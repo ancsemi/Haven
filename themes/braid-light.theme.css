@@ -1,6 +1,6 @@
 /**
  * @name        Braid Light
- * @description Braid's airy light look — white surfaces, deep green accent, soft rounded corners. Pairs with the Braid Layout plugin.
+ * @description Braid's airy light look: white surfaces, deep green accent, soft rounded corners. Pairs with the Braid Layout plugin.
  * @author      Amnibro
  * @version     1.0
  * @icon        🍃
@@ -125,7 +125,7 @@ body { background: var(--bg-primary) !important; color: var(--text-primary) !imp
 .messages { padding: 1.5rem 1.75rem .75rem !important; gap: .25rem; width: 100%; box-sizing: border-box; }
 .message { border-radius: var(--braid-r) !important; }
 .message:hover { background: rgba(0, 0, 0, .03) !important; box-shadow: none !important; }
-/* Message gutter — drive the shared variables instead of restyling
+/* Message gutter: drive the shared variables instead of restyling
    .message-row / .message-avatar directly. A compact follow-up has no avatar
    and indents by (padding + avatar + gap); sizing only the leader's half left
    follow-ups 8px to its left. See --msg-gutter in style.css. */

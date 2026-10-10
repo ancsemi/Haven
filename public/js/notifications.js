@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Notification Tone System (Web Audio API + Audio Files)
-// Zero dependencies — generates tones programmatically,
+// Haven: Notification Tone System (Web Audio API + Audio Files)
+// Zero dependencies: generates tones programmatically,
 // plays AIM-style sounds & custom uploaded audio files
 // ═══════════════════════════════════════════════════════════
 
@@ -92,8 +92,8 @@ class NotificationManager {
   bell()  { this._playTone([1047, 1319, 1568], [0.15, 0.15, 0.25], 'sine'); }
   alert() { this._playTone([880, 1100, 880, 1100], [0.08, 0.08, 0.08, 0.12], 'sine'); }
   chord() { this._playTone([523, 659, 784, 1047], [0.1, 0.08, 0.08, 0.2], 'sine'); }
-  swoosh(){ this._playTone([400, 600, 800], [0.04, 0.04, 0.06], 'sine'); }  // soft ascending — "sent"
-  announcement() { this._playTone([523, 659, 784, 1047], [0.12, 0.1, 0.1, 0.25], 'sine'); } // bright ascending chord — announcement
+  swoosh(){ this._playTone([400, 600, 800], [0.04, 0.04, 0.06], 'sine'); }  // soft ascending: "sent"
+  announcement() { this._playTone([523, 659, 784, 1047], [0.12, 0.1, 0.1, 0.25], 'sine'); } // bright ascending chord: announcement
 
   // ── Voice action cues (always play at current volume) ───
   mute_on()  { this._playTone([600, 400], [0.06, 0.08], 'sine'); }
@@ -229,7 +229,7 @@ class NotificationManager {
    * Rate-limit gate for VISIBLE notification pop-ups (Desktop OS banners and
    * browser Notifications). Returns true if a pop-up may show right now, or
    * false if we're still inside the user's chosen cooldown window. Off (0)
-   * always allows. Sounds and unread badges do NOT pass through this — only the
+   * always allows. Sounds and unread badges do NOT pass through this; only the
    * visible pop-up is throttled, so a burst of activity (or a flaky connection
    * that keeps reconnecting) can't spam the taskbar.
    */

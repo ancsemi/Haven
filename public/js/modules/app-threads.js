@@ -301,7 +301,7 @@ _sendThreadMessage() {
   const parentId = this._activeThreadParent;
   if (!parentId) return;
   const hasPending = !!(this._threadPending && this._threadPending.length);
-  // Nothing to send — no text and no held attachments.
+  // Nothing to send: no text and no held attachments.
   if (!content && !hasPending) return;
   const replyTo = this._threadReplyingTo ? this._threadReplyingTo.id : null;
 
@@ -367,7 +367,7 @@ _appendThreadMessage(msg) {
     : '';
 
   // Group consecutive replies from the same author (within 5 min, no reply
-  // banner) into compact rows, the same way the main channel does — drop the
+  // banner) into compact rows, the same way the main channel does, and drop the
   // avatar and author header, keep the content and the hover toolbar. The
   // thread's parent message lives in a separate preview element, not in this
   // container, so we only ever group reply-against-reply.
@@ -449,8 +449,8 @@ _appendThreadMessage(msg) {
 
 // Promote a compact thread reply back to a full row (avatar + author header
 // restored), keeping its existing content/toolbar/reactions. Called when the
-// group head above it is deleted, so the new head still shows who sent it —
-// the thread mirror of `_promoteCompactToFull`.
+// group head above it is deleted, so the new head still shows who sent it.
+// This is the thread mirror of `_promoteCompactToFull`.
 _promoteThreadCompactToFull(compactEl) {
   if (!compactEl) return;
   const userId = parseInt(compactEl.dataset.userId, 10);

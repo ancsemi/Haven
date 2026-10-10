@@ -9,7 +9,7 @@ export default {
 
 /** (3.20.2, #5399 follow-up) Mirror a per-channel mute toggle to the
  *  server so sendPushNotifications can skip muted recipients. Fire-and-
- *  forget — localStorage stays the local source of truth and any sync
+ *  forget: localStorage stays the local source of truth and any sync
  *  failure (offline, server old) just leaves the row uncreated. The
  *  initial localStorage→server sync happens in _bootstrapChannelPrefs. */
 _syncChannelMutePref(code, muted) {
@@ -26,7 +26,7 @@ _syncChannelMutePref(code, muted) {
 /** One-shot reconciliation between localStorage and the server-side
  *  mute list. Server wins for known codes; any local-only entries get
  *  pushed up via PUT (covers users who had muted channels before this
- *  feature shipped). Idempotent — guarded by `_channelPrefsSynced`. */
+ *  feature shipped). Idempotent, guarded by `_channelPrefsSynced`. */
 async _bootstrapChannelPrefs() {
   if (this._channelPrefsSynced) return;
   const tok = localStorage.getItem('haven_token');
@@ -56,7 +56,7 @@ async _bootstrapChannelPrefs() {
   }
 },
 
-/** Sanitize a CSS color value – only allow hex (#RGB / #RRGGBB), rgb(), hsl(), or CSS variables */
+/** Sanitize a CSS color value: only allow hex (#RGB / #RRGGBB), rgb(), hsl(), or CSS variables */
 _safeColor(c, fallback = '') {
   if (typeof c !== 'string') return fallback;
   const s = c.trim();
@@ -215,7 +215,7 @@ _updatePinIndicator(count) {
     const seen = this._getMaxSeenPinId(this.currentChannel);
     const liveUnread = this._unreadPinIdByChannel[this.currentChannel] || 0;
     if (seen == null) {
-      // First encounter — user has never opened the pinned panel for this
+      // First encounter: user has never opened the pinned panel for this
       // channel; surface the dot once so they know there's something there.
       unread = true;
     } else if (liveUnread > seen) {
@@ -240,7 +240,7 @@ _markPinsSeen(pins) {
     if (id > max) max = id;
   }
   if (max > 0) this._setMaxSeenPinId(this.currentChannel, max);
-  // Clear the live-unread tracker for this channel — they've seen everything.
+  // Clear the live-unread tracker for this channel; they've seen everything.
   this._unreadPinIdByChannel = this._unreadPinIdByChannel || {};
   this._unreadPinIdByChannel[this.currentChannel] = 0;
   this._updatePinIndicator(this._pinnedCountByChannel?.[this.currentChannel] || pins.length);
@@ -256,11 +256,11 @@ _bumpPinIndicator(delta) {
 // (#5280) Burn-after-read DMs. Walks any message rows in `root` whose
 // `data-burn-seconds` is set and either replaces the content with a
 // click-to-reveal placeholder (not yet started) or wires the countdown
-// (already started — `data-burn-started-at` is set). When the user
+// (already started, `data-burn-started-at` is set). When the user
 // clicks reveal, emits `mark-burning` so the server stamps the start
 // time and broadcasts `message-burning` to keep the timer in sync
 // across both participants. The actual destructive delete fires from
-// the server's periodic sweep — this is just the UI layer.
+// the server's periodic sweep. This is just the UI layer.
 _wireBurnMessages(root) {
   if (!root) root = document.getElementById('messages');
   if (!root) return;
@@ -307,7 +307,7 @@ _wireBurnMessages(root) {
       this._startBurnCountdown(el, burnSeconds, startedAt);
       return;
     }
-    // Sender's own burn message: show content normally — they already know
+    // Sender's own burn message: show content normally, since they already know
     // what they wrote. Starting the burn timer is the recipient's action.
     const isSender = parseInt(el.dataset.userId) === (this.user?.id || 0);
     if (isSender) return;
@@ -367,7 +367,7 @@ _replaceBurnedMessage(el) {
 _isImageUrl(str) {
   if (!str) return false;
   const trimmed = str.trim();
-  // Spoiler-wrapped image (sender marked it as a spoiler) — unwrap and test
+  // Spoiler-wrapped image (sender marked it as a spoiler): unwrap and test
   // the payload so the message still gets image layout treatment.
   if (trimmed.startsWith('spoiler-img:')) return this._isImageUrl(trimmed.slice(12));
   if (trimmed.startsWith('e2e-img:')) return true;
@@ -386,7 +386,7 @@ _isImageUrl(str) {
 
 // Auto-link and markdown image handlers run after `_escapeHtml`, so query
 // strings arrive as `?ex=…&amp;is=…`. Feed those straight to the media proxy
-// and Discord (Ferry attachments) 404s — the phone client never HTML-escapes
+// and Discord (Ferry attachments) 404s. The phone client never HTML-escapes
 // the URL, which is why the same photo shows on mobile and vanishes on desktop.
 _rawHttpUrl(escapedOrRaw) {
   if (typeof escapedOrRaw !== 'string' || !escapedOrRaw) return null;
@@ -443,7 +443,7 @@ _extractUploadUrls(content) {
 },
 
 // Remember which uploads a decrypted DM message points at, so a later delete
-// can tell the server which files to clean up. Only DM messages need this —
+// can tell the server which files to clean up. Only DM messages need this;
 // everywhere else the server reads the URLs straight out of the stored
 // content. Capped so a long session can't grow it without bound. (#5487)
 _rememberDmAttachments(message) {
@@ -458,7 +458,7 @@ _rememberDmAttachments(message) {
   }
 },
 
-// Client-side DM message search — walks _lastRenderedMessages (already
+// Client-side DM message search: walks _lastRenderedMessages (already
 // decrypted) and hands matches to the search panel. DMs are E2E-encrypted so
 // the server never sees plaintext; each DM keeps its own panel context. (#5248)
 _searchDmCacheLocally(query) {
@@ -495,7 +495,7 @@ _isEmojiOnly(str) {
   let s = str.replace(/:([a-zA-Z0-9_-]+):/g, ' ');
   try {
     // Strip unicode emoji, skin-tone modifiers, ZWJ, variation selectors, flags.
-    // Skin tones (1F3FB–1F3FF) are Emoji_Modifier, not Extended_Pictographic, so
+    // Skin tones (1F3FB-1F3FF) are Emoji_Modifier, not Extended_Pictographic, so
     // they need their own range or a toned emoji leaves a leftover and misses jumbo.
     s = s.replace(/[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u{FE00}-\u{FEFF}\u{200D}\u{20E3}\u{1F1E0}-\u{1F1FF}]/gu, '');
   } catch {
@@ -519,7 +519,7 @@ _discordEmoteHtml(name, id, animated) {
   return `<img src="/api/ferry/emote/${id}.${animated ? 'gif' : 'png'}" alt="${label}" title="${label}" class="custom-emoji discord-emote">`;
 },
 
-// Resolve a `:name:` shortcode to an image emoji — checks the bundled
+// Resolve a `:name:` shortcode to an image emoji. Checks the bundled
 // built-in image emoji (US flags, etc.) first, then server custom emoji.
 // Returns { name, url } or null.
 _findNamedEmoji(name) {
@@ -614,7 +614,7 @@ _timeLocale() {
  *  the device zone. Only a value the user actively confirmed counts; Skip and
  *  "Remind later" leave this unset so nothing changes from Haven's old
  *  browser-default behaviour. Passing an IANA id to Intl means DST and any
- *  historical offset change are resolved per-instant — never a frozen offset. */
+ *  historical offset change are resolved per-instant, never a frozen offset. */
 _userTimeZone() {
   const tz = this._userPrefs && this._userPrefs.timezone;
   if (typeof tz !== 'string' || !tz) return undefined;
@@ -958,7 +958,7 @@ _jumpToLatest() {
 
 // Snap the feed back to the live present by re-running the fresh channel load.
 // Needed when the DOM window has been trimmed (newest messages aren't in the
-// DOM, i.e. _noMoreFuture === false) — a plain _scrollToBottom only reaches the
+// DOM, i.e. _noMoreFuture === false). A plain _scrollToBottom only reaches the
 // artificial bottom of the loaded window. This mirrors the reset the own-message
 // and tab-resync paths already use, so message-history renders the initial-load
 // branch and _renderMessages lands at the true bottom.
@@ -1017,7 +1017,7 @@ _showToast(message, type = 'info', action = null, duration = 4000) {
 
 /** Show a one-time notice about the Account Recovery feature.
  *  Whether to show it at all is decided server-side (no recovery codes yet AND
- *  not previously dismissed) — see get-recovery-notice-state. This only guards
+ *  not previously dismissed); see get-recovery-notice-state. This only guards
  *  against showing twice within a single session (e.g. socket reconnects). */
 _showRecoveryNotice() {
   if (this._recoveryNoticeShown) return;
@@ -1272,7 +1272,7 @@ _proxyMediaUrl(url) {
   try {
     if (new URL(url, location.href).origin === location.origin) return url;
   } catch { return url; }
-  if (!this._mediaToken) return null;   // enabled but not ready — defer
+  if (!this._mediaToken) return null;   // enabled but not ready, so defer
   return `/api/media-proxy?url=${encodeURIComponent(url)}&mt=${encodeURIComponent(this._mediaToken)}`;
 },
 

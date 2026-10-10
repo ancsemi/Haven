@@ -70,10 +70,10 @@
    derived from the other: overrides set these variables and both move
    together, so the two can't drift apart again. */
 :root {
-  --msg-pad-x: 0.5rem;        /* 8px  — .message-row horizontal padding */
-  --msg-pad-y: 0.25rem;       /* 4px  — .message-row vertical padding */
-  --msg-avatar: 2.25rem;      /* 36px — avatar column */
-  --msg-gap: 0.75rem;         /* 12px — avatar → body gap */
+  --msg-pad-x: 0.5rem;        /* 8px: .message-row horizontal padding */
+  --msg-pad-y: 0.25rem;       /* 4px: .message-row vertical padding */
+  --msg-avatar: 2.25rem;      /* 36px: avatar column */
+  --msg-gap: 0.75rem;         /* 12px: avatar → body gap */
   --msg-gutter: calc(var(--msg-pad-x) + var(--msg-avatar) + var(--msg-gap));
 }
 
@@ -142,13 +142,13 @@
   box-sizing: border-box;
 }
 
-/* Away: half-circle (dome) — visually distinct from full circle */
+/* Away: half-circle (dome), visually distinct from full circle */
 .user-status-dot.away {
   background: #faa61a;
   border-radius: 0.125rem 0.125rem 50% 50%;
 }
 
-/* DND: square — immediately distinguishable */
+/* DND: square, immediately distinguishable */
 .user-status-dot.dnd {
   background: var(--danger);
   border-radius: 0.125rem;
@@ -332,7 +332,7 @@
 .shape-hex      { clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
 .shape-diamond  { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
 
-/* Avatar Shape Classes — applied to .message-avatar and .message-avatar-img */
+/* Avatar Shape Classes: applied to .message-avatar and .message-avatar-img */
 .avatar-circle   { border-radius: 50% !important; }
 .avatar-rounded  { border-radius: 0.375rem !important; }
 .avatar-squircle { border-radius: 28% !important; }
@@ -566,7 +566,7 @@ details.sound-section:not([open]) .sound-section-label::before {
 .message-compact {
   display: flex;
   position: relative;
-  /* Left pad matches the leader's avatar column — see --msg-gutter above. */
+  /* Left pad matches the leader's avatar column (see --msg-gutter above). */
   padding: 0.0625rem 0.5rem 0.0625rem var(--msg-gutter);
   border-radius: var(--radius-sm);
   transition: background var(--transition);
@@ -703,12 +703,12 @@ details.sound-section:not([open]) .sound-section-label::before {
   pointer-events: none;
 }
 
-/* Sidebar collapse arrow — fixed to the right edge of the viewport.
+/* Sidebar collapse arrow: fixed to the right edge of the viewport.
    Always accessible regardless of sidebar state or scroll position. */
 .sidebar-collapse-btn {
   position: fixed;
   right: 0;
-  top: 72px;          /* near top — where the voice panel header sits */
+  top: 72px;          /* near top, where the voice panel header sits */
   transform: none;
   width: 1.25rem;
   height: 2.25rem;
@@ -724,7 +724,7 @@ details.sound-section:not([open]) .sound-section-label::before {
   cursor: pointer;
   padding: 0;
   z-index: 100;
-  /* `right` is set imperatively in JS when sidebars open/close — animate it
+  /* `right` is set imperatively in JS when sidebars open/close; animate it
      so the button slides with the panel rather than popping into place. */
   transition: right 0.25s ease, color 0.15s, background 0.15s;
 }
@@ -733,7 +733,7 @@ details.sound-section:not([open]) .sound-section-label::before {
   background: var(--bg-tertiary);
 }
 
-/* Users section — fills remaining space and scrolls */
+/* Users section: fills remaining space and scrolls */
 .right-sidebar-users {
   flex: 1 1 0;
   overflow-y: auto;
@@ -910,7 +910,7 @@ details.sound-section:not([open]) .sound-section-label::before {
      uses for exactly this reason (#5462). */
   z-index: 100010;
   width: 20rem;
-  /* Translucent, theme-aware glass — colours come from CSS vars so it tracks
+  /* Translucent, theme-aware glass. Colours come from CSS vars so it tracks
      the active theme in both light and dark. */
   background: color-mix(in srgb, var(--bg-secondary) 65%, transparent);
   backdrop-filter: blur(20px) saturate(1.3);

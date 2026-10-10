@@ -13,7 +13,7 @@ _openSubChannelPanel() {
   // Run one-time migration: muted sub-channels → unsubbed, others → subbed
   if (!localStorage.getItem('haven_sub_panel_migrated')) {
     localStorage.setItem('haven_sub_panel_migrated', 'true');
-    // Existing muted list already represents unsubbed state — no changes needed.
+    // Existing muted list already represents unsubbed state, so no changes needed.
     // All non-muted channels are implicitly subscribed.
   }
 
@@ -333,7 +333,7 @@ _renderOrganizeList() {
       return b.localeCompare(a);
     });
   } else {
-    // manual — use stored order
+    // manual: use stored order
     const order = this._organizeCatOrder || [];
     allKeys.sort((a, b) => {
       const ia = order.indexOf(a);
@@ -548,13 +548,13 @@ _renderOrganizeList() {
   // Disable up/down based on selection type
   let canMoveUp = false, canMoveDown = false;
   if (this._organizeSelectedTag) {
-    // Category selected — always allow movement; handler auto-switches to manual mode
+    // Category selected: always allow movement; handler auto-switches to manual mode
     const orderedTags = grouped.map(g => g.tag || '__untagged__');
     const tagIdx = orderedTags.indexOf(this._organizeSelectedTag);
     canMoveUp = tagIdx > 0;
     canMoveDown = tagIdx >= 0 && tagIdx < orderedTags.length - 1;
   } else if (this._organizeSelected) {
-    // Channel selected — can move if its tag group sort is manual
+    // Channel selected: can move if its tag group sort is manual
     const ch = this._organizeList.find(c => c.code === this._organizeSelected);
     if (ch) {
       const { group, effectiveSort } = this._getOrganizeVisualGroup(ch);

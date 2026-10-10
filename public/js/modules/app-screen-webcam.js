@@ -162,7 +162,7 @@ _handleWebcamStream(userId, stream) {
       });
       tile.appendChild(fsBtnWC);
 
-      // Minimize button — collapses tile but keeps in grid
+      // Minimize button: collapses tile but keeps in grid
       const minBtn = document.createElement('button');
       minBtn.className = 'stream-minimize-btn';
       minBtn.title = t('media.minimize');
@@ -183,7 +183,7 @@ _handleWebcamStream(userId, stream) {
       });
       tile.appendChild(minBtn);
 
-      // Close button — removes tile entirely
+      // Close button: removes tile entirely
       const closeBtn = document.createElement('button');
       closeBtn.className = 'stream-close-btn';
       closeBtn.title = t('media.close_camera');
@@ -250,7 +250,7 @@ _handleWebcamStream(userId, stream) {
 
     this._updateWebcamVisibility();
   } else {
-    // Stream ended — remove tile
+    // Stream ended: remove tile
     const tileId = `webcam-tile-${userId || 'self'}`;
     const tile = document.getElementById(tileId);
     if (tile) {
@@ -504,7 +504,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
   const label = document.getElementById('screen-share-label');
 
   if (stream) {
-    // Honour auto-accept setting — show a join prompt instead of opening the
+    // Honour auto-accept setting: show a join prompt instead of opening the
     // tile automatically. Clicking the sharer's live badge counts as the
     // accept for that share, so it skips the prompt too (#5636).
     const accepted = !!(this._acceptedStreams && this._acceptedStreams.has(userId));
@@ -534,7 +534,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       const vid = document.createElement('video');
       vid.autoplay = true;
       vid.playsInline = true;
-      vid.muted = true; // Always mute — screen audio routes through WebRTC audio track
+      vid.muted = true; // Always mute; screen audio routes through WebRTC audio track
       tile.appendChild(vid);
 
       const lbl = document.createElement('div');
@@ -627,7 +627,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       });
       tile.appendChild(popoutBtn);
 
-      // Fullscreen button — makes the video element fill the screen
+      // Fullscreen button: makes the video element fill the screen
       const fsBtn = document.createElement('button');
       fsBtn.className = 'stream-fullscreen-btn';
       fsBtn.title = t('media.fullscreen');
@@ -644,7 +644,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       });
       tile.appendChild(fsBtn);
 
-      // Minimize button — hides tile but KEEPS audio playing
+      // Minimize button: hides tile but KEEPS audio playing
       const minBtn = document.createElement('button');
       minBtn.className = 'stream-minimize-btn';
       minBtn.title = t('media.stream_minimize');
@@ -655,7 +655,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       });
       tile.appendChild(minBtn);
 
-      // Close button — hides tile and mutes its audio (can be restored from hidden bar)
+      // Close button: hides tile and mutes its audio (can be restored from hidden bar)
       const closeBtn = document.createElement('button');
       closeBtn.className = 'stream-close-btn';
       closeBtn.title = t('media.stream_close');
@@ -673,7 +673,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
     // the Join prompt was up. The tile exists now, so let it play (#5636).
     if (userId !== null && userId !== this.user.id) this.voice.flushPendingScreenAudio?.(userId);
 
-    // Show the container BEFORE assigning srcObject — browsers won't decode
+    // Show the container BEFORE assigning srcObject; browsers won't decode
     // video frames inside a display:none container, causing a black rectangle
     // that only fixes itself on layout reflow (e.g. resizing the slider).
     container.style.display = 'flex';
@@ -693,7 +693,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
     const curStream = videoEl.srcObject;
     const curVideoTrack = curStream ? (curStream.getVideoTracks?.()[0] || null) : null;
     // If the currently attached track is dead (readyState !== 'live'), we MUST
-    // reassign — even if the new track has the same id, the browser will keep
+    // reassign. Even if the new track has the same id, the browser will keep
     // rendering a black frame from the dead source. This happens on reshare
     // when the sharer's stopScreenShare ends the track but the viewer's
     // element still holds a reference to that dead MediaStreamTrack.
@@ -766,7 +766,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       this.socket.emit('stream-watch', { code: this.voice.currentChannel, sharerId: userId });
     }
   } else {
-    // Stream ended — remove this tile. The next share from this person gets
+    // Stream ended: remove this tile. The next share from this person gets
     // the prompt again, and any offer that never got a tile is gone (#5636).
     this._pendingStreamOffers?.delete(userId);
     this._acceptedStreams?.delete(userId);
@@ -804,7 +804,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
 // `videoWidth > 0` only proves that metadata arrived once. On a reshare the
 // element keeps the dimensions of the stream it was previously showing, so a
 // tile can sit on a frozen or black frame indefinitely while videoWidth reads
-// as healthy — and _retryPlay, which bails the moment videoWidth is non-zero,
+// as healthy, and _retryPlay, which bails the moment videoWidth is non-zero,
 // never runs. That is the "black screen until I dragged the resize slider"
 // case: the slider forced a reflow, which nudged the decoder, which is not a
 // recovery path anyone should have to discover.
@@ -843,7 +843,7 @@ _startStreamStallWatchdog(tileId, userId) {
     const track = videoEl.srcObject.getVideoTracks
       ? videoEl.srcObject.getVideoTracks()[0]
       : null;
-    // Nothing is meant to be flowing — not a stall.
+    // Nothing is meant to be flowing, so not a stall.
     if (!track || track.readyState !== 'live' || track.muted) { stalls = 0; return; }
 
     const frames = readFrames(videoEl);

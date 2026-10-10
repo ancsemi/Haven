@@ -61,7 +61,7 @@ _bindVoiceControls() {
   document.getElementById('music-volume-slider').addEventListener('input', (e) => {
     this._setMusicVolume(parseInt(e.target.value));
   });
-  // Seek slider — user drags to scrub position
+  // Seek slider: user drags to scrub position
   const seekSlider = document.getElementById('music-seek-slider');
   seekSlider.addEventListener('input', () => { this._musicSeeking = true; });
   seekSlider.addEventListener('change', (e) => {
@@ -82,7 +82,7 @@ _bindVoiceControls() {
     if (e.key === 'Enter') { e.preventDefault(); this._shareMusic(); }
   });
 
-  // Voice controls — now pinned at bottom of right sidebar
+  // Voice controls, now pinned at bottom of right sidebar
   // The header voice-active-indicator opens the RIGHT sidebar on mobile
   document.getElementById('voice-active-indicator')?.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -314,7 +314,7 @@ _bindVoiceControls() {
       this.voice.setScreenResolution(val);
     });
   }
-  // ── Screen share bitrate stepper (300–10000 Kbps + unlimited) ──
+  // ── Screen share bitrate stepper (300 to 10000 Kbps + unlimited) ──
   // The value is an editable input: type a number and confirm with Enter or
   // by leaving the field; out-of-range input clamps to the nearest bound.
   // Holding a step button auto-repeats with acceleration.
@@ -329,7 +329,7 @@ _bindVoiceControls() {
   // Unconditional field write. Stepper presses are explicit user intent to
   // change the value, so they must sync the field even while it is focused:
   // button pointerdown is preventDefaulted (focus stays in the field) and
-  // renderBitrate skips focused inputs — without this, the field keeps the
+  // renderBitrate skips focused inputs. Without this, the field keeps the
   // stale text and the next blur re-commits it, silently reverting the step
   // (and re-applying the old cap to a live share).
   const writeBitrateField = (kbps) => {
@@ -408,7 +408,7 @@ _bindVoiceControls() {
       if (dir < 0) {
         // From unlimited, step down into the top of the range; from a capped
         // value, saturate at the 300 floor. A raw `cur - magnitude` can land
-        // exactly on 0 (e.g. 400 − 400), which means unlimited — a hold
+        // exactly on 0 (e.g. 400 − 400), which means unlimited. A hold
         // sliding down must never jump to uncapped.
         if (cur === 0) next = 10000;
         else next = Math.max(300, cur - magnitude);
@@ -437,7 +437,7 @@ _bindVoiceControls() {
     // pointerdown. Pointer clicks carry detail >= 1. Checking detail (not just
     // `pressed`) means a stale `pressed` from a drag-off release can never
     // swallow the next keyboard activation, while a pointer click following
-    // its own pointerdown is still consumed exactly once — including the
+    // its own pointerdown is still consumed exactly once, including the
     // touch sequence pointerup → pointerleave → click. A keyboard step never
     // touches the active pointer's state: its timers and trailing click still
     // belong to that press, so a second finger stays ignored instead of
@@ -458,7 +458,7 @@ _bindVoiceControls() {
       activePointerId = null;
       stop();
     };
-    // pointerup is followed by click, which consumes `pressed` above — the
+    // pointerup is followed by click, which consumes `pressed` above. The
     // flag itself is left for click, but the timers stop here. pointerleave
     // must NOT clear `pressed`: on touch the sequence is pointerup →
     // pointerleave → click, so clearing on leave would double-step.
@@ -470,14 +470,14 @@ _bindVoiceControls() {
       // no pointerup/click here). `pressed` is deliberately kept for the
       // trailing click: on touch the sequence is pointerup → pointerleave →
       // click, so clearing it here would double-step. A stale `pressed` with
-      // no click coming is harmless — the next keyboard click (detail === 0)
+      // no click coming is harmless: the next keyboard click (detail === 0)
       // steps regardless.
       if (e && e.pointerId !== undefined && activePointerId !== null &&
           e.pointerId !== activePointerId) return;
       activePointerId = null;
       stop();
     });
-    // pointercancel is never followed by click, so it clears both — but only
+    // pointercancel is never followed by click, so it clears both, but only
     // when it belongs to the active press. Clearing `pressed` before the
     // identity check (as a previous version did) let a second, ignored
     // pointer's cancel disarm the first press, and the trailing click then
@@ -609,7 +609,7 @@ _bindVoiceControls() {
     document.querySelectorAll(`.channel-voice-user[data-user-id="${resolvedId}"], .voice-user-item[data-user-id="${resolvedId}"]`).forEach(el => {
       el.classList.toggle('talking', isTalking);
     });
-    // Speaking counts as activity — reset idle timer so presence stays online
+    // Speaking counts as activity: reset idle timer so presence stays online
     // and the server gets a voice-activity ping for AFK tracking
     if (userId === 'self' && isTalking) this._resetIdle?.();
   };

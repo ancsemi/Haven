@@ -38,7 +38,7 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
     // entirely (same simulation: zero). Steady-state occupancy then sits
     // between 448 and 896 samples, so this adds roughly 9-19 ms of latency,
     // plus a one-off ~20 ms of silence when suppression is switched on.
-    this._FIFO_CAP = 2880;  // 6 frames — comfortably clear of prime + one frame
+    this._FIFO_CAP = 2880;  // 6 frames, comfortably clear of prime + one frame
     this._PRIME = 960;      // 2 frames of headroom before we start draining
     this._fifo = new Float32Array(this._FIFO_CAP);
     this._fifoRead = 0;
@@ -52,7 +52,7 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
       if (data.type === 'wasm-bytes') {
         this._initWasm(data.bytes);
       } else if (data.type === 'wasm-module') {
-        // Legacy path (broken on Chromium/Electron — Module does not clone).
+        // Legacy path (broken on Chromium/Electron: Module does not clone).
         // Kept only so a mixed-version deploy still surfaces an error instead
         // of hanging forever in pass-through.
         this._initWasm(data.module);
@@ -103,7 +103,7 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
       const instance = await WebAssembly.instantiate(wasmModule, {
         a: {
           a: (requestedSize) => {
-            // _emscripten_resize_heap — grow memory
+            // _emscripten_resize_heap: grow memory
             const oldSize = HEAPU8.length;
             const maxHeapSize = 2147483648;
             requestedSize = requestedSize >>> 0;
@@ -122,7 +122,7 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
             return false;
           },
           b: (dest, src, num) => {
-            // _emscripten_memcpy_big — fast memcpy
+            // _emscripten_memcpy_big: fast memcpy
             HEAPU8.copyWithin(dest, src, src + num);
           }
         }
@@ -237,7 +237,7 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
       this._HEAPF32[inIdx + i] = this._inputBuf[i] * 32768;
     }
 
-    // Process — returns VAD probability (0..1), output written to wasmOutputPtr
+    // Process: returns VAD probability (0..1), output written to wasmOutputPtr
     this._rnnoise_process_frame(this._state, this._wasmOutputPtr, this._wasmInputPtr);
 
     // Read output, scale back to [-1, 1], and append to the FIFO. The old code

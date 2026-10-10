@@ -85,7 +85,7 @@ _bindMediaGallery() {
       this._mediaGalleryActiveTab = btn.dataset.tab;
       this._applyMediaTileSize();
       if (this._mediaGalleryData) this._renderMediaGalleryTab(this._mediaGalleryActiveTab);
-      // Switching tabs clears selection — selecting items across tabs and
+      // Switching tabs clears selection: selecting items across tabs and
       // hitting Delete would be confusing since each tab has its own scope.
       if (this._mediaGallerySelected) this._mediaGallerySelected.clear();
       this._refreshMediaGalleryToolbar();
@@ -164,7 +164,7 @@ _bindMediaGallery() {
     const count = this._mediaGallerySelected.size;
     const ok = confirm(t('media_gallery.confirm_delete', { count }));
     if (!ok) return;
-    // Build messageIds (one delete per message — bulk endpoint dedupes
+    // Build messageIds (one delete per message; bulk endpoint dedupes
     // server-side too). Group attachment URLs per message id so E2E DM
     // attachments can be moved to deleted-attachments/ even though the
     // server can't read the ciphertext.
@@ -362,7 +362,7 @@ _sortMediaItems(items) {
 // Returns true if the current user can bulk-delete content in this
 // channel via the gallery (admins or anyone with delete_message; we
 // don't expose Select Mode for self-only deleters because the bulk
-// endpoint silently skips ones they can't touch — that's confusing).
+// endpoint silently skips ones they can't touch, and that's confusing).
 _canBulkDeleteMedia() {
   if (!this.user) return false;
   if (this.user.isAdmin) return true;

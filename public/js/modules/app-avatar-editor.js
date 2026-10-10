@@ -610,7 +610,7 @@ _computeMatrix3d(w, h, dst) {
   // divisor; as w nears 0 the content shoots toward infinity and covers chat. The
   // catch is *where* w matters: content committed beneath the distort (a rotate's
   // tips, resize overflow) paints well outside the unit box, so checking w only at
-  // [0,1] corners (as this once did) misses the blowup — a plain trapezoid can have
+  // [0,1] corners (as this once did) misses the blowup: a plain trapezoid can have
   // healthy corner w yet tiny w a little past the edge. w is linear, so its minimum
   // over any rectangle is at a corner: evaluate it at the corners of the region the
   // border can actually reach (MARGIN past the box) and refuse anything that lets
@@ -701,7 +701,7 @@ _renderBorderHistory() {
 // this only catches a resize that drifts a moved (off-centre) frame out.
 // The guards let a frame overhang the avatar by _borderOverflowFrac() (of); an off-centre
 // frame (moved, or auto-cropped from an off-centre image) legitimately resizes a bit past
-// [-of, 1+of], so we only refuse once it overhangs by another full allowance (2*of) — i.e.
+// [-of, 1+of], so we only refuse once it overhangs by another full allowance (2*of), i.e.
 // genuinely out of frame, not merely at the guard's edge. Widen the 2x multiplier to be
 // more permissive.
 _borderBoxExceeds(op) {
@@ -867,7 +867,7 @@ _setupBorderEditor() {
       ny = Math.min((1 + of) - base[1], Math.max(-of - base[1], ny));
       d[active.corner] = [nx, ny];
       // Reject the move if it folds the quad (perimeter order) or produces a
-      // degenerate/exploding homography — that is what breaks chat when saved.
+      // degenerate/exploding homography, which is what breaks chat when saved.
       const q = [[d.tl[0], d.tl[1]], [1 + d.tr[0], d.tr[1]], [1 + d.br[0], 1 + d.br[1]], [d.bl[0], 1 + d.bl[1]]];
       const W = rect.width, H = rect.height;
       const dst = [[d.tl[0] * W, d.tl[1] * H], [(1 + d.tr[0]) * W, d.tr[1] * H], [d.bl[0] * W, (1 + d.bl[1]) * H], [(1 + d.br[0]) * W, (1 + d.br[1]) * H]];
@@ -1009,7 +1009,7 @@ _setupAvatarUpload() {
   if (this._avatarDelegationActive) return;
   this._avatarDelegationActive = true;
 
-  // Pending state — nothing is saved until the user clicks Save
+  // Pending state: nothing is saved until the user clicks Save
   this._pendingAvatarFile = null;       // raw File object from <input>
   this._pendingAvatarPreviewUrl = null; // local preview data URL (display only)
   this._pendingAvatarRemoved = false;   // user clicked Clear

@@ -5,7 +5,7 @@
 export default {
 
 _bindThreadAndDmPanels() {
-  // Thread panel — close, send
+  // Thread panel: close, send
   const threadCloseBtn = document.getElementById('thread-panel-close');
   if (threadCloseBtn) threadCloseBtn.addEventListener('click', () => this._closeThread());
 
@@ -48,10 +48,10 @@ _bindThreadAndDmPanels() {
     this._checkChannelTrigger(dmPipInput);
     this._checkEmojiTrigger(dmPipInput);
     this._checkSlashTrigger(dmPipInput);
-    // Personas are not supported in DMs — omit _checkPersonaTrigger here
+    // Personas are not supported in DMs, so omit _checkPersonaTrigger here
   });
 
-  // Paste images / files into the DM PiP input — queues images for preview
+  // Paste images / files into the DM PiP input; queues images for preview
   // (same as main channel paste behavior). (#5324)
   if (dmPipInput) dmPipInput.addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
@@ -113,7 +113,7 @@ _bindThreadAndDmPanels() {
     });
   }
 
-  // PiP emoji button — positions the picker above the button and targets the PiP input
+  // PiP emoji button: positions the picker above the button and targets the PiP input
   const dmPipEmojiBtn = document.getElementById('dm-pip-emoji-btn');
   if (dmPipEmojiBtn) {
     dmPipEmojiBtn.addEventListener('click', (e) => {
@@ -133,7 +133,7 @@ _bindThreadAndDmPanels() {
   if (dmPipMessages) {
     dmPipMessages.addEventListener('click', async (e) => {
       // Toolbar action buttons
-      // Inline ⋯ dots button — reveals the full toolbar (touch/mobile)
+      // Inline ⋯ dots button: reveals the full toolbar (touch/mobile)
       const dotsBtn = e.target.closest('.msg-dots-btn');
       if (dotsBtn) {
         e.stopPropagation();
@@ -226,7 +226,7 @@ _bindThreadAndDmPanels() {
   const threadSendBtn = document.getElementById('thread-send-btn');
   if (threadSendBtn) threadSendBtn.addEventListener('click', () => this._sendThreadMessage());
 
-  // Thread emoji button — positions the picker above the button and targets the thread input
+  // Thread emoji button: positions the picker above the button and targets the thread input
   const threadEmojiBtn = document.getElementById('thread-emoji-btn');
   if (threadEmojiBtn) {
     threadEmojiBtn.addEventListener('click', (e) => {
@@ -258,9 +258,9 @@ _bindThreadAndDmPanels() {
       this._checkChannelTrigger(threadInput);
       this._checkEmojiTrigger(threadInput);
       this._checkSlashTrigger(threadInput);
-      // Personas are not supported in threads — omit _checkPersonaTrigger here
+      // Personas are not supported in threads, so omit _checkPersonaTrigger here
     });
-    // Paste images / files into the thread input — upload then send as thread message
+    // Paste images / files into the thread input, upload then send as thread message
     threadInput.addEventListener('paste', (e) => {
       const items = e.clipboardData?.items;
       if (!items) return;
@@ -279,7 +279,7 @@ _bindThreadAndDmPanels() {
       }
     });
 
-    // Drag & drop parity with the other composers — queue, never insta-post.
+    // Drag & drop parity with the other composers: queue, never insta-post.
     // The whole panel takes the drop, not only the reply box: in a forum topic
     // people drop pictures onto the replies the way they would onto a chat
     // (#5684).
@@ -437,7 +437,7 @@ _bindThreadAndDmPanels() {
     }
   }
 
-  // PiP input area height resize — drag the top handle upward to expand the textarea.
+  // PiP input area height resize: drag the top handle upward to expand the textarea.
   // Used by DM PiP, thread input, AND the main channel composer (#5327).
   // We set both `height` and `min-height` inline so the auto-grow `input`
   // handler (which sets `height = 'auto'` then caps at a small default) can't
@@ -448,10 +448,10 @@ _bindThreadAndDmPanels() {
 // ── DM Picture-in-Picture (overlay panel, like thread PiP) ──
 // Opens a floating, draggable, resizable panel that hosts a DM
 // without leaving the user's current channel. The DM panel is its
-// own message view — receives `new-message` events filtered by code,
+// own message view, which receives `new-message` events filtered by code,
 // sends via `send-message` with the PiP channel code.
 _openDMPiP(code) {
-  // Don't open as PiP if this DM is already the active main channel — user is
+  // Don't open as PiP if this DM is already the active main channel; user is
   // already viewing it. This prevents sidebar clicks, dm-opened events, and
   // channel-link clicks from spawning a redundant PiP overlay.
   if (code === this.currentChannel) return;
@@ -462,7 +462,7 @@ _openDMPiP(code) {
   // Keep the DM PiP cleared from the unread badge AND tell the server
   // we've read up to its latest message.  Without the server emit the
   // local mirror gets clobbered the next time `channels-list` snapshots
-  // (which can happen at any moment for unrelated reasons — a peer
+  // (which can happen at any moment for unrelated reasons: a peer
   // joining a voice channel, an admin tweak, a role change, etc.) and
   // the unread dot keeps coming back forever.  This was the root cause
   // of "I've sat on this DM for an hour and it still keeps re-notifying".
@@ -483,7 +483,7 @@ _openDMPiP(code) {
   if (!panel) {
     // Fallback: cached app shell may predate the PiP panel element. Open the
     // DM in the main pane so the click isn't a no-op (notably for self-DMs
-    // where users were seeing the toast but no panel — issue: SerChiz v3.8).
+    // where users were seeing the toast but no panel; issue: SerChiz v3.8).
     console.warn('[DM] PiP panel not found in DOM, falling back to switchChannel');
     this._activeDMPip = null;
     try { localStorage.removeItem('haven_active_dm_pip'); } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
@@ -546,7 +546,7 @@ _refreshDMPipHeader(ch, partnerName) {
       || 'circle';
     avatarWrap.className = `dm-pip-avatar-wrap avatar-${shape}`;
     // Determine status: 'online' / 'away' / 'dnd' / 'invisible' / 'offline'
-    // (matches the sidebar `.user-status-dot` modifier classes — empty
+    // (matches the sidebar `.user-status-dot` modifier classes: empty
     // class = online green; 'away'/'dnd'/'invisible' for explicit states;
     // offline users are treated as 'away' visually like the sidebar does
     // so a self-DM (always us) doesn't render a meaningless gray dot.)
@@ -703,7 +703,7 @@ _bindDMPiPDrag() {
 },
 
 // Render a DM message in the PiP panel using the same DOM structure as
-// the main pane.  Avatars are hidden via CSS — partner pfp lives in the
+// the main pane.  Avatars are hidden via CSS; partner pfp lives in the
 // header instead, since DMs are 1-on-1 and the per-row pfp is redundant.
 _appendDMPiPMessage(msg) {
   const list = document.getElementById('dm-pip-messages');
@@ -735,7 +735,7 @@ _appendDMPiPMessage(msg) {
   const wasAtBottom = (list.scrollHeight - list.clientHeight - list.scrollTop) < 80;
   const el = this._createMessageEl(msg, prevMsg);
   list.appendChild(el);
-  // Async content (link previews, E2E images/files, videos) — hook into existing pipelines
+  // Async content (link previews, E2E images/files, videos): hook into existing pipelines
   try { this._fetchLinkPreviews?.(el); } catch (err) { console.warn('[DM PiP] _fetchLinkPreviews failed', err); }
   try { this._setupVideos?.(el); } catch (err) { console.warn('[DM PiP] _setupVideos failed', err); }
   try { this._decryptE2EImages?.(el); } catch (err) { console.warn('[DM PiP] _decryptE2EImages failed', err); }

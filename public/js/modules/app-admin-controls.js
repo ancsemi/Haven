@@ -48,7 +48,7 @@ _bindAdminModeration() {
 },
 
 _bindAdminControls() {
-  // Member visibility select (admin) — saved via admin Save button
+  // Member visibility select (admin), saved via admin Save button
 
   // View bans button
   document.getElementById('view-bans-btn').addEventListener('click', () => {
@@ -146,7 +146,7 @@ _bindAdminControls() {
     if (this._openBulkCleanup) this._openBulkCleanup();
   });
 
-  // ── Cleanup controls (admin) — saved via admin Save button ──
+  // ── Cleanup controls (admin), saved via admin Save button ──
   const cleanupAge = document.getElementById('cleanup-max-age');
   if (cleanupAge) {
     cleanupAge.addEventListener('change', () => {
@@ -270,7 +270,7 @@ _bindAdminControls() {
             if (progLabel) progLabel.textContent = t('settings.admin.restore_upload_progress_bytes', { pct, done: fmtBytesR(e.loaded), total: fmtBytesR(e.total) });
           };
           xhr.upload.onload = () => {
-            // Upload finished — server now stages the zip to disk. Flip to the
+            // Upload finished: server now stages the zip to disk. Flip to the
             // extraction phase; socket events refine this if/when they arrive.
             setBar(0, true);
             if (progLabel) progLabel.textContent = t('settings.admin.restore_upload_complete');
@@ -474,7 +474,7 @@ _bindAdminControls() {
     const token = localStorage.getItem('haven_token');
     if (!token) return;
     // Visible status before the fetch so admins always see *something*
-    // happen on click — helps diagnose cases where the request fails
+    // happen on click. This helps diagnose cases where the request fails
     // silently or the host blocks the request. (#5267)
     if (status) {
       if (status.style) status.style.display = 'block';
@@ -495,7 +495,7 @@ _bindAdminControls() {
   });
 
   // ── Whitelist controls (admin) ───────────────────────
-  // Whitelist toggle — saved via admin Save button
+  // Whitelist toggle, saved via admin Save button
 
   document.getElementById('whitelist-add-btn').addEventListener('click', () => {
     const input = document.getElementById('whitelist-username-input');
@@ -524,7 +524,7 @@ _bindAdminControls() {
     this.socket.emit('get-automod-log', { limit: 100 });
   }
 
-  // ── Tunnel settings (immediate — not part of Save flow) ──
+  // ── Tunnel settings (immediate, not part of Save flow) ──
   const tunnelToggleBtn = document.getElementById('tunnel-toggle-btn');
   if (tunnelToggleBtn) {
     tunnelToggleBtn.addEventListener('click', () => {
@@ -548,7 +548,7 @@ _bindAdminControls() {
     });
   }
 
-  // ── Server invite code (immediate — not part of Save flow) ──
+  // ── Server invite code (immediate, not part of Save flow) ──
   document.getElementById('generate-server-code-btn')?.addEventListener('click', () => {
     this.socket.emit('generate-server-code');
   });
@@ -575,7 +575,7 @@ _bindAdminControls() {
     }
   });
 
-  // ── Registration token (#5344) — independent of whitelist ──
+  // ── Registration token (#5344), independent of whitelist ──
   document.getElementById('registration-token-enabled')?.addEventListener('change', (e) => {
     this.socket.emit('update-server-setting', {
       key: 'registration_token_enabled',
@@ -679,7 +679,7 @@ _bindAdminControls() {
     }
     // CSV of channel ids. Empty string = no channels (guests can log in but have nowhere to go).
     // (#5401) Sub-channels and voice rooms are listed individually so admins
-    // grant guests exactly the channels they intend — no implicit cascade.
+    // grant guests exactly the channels they intend, no implicit cascade.
     const raw = this.serverSettings?.guest_channels || '';
     const selected = new Set(
       raw.split(',').map(s => s.trim()).filter(Boolean).map(s => parseInt(s)).filter(Number.isFinite)
@@ -981,7 +981,7 @@ _bindAdminControls() {
     }
   });
 
-  // Invite Links popout — open/close. Refresh the list and create-form channels
+  // Invite Links popout: open/close. Refresh the list and create-form channels
   // on open so the modal always reflects current state.
   // Active sessions. Refreshed whenever the Account settings pane is opened
   // rather than polled, since the list is only interesting while you look at it.

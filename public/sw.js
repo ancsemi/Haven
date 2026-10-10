@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Service Worker for Push Notifications
+// Haven: Service Worker for Push Notifications
 // Handles incoming push events and notification click actions
 // ═══════════════════════════════════════════════════════════
 
@@ -59,7 +59,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Activate immediately — don't wait for old SW to die
+// Activate immediately; don't wait for old SW to die
 self.addEventListener('activate', (event) => {
   event.waitUntil(clients.claim());
 });

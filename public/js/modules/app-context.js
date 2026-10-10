@@ -132,7 +132,7 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
   // "Add to Channel" mirrors the invite filter but also skips sub-channels and
   // never targets yourself. Its own picker validates membership server-side.
   // It used to live inside the mod-only gear menu, so it stays gated on the same
-  // mod-ish powers — regular members use "Invite to Channel" above instead.
+  // mod-ish powers; regular members use "Invite to Channel" above instead.
   const addToChannelList = (this.channels || []).filter(ch =>
     !ch.is_dm && ch.name && !ch.parent_channel_id &&
     ((!ch.is_private && ch.code_visibility !== 'private') || isAdmin || ch.canInvitePrivate)
@@ -522,7 +522,7 @@ _setupNotifications() {
     });
   }
 
-  // DM single-click default — open fullscreen DM instead of PiP. (#5295)
+  // DM single-click default: open fullscreen DM instead of PiP. (#5295)
   const dmFsToggle = document.getElementById('dm-fullscreen-default');
   if (dmFsToggle) {
     dmFsToggle.checked = localStorage.getItem('haven_dm_fullscreen_default') === 'true';
@@ -550,7 +550,7 @@ _setupNotifications() {
         // The show branch sets an INLINE `display: flex !important`, and inline
         // !important outranks the stylesheet's `[data-hide-statusbar] .status-bar
         // { display: none !important }`. Leaving it in place meant the bar could
-        // be shown once and then never hidden again — the attribute flipped, the
+        // be shown once and then never hidden again: the attribute flipped, the
         // checkbox unchecked, and the bar stayed on screen regardless.
         if (sb) sb.style.removeProperty('display');
       }
@@ -561,7 +561,7 @@ _setupNotifications() {
     });
     applyStatusBar();
   }
-  // Toggle tab (visible when bar is hidden) — click to show bar
+  // Toggle tab (visible when bar is hidden): click to show bar
   if (statusBarToggleTab) {
     statusBarToggleTab.addEventListener('click', () => {
       if (showStatusBarToggle) {
@@ -663,7 +663,7 @@ _setupNotifications() {
     // Mirrors the server's read in activity.js prefsFor(): absent = on.
     const master = prefs.share_activity !== 'false';
     if (shareActivityToggle) shareActivityToggle.checked = master;
-    // Absent sub-preference means "on" — matches the server's read of it.
+    // Absent sub-preference means "on", which matches the server's read of it.
     if (shareGameToggle)  shareGameToggle.checked  = prefs.share_game_activity  !== 'false';
     if (shareMusicToggle) shareMusicToggle.checked = prefs.share_music_activity !== 'false';
     if (activitySubOptions) activitySubOptions.style.display = master ? '' : 'none';
@@ -726,7 +726,7 @@ _setupNotifications() {
 
     const isLoopback = (u) => /^https?:\/\/(localhost|127\.0\.0\.1|\[?::1\]?)(:|$)/i.test(u || '');
 
-    // Always start hidden each session — the address is only revealed after
+    // Always start hidden each session; the address is only revealed after
     // an explicit click, and that choice is intentionally NOT persisted so it
     // resets to hidden every time the app (re)loads. (privacy default)
     let urlVisible = false;
@@ -766,7 +766,7 @@ _setupNotifications() {
       applyUrlVis();
     });
 
-    // Click to copy — works even when URL is hidden.
+    // Click to copy: works even when URL is hidden.
     // navigator.clipboard.writeText() fails silently in Electron's BrowserView,
     // so fall back to a hidden-textarea execCommand('copy') like the other
     // copy buttons do. (#182)
@@ -802,7 +802,7 @@ async _setupPushNotifications() {
   const toggle = document.getElementById('push-notif-enabled');
   const statusEl = document.getElementById('push-notif-status');
 
-  // Haven Desktop provides native OS notifications via app-preload.js — hide the web-push section entirely
+  // Haven Desktop provides native OS notifications via app-preload.js, so hide the web-push section entirely
   if (window.havenDesktop?.isDesktopApp) {
     const section = document.getElementById('section-push');
     if (section) section.style.display = 'none';
@@ -887,7 +887,7 @@ async _setupPushNotifications() {
     existingSub = await this._swRegistration.pushManager.getSubscription();
   } catch (err) {
     console.warn('Push getSubscription failed (non-fatal, will retry on subscribe):', err.message || err);
-    // Don't bail out — let the user attempt to subscribe via the toggle.
+    // Don't bail out; let the user attempt to subscribe via the toggle.
     // The actual subscribe() call in _subscribePush will surface the real error.
   }
 
@@ -1260,7 +1260,7 @@ async _refreshTunnelStatus() {
       headers: { 'Authorization': `Bearer ${this.token}` }
     });
     if (!res.ok && res.status !== 304) throw new Error(`HTTP ${res.status}`);
-    if (res.status === 304) return;  // Not Modified — nothing to update
+    if (res.status === 304) return;  // Not Modified: nothing to update
     const data = await res.json();
     this._updateTunnelStatusUI(data);
     // If still starting, poll again in 2 s
@@ -1373,7 +1373,7 @@ _startStatusBar() {
     document.documentElement.setAttribute('data-desktop-app', '1');
     // The status bar is the desktop app's only footer. Pre-v1.4.26 builds
     // inject one of their own from the preload, which used to make us stand
-    // down here to avoid two stacked bars — but that legacy bar is now hidden
+    // down here to avoid two stacked bars, but that legacy bar is now hidden
     // in CSS, so standing down would leave no footer at all. Show ours unless
     // the Settings toggle is off (#5647).
     if (this._statusBarWanted()) _forceWebStatusBar();
@@ -1415,19 +1415,19 @@ _updateClock() {
  * Emit a latency probe, recording when it went out.
  *
  * Timestamps go in a FIFO rather than a single `_pingStart` field because
- * more than one place emits 'ping-check' — the 15 s monitor below and the
+ * more than one place emits 'ping-check' (the 15 s monitor below and the
  * window-focus zombie-socket probe in app-socket.js. The server replies with
  * a bare 'pong-check' carrying no correlation id, so a shared field meant the
  * focus probe's pong was measured against the *previous scheduled ping's*
  * timestamp. That reported "time since the last 15 s tick" as latency: a
- * uniformly random 0–15000 ms, which is where multi-second readings on a
+ * uniformly random 0 to 15000 ms, which is where multi-second readings on a
  * localhost server came from. Socket.IO preserves ordering, so pongs come
  * back in send order and the queue pairs them up correctly.
  */
 _pingSend() {
   if (!this.socket || !this.socket.connected) return;
   if (!this._pingQueue) this._pingQueue = [];
-  // If pongs stop coming back, don't accumulate — a stale head would later be
+  // If pongs stop coming back, don't accumulate: a stale head would later be
   // paired with an unrelated pong and produce exactly the bogus reading this
   // is meant to prevent.
   if (this._pingQueue.length >= 4) this._pingQueue.shift();
@@ -1481,7 +1481,7 @@ _startPerfDiagnostics() {
   const SAMPLE_INTERVAL = 1000;   // measure one FPS reading every 1 s
   const REPORT_INTERVAL = 15000;  // evaluate + log every 15 s
   const FPS_WARN        = 30;     // warn below this average
-  const FPS_CRITICAL    = 12;     // critical — user is seeing freeze
+  const FPS_CRITICAL    = 12;     // critical: user is seeing freeze
 
   const samples = [];             // rolling window of {fps, ts}
   const MAX_SAMPLES = 60;         // keep last 60 s of FPS readings
@@ -1490,7 +1490,7 @@ _startPerfDiagnostics() {
   let rafId = null;
   let reportTimer = null;
 
-  // Count frames via rAF — skip sampling when the window is hidden/backgrounded
+  // Count frames via rAF; skip sampling when the window is hidden/backgrounded
   // because Chromium throttles rAF to ~1 FPS in background tabs, which would
   // cause false CRITICAL alerts even when the app is perfectly healthy.
   //
@@ -1499,7 +1499,7 @@ _startPerfDiagnostics() {
   // vsync for the whole session, so the compositor and GPU never get to go
   // idle and any running CSS animation is re-evaluated on every one of those
   // frames. Measuring the frame rate does need rAF, but it does not need it
-  // 100% of the time — three seconds out of every fifteen is plenty for an
+  // 100% of the time. Three seconds out of every fifteen is plenty for an
   // average and a trend, and leaves the renderer alone the rest of the time.
   const BURST_MS = 3000;
   let burstStart = 0;
@@ -1521,7 +1521,7 @@ _startPerfDiagnostics() {
       lastSampleTime = now;
     }
     if (now - burstStart >= BURST_MS) {
-      rafId = null;   // burst over — stop asking for frames until the next one
+      rafId = null;   // burst over, stop asking for frames until the next one
       return;
     }
     rafId = requestAnimationFrame(countFrame);
@@ -1583,7 +1583,7 @@ _startPerfDiagnostics() {
     }
   }, REPORT_INTERVAL);
 
-  // Take the next reading (#5456) — the frame loop is idle between bursts.
+  // Take the next reading (#5456); the frame loop is idle between bursts.
   const burstTimer = setInterval(startBurst, REPORT_INTERVAL);
 
   this._perfDiag = { reportTimer, burstTimer, samples, stop: () => {

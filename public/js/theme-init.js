@@ -161,7 +161,7 @@
       document.documentElement.style.removeProperty(leakedKeys[i]);
     }
   }
-  // Apply effect overlay system (stackable) — always strip theme pseudo-element effects
+  // Apply effect overlay system (stackable); always strip theme pseudo-element effects
   document.documentElement.setAttribute('data-fx-custom', '');
   var fxRaw = (_safeMode || _resetPending) ? '[]' : (localStorage.getItem('haven_effects') || 'auto');
   var fxMode;

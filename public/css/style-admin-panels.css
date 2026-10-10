@@ -530,7 +530,7 @@
   pointer-events: none;
 }
 
-/* Banner visible — base: header & topic above banner */
+/* Banner visible (base): header & topic above banner */
 .main.has-banner .channel-topic-bar,
 /* The banner is absolutely positioned at z-index 0, so it paints over any
    sibling that is not itself positioned. The header and topic bar were lifted
@@ -1387,7 +1387,7 @@
    Consolidated fixes for cramped / overflowing mobile UIs
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-/* ── Fix: Members modal — use horizontal space, not purely vertical ── */
+/* ── Fix: Members modal, use horizontal space, not purely vertical ── */
 @media (max-width: 600px) {
   /* The modal itself should be near full-width */
   #all-members-modal .modal {
@@ -1435,7 +1435,7 @@
   }
 }
 
-/* ── Fix: RAC (Role Assignment) modal — less claustrophobic on mobile ── */
+/* ── Fix: RAC (Role Assignment) modal, less claustrophobic on mobile ── */
 @media (max-width: 600px) {
   .role-assign-center-box {
     width: 97vw !important;
@@ -1465,7 +1465,7 @@
   .rac-role-select { font-size: 0.78rem; }
 }
 
-/* ── Fix: Reaction picker overflow — keep within viewport ── */
+/* ── Fix: Reaction picker overflow, keep within viewport ── */
 @media (max-width: 480px) {
   .reaction-picker {
     position: fixed !important;

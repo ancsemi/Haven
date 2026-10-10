@@ -156,7 +156,7 @@ _renderImageQueue() {
   this._renderTagBar();
 },
 
-// ── Attachment tagging (composer) — (#tagging) ──────────────────────────────
+// ── Attachment tagging (composer) (#tagging) ──────────────────────────────
 // A row below the image-queue bar tags the *active* attachment. Tags ride on
 // the File object (`_tags`), same trick as `_spoiler`, so the flush loop can
 // read them without extra state. Applying an existing tag is open to any
@@ -261,7 +261,7 @@ _renderTagBar() {
 },
 
 // Wire the Add-tag button, the popup input and the outside-click closer exactly
-// once — the tag bar is re-rendered constantly, so per-render binding would
+// once. The tag bar is re-rendered constantly, so per-render binding would
 // stack listeners.
 _ensureTagComposerBound() {
   if (this._tagComposerBound) return;
@@ -320,7 +320,7 @@ _closeTagPopup() {
   clearTimeout(this._tagSearchTimer);
 },
 
-// Client mirror of src/uploadTags.normalizeTagName — same rules so the picker
+// Client mirror of src/uploadTags.normalizeTagName: same rules so the picker
 // rejects what the server would. Returns { name, norm } or null.
 _normalizeTag(raw) {
   if (typeof raw !== 'string') return null;
@@ -540,7 +540,7 @@ async _flushImageQueue(bundled = false, personaPrefix = '') {
   }
 },
 
-// ── General file queue (non-image attachments) — (#5417) ──
+// ── General file queue (non-image attachments) (#5417) ──
 // Mirrors _imageQueue so non-image attachments get a remove-able preview
 // chip in the same bar instead of uploading instantly on selection.
 _queueGeneralFile(file) {

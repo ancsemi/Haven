@@ -29,7 +29,7 @@ _openChannelCtxMenu(code, btnEl) {
   // (#5467) Channel Functions is gated on its own permission now, so a
   // moderator who runs one channel can configure it without also holding
   // create_channel. The answer is per channel and comes from the server
-  // (canManageSettings on the channel row) — the flat permission list can't
+  // (canManageSettings on the channel row); the flat permission list can't
   // tell "manage this channel" apart from "manage some other channel", so it
   // used to show the entry everywhere once you held the permission anywhere.
   const ch = this.channels.find(c => c.code === code);
@@ -134,7 +134,7 @@ _openChannelCtxMenu(code, btnEl) {
     // (#5492) Mirror the server's rule instead of approximating it: you need
     // the current parent if there is one, plus at least one destination you
     // actually manage. A top-level channel has no parent to answer to, so
-    // managing a destination is enough to pull it in — otherwise the entry
+    // managing a destination is enough to pull it in, otherwise the entry
     // hid an action the server would have allowed.
     const sourceOk = !ch.parent_channel_id || canManageSubs;
     const hasTarget = this._reparentTargets(ch).length > 0;
@@ -174,7 +174,7 @@ _openChannelCtxMenu(code, btnEl) {
   });
 },
 
-/* ── Hidden channels (admin declutter, local-only — #5409) ─────────────
+/* ── Hidden channels (admin declutter, local-only, #5409) ─────────────
    Admins can't leave channels because they need access to every one, so
    instead they can hide a channel from their own sidebar. This is purely a
    per-device view preference (localStorage), like mute. It never changes
@@ -387,7 +387,7 @@ _updateChannelFunctionsPanel(ch) {
   const cleanupRow = document.querySelector('.cfn-row[data-fn="cleanup-exempt"]');
   if (cleanupRow) cleanupRow.style.display = isAdmin ? '' : 'none';
   this._setCfnBadge('cleanup-exempt', ch.cleanup_exempt === 1, t(ch.cleanup_exempt === 1 ? 'channel_functions.on' : 'channel_functions.off'));
-  // Welcome messages — text channels only, hide the row for DMs.
+  // Welcome messages: text channels only, hide the row for DMs.
   const welcomeRow = document.querySelector('.cfn-row[data-fn="welcome"]');
   if (welcomeRow) welcomeRow.style.display = (ch.is_dm || !isAdmin) ? 'none' : '';
   this._setCfnBadge('welcome', ch.show_welcome === 1, t(ch.show_welcome === 1 ? 'channel_functions.on' : 'channel_functions.off'));
@@ -411,10 +411,10 @@ _updateChannelFunctionsPanel(ch) {
   // Announcement channel
   const isAnnouncement = ch.notification_type === 'announcement';
   this._setCfnBadge('announcement', isAnnouncement, t(isAnnouncement ? 'channel_functions.on' : 'channel_functions.off'));
-  // (#5389) Default role badge — show role name when set, else "None".
+  // (#5389) Default role badge: show role name when set, else "None".
   // Hide for DMs since DMs have no role concept.
   // (#5467) Setting a channel's default role hands out a role, so the server
-  // gates it on manage_roles — hide the row for anyone who lacks that.
+  // gates it on manage_roles, so hide the row for anyone who lacks that.
   const canSetDefaultRole = isAdmin || this._hasPerm('manage_roles');
   const defaultRoleRow = document.querySelector('.cfn-row[data-fn="default-role"]');
   if (defaultRoleRow) {
@@ -430,7 +430,7 @@ _updateChannelFunctionsPanel(ch) {
   const hasExpiry = !!ch.expires_at;
   if (hasExpiry) {
     const hoursLeft = Math.max(1, Math.round((new Date(ch.expires_at) - Date.now()) / 3600000));
-    // #5390 — distinguish 'clear messages' mode from full channel deletion
+    // #5390: distinguish 'clear messages' mode from full channel deletion
     // so admins can tell at a glance what the timer will do. The ↻ glyph
     // hints that the clear timer rearms itself.
     const isClear = ch.auto_delete_mode === 'clear';

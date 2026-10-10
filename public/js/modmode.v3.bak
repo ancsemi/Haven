@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Mod Mode (layout customisation) v3
+// Haven: Mod Mode (layout customisation) v3
 // - Sections can be reordered within panels via drag-and-drop.
 // - Sections can be floated: free-floating windows that are
 //   draggable and resizable even OUTSIDE mod mode.
@@ -18,7 +18,7 @@ class ModMode {
     this.dragSrc = null;
     this.dragGroup = [];
 
-    /* Section panels — where data-mod-id sections can live */
+    /* Section panels: where data-mod-id sections can live */
     this.sectionPanels = ['sidebar-mod-container', 'right-sidebar', 'status-bar', 'float-layer'];
 
     this.defaultState = () => ({
@@ -169,7 +169,7 @@ class ModMode {
     }
   }
 
-  // ── Floating pill (Save & Exit — bottom-right, non-blocking) ──
+  // ── Floating pill (Save & Exit, bottom-right, non-blocking) ──
 
   _showPill() {
     let pill = document.getElementById('mod-mode-pill');
@@ -255,7 +255,7 @@ class ModMode {
     s.addEventListener('dragleave', this._bound.dragLeave);
     s.addEventListener('drop',      this._bound.drop);
     this._injectSectionControls(s);
-    // Make section labels and the drag handle actual drag sources \u2014
+    // Make section labels and the drag handle actual drag sources;
     // the section body itself is NOT draggable (prevents scroll conflicts)
     s.querySelectorAll('.section-label').forEach(label => {
       label.setAttribute('draggable', 'true');
@@ -370,7 +370,7 @@ class ModMode {
     /* Only start if the drag originated from a draggable child (label/handle) */
     if (!e.target.matches || !e.target.closest('[draggable="true"]')) return;
     const s = e.currentTarget;
-    /* Don't allow reorder-drag on floating sections \u2014 they use mousedown drag */
+    /* Don't allow reorder-drag on floating sections; they use mousedown drag */
     if (s.classList.contains('mod-floating')) { e.preventDefault(); return; }
     this.dragSrc = s;
     const id = s.dataset.modId;

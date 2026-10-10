@@ -328,7 +328,7 @@
   text-transform: uppercase;
   /* Space below title, above the card */
   margin: 0 0 10px;
-  /* Never shrink — stays above the scroll box */
+  /* Never shrink; stays above the scroll box */
   flex-shrink: 0;
 }
 .donors-tier-title::before,
@@ -426,7 +426,7 @@
   text-decoration: none;
   transition: transform .15s, box-shadow .15s;
   box-shadow: 0 3px 12px rgba(226,68,68,.35);
-  /* Pinned to the bottom of the flex column modal — never shrinks, never
+  /* Pinned to the bottom of the flex column modal: never shrinks, never
      scrolls out of view. */
   flex-shrink: 0;
   align-self: center;
@@ -839,13 +839,13 @@
 #app-body .server-bar[data-panel-pos="left"] { order: 0; }
 #app-body .sidebar[data-panel-pos="left"] { order: 1; }
 #app-body .main { order: 2; }
-/* Soundboard sidebar twins the voice/users panel — sits directly LEFT of it.
+/* Soundboard sidebar twins the voice/users panel and sits directly LEFT of it.
    Default flex order with no explicit value is 0, which puts it at the far
    LEFT of #app-body. Force it between main (2) and right-sidebar (4). */
 #app-body .sb-sidebar-panel { order: 3; }
 #app-body .right-sidebar { order: 4; }
 
-/* Right sidebar — snapped left */
+/* Right sidebar: snapped left */
 #app-body .right-sidebar[data-panel-pos="left"] {
   order: 1;
   border-left: none;
@@ -857,7 +857,7 @@
 }
 #app-body .right-sidebar[data-panel-pos="right"] { order: 4; }
 
-/* Floating panel (center) — any panel */
+/* Floating panel (center): any panel */
 .mod-float {
   position: fixed !important;
   z-index: 500;
@@ -959,7 +959,7 @@
   transform: rotate(-90deg);
 }
 
-/* Drag handle between channels & DMs — blends with natural section border */
+/* Drag handle between channels & DMs: blends with natural section border */
 .sidebar-split-handle {
   height: 0;
   position: relative;
@@ -1062,7 +1062,7 @@
 
 /* Burn-after-read message states */
 .message-burn-pending .message-content {
-  /* No left border — the flame icon is the indicator. The orange bar
+  /* No left border; the flame icon is the indicator. The orange bar
      looked noisy and inconsistent across full vs compact rows. */
   padding-left: 0;
 }

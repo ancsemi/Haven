@@ -234,7 +234,7 @@
   background: var(--bg-hover);
 }
 
-/* Mobile server dropdown — hidden on desktop, shown at ≤768px */
+/* Mobile server dropdown: hidden on desktop, shown at ≤768px */
 .mobile-server-dropdown { display: none; position: relative; }
 .mobile-server-btn {
   background: transparent; border: none; color: var(--accent, #7c5cfc);
@@ -370,7 +370,7 @@
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 @media (max-width: 768px) {
-  /* Safe area insets — left/right only on #app; top/bottom applied
+  /* Safe area insets: left/right only on #app; top/bottom applied
      directly to edge elements (channel-header, input area, sidebar)
      so iOS Safari honours them reliably with viewport-fit=cover. */
   #app {
@@ -401,7 +401,7 @@
   .welcome-screen { width: 100%; justify-content: center; align-items: center; }
   .welcome-content { max-width: 90vw; padding: 0 1rem; }
 
-  /* Left sidebar — slide out as overlay (! overrides theme [data-theme] .sidebar { position: relative }) */
+  /* Left sidebar: slide out as overlay (! overrides theme [data-theme] .sidebar { position: relative }) */
   .sidebar {
     position: fixed !important;
     left: 0;
@@ -431,7 +431,7 @@
     display: none;
   }
 
-  /* Right sidebar — slide in from right as overlay */
+  /* Right sidebar: slide in from right as overlay */
   .right-sidebar {
     display: flex !important;
     position: fixed;
@@ -454,7 +454,7 @@
     transform: translateX(0);
   }
 
-  /* Channel header adjustments — safe-area-inset-top prevents
+  /* Channel header adjustments: safe-area-inset-top prevents
      underlapping the iOS status bar / Dynamic Island */
   .channel-header {
     padding: calc(0.5rem + constant(safe-area-inset-top)) 0.75rem 0.5rem; /* iOS 11.0-11.1 */
@@ -466,7 +466,7 @@
   .channel-info h3 { font-size: 0.875rem; }
   .channel-code-tag { font-size: 0.625rem; padding: 0.0625rem 0.375rem; }
 
-  /* Hide header clutter — search/pin/delete tucked into long-press or sidebar */
+  /* Hide header clutter: search/pin/delete tucked into long-press or sidebar */
   #delete-channel-btn,
   #search-toggle-btn,
   #pinned-toggle-btn,
@@ -486,19 +486,19 @@
   .reply-banner { max-width: 100%; flex-wrap: wrap; }
   .reply-preview { white-space: normal; word-break: break-word; }
 
-  /* GIF picker — constrained on tablet */
+  /* GIF picker: constrained on tablet */
   .gif-picker { max-width: 22.5rem; }
 
-  /* Screen share — constrained */
+  /* Screen share: constrained */
   .screen-share-container { max-height: 40vh; }
-  /* Webcam — constrained */
+  /* Webcam: constrained */
   .webcam-container { max-height: 10rem; }
   .webcam-tile { width: 7.5rem; height: 5.625rem; }
 
-  /* Status bar — condense on small tablets but keep visible */
+  /* Status bar: condense on small tablets but keep visible */
   .status-bar .status-item:nth-child(n+5) { display: none; }
 
-  /* Server banner — smaller on mobile */
+  /* Server banner: smaller on mobile */
   .server-banner-display { height: 7.5rem; }
   .server-banner-display::after { height: 3.125rem; }
 }
@@ -517,7 +517,7 @@
 
   .right-sidebar { width: 85vw; min-width: 85vw; }
 
-  /* Channel header — tight, prevent overflow, safe-area top */
+  /* Channel header: tight, prevent overflow, safe-area top */
   .channel-header {
     padding: calc(0.375rem + env(safe-area-inset-top, 0px)) 0.5rem 0.375rem;
     min-height: calc(2.75rem + env(safe-area-inset-top, 0px));
@@ -533,16 +533,16 @@
   .channel-info h3 { font-size: 0.8125rem; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .channel-code-tag { display: none !important; }
 
-  /* Android beta banner — hide on phone, it eats header space */
+  /* Android beta banner: hide on phone, it eats header space */
   .android-beta-banner { display: none !important; }
 
-  /* Update banner — compact on phone */
+  /* Update banner: compact on phone */
   .update-banner { padding: 0.1875rem 0.5rem; font-size: 0.6875rem; }
   .disk-low-banner { padding: 0.1875rem 0.5rem; font-size: 0.6875rem; }
   .disk-low-dot { width: 0.375rem; height: 0.375rem; }
   .update-pulse { width: 0.375rem; height: 0.375rem; }
 
-  /* Desktop app banner — hide on mobile (they have Haven-Android) */
+  /* Desktop app banner: hide on mobile (they have Haven-Android) */
   .desktop-app-banner { display: none !important; }
 
   @keyframes slideUpSheet {
@@ -562,16 +562,16 @@
   .message-time { font-size: 0.625rem; }
   .message-header { flex-wrap: wrap; }
 
-  /* Reply banners — allow wrapping on mobile */
+  /* Reply banners: allow wrapping on mobile */
   .reply-banner { max-width: 100%; flex-wrap: wrap; }
   .reply-preview { white-space: normal; word-break: break-word; }
 
-  /* Chat images — scale down for mobile, preserve aspect ratio */
+  /* Chat images: scale down for mobile, preserve aspect ratio */
   .chat-image { display: block; max-width: min(80%, 17.5rem); max-height: 18.75rem; object-fit: contain; width: auto; height: auto; }
   .image-mode-full .chat-image { max-width: 100%; max-height: 17.5rem; }
   .message-compact .chat-image { margin-top: 0.25rem; }
 
-  /* Input area — single-row inline layout */
+  /* Input area: single-row inline layout */
   .message-input-area {
     padding: 0.375rem 0.5rem calc(0.375rem + env(safe-area-inset-bottom, 0px));
     gap: 0.25rem;
@@ -580,7 +580,7 @@
   }
   .message-input-area textarea { min-width: auto; }
 
-  /* Media buttons — compact inline, not a separate row */
+  /* Media buttons: compact inline, not a separate row */
   .input-actions-box {
     border-radius: 1rem;
     padding: 0.125rem 0.125rem;
@@ -590,7 +590,7 @@
     border: none;
     background: none;
   }
-  /* Hide dividers on phone — too cramped */
+  /* Hide dividers on phone (too cramped) */
   .input-actions-box .input-actions-divider { display: none; }
   .input-actions-box .btn-upload,
   .input-actions-box .btn-emoji,
@@ -634,7 +634,7 @@
     order: 2;
   }
 
-  /* GIF picker — full width on phone */
+  /* GIF picker: full width on phone */
   .gif-picker {
     left: 4px;
     right: 4px;
@@ -646,7 +646,7 @@
 
   .gif-picker-grid { max-height: 40vh; }
 
-  /* Emoji picker — fixed positioning on phone so it doesn't push layout */
+  /* Emoji picker: fixed positioning on phone so it doesn't push layout */
   .emoji-picker {
     position: fixed;
     left: 4px;
@@ -662,7 +662,7 @@
   .emoji-grid { max-height: min(12.5rem, 30vh); }
   .emoji-item { width: 2.5rem; height: 2.5rem; font-size: 1.375rem; }
 
-  /* Mention dropdown — wider */
+  /* Mention dropdown: wider */
   .mention-dropdown {
     left: 8px;
     right: 8px;
@@ -677,7 +677,7 @@
   .reply-banner { padding: 0.25rem 0.5rem; font-size: 0.75em; max-width: 100%; flex-wrap: wrap; }
   .reply-preview { white-space: normal; word-break: break-word; }
 
-  /* Reaction badges — touch-friendly */
+  /* Reaction badges: touch-friendly */
   .reaction-badge { padding: 0.25rem 0.625rem; font-size: 0.875rem; }
   .reaction-picker { gap: 0.25rem; padding: 0.375rem 0.5rem; }
   .reaction-pick-btn { width: 2.375rem; height: 2.375rem; font-size: 1.25rem; }
@@ -685,13 +685,13 @@
 
   /* Toolbar touch overrides are in the (hover: none) query below */
 
-  /* Screen share — smaller on phone */
+  /* Screen share: smaller on phone */
   .screen-share-container { max-height: 35vh; min-height: 7.5rem; }
-  /* Webcam — smaller on phone */
+  /* Webcam: smaller on phone */
   .webcam-container { max-height: 8.125rem; }
   .webcam-tile { width: 6.25rem; height: 4.6875rem; }
 
-  /* Status bar — condense on phones */
+  /* Status bar: condense on phones */
   .status-bar .status-item:nth-child(n+3) { display: none; }
 
   /* Welcome screen */
@@ -699,16 +699,16 @@
   .welcome-content h2 { font-size: 1.125rem; }
   .welcome-content p { font-size: 0.8125rem; }
 
-  /* Modal — wider on phone */
+  /* Modal: wider on phone */
   .modal { padding: 1.25rem; width: 95%; max-height: 85vh; overflow-y: auto; }
   .modal h3 { font-size: 1.125rem; }
 
-  /* Settings modal — scrollable on phone, hide nav */
+  /* Settings modal: scrollable on phone, hide nav */
   .modal-settings { max-height: 80vh; }
   .settings-nav { display: none; }
   .settings-body { overflow-y: auto; }
 
-  /* Toasts — full width */
+  /* Toasts: full width */
   #toast-container { left: 50%; right: auto; top: calc(8px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); }
   .toast { max-width: none; }
 
@@ -719,7 +719,7 @@
   .search-container { flex: 1; }
   .search-input { font-size: 0.875rem; }
 
-  /* Stream audio controls — always visible on touch */
+  /* Stream audio controls: always visible on touch */
   .stream-audio-controls { opacity: 1; }
   .stream-vol-slider { width: 3.125rem; }
 }
@@ -806,7 +806,7 @@
     padding-top: calc(0.5rem + var(--safe-top, env(safe-area-inset-top, 0px))) !important;
   }
 
-  /* Message input — bottom safe area */
+  /* Message input: bottom safe area */
   body.is-ios .message-input-area,
   body.is-android .message-input-area {
     padding-bottom: calc(0.5rem + var(--safe-bottom, env(safe-area-inset-bottom, 0px))) !important;
@@ -859,7 +859,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
     touch-action: manipulation;
   }
 
-  /* Disable hover effects on touch — prevents iOS "sticky hover" requiring
+  /* Disable hover effects on touch: prevents iOS "sticky hover" requiring
      double-tap (first tap activates :hover, second fires click) */
   .channel-item:hover { background: transparent; }
   .channel-item:hover .channel-name { color: var(--text-secondary); }
@@ -880,7 +880,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
     user-select: text;
   }
 
-  /* Touch devices — larger tap targets */
+  /* Touch devices: larger tap targets */
   .channel-item { padding: 0.75rem 1rem; min-height: 2.75rem; }
   .btn-sm { min-height: 2.75rem; padding: 0.625rem 0.875rem; }
   .icon-btn { min-width: 2.5rem; min-height: 2.5rem; font-size: 1.125rem; }
@@ -891,7 +891,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
   .message:hover, .message-compact:hover { background: transparent; }
   .message-compact:hover .compact-time { display: none !important; }
 
-  /* Kill the hover-triggered toolbar — belt-and-suspenders in case
+  /* Kill the hover-triggered toolbar: belt-and-suspenders in case
      the browser still reports (hover: hover) for the base guard. */
   .message:hover .msg-toolbar,
   .message-compact:hover .msg-toolbar { display: none !important; }
@@ -923,7 +923,7 @@ body.is-ios.ios-keyboard-open .message-input-area {
     font-size: 1rem;
   }
 
-  /* Compact timestamp — always hidden on touch (no real hover exists) */
+  /* Compact timestamp: always hidden on touch (no real hover exists) */
   .message-compact .compact-time { display: none !important; }
 
   /* Smoother scrolling on touch */

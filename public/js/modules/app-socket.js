@@ -269,10 +269,10 @@ _listenSession() {
     // list changed" nudge (role edited, roles reset, admin role display
     // changed) for anyone with the Role Management modal open. There's no
     // per-user permission set to apply then. Bail instead of throwing on
-    // `data.roles` — that TypeError also aborted every roles-updated listener
+    // `data.roles`. That TypeError also aborted every roles-updated listener
     // registered after this one, including the modal's own _loadRoles refresh.
     if (!data) return;
-    // Your own roles/permissions just changed — cached search results may now
+    // Your own roles/permissions just changed, so cached search results may now
     // include messages you can no longer access. Force-invalidate the panel
     // (the channel list may be unchanged, so the signature check won't catch
     // this). Payload-less server-wide nudges bail above and don't trigger it.
@@ -320,7 +320,7 @@ _listenSession() {
     this._authErrorStreak = 0;
     this._startPingMonitor();
     // (#self-absent-voice-panel) Cancel any pending soft-leave from a brief
-    // socket blip — we reconnected before the 2 s deadline, so the voice
+    // socket blip: we reconnected before the 2 s deadline, so the voice
     // session is still live and just needs to rebind its socketId on the
     // server side via voice-rejoin (handled below).
     if (this._voiceDisconnectTimer) {
@@ -353,7 +353,7 @@ _listenSession() {
 
     // (#5399 follow-up) Reconcile per-channel mute prefs with the server
     // once per session so the server can honor them when fanning out
-    // pushes. Guarded internally — safe to call on every reconnect.
+    // pushes. Guarded internally, so safe to call on every reconnect.
     this._bootstrapChannelPrefs?.();
 
     // (#5391) Watchdog: if the socket connects but channels-list never
@@ -373,7 +373,7 @@ _listenSession() {
           headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('haven_token') || '') }
         });
         if (resp.status === 401 || resp.status === 404) {
-          // Token is stale or user row gone — same outcome as a socket
+          // Token is stale or user row gone: same outcome as a socket
           // 'Invalid token' / 'Session expired'. Kick to login.
           this._clearChannelCodeMap();
           localStorage.removeItem('haven_token');
@@ -383,7 +383,7 @@ _listenSession() {
           return;
         }
       } catch {
-        // Network failure — leave it alone, the user can refresh manually.
+        // Network failure: leave it alone, the user can refresh manually.
         return;
       }
       // Token is valid but channels never came. Retry once before giving up.
@@ -392,7 +392,7 @@ _listenSession() {
         this.socket.emit('get-channels');
         setTimeout(() => {
           if (!this._channelsListGotResponse) {
-            // Server clearly can't fulfil get-channels for this session —
+            // Server clearly can't fulfil get-channels for this session;
             // a full reload picks up any server-side fix and re-runs the
             // auth handshake from scratch.
             console.warn('[#5391] channels-list still missing after retry, forcing reload');
@@ -403,7 +403,7 @@ _listenSession() {
     }, 10000);
     if (this.currentChannel) {
       this.socket.emit('enter-channel', { code: this.currentChannel });
-      // Reset pagination — reconnect replaces message list
+      // Reset pagination: reconnect replaces message list
       this._oldestMsgId = null;
       this._noMoreHistory = false;
       this._loadingHistory = false;
@@ -427,7 +427,7 @@ _listenSession() {
       if (this.voice.isDeafened) this.socket.emit('voice-deafen-state', { code: this.voice.currentChannel, deafened: true });
       // (#5427) When the socket flaps (common on the web client behind certain
       // proxies/browsers), this fast-path rejoin keeps the existing peer
-      // connections instead of rebuilding them — but if ICE silently died
+      // connections instead of rebuilding them, but if ICE silently died
       // during the outage, some peers end up with no audio while others are
       // fine. The auto-recovery on connectionstatechange can take up to 8s and
       // can miss an event that fired while we were disconnected. Once signaling
@@ -441,7 +441,7 @@ _listenSession() {
       // tore down local audio but kept the channel intent. Re-init the mic
       // and announce ourselves via voice-rejoin so peers tear down their
       // stale RTCPeerConnections via voice-user-left and we get fresh ones.
-      // This is the proper rejoin path — the localStorage setTimeout(1500)
+      // This is the proper rejoin path. The localStorage setTimeout(1500)
       // fallback below uses voice.join which doesn't do that, leaving peers
       // with dead audio paths even after "rejoin".
       const rejoinChannel = this.voice._softLeftChannel;
@@ -497,11 +497,11 @@ _listenSession() {
     // Track when we went hidden so we can detect long sleeps on resume
     // (PC suspend/lock for hours leaves a "zombie" socket that the client
     // thinks is connected but the server has long since dropped via ping
-    // timeout — the result is empty member lists and no chat history on
+    // timeout. The result is empty member lists and no chat history on
     // wake until you switch channels twice). (#post-sleep-channel-desync)
     if (document.hidden) {
       this._hiddenAt = Date.now();
-      // (#5463) Mark the current wake-detector window as tainted — see the
+      // (#5463) Mark the current wake-detector window as tainted (see the
       // background-throttling note on _wakeCheckInterval below.
       this._tabHiddenSinceWakeCheck = true;
       return;
@@ -511,7 +511,7 @@ _listenSession() {
     // Mobile fix: when returning to foreground, ensure socket is connected and refresh data
     if (!document.hidden) {
       // After a long hidden period (>30 s) the socket is almost certainly
-      // a zombie even if .connected reports true — Chromium throttles
+      // a zombie even if .connected reports true. Chromium throttles
       // background tabs and macOS/Windows suspend network I/O during
       // sleep. Force a clean reconnect cycle so the 'connect' handler
       // does the full resync (enter-channel, get-messages, members,
@@ -521,7 +521,7 @@ _listenSession() {
       // (#5444) Never do that while a live voice session is running,
       // though. Cycling the socket makes the server grace-evict the voice
       // slot and re-add it a moment later, which is heard by everyone in
-      // the call as a leave sound followed by a join sound — for nothing
+      // the call as a leave sound followed by a join sound, for nothing
       // more than the user tabbing away for half a minute and coming
       // back. In that case fall through to the in-place refresh below.
       const voiceLive = !!(this.voice && this.voice.inVoice &&
@@ -543,7 +543,7 @@ _listenSession() {
       // Browsers don't compute layout accurately while a tab is hidden, so
       // scrollToBottom during a background reconnect often undershoots.
       // Defer to requestAnimationFrame so the browser recalculates layout
-      // before we read scrollHeight — avoids jumping to wrong position.
+      // before we read scrollHeight; avoids jumping to wrong position.
       if (this._coupledToBottom) {
         this._suppressCoupleCheck = true;
         requestAnimationFrame(() => {
@@ -556,14 +556,14 @@ _listenSession() {
       const sinceLast = Date.now() - (this._lastConnectTime || 0);
       if (sinceLast < 3000) return;
       // Re-fetch current channel messages + member list to catch anything missed
-      // Only do a full reset if coupled to bottom — if the user was browsing
+      // Only do a full reset if coupled to bottom; if the user was browsing
       // history before the tab switch, preserve their position by skipping the
       // reset so _renderMessages doesn't yank them to the latest messages.
       if (this.currentChannel && this.socket?.connected) {
         // (#post-sleep-channel-desync) Re-emit enter-channel so the server
         // re-adds this socket to its channelUsers map for this code. Without
         // this, subsequent online-users broadcasts compute the roster from
-        // a stale map and the user sees an empty member list — exactly the
+        // a stale map and the user sees an empty member list, exactly the
         // symptom reported after a multi-hour PC sleep.
         this.socket.emit('enter-channel', { code: this.currentChannel });
         if (this._coupledToBottom) {
@@ -616,7 +616,7 @@ _listenSession() {
   });
 
   // iOS Safari bfcache: page is restored from cache (back/forward nav or tab switch)
-  // without a visibilitychange event — reconnect if the socket is stale.
+  // without a visibilitychange event, so reconnect if the socket is stale.
   window.addEventListener('pageshow', (e) => {
     if (e.persisted && this.socket && !this.socket.connected) {
       this.socket.connect();
@@ -626,7 +626,7 @@ _listenSession() {
   // ── Wake-from-sleep detector (#post-sleep-channel-desync round 2) ──
   // The visibilitychange-based fix above ONLY catches scenarios where the
   // browser fires a hidden→visible transition. On Windows, locking the PC
-  // (Win+L) does NOT hide the window from the browser's perspective — the
+  // (Win+L) does NOT hide the window from the browser's perspective. The
   // lock screen is an OS overlay, not a window state change. So after a
   // multi-hour lock, visibilitychange never fires on unlock, and the
   // previous fix never runs. Result: empty member list, empty chat,
@@ -643,15 +643,15 @@ _listenSession() {
   // applies "intensive throttling" and fires setInterval at most once per
   // MINUTE. That produced a 60 s drift on every tick, which tripped this
   // detector, which hard-cycled the socket, which grace-evicted the user
-  // from voice on the server — a self-inflicted disconnect/reconnect loop
+  // from voice on the server: a self-inflicted disconnect/reconnect loop
   // running exactly every 60 seconds, forever, for as long as the tab sat
   // in the background. It only ever hit web users because Haven Desktop
   // sets `backgroundThrottling: false` on its windows, and it only ever
   // hit idle tabs because a foreground tab is never throttled.
   //
   // So: only trust drift while the tab is actually visible. A hidden tab
-  // has its own recovery path already — the visibilitychange handler above
-  // forces a full resync when it comes back after >30 s hidden — and a
+  // has its own recovery path already (the visibilitychange handler above
+  // forces a full resync when it comes back after >30 s hidden), and a
   // socket that genuinely died while hidden is handled by socket.io's own
   // reconnection. The PC-lock case this detector exists for is unaffected,
   // because Win+L does NOT mark the page hidden.
@@ -663,7 +663,7 @@ _listenSession() {
     const drift = now - this._lastWakeCheck;
     this._lastWakeCheck = now;
     // Discard any interval that the tab spent hidden for even part of its
-    // length — the drift is throttling, not a suspend, and we can't tell
+    // length. The drift is throttling, not a suspend, and we can't tell
     // the two apart from the timestamp alone.
     const wasHidden = document.hidden || this._tabHiddenSinceWakeCheck;
     this._tabHiddenSinceWakeCheck = document.hidden;
@@ -685,7 +685,7 @@ _listenSession() {
   // often during a multi-second main-thread stall while the stream video
   // element relayouts. A single missed pong used to hard-cycle the socket
   // (`focus-zombie`), which is exactly the "first resize drops me from
-  // voice roster but I can still talk" bug — server grace-evicts the old
+  // voice roster but I can still talk" bug: server grace-evicts the old
   // socketId, UI flips to Join Voice, WebRTC peers keep carrying audio.
   window.addEventListener('resize', () => {
     this._recentWindowResizeAt = Date.now();
@@ -721,7 +721,7 @@ _listenSession() {
       this.socket?.off('pong-check', ackHandler);
       if (acked) return;
       if (voiceLive) {
-        // Light recovery only — rebind voice + refresh rosters. Do NOT
+        // Light recovery only: rebind voice + refresh rosters. Do NOT
         // disconnect; that is what knocks us out of the server voice map
         // while leaving WebRTC audio running.
         console.warn(`[wake-detect] no pong in ${probeMs}ms on focus while in voice (probe ${Date.now()-probeStart}ms), light resync, not disconnect`);
@@ -738,10 +738,10 @@ _listenSession() {
     this._setLed('status-server-led', 'danger pulse');
     document.getElementById('status-server-text').textContent = t('app.status.disconnected');
     document.getElementById('status-ping').textContent = '--';
-    // Drop outstanding probes — pairing one with a pong from after the
+    // Drop outstanding probes. Pairing one with a pong from after the
     // reconnect would report the length of the outage as latency.
     this._pingQueue = [];
-    // (#self-absent-voice-panel — Desktop "lost myself in voice" follow-up)
+    // (#self-absent-voice-panel: Desktop "lost myself in voice" follow-up)
     // Previously we _softLeave()'d the voice session immediately on every
     // disconnect. Socket.io aggressively reconnects within a few hundred ms
     // on transient network blips (especially Electron suspending the
@@ -755,7 +755,7 @@ _listenSession() {
     // skip the soft-leave entirely. The reconnect handler will issue
     // `voice-rejoin` which rebinds our voice slot to the new socketId.
     //
-    // If WebRTC peers are still connected, NEVER soft-leave — that destroys
+    // If WebRTC peers are still connected, NEVER soft-leave; that destroys
     // working audio/streams while the user can still talk, and the server
     // grace timer + missed voice-rejoin is what makes everyone else see
     // "they left" even though media is live. Keep the session and wait for
@@ -783,7 +783,7 @@ _listenSession() {
   });
 
   this.socket.on('connect_error', (err) => {
-    // Don't kick during password change — socket will reconnect with fresh token
+    // Don't kick during password change; socket will reconnect with fresh token
     if (this._justChangedPassword) return;
     // These messages come from the socket.io auth middleware and are
     // 100% deterministic (JWT verify failure / user row mismatch / pwv bump).
@@ -802,10 +802,10 @@ _listenSession() {
     document.getElementById('status-server-text').textContent = t('app.status.error');
   });
 
-  // Password was changed on this or another session — force re-login
+  // Password was changed on this or another session: force re-login
   this.socket.on('force-logout', (data) => {
     if (data && data.reason === 'password_changed') {
-      // If WE just changed the password, skip the kick — we already have the fresh token
+      // If WE just changed the password, skip the kick; we already have the fresh token
       if (this._justChangedPassword) {
         this._justChangedPassword = false;
         return;
@@ -826,7 +826,7 @@ _listenSession() {
       localStorage.removeItem('haven_user');
       window.location.href = '/';
     } else if (data && data.reason === 'totp_enabled') {
-      // If WE just enabled TOTP, skip the kick — we already have the fresh token
+      // If WE just enabled TOTP, skip the kick; we already have the fresh token
       if (this._justEnabledTotp) {
         this._justEnabledTotp = false;
         return;
@@ -871,7 +871,7 @@ _forceFullResync(reason) {
   // Defensive: if for some reason 'connect' doesn't fire within 6 s,
   // emit the resync requests anyway against the current socket so the
   // user at least gets channel data refreshed. (The connect handler is
-  // the authoritative path — this is purely a belt-and-braces.)
+  // the authoritative path; this is purely a belt-and-braces.)
   setTimeout(() => {
     if (this.socket?.connected && this.currentChannel) {
       // Only do this if connect handler didn't already run very recently.
@@ -909,9 +909,9 @@ _lightVoiceResync(reason) {
     }
     if (this.voice?.inVoice && this.voice.currentChannel) {
       // voice-rejoin is now a no-op on the server when already bound on this
-      // socket (skipRenegotiate). Still safe — used only to refresh roster.
+      // socket (skipRenegotiate). Still safe: used only to refresh roster.
       this.socket.emit('voice-rejoin', { code: this.voice.currentChannel, ...this.voice.getRelayClientInfo() });
-      // UI may have been flipped to "Join Voice" by a partial desync — restore.
+      // UI may have been flipped to "Join Voice" by a partial desync, so restore.
       try { this._reconcileVoiceUi?.(); } catch (err) { console.warn('[Resync] _reconcileVoiceUi failed', err); }
       try { this.voice.reassertScreenStreams?.(); } catch (err) { console.warn('[Resync] reassertScreenStreams failed', err); }
     }

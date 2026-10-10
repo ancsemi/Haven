@@ -119,7 +119,7 @@ _renderUserItem(u, scoreLookup) {
   const onlineClass = u.online === false ? ' offline' : '';
   const score = scoreLookup[u.id] || 0;
   // Per-device "hide other players' badges" preference. Only suppress badges
-  // for users other than self — own badge stays visible to me unless the
+  // for users other than self. Own badge stays visible to me unless the
   // server-side "hide own from server" preference also stripped it.
   const hideOthers = localStorage.getItem('haven_hide_other_scores') === 'true';
   const hideOwn    = localStorage.getItem('haven_hide_own_score')    === 'true';
@@ -139,7 +139,7 @@ _renderUserItem(u, scoreLookup) {
     ? `<span class="user-status-text" title="${this._escapeHtml(u.statusText)}">${this._escapeHtml(u.statusText)}</span>`
     : '';
 
-  // Rich presence — sidebar shows at most ONE activity to keep the list
+  // Rich presence: sidebar shows at most ONE activity to keep the list
   // scannable; a game outranks music. The profile card is where both show.
   const activityHtml = this._sidebarActivityHtml(u.activity);
 
@@ -191,7 +191,7 @@ _renderUserItem(u, scoreLookup) {
   const tooltipRole = u.role ? `<div class="tooltip-role" style="color:${roleColor}">● ${this._escapeHtml(u.role.name)}</div>` : '';
   const tooltipStatus = u.statusText ? `<div class="tooltip-status">${this._escapeHtml(u.statusText)}</div>` : '';
   const tooltipOnline = u.online === false ? `<div class="tooltip-status">${t('app.profile.offline')}</div>` : '';
-  // Tooltip removed — the full profile popup (hover/click) provides this info.
+  // Tooltip removed: the full profile popup (hover/click) provides this info.
 
   const dmBtn = u.id === this.user.id
     ? `<button class="user-action-btn user-dm-btn" data-dm-uid="${u.id}" title="${t('users.notes_to_self_hint')}">📝</button>`
@@ -244,7 +244,7 @@ _renderUserItem(u, scoreLookup) {
 
 /**
  * Render the linked-account rows. Providers the server has no credentials for
- * are shown greyed out with the reason, rather than hidden — otherwise a user
+ * are shown greyed out with the reason, rather than hidden; otherwise a user
  * whose admin hasn't set up Spotify just sees an unexplained gap and files a
  * bug about the missing button.
  */
@@ -257,7 +257,7 @@ _renderConnections() {
   const available = data.available || {};
 
   // Steam and Spotify both require per-deployment credentials that cannot ship
-  // with Haven — a Steam key is tied to one person's Steam account, and a
+  // with Haven: a Steam key is tied to one person's Steam account, and a
   // bundled Spotify client secret would be extractable by anyone who downloads
   // the source. So "not configured" is the correct default state, and the admin
   // needs to know exactly which env vars fix it rather than just seeing a dead row.
@@ -303,7 +303,7 @@ _renderConnections() {
       // Two things trip people up here, both worth stating outright:
       //  1. developer.spotify.com is a SEPARATE site from Spotify account
       //     settings. "Manage apps" under your account lists apps you've
-      //     authorised and has no Create button — it is the wrong page, and
+      //     authorised and has no Create button. It is the wrong page, and
       //     it's the one people find first when they go looking themselves.
       //  2. "Create an app" sounds like software development. It isn't; it's
       //     registering a name so Spotify knows who is asking.
@@ -323,7 +323,7 @@ _renderConnections() {
 
   const isAdmin = !!this.user?.isAdmin;
 
-  // Placeholder is a hint, not a default — derive it from the viewer's own
+  // Placeholder is a hint, not a default, so derive it from the viewer's own
   // Haven name. It was hardcoded to a real username, which meant every user on
   // every Haven server was shown one specific person's handle as the example.
   const placeholderName = this._escapeHtml(
@@ -332,7 +332,7 @@ _renderConnections() {
       .slice(0, 15) || t('users.connections.username_placeholder')
   );
 
-  // Advanced providers stay collapsed unless already linked/configured —
+  // Advanced providers stay collapsed unless already linked/configured:
   // no point hiding something the user is actively using.
   const isAdvancedHidden = (p) => p.advanced && !linked.has(p.id) && !available[p.id];
 
@@ -342,7 +342,7 @@ _renderConnections() {
 
     let sub, btn = '';
     if (!configured) {
-      // Admins get an inline setup form — most self-hosters have no idea where
+      // Admins get an inline setup form. Most self-hosters have no idea where
       // .env lives, and telling them to "edit .env and restart" is a dead end.
       // Everyone else just learns the provider is off.
       sub = isAdmin ? t('users.connections.not_setup') : t('users.connections.not_enabled');
@@ -362,7 +362,7 @@ _renderConnections() {
         if (configured) btn += `<button class="btn-sm connection-forget" data-provider="${p.id}">${t('users.connections.remove_key')}</button>`;
       }
     } else if (p.linkType === 'username') {
-      // No OAuth for this provider — the whole link flow is one text field.
+      // No OAuth for this provider: the whole link flow is one text field.
       sub = p.blurb;
       btn += `<button class="btn-sm btn-accent connection-username-toggle" data-provider="${p.id}">${t('users.connections.connect')}</button>`;
       if (isAdmin) {
@@ -385,7 +385,7 @@ _renderConnections() {
     }
 
     // Rendered whenever an admin is looking, whether or not the provider is
-    // already configured — so an existing key can be rotated from here instead
+    // already configured, so an existing key can be rotated from here instead
     // of by editing .env by hand. Hidden until "Set up" (unconfigured) or
     // "Change key" (configured) reveals it. Non-admins never see it.
     const setupForm = isAdmin ? `
@@ -535,7 +535,7 @@ _renderConnections() {
       }
       // Each key is saved independently; the server validates format and
       // replies with a refreshed 'connections' payload. Clear the fields
-      // immediately — these are secrets and shouldn't linger in the DOM.
+      // immediately; these are secrets and shouldn't linger in the DOM.
       inputs.forEach(i => {
         this.socket?.emit('set-integration-key', { key: i.dataset.envKey, value: i.value.trim() });
         i.value = '';
@@ -646,14 +646,14 @@ _profileStatusTextHtml(text) {
  * Re-render an open profile card from the latest presence, so status (online/
  * away/dnd), custom status text and activity (pause, resume, track change,
  * clear) all update live without reopening it. Driven by the online-users
- * broadcasts the client already receives — no new traffic.
+ * broadcasts the client already receives, so no new traffic.
  */
 _refreshOpenProfileCard() {
   if (this._openProfileUserId == null) return;
   const popup = document.getElementById('profile-popup');
   if (!popup) return;
   // The broadcast is scoped to the current channel and can be visibility-
-  // filtered, so absence does NOT reliably mean offline — the user may just be
+  // filtered, so absence does NOT reliably mean offline; the user may just be
   // in another channel. Only refresh from a record we actually have; otherwise
   // leave the card as-is rather than wrongly flipping it to offline.
   const u = (this._lastOnlineUsers || []).find(u => u.id === this._openProfileUserId);
@@ -1157,10 +1157,10 @@ _renderVoiceUsers(users, channelCode) {
       streamBadge += `<span class="voice-stream-badge watching" title="${this._escapeHtml(t('users.watching_stream_title', { names: watchNames }))}">👁${watchCount > 1 ? ' ' + watchCount : ''}</span>`;
     }
 
-    // Only render mic/speaker icons when they actually signal something —
+    // Only render mic/speaker icons when they actually signal something,
     // i.e. the user is muted or deafened. An unmuted, listening user shows
     // no icons at all, so the roster stays legible instead of every row
-    // carrying two faded glyphs. The "you" tag is dropped too — people know
+    // carrying two faded glyphs. The "you" tag is dropped too; people know
     // who they are, and it was just more clutter. (#voice-declutter)
     const statusIcons = [];
     if (u.isMuted) statusIcons.push(`<span class="voice-status-icon is-muted" title="${t('voice.status_muted')}">🎙️</span>`);
@@ -1219,7 +1219,7 @@ _renderVoiceUsers(users, channelCode) {
     });
   });
 
-  // Bind LIVE badges — clicking restores a hidden stream tile
+  // Bind LIVE badges: clicking restores a hidden stream tile
   el.querySelectorAll('.voice-stream-badge.live').forEach(badge => {
     badge.style.cursor = 'pointer';
     badge.addEventListener('click', (e) => {
@@ -1255,7 +1255,7 @@ _watchStream(userId) {
   if (this.voice._deliverScreenFromReceivers?.(userId)) return;
   // No tile at all (e.g. we joined after they went live and their stream
   // never reached us, or we closed our view and the sharer's tile was
-  // since torn down) — actively ask the sharer to (re)send. Arm the
+  // since torn down), actively ask the sharer to (re)send. Arm the
   // retry watchdog too: a single renegotiate request often loses the
   // race (the sharer may be mid-signaling-change), which left the viewer
   // stuck on "Requesting stream…" forever with no second attempt. The
@@ -1280,7 +1280,7 @@ _showVoiceUserMenu(anchorEl, userId, username) {
     || !!(this.voice && this.voice.screenSharers && this.voice.screenSharers.has(userId));
   const hiddenTile = isStreaming ? document.querySelector(`#screen-tile-${userId}[data-hidden="true"]`) : null;
   // Offer "Watch stream" whenever they're live and we don't already have a
-  // visible tile — this both restores a hidden tile and requests a stream we
+  // visible tile. This both restores a hidden tile and requests a stream we
   // never received (late joiner).
   const visibleTile = document.querySelector(`#screen-tile-${userId}:not([data-hidden="true"])`);
   const canWatchStream = isStreaming && !visibleTile;

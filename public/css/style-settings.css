@@ -51,7 +51,7 @@
   color: var(--text-primary);
 }
 
-/* Section headers in the settings nav. Not clickable — they exist so ~20 flat
+/* Section headers in the settings nav. Not clickable; they exist so ~20 flat
    entries read as five short groups instead of one long list. */
 .settings-nav-group-label {
   font-size: 0.5625rem;

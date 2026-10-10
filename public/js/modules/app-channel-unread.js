@@ -45,12 +45,12 @@ _setupChannelDragDrop() {
   const list = document.getElementById('channel-list');
   if (!list || !canManage) return;
 
-  // Make eligible items draggable (idempotent — safe to re-run each render)
+  // Make eligible items draggable (idempotent, safe to re-run each render)
   list.querySelectorAll(
     '.channel-item:not(.sub-channel-item):not(.dm-item):not(.temp-channel-create-btn), .category-label, .sub-channel-item'
   ).forEach(el => el.setAttribute('draggable', 'true'));
 
-  // Listeners must only be attached ONCE per container — re-renders would
+  // Listeners must only be attached ONCE per container; re-renders would
   // otherwise stack duplicate handlers and cause channels to spasm/jump.
   if (list._dragSetupDone) return;
   list._dragSetupDone = true;
@@ -126,7 +126,7 @@ _saveDragDropOrder(el) {
   const list = document.getElementById('channel-list');
   if (!list) return;
 
-  // Category label was dragged — reorder categories
+  // Category label was dragged: reorder categories
   if (el.classList.contains('category-label')) {
     const newOrder = [...list.querySelectorAll('.category-label')].map(e => e.dataset.category || '__untagged__');
     localStorage.setItem('haven_cat_order___server__', JSON.stringify(newOrder));
@@ -142,7 +142,7 @@ _saveDragDropOrder(el) {
     return;
   }
 
-  // Sub-tag label was dragged — reorder sub-tags within parent
+  // Sub-tag label was dragged: reorder sub-tags within parent
   if (el.classList.contains('sub-tag-label')) {
     const parentCode = el.dataset.parentCode;
     if (!parentCode) return;
@@ -160,7 +160,7 @@ _saveDragDropOrder(el) {
     return;
   }
 
-  // Sub-channel was dragged — reorder subs within parent
+  // Sub-channel was dragged: reorder subs within parent
   if (el.classList.contains('sub-channel-item')) {
     const parentId = parseInt(el.dataset.parentId);
     const parentCh = this.channels.find(c => c.id === parentId);
@@ -183,7 +183,7 @@ _saveDragDropOrder(el) {
     return;
   }
 
-  // Parent channel was dragged — determine its new category from preceding category label
+  // Parent channel was dragged: determine its new category from preceding category label
   let newCategory = '';
   let prev = el.previousElementSibling;
   while (prev) {
@@ -328,7 +328,7 @@ _updateBadge(code) {
               parentBubble.remove();
             }
           } else {
-            // Sub-channels are expanded — remove any bubble from parent
+            // Sub-channels are expanded, so remove any bubble from parent
             const parentBubble = parentEl.querySelector('.channel-badge-bubble');
             if (parentBubble) parentBubble.remove();
           }
@@ -347,7 +347,7 @@ _updateBadge(code) {
 
 // Add a small "look inside" dot to expanded category labels and to
 // expanded parent channels when one of their children has unread
-// messages. The dot is visually distinct from the count bubble — the
+// messages. The dot is visually distinct from the count bubble: the
 // bubble (with a number) only appears when the parent is collapsed
 // and is the actual count; this dot is just a hint that there's
 // something below worth scrolling to. (parent-notif feature request)
@@ -379,7 +379,7 @@ _updateNestedIndicators() {
   // bubble like collapsed parent channels do, otherwise the unreads
   // would be invisible (channel rows are hidden with the category) and
   // the user would see a taskbar badge with no on-screen indicator
-  // anywhere — exactly the phantom-badge bug. (#desktop-phantom-badge)
+  // anywhere, exactly the phantom-badge bug. (#desktop-phantom-badge)
   document.querySelectorAll('.section-label.category-label[data-category]').forEach(catEl => {
     const cat = catEl.dataset.category;
     if (!cat) return;
@@ -423,7 +423,7 @@ _updateNestedIndicators() {
     setDot(parentEl, subTotal > 0);
   }
 
-  // Tag labels (sub-channel category groups inside a parent channel) — issue #5311.
+  // Tag labels (sub-channel category groups inside a parent channel), issue #5311.
   // When the tag row is collapsed, append a count bubble like the one used for
   // collapsed parent channels. When expanded, fall back to the same dot pattern
   // as parents/categories so the indication stays consistent.
@@ -489,7 +489,7 @@ _updateDesktopBadge() {
   // Exclude muted channels from the desktop total. The channels-list
   // snapshot from the server doesn't know about local mutes (they live in
   // localStorage), so a muted channel with new messages was lighting up
-  // the taskbar even though every sidebar indicator was suppressed —
+  // the taskbar even though every sidebar indicator was suppressed, which
   // looked like a phantom badge to the user. (#desktop-phantom-badge)
   let mutedSet = null;
   try {
@@ -513,7 +513,7 @@ _updateDesktopBadge() {
 // got cleared because the renderer that originally raised it was destroyed
 // or hot-reloaded without the corresponding clear IPC.  Also covers
 // renderers that started before the main process finished wiring badge
-// IPC handlers.  Idempotent — sends the current truth, no diff needed.
+// IPC handlers.  Idempotent: sends the current truth, no diff needed.
 _resyncDesktopBadgeOnFocus() {
   if (this._desktopBadgeFocusBound) return;
   this._desktopBadgeFocusBound = true;
@@ -522,7 +522,7 @@ _resyncDesktopBadgeOnFocus() {
     // Clear stale unread badge on the channel the user is actively viewing.
     // When the page is hidden (backgrounded BrowserView, alt-tab, minimise)
     // incoming messages bump unreadCounts even though the user was already
-    // at the bottom — because isActivelyViewing = false in the new-message
+    // at the bottom, because isActivelyViewing = false in the new-message
     // handler.  The badge-clearing path inside that handler only fires when
     // a *new* message arrives while visible, so if no message arrives after
     // the user returns the "N unread" badge is stuck until someone else
@@ -556,7 +556,7 @@ _resyncDesktopBadgeOnFocus() {
 _fireNativeNotification(message, channelCode, opts) {
   // Server-level mute: suppress all notifications from this server instance.
   if (localStorage.getItem('haven_server_muted') === '1') return;
-  // Per-channel mute: client-side muted channels list (defense-in-depth — callers
+  // Per-channel mute: client-side muted channels list (defense-in-depth; callers
   // should also check, but bots / webhooks have user_id=null which can slip through
   // edge cases such as channels-list re-seeding or future notification paths).
   const _mutedChsNotif = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
@@ -569,7 +569,7 @@ _fireNativeNotification(message, channelCode, opts) {
   else if (!n.enabled) return;
   // Don't notify for own messages
   if (message.user_id === this.user?.id) return;
-  // Opt-in pop-up rate limit — throttle the visible banner (the sound already
+  // Opt-in pop-up rate limit: throttle the visible banner (the sound already
   // played via notifications.play() at the call site; unread badges are
   // untouched). Off by default. (limit how often notifications pop the app)
   if (!this.notifications.popupAllowed()) return;
@@ -581,7 +581,7 @@ _fireNativeNotification(message, channelCode, opts) {
   let rawContent = message.content || '';
   // A Discord emote token reads as its :name: in a notification.
   rawContent = rawContent.replace(/<a?:([A-Za-z0-9_]{2,32}):\d{15,25}>/g, ':$1:');
-  // Detect E2E encrypted envelope — show generic text instead of ciphertext
+  // Detect E2E encrypted envelope: show generic text instead of ciphertext
   try { const p = JSON.parse(rawContent); if (p && p.v && p.ct) rawContent = ''; } catch { /* not JSON */ }
   // Burn-after-read: never reveal the message content in a notification
   if (message.burn_seconds && message.burn_seconds > 0) rawContent = t('notifications_runtime.burn_message');

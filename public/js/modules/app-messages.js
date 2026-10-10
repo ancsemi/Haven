@@ -7,7 +7,7 @@ export default {
 
 async _sendMessage() {
   const input = document.getElementById('message-input');
-  // `let` (not `const`) — DM slash commands like /me, /shrug rewrite this
+  // `let` (not `const`) because DM slash commands like /me, /shrug rewrite this
   // before E2E encryption further down. (#5297)
   let content = input.value.trim();
   const typed = input.value;
@@ -70,7 +70,7 @@ async _sendMessage() {
     return;
   }
 
-  // (#5335) Sticker shortcode — if the message is exactly `:stickername:`
+  // (#5335) Sticker shortcode: if the message is exactly `:stickername:`
   // (whitespace-trimmed) and that name matches an uploaded sticker, route
   // it through _sendStickerMessage so it goes out as a standalone sticker
   // image instead of a literal `:name:` text message.
@@ -96,7 +96,7 @@ async _sendMessage() {
 
   // Client-side slash commands (not sent to server)
   if (content.startsWith('/')) {
-    // /tts:stop — cancel all speech synthesis immediately
+    // /tts:stop: cancel all speech synthesis immediately
     if (content.trim().toLowerCase() === '/tts:stop') {
       this.notifications?.stopTTS();
       this._showToast(t('toasts.tts_stopped'), 'info');
@@ -130,10 +130,10 @@ async _sendMessage() {
         if (!arg) { this._showToast(t('commands.play_usage'), 'error'); }
         else if (!this.voice || !this.voice.inVoice) { this._showToast(t('toasts.join_voice_first'), 'error'); }
         else if (this._getMusicEmbed(arg)) {
-          // Direct URL — share immediately
+          // Direct URL: share immediately
           this.socket.emit('music-share', { code: this.voice.currentChannel, url: arg });
         } else {
-          // Not a URL — treat as a search query
+          // Not a URL: treat as a search query
           this._musicSearchQuery = arg;
           this._musicSearchOffset = 0;
           this.socket.emit('music-search', { query: arg, offset: 0 });
@@ -210,7 +210,7 @@ async _sendMessage() {
   if (this.replyingTo) {
     payload.replyTo = this.replyingTo.id;
   }
-  // (#5280) Burn-after-read arming — DM-only; cleared in switchChannel
+  // (#5280) Burn-after-read arming (DM-only); cleared in switchChannel
   // when the user moves to a non-DM channel so a stale flag can't leak.
   // The button is a *persistent* toggle: once armed, every message in
   // this DM is burn-after-read until the user clicks the button to
@@ -343,7 +343,7 @@ async _sendMessage() {
     this.notifications.play('sent');
   }
 
-  // Upload queued images — mark as bundled when text was also sent so
+  // Upload queued images. Mark as bundled when text was also sent so
   // the server knows not to apply a second slow-mode tick for them (#5342).
   // If the text message used a persona prefix (::Name ...), pass it along so
   // the bundled images are attributed to the same persona.
@@ -377,7 +377,7 @@ _jumpToMessage(msgId) {
     setTimeout(() => existing.classList.remove('highlight-flash'), 2000);
     return;
   }
-  // Message not in DOM — fetch messages around it
+  // Message not in DOM: fetch messages around it
   this._jumpTargetId = msgId;
   this.socket.emit('get-messages', { code: this.currentChannel, around: msgId });
 },
@@ -545,7 +545,7 @@ _renderMessages(messages, lastReadMessageId) {
   // Fetch link previews for all messages
   this._fetchLinkPreviews(container);
   this._setupVideos(container);
-  // Decrypt E2E images (async — renders as images load)
+  // Decrypt E2E images (async, renders as images load)
   this._decryptE2EImages(container);
   // Wire up decryption-on-click for E2E file attachments (#5310, #5308)
   this._decryptE2EFiles(container);
@@ -634,7 +634,7 @@ _prependMessages(messages) {
       keepStart = Math.max(0, total - MAX_DOM_MESSAGES);
     }
 
-    // Trim from bottom first (below viewport — no visual shift)
+    // Trim from bottom first (below viewport, no visual shift)
     const trimBottom = total - keepEnd;
     if (trimBottom > 0) {
       for (let i = 0; i < trimBottom; i++) container.removeChild(container.lastElementChild);
@@ -645,7 +645,7 @@ _prependMessages(messages) {
       }
     }
 
-    // Trim from top (above viewport — adjust scrollTop to compensate)
+    // Trim from top (above viewport, adjust scrollTop to compensate)
     if (keepStart > 0) {
       const hBefore = container.scrollHeight;
       for (let i = 0; i < keepStart; i++) container.removeChild(container.firstElementChild);
@@ -659,7 +659,7 @@ _prependMessages(messages) {
 
     realign();
   } else if (total > MAX_DOM_MESSAGES) {
-    // No anchor — just trim from bottom
+    // No anchor: just trim from bottom
     const excess = total - MAX_DOM_MESSAGES;
     for (let i = 0; i < excess; i++) container.removeChild(container.lastElementChild);
     this._noMoreFuture = false;
@@ -757,7 +757,7 @@ _appendMessages(messages) {
   if (firstChild && firstChild.dataset && firstChild.dataset.msgId) {
     this._oldestMsgId = parseInt(firstChild.dataset.msgId);
   }
-  // Older messages were trimmed — re-enable backward pagination so the
+  // Older messages were trimmed: re-enable backward pagination so the
   // user can scroll up again to reload them.
   if (trimmed) this._noMoreHistory = false;
 
@@ -959,7 +959,7 @@ _renderAttachmentTags(tags) {
 
 _createMessageEl(msg, prevMsg) {
   // Persisted welcome message (new-member greeting). Rendered as a simple,
-  // non-interactive system line reusing the .welcome-message styling — no
+  // non-interactive system line reusing the .welcome-message styling: no
   // avatar, toolbar, reactions, or grouping. Covers history load and live
   // append alike. Uses textContent so the name/template can't inject HTML.
   if (msg && msg.type === 'welcome') {
@@ -1130,7 +1130,7 @@ _createMessageEl(msg, prevMsg) {
     if (msg.is_archived) el.dataset.archived = '1';
     if (msg._e2e) el.dataset.e2e = '1';
     if (msg.poll && msg.poll.anonymous) el.dataset.pollAnonymous = '1';
-    // (#5280) burn-after-read — compact messages need the same class/data
+    // (#5280) burn-after-read: compact messages need the same class/data
     // as full messages so _wireBurnMessages can process them.
     if (msg.burn_seconds && msg.burn_seconds > 0) {
       el.classList.add('message-burn-pending');
@@ -1216,7 +1216,7 @@ _createMessageEl(msg, prevMsg) {
     ? '<span class="discord-badge">DISCORD</span>'
     : msg.is_webhook ? '<span class="bot-badge">BOT</span>' : '';
 
-  // Persona badge (#86, #5349) — shown when message was sent via a user persona
+  // Persona badge (#86, #5349), shown when message was sent via a user persona
   const personaBadge = msg.persona_id
     ? `<span class="persona-msg-badge" title="${this._escapeHtml(t('app.messages.via_persona', { name: msg.real_username || t('app.messages.real_account') }))}">${this._escapeHtml(t('app.messages.persona_badge'))}</span>`
     : '';
@@ -1228,7 +1228,7 @@ _createMessageEl(msg, prevMsg) {
     ? `<span class="ferry-badge" title="${this._escapeHtml(t('app.messages.relayed_to_discord'))}">🛶 ${this._escapeHtml(msg.ferry_target === 'dm' ? t('app.messages.discord_dm') : msg.ferry_target)}</span>`
     : '';
 
-  // (#5381) Guest badge — shown next to the username when the author is
+  // (#5381) Guest badge, shown next to the username when the author is
   // an ephemeral guest account.
   const guestBadge = (onlineUser && onlineUser.isGuest)
     ? `<span class="guest-msg-badge" style="background:rgba(136,136,136,0.18);color:#aaa;font-size:0.62rem;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:0.04em" title="${t('app.messages.temporary_guest')}">${t('app.messages.guest_badge')}</span>`
@@ -1258,7 +1258,7 @@ _createMessageEl(msg, prevMsg) {
   if (msg.pinned) el.dataset.pinned = '1';
   if (msg.is_archived) el.dataset.archived = '1';
   if (msg._e2e) el.dataset.e2e = '1';
-  // (#5280) burn-after-read marker — `_wireBurnMessages` (called from
+  // (#5280) burn-after-read marker: `_wireBurnMessages` (called from
   // every render path) reads these attrs to set up the click-to-reveal
   // placeholder + countdown timer.
   if (msg.burn_seconds && msg.burn_seconds > 0) {
@@ -1355,7 +1355,7 @@ _promoteCompactToFull(compactEl) {
     ? `<img class="message-avatar message-avatar-img ${shapeClass}"${this._animAttr(animateProfile)} src="${this._escapeHtml(avatar)}" loading="lazy" alt="${initial}"><div class="message-avatar ${shapeClass}" style="background-color:${color};display:none">${initial}</div>`
     : `<div class="message-avatar ${shapeClass}" style="background-color:${color}">${initial}</div>`;
 
-  // Multi-role aware (compact-to-full path) — mirror of _createMessageEl above.
+  // Multi-role aware (compact-to-full path); mirror of _createMessageEl above.
   const _allRoles2 = (onlineUser && Array.isArray(onlineUser.roles)) ? onlineUser.roles : [];
   const _roleTitle2 = _allRoles2.length > 1
     ? _allRoles2.map(r => r.name).join('\n')

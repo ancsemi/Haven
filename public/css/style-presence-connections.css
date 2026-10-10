@@ -12,7 +12,7 @@
    User Status Dots
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-/* DND: square — distinct shape */
+/* DND: square, distinct shape */
 .user-dot.dnd {
   background-color: var(--danger) !important;
   box-shadow: 0 0 4px var(--danger);
@@ -223,7 +223,7 @@
   background: #fff;
 }
 
-/* Keyboard focus has to stay visible — the native outline is suppressed by
+/* Keyboard focus has to stay visible: the native outline is suppressed by
    appearance:none on some platforms. */
 :root[data-toggle-style="switch"] .toggle-row > input[type="checkbox"]:focus-visible,
 :root[data-toggle-style="switch"] .checkbox-row > input[type="checkbox"]:not(.backup-include):focus-visible,
@@ -266,7 +266,7 @@
   padding-top: 6px;
 }
 
-/* Says what the two toggles below are for -- on their own "Music" and "Game"
+/* Says what the two toggles below are for. On their own "Music" and "Game"
    don't make it clear they control what other people can see. */
 .status-activity-label {
   padding: 0 0.75rem 0.125rem;
@@ -395,7 +395,7 @@
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 /* ── Rich presence ─────────────────────────────────────── */
-/* Sidebar: one compact line, truncated. Deliberately quiet — it sits next to
+/* Sidebar: one compact line, truncated. Deliberately quiet: it sits next to
    every name in the member list, so it must never out-shout the username. */
 .user-activity {
   font-size: 0.6875rem;
@@ -574,7 +574,7 @@
 .connection-row .connection-sub {
   font-size: 0.6875rem;
   color: var(--text-muted);
-  /* Setup hints name env vars and URLs — let them wrap rather than truncating
+  /* Setup hints name env vars and URLs; let them wrap rather than truncating
      the one piece of information the admin actually needs. */
   white-space: normal;
   line-height: 1.4;
@@ -642,7 +642,7 @@
 }
 .connection-setup-form[hidden] { display: none; }
 
-/* Username link form (Last.fm) — same shell as the admin setup form. */
+/* Username link form (Last.fm): same shell as the admin setup form. */
 .connection-username-form {
   border: 1px solid var(--border);
   border-top: none;
@@ -655,7 +655,7 @@
 }
 .connection-username-form[hidden] { display: none; }
 
-/* "Other options" — keeps the harder, more limited providers out of the way
+/* "Other options": keeps the harder, more limited providers out of the way
    without hiding them outright. */
 .connection-advanced { margin-top: 0.25rem; }
 .connection-advanced > summary {
@@ -669,7 +669,7 @@
 .connection-advanced > summary:hover { color: var(--text-secondary); }
 .connection-advanced[open] > summary { margin-bottom: 0.375rem; }
 
-/* The Last.fm blurb is a real sentence, not a status line — let it breathe. */
+/* The Last.fm blurb is a real sentence, not a status line. Let it breathe. */
 .connection-row .connection-sub { line-height: 1.45; }
 .connection-username-form input { font-family: inherit; font-size: 0.75rem; }
 /* The scrobbling note is multi-line with bullets, not a one-liner hint. */
@@ -995,7 +995,7 @@
    THEMED SLIDER EFFECTS
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-/* Bloodborne / Dark Souls — health bar red glow */
+/* Bloodborne / Dark Souls: health bar red glow */
 [data-theme="bloodborne"] .slider-sm,
 [data-theme="bloodborne"] .ns-slider {
   --track-bg: #1a0c0c;
@@ -1014,7 +1014,7 @@
   box-shadow: 0 0 8px rgba(200, 168, 78, 0.5);
 }
 
-/* Elden Ring — golden estus glow */
+/* Elden Ring: golden estus glow */
 [data-theme="eldenring"] .slider-sm,
 [data-theme="eldenring"] .ns-slider {
   --track-bg: #14141e;
@@ -1024,7 +1024,7 @@
   box-shadow: 0 0 10px rgba(212, 168, 50, 0.6);
 }
 
-/* Minecraft — blocky green bar */
+/* Minecraft: blocky green bar */
 [data-theme="minecraft"] .slider-sm,
 [data-theme="minecraft"] .ns-slider {
   --track-bg: #2e2e2e;
@@ -1045,7 +1045,7 @@
   border-radius: 0.125rem;
 }
 
-/* Final Fantasy X — blue mana bar */
+/* Final Fantasy X: blue mana bar */
 [data-theme="ffx"] .slider-sm,
 [data-theme="ffx"] .ns-slider {
   --track-bg: #101a30;
@@ -1057,7 +1057,7 @@
   box-shadow: 0 0 8px rgba(64, 168, 224, 0.5);
 }
 
-/* Zelda — green heart / stamina bar */
+/* Zelda: green heart / stamina bar */
 [data-theme="zelda"] .slider-sm,
 [data-theme="zelda"] .ns-slider {
   --track-bg: #142014;
@@ -1069,7 +1069,7 @@
   box-shadow: 0 0 8px rgba(68, 187, 68, 0.5);
 }
 
-/* Matrix — green terminal glow */
+/* Matrix: green terminal glow */
 [data-theme="matrix"] .slider-sm,
 [data-theme="matrix"] .ns-slider {
   --track-bg: #0a0a0a;
@@ -1079,7 +1079,7 @@
   box-shadow: 0 0 8px rgba(0, 255, 65, 0.5);
 }
 
-/* Tron — neon blue trail */
+/* Tron: neon blue trail */
 [data-theme="tron"] .slider-sm,
 [data-theme="tron"] .ns-slider {
   --track-bg: #0c141f;
@@ -1089,7 +1089,7 @@
   box-shadow: 0 0 10px rgba(111, 236, 255, 0.6);
 }
 
-/* Cyberpunk — neon pink */
+/* Cyberpunk: neon pink */
 [data-theme="cyberpunk"] .slider-sm,
 [data-theme="cyberpunk"] .ns-slider {
   --track-bg: #0a0a12;
@@ -1099,7 +1099,7 @@
   box-shadow: 0 0 8px rgba(255, 45, 111, 0.5);
 }
 
-/* Halo — UNSC blue-green */
+/* Halo: UNSC blue-green */
 [data-theme="halo"] .slider-sm,
 [data-theme="halo"] .ns-slider {
   --track-bg: #0d1a0d;
@@ -1109,7 +1109,7 @@
   box-shadow: 0 0 8px rgba(79, 195, 247, 0.5);
 }
 
-/* Ice — frozen blue */
+/* Ice: frozen blue */
 [data-theme="ice"] .slider-sm,
 [data-theme="ice"] .ns-slider {
   --track-bg: #102030;
@@ -1119,7 +1119,7 @@
   box-shadow: 0 0 10px rgba(0, 212, 255, 0.6);
 }
 
-/* LoTR — golden warmth */
+/* LoTR: golden warmth */
 [data-theme="lotr"] .slider-sm,
 [data-theme="lotr"] .ns-slider {
   --track-bg: #2a221a;
@@ -1129,7 +1129,7 @@
   box-shadow: 0 0 6px rgba(212, 168, 68, 0.5);
 }
 
-/* Dracula — purple accent */
+/* Dracula: purple accent */
 [data-theme="dracula"] .slider-sm,
 [data-theme="dracula"] .ns-slider {
   --track-bg: #22232e;
@@ -1262,7 +1262,7 @@
   margin-left: 0.25rem;
   white-space: nowrap;
   flex-shrink: 0;
-  /* Hidden in sidebar user list — role shown via dot + tooltip instead */
+  /* Hidden in sidebar user list; role shown via dot + tooltip instead */
   display: none;
 }
 .msg-role-badge {

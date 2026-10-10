@@ -507,7 +507,7 @@
   position: relative;
 }
 
-/* Auto-injected expand/close button group — absolutely positioned in
+/* Auto-injected expand/close button group: absolutely positioned in
    the top-right of every modal so it works regardless of inner header
    structure (back button, wrapper divs, etc). */
 .modal-controls {
@@ -1161,7 +1161,7 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
 /* ── User Context Menu (right-click options) ── */
 .user-context-menu {
   position: fixed;
-  /* Same reasoning as .image-context-menu — needs to clear the PiP
+  /* Same reasoning as .image-context-menu: needs to clear the PiP
      DM (99999) and image lightbox (100010). */
   z-index: 100020;
   background: var(--bg-secondary, #23263a);

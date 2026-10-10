@@ -1022,7 +1022,7 @@ _submitSchedule() {
 /* ── /time timestamp picker modal ───────────────────── */
 // Opened by `/time` with no argument. It builds the very same <t:...> token
 // the text command does, so the render side (_formatTimestampToken) is reused
-// untouched — the modal is only a friendlier way to choose the instant.
+// untouched; the modal is only a friendlier way to choose the instant.
 
 /** True when the reader's locale keeps a 24-hour clock. Falls back to 24-hour
  *  when the browser cannot report an hour cycle, per the feature's default. */
@@ -1071,7 +1071,7 @@ _tsmScope() { return { modalId: 'time-modal', prefix: 'tsm', meridiemKey: '_tsmM
 _schScope() { return { modalId: 'schedule-modal', prefix: 'sch', meridiemKey: '_schMeridiem' }; },
 
 /** Switch the 24HR / AM / PM segmented control. `seedHour24`, when given, is a
- *  0–23 hour to load into the field in the new mode's units. */
+ *  0-23 hour to load into the field in the new mode's units. */
 _tsmSetMeridiem(mode, seedHour24, scope = this._tsmScope()) {
   this[scope.meridiemKey] = mode;
   document.querySelectorAll(`#${scope.modalId} .tsm-mer-btn`).forEach(b => {
@@ -1093,7 +1093,7 @@ _tsmSetMeridiem(mode, seedHour24, scope = this._tsmScope()) {
   }
 },
 
-/** Convert the hour field's current number into 0–23, honouring the mode. */
+/** Convert the hour field's current number into 0-23, honouring the mode. */
 _tsmReadHour24(raw, scope = this._tsmScope()) {
   const h = Number(raw);
   if (!Number.isFinite(h)) return NaN;
@@ -1123,7 +1123,7 @@ _tsmBuildDate(scope = this._tsmScope()) {
   return when;
 },
 
-/** Build the seven style rows once — each a live preview plus its own Insert
+/** Build the seven style rows once, each a live preview plus its own Insert
  *  button. Order follows the format list the feature documents. */
 _tsmRenderStyles() {
   const box = document.getElementById('tsm-styles');

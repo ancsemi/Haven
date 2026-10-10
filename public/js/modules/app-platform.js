@@ -64,7 +64,7 @@ async _checkForUpdates() {
     }
     this._applyUpdateBanner();
   } catch (e) {
-    // Silently fail — update check is non-critical
+    // Silently fail; update check is non-critical
   }
 
   // Re-check every 30 minutes
@@ -114,7 +114,7 @@ _isNewerVersion(remote, local) {
 // ── Desktop App Banner (top bar only) ──────────────────
 /** Wire the "Get the Desktop App" banner in the top bar. The promo modal
  *  itself is shown via the unified welcome-popup queue (see
- *  `_initWelcomePopups`) — this function only handles the persistent banner. */
+ *  `_initWelcomePopups`); this function only handles the persistent banner. */
 _initDesktopAppBanner() {
   // Don't advertise the desktop app to someone already running it. This checks
   // every signal the rest of the client uses rather than just two: the preload
@@ -136,7 +136,7 @@ _initDesktopAppBanner() {
     return;
   }
 
-  // Don't show on mobile / tablet — desktop app isn't relevant there
+  // Don't show on mobile / tablet, desktop app isn't relevant there
   if (/Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(navigator.userAgent)) return;
 
   // ── Top-bar banner ──
@@ -256,7 +256,7 @@ _syncAndroidBanner() {
  *  uncoordinated `setTimeout`-soup where each promo modal raced the others.
  *  Behavior:
  *    1. Dismissal state is per-account, stored server-side in user_preferences
- *       (keys promo_seen_*) — never in localStorage. A popup whose pref is set
+ *       (keys promo_seen_*), never in localStorage. A popup whose pref is set
  *       is skipped. State is fetched via get-preferences; the queue waits for
  *       it before showing anything.
  *    2. Shows remaining popups one at a time, injecting a footer with
@@ -264,13 +264,13 @@ _syncAndroidBanner() {
  *    3. Persistence is opt-in: a dismissal is written to the account ONLY when
  *       the user ticks that modal's "Don't show again" box. Any plain close
  *       (Next, Skip all, X, overlay click, Maybe Later, primary CTA) is
- *       session-only — the popup returns on the next login. */
+ *       session-only: the popup returns on the next login. */
 _initWelcomePopups() {
   // Run the queue at most once per page load.
   if (this._welcomePopupsStarted) return;
 
   // Dismissal state lives server-side in user_preferences (fetched via
-  // get-preferences). Wait for it to land before deciding what to show —
+  // get-preferences). Wait for it to land before deciding what to show;
   // otherwise a hardened browser (which wipes localStorage every session and
   // so never had a client-side record anyway) would re-show a modal the user
   // already told us to stop showing. No localStorage is read or written here.
@@ -349,7 +349,7 @@ _runWelcomePromoQueue() {
     if (!modal) { idx++; return showCurrent(); }
 
     // Inject (or refresh) the queue footer inside the modal card. We append
-    // to the inner card if we can find one — otherwise we fall back to the
+    // to the inner card if we can find one; otherwise we fall back to the
     // modal itself. Idempotent: we remove any previously-injected footer
     // first so re-opening works cleanly.
     const card = modal.querySelector('.modal-content, .modal-card, [class*="modal-content"], div') || modal;
@@ -379,7 +379,7 @@ _runWelcomePromoQueue() {
     const skipBtn = footer.querySelector('.haven-welcome-queue-skip');
     if (skipBtn) {
       skipBtn.addEventListener('click', () => {
-        // Terminate the queue for this session. Nothing is persisted — only an
+        // Terminate the queue for this session. Nothing is persisted; only an
         // explicit "Don't show again" tick (handled on close below) survives to
         // the next login. The current modal's own checkbox is still honoured
         // because hiding it fires the close handler.
@@ -402,7 +402,7 @@ _runWelcomePromoQueue() {
         // Persist a dismissal only when the user ticked this modal's "Don't
         // show again" box. A plain close (Next / Done / Maybe Later / overlay)
         // is session-only: the queue has already advanced past it here, but it
-        // returns on the next login. This is deliberate — see commit rationale.
+        // returns on the next login. This is deliberate (see commit rationale).
         const checkbox = document.getElementById(entry.checkboxId);
         if (checkbox && checkbox.checked) {
           this.socket.emit('set-preference', { key: entry.prefKey, value: 'true' });
@@ -412,7 +412,7 @@ _runWelcomePromoQueue() {
         }
         idx++;
         // Tiny delay so the close animation / focus shift completes before
-        // the next one opens — feels less jarring than back-to-back flashes.
+        // the next one opens. Feels less jarring than back-to-back flashes.
         setTimeout(showCurrent, 350);
       }
     });
@@ -544,13 +544,13 @@ _resolveTimezoneModal(action) {
   if (action === 'confirm') {
     // Saves both prefs, then reloads so every already-rendered timestamp picks
     // up the new zone/format. onClose (the promo queue) is intentionally not
-    // run — the reload re-evaluates it cleanly afterwards.
+    // run; the reload re-evaluates it cleanly afterwards.
     this._saveTimezonePrefs(tz, fmt);
     return;
   }
   if (action === 'erase') {
     // Clear the saved zone/format and reload so every timestamp reverts to the
-    // browser default. onClose is not run — the reload re-evaluates cleanly.
+    // browser default. onClose is not run; the reload re-evaluates cleanly.
     this._eraseTimezonePrefs();
     return;
   }
@@ -653,7 +653,7 @@ async _setupDesktopShortcuts() {
     keyEl.textContent = formatAccel(config[action] || '');
 
     recordBtn.addEventListener('click', () => {
-      // Already recording — cancel
+      // Already recording: cancel
       if (recordBtn.classList.contains('recording')) {
         recordBtn.classList.remove('recording');
         recordBtn.textContent = t('platform.shortcuts.record');
@@ -672,7 +672,7 @@ async _setupDesktopShortcuts() {
       window.havenDesktop.shortcuts.setConfig({ [action]: '' }).catch((err) => { console.warn('[Desktop] could not update shortcuts', err); });
 
       // (#5255) Three things the previous recorder couldn't do:
-      // 1. Lone modifiers (just Alt / Ctrl / Shift) — useful while gaming so
+      // 1. Lone modifiers (just Alt / Ctrl / Shift): useful while gaming so
       //    you can transmit without lifting a hand off WASD.
       // 2. Extra mouse buttons (Mouse4 / Mouse5) for thumb-button push-to-talk.
       // 3. The PTT mode (toggle vs hold) lives on a sibling control wired up
@@ -733,13 +733,13 @@ async _setupDesktopShortcuts() {
         e.preventDefault();
         e.stopPropagation();
         if (MOD_KEYS.has(e.key)) {
-          // Don't commit yet — wait for keyup to decide if this is a lone-mod
+          // Don't commit yet. Wait for keyup to decide if this is a lone-mod
           // press or the modifier half of a combo.
           pendingLoneMod = e.key;
           keyEl.textContent = `${e.key}…`;
           return;
         }
-        // Non-modifier pressed — kill the pending lone-mod and commit a combo.
+        // Non-modifier pressed: kill the pending lone-mod and commit a combo.
         pendingLoneMod = null;
         const parts = [];
         if (e.ctrlKey || e.metaKey) parts.push('CommandOrControl');
@@ -763,7 +763,7 @@ async _setupDesktopShortcuts() {
       };
 
       const onMouseDown = (e) => {
-        // 0/1/2 are left/middle/right — leave those alone so the user can still
+        // 0/1/2 are left/middle/right; leave those alone so the user can still
         // click around. 3+ are the extra mouse buttons (mouse4 / mouse5).
         if (e.button < 3) return;
         e.preventDefault();
@@ -786,7 +786,7 @@ async _setupDesktopShortcuts() {
     });
   });
 
-  // (#5255) PTT mode select — toggle vs hold-to-transmit. Stored on the same
+  // (#5255) PTT mode select: toggle vs hold-to-transmit. Stored on the same
   // shortcuts config object alongside the keybinds. Default to "hold" since
   // that's what most voice apps use and what the issue reporter wanted.
   const pttModeSel = document.getElementById('ptt-mode-select');
@@ -877,7 +877,7 @@ async _setupDesktopAppPrefs() {
 
   // (#35) Nvidia G-Sync / VRR FPS-drop workarounds. Both flags are Chromium
   // command-line switches read at app boot, so flipping them only takes effect
-  // after a restart — surface a toast saying so.
+  // after a restart, so surface a toast saying so.
   gpuVsyncEl?.addEventListener('change', async () => {
     try {
       const res = await window.havenDesktop.prefs.setDisableGpuVsync(gpuVsyncEl.checked);
@@ -928,7 +928,7 @@ async _initE2E() {
   try {
     this.e2e = new HavenE2E();
     // Read the password-derived wrapping key from sessionStorage (set during login).
-    // On auto-login (JWT, no password) this will be null — IndexedDB-only mode.
+    // On auto-login (JWT, no password) this will be null (IndexedDB-only mode).
     const wrappingKey = sessionStorage.getItem('haven_e2e_wrap') || null;
     const ok = await this.e2e.init(this.socket, wrappingKey);
     // Keep wrapping key in memory for cross-device sync (conflict resolution).
@@ -1037,7 +1037,7 @@ async _e2eSetupListeners() {
         this._showToast(this._e2eSyncErrorMessage(synced.reason), 'error', null, 8000);
       }
     } else {
-      // No wrapping key — need password
+      // No wrapping key: need password
       this._showToast(t('platform.e2e.keys_changed'), 'error');
       this._e2ePwPendingAction = () => this._syncE2EFromServer();
       this._showE2EPasswordModal();
@@ -1100,15 +1100,15 @@ async _e2eSetupListeners() {
           this._noMoreFuture = true;
           this._loadingFuture = false;
           this._historyAfter = null;
-          // Fetch partner key first — otherwise messages land with an empty
-          // _dmPublicKeys and show '[Encrypted — waiting for key...]' forever.
+          // Fetch partner key first; otherwise messages land with an empty
+          // _dmPublicKeys and show '[Encrypted: waiting for key...]' forever.
           await this._fetchDMPartnerKey(ch);
           this.socket.emit('get-messages', { code: this.currentChannel });
         }
         return;
       }
     }
-    // No wrapping key or sync failed — prompt for password
+    // No wrapping key or sync failed: prompt for password
     this._showToast(t('platform.e2e.keys_changed'), 'error');
     this._e2ePwPendingAction = () => this._syncE2EFromServer();
     this._showE2EPasswordModal();
@@ -1129,7 +1129,7 @@ async _e2eSetupListeners() {
 async _recoverE2EFromBackup() {
   const wrappingKey = this._e2eWrappingKey || sessionStorage.getItem('haven_e2e_wrap') || null;
   if (!wrappingKey) {
-    // Need password first — set a pending action so the modal resolves here.
+    // Need password first. Set a pending action so the modal resolves here.
     this._e2ePwPendingAction = () => this._recoverE2EFromBackup();
     this._showE2EPasswordModal();
     return;
@@ -1166,9 +1166,9 @@ async _recoverE2EFromBackup() {
       this._noMoreFuture = true;
       this._loadingFuture = false;
       this._historyAfter = null;
-      // Fetch partner key BEFORE requesting messages — _dmPublicKeys was just
+      // Fetch partner key BEFORE requesting messages. _dmPublicKeys was just
       // cleared, so without this every incoming message decryption misses the
-      // shared key and shows '[Encrypted — waiting for key...]' indefinitely.
+      // shared key and shows '[Encrypted: waiting for key...]' indefinitely.
       await this._fetchDMPartnerKey(ch);
       this.socket.emit('get-messages', { code: this.currentChannel });
     }
@@ -1179,7 +1179,7 @@ async _recoverE2EFromBackup() {
 
 /**
  * Build a user-facing error message for a syncFromServer failure reason.
- * Critical: never advise Reset for 'bad-password' or 'network' — that destroys DMs.
+ * Critical: never advise Reset for 'bad-password' or 'network'; that destroys DMs.
  */
 _e2eSyncErrorMessage(reason) {
   switch (reason) {
@@ -1238,7 +1238,7 @@ _requireE2E(action) {
     action();
     return;
   }
-  // E2E not available — prompt for password
+  // E2E not available: prompt for password
   this._e2ePwPendingAction = action;
   this._showE2EPasswordModal();
 },
@@ -1258,7 +1258,7 @@ _showE2EPasswordModal() {
   submitBtn.disabled = false;
   submitBtn.textContent = t('platform.e2e.unlock');
 
-  // (#12) An SSO account has no Haven password — its key is wrapped with the
+  // (#12) An SSO account has no Haven password. Its key is wrapped with the
   // separate encryption passphrase set at first sign-in. Ask for that instead,
   // or the prompt tells the user to enter a password they do not have. An
   // account that chose its own encryption passphrase is asked for that too.
@@ -1286,7 +1286,7 @@ _showE2EPasswordModal() {
 },
 
 /**
- * Submit the E2E password prompt — verify against server, derive wrapping key, init E2E.
+ * Submit the E2E password prompt: verify against server, derive wrapping key, init E2E.
  */
 async _submitE2EPassword() {
   const modal = document.getElementById('e2e-password-modal');
@@ -1321,7 +1321,7 @@ async _submitE2EPassword() {
   errorEl.style.display = 'none';
 
   try {
-    // (#12) SSO accounts have nothing on the server to check this against —
+    // (#12) SSO accounts have nothing on the server to check this against:
     // the passphrase is deliberately never sent anywhere, so the server has no
     // copy and no hash of it. Unwrapping the key IS the check: a wrong
     // passphrase fails the AES-GCM auth tag below, and init() leaves the
@@ -1347,7 +1347,7 @@ async _submitE2EPassword() {
       return;
     }
 
-    // Password correct — derive wrapping key and init E2E
+    // Password correct: derive wrapping key and init E2E
     submitBtn.textContent = t('platform.e2e.unlocking');
     const wrappingKey = await HavenE2E.deriveWrappingKey(password);
     sessionStorage.setItem('haven_e2e_wrap', wrappingKey);
@@ -1732,7 +1732,7 @@ async _performE2EKeyReset() {
   // We need the wrapping key from memory, sessionStorage, or password prompt.
   let wrappingKey = this._e2eWrappingKey || sessionStorage.getItem('haven_e2e_wrap') || null;
   if (!wrappingKey) {
-    // Wrapping key was cleared after init — prompt for password directly,
+    // Wrapping key was cleared after init, so prompt for password directly,
     // then retry the reset (no need to show RESET confirmation again).
     // Use a custom pending action that bypasses _requireE2E.
     this._e2ePwPendingAction = null; // clear normal pending action
@@ -1921,7 +1921,7 @@ _decryptE2EFiles(root) {
           obs.observe(document.body, { childList: true, subtree: true });
 
           // Same undecodable-container fallback the plaintext path gets: the
-          // decrypt succeeded, so the file is fine — the browser just can't play
+          // decrypt succeeded, so the file is fine; the browser just can't play
           // it. Disconnect the revoke observer first, since the fallback pulls
           // mediaEl out of the DOM and would otherwise kill the blob URL the
           // download link is about to point at.

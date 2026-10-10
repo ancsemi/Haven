@@ -29,7 +29,7 @@ _formatContent(str) {
   }
 
   // E2E encrypted file: e2e-file:{"mime":...,"size":N,"url":"/uploads/...","name":"..."}
-  // (#5310, #5308) — non-image DM uploads, plus paste-into-PiP, are encrypted
+  // (#5310, #5308): non-image DM uploads, plus paste-into-PiP, are encrypted
   // before upload and the metadata is wrapped in this marker.
   if (str.startsWith('e2e-file:')) {
     try {
@@ -122,7 +122,7 @@ _formatContent(str) {
         <audio controls preload="metadata" src="${fileUrl}" class="file-audio"></audio>
       </div>`;
     }
-    // Audio/video get inline players. The extension lists are optimistic —
+    // Audio/video get inline players. The extension lists are optimistic:
     // a container being playable depends on the codecs inside it, not just the
     // extension (a .mov holding ProRes or HEVC won't decode in most browsers).
     // _setupVideos swaps the player back out for a download link
@@ -160,7 +160,7 @@ _formatContent(str) {
   // Inline images go through the lazy media queue (app-media.js): the loader
   // fetches them near the viewport, closest first, and pins their box so
   // scrolling history never jumps.
-  // SVG is included — browsers render SVGs in <img> tags safely (no script execution). (#5309)
+  // SVG is included: browsers render SVGs in <img> tags safely (no script execution). (#5309)
   // Basename allows dots (`photo.edit.jpg`) and one extra path segment so this
   // matches `_isImageUrl` / Haven Mobile. The previous `[\w\-]+` pattern
   // classified those as images then emitted no <img>, so the bubble was blank.
@@ -402,7 +402,7 @@ _formatContent(str) {
       }
     }
     if (chanByName.size > 0) {
-      // Names with spaces are typed as #foo_bar — try the literal form
+      // Names with spaces are typed as #foo_bar, so try the literal form
       // first, then fall back to a space-substituted lookup so spaced
       // channel names resolve too.
       const lookup = (map, lower) => map.get(lower) || map.get(lower.replace(/_/g, ' '));
@@ -420,7 +420,7 @@ _formatContent(str) {
     }
   }
 
-  // Render spoilers (||text||) — CSP-safe, uses delegated click handler
+  // Render spoilers (||text||): CSP-safe, uses delegated click handler
   html = html.replace(/\|\|(.+?)\|\|/g, '<span class="spoiler">$1</span>');
 
   // Render custom + bundled built-in image emojis :name:
@@ -499,7 +499,7 @@ _formatContent(str) {
   const tableRe = /(^|\n)((?:\|[^\n]*\|\s*\n)+)\|\s*:?-{2,}:?(?:\s*\|\s*:?-{2,}:?)+\s*\|\s*(?:\n((?:\|[^\n]*\|\s*(?:\n|$))*))?/g;
   html = html.replace(tableRe, (full, pre, headBlock, bodyBlock) => {
     // headBlock holds 1+ leading rows; the last one is the header (the rest
-    // would only happen with malformed input — drop them safely by taking
+    // would only happen with malformed input, so drop them safely by taking
     // just the last row as header).
     const headRows = headBlock.trim().split('\n').filter(l => /^\s*\|.*\|\s*$/.test(l));
     if (headRows.length === 0) return full;
@@ -563,7 +563,7 @@ _formatContent(str) {
       const top = stack[stack.length - 1];
       if (!top || top.depth < item.depth) {
         // Open a new nested list. If we're nesting under an open <li>,
-        // don't close it — the new list goes inside.
+        // don't close it; the new list goes inside.
         if (top && top.depth < item.depth) {
           // already inside an open <li> from previous sibling
         }
@@ -571,7 +571,7 @@ _formatContent(str) {
         out += item.ordered ? `<ol class="chat-list"${startAttr}>` : '<ul class="chat-list">';
         stack.push({ ordered: item.ordered, depth: item.depth });
       } else if (top.depth === item.depth && top.ordered !== item.ordered) {
-        // Same depth but list type changed — close current, open new.
+        // Same depth but list type changed: close current, open new.
         out += '</li>';
         const popped = stack.pop();
         out += popped.ordered ? '</ol>' : '</ul>';
@@ -579,7 +579,7 @@ _formatContent(str) {
         out += item.ordered ? `<ol class="chat-list"${startAttr}>` : '<ul class="chat-list">';
         stack.push({ ordered: item.ordered, depth: item.depth });
       } else {
-        // Same depth, same type — close previous <li> sibling.
+        // Same depth, same type: close previous <li> sibling.
         out += '</li>';
       }
       out += `<li>${item.text}`;
@@ -806,10 +806,10 @@ _setReply(msgEl, msgId) {
   // Opening a forum topic's thread (above) stays allowed, as from the
   // Threads button; a reply in the channel itself does not.
   if (this._refuseSelfDestructing(msgEl)) return;
-  // Get message info — works for both full messages and compact messages
+  // Get message info: works for both full messages and compact messages
   let author = msgEl.querySelector('.message-author')?.textContent;
   if (!author) {
-    // Compact message — look up the previous full message's author
+    // Compact message: look up the previous full message's author
     let prev = msgEl.previousElementSibling;
     while (prev) {
       const authorEl = prev.querySelector('.message-author');
@@ -852,7 +852,7 @@ _quoteMessage(msgEl) {
   }
   author = author || t('voice.someone');
 
-  // Build the blockquote text — each line prefixed with >
+  // Build the blockquote text: each line prefixed with >
   const quotedLines = rawContent.split('\n').map(l => `> ${l}`).join('\n');
   const quoteText = `${t('thread_runtime.wrote', { author })}\n${quotedLines}\n`;
 
@@ -1128,7 +1128,7 @@ _dmLinkBlocked(text) {
 _maybeShowDmSafetyNotice(container) {
   if (!container) return;
   try { if (localStorage.getItem('haven_dm_safety_dismissed') === '1') return; } catch { /* storage blocked (private mode): show the notice */ }
-  // Already present in this container — don't stack copies on re-render.
+  // Already present in this container, so don't stack copies on re-render.
   if (container.querySelector(':scope > .dm-safety-notice')) return;
 
   const notice = document.createElement('div');

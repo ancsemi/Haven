@@ -1,5 +1,5 @@
 /**
- * Haven — shared auto-mod link rules (v3.44.0)
+ * Haven: shared auto-mod link rules (v3.44.0)
  *
  * Loaded by BOTH the Node server (src/automod.js requires this file) and the
  * browser (plain <script> tag). One copy on purpose: the server decides
@@ -8,7 +8,7 @@
  * what "the host of this URL" means, the client-side check would become a
  * false reassurance, which is worse than not having it.
  *
- * Pure functions only. No DOM, no database, no settings lookups — callers
+ * Pure functions only. No DOM, no database, no settings lookups; callers
  * pass a policy object in and get a verdict out.
  *
  * ── Why the URL parsing is this paranoid ──
@@ -54,7 +54,7 @@
   // Only consulted for schemeless candidates. Haven's client auto-links
   // http(s):// URLs only, so a bare "evil.foo" is inert text nobody can click.
   // We still catch bare domains a human would retype, without flagging every
-  // "readme.md" or "main.py" in a technical conversation — several file
+  // "readme.md" or "main.py" in a technical conversation. Several file
   // extensions collide with real ccTLDs, so a permissive rule here would block
   // ordinary messages.
   var COMMON_TLDS = {};
@@ -200,7 +200,7 @@
     while ((m = MD_RE.exec(text)) !== null) push(m[2], { viaMarkdown: true, label: m[1] });
     var withoutMd = text.replace(MD_RE, ' ');
 
-    // Scheme-ful URLs — the ones Haven turns into clickable anchors and inline
+    // Scheme-ful URLs (the ones Haven turns into clickable anchors and inline
     // <img> tags, so they carry all the real risk.
     var SCHEME_RE = /\bhttps?:\/\/[^\s<>"'`\])]+/gi;
     while ((m = SCHEME_RE.exec(withoutMd)) !== null) push(m[0].replace(/[.,;:!?]+$/, ''));

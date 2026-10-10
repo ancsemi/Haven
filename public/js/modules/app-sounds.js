@@ -4,7 +4,7 @@
 export default {
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// SOUND MANAGER (Full Popout — Admin + User)
+// SOUND MANAGER (Full Popout: Admin + User)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 _setupSoundManagement() {
@@ -38,7 +38,7 @@ _setupSoundManagement() {
     if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
   });
 
-  // Close soundboard sidebar panel (no longer needed — toggle btn handles this)
+  // Close soundboard sidebar panel (no longer needed, toggle btn handles this)
 
   // Soundboard sidebar toggle button
   document.getElementById('sb-sidebar-toggle-btn')?.addEventListener('click', () => {
@@ -146,7 +146,7 @@ _setupSoundManagement() {
     });
   }
 
-  // List view mode toggle (popup/pip grid layout — separate from sidebar mode)
+  // List view mode toggle (popup/pip grid layout, separate from sidebar mode)
   const listModeCheckbox = document.getElementById('soundboard-list-mode');
   if (listModeCheckbox) {
     listModeCheckbox.checked = this._soundboardListMode;
@@ -161,7 +161,7 @@ _setupSoundManagement() {
     });
   }
 
-  // Sidebar layout toggle — closes the popup and opens the sidebar panel
+  // Sidebar layout toggle: closes the popup and opens the sidebar panel
   const _applySoundboardSidebarMode = (val) => {
     this._soundboardSidebarMode = val;
     localStorage.setItem('haven_soundboard_sidebar_mode', val ? 'true' : 'false');
@@ -206,7 +206,7 @@ _setupSoundManagement() {
   {
     const panel = document.getElementById('sb-sidebar-panel');
     const toggleBtn = document.getElementById('sb-sidebar-toggle-btn');
-    // Always start with panel hidden — user must click to open it
+    // Always start with panel hidden; user must click to open it
     if (panel) panel.classList.add('sb-hidden');
     if (toggleBtn) {
       // Show the toggle arrow button if sidebar mode is on
@@ -241,7 +241,7 @@ _setupSoundManagement() {
       // `useRendered=false` places the button off the panel's *requested*
       // width (style.width / default) so it slides smoothly while the panel's
       // width transition is still animating. `useRendered=true` re-reads the
-      // *actual* laid-out width once the animation settles — this closes the
+      // *actual* laid-out width once the animation settles. This closes the
       // gap that appeared when a narrow window let flex-shrink squeeze the
       // panel below its requested width (min-width:200px floor), leaving the
       // toggle stranded to the left of the panel's real edge.
@@ -258,7 +258,7 @@ _setupSoundManagement() {
         if (sbBtn) {
           sbBtn.style.right = (voiceWidth + sbWidth) + 'px';
           // When the sb panel is OPEN, the toggle button sits at the panel's
-          // left edge — a horizontal position the voice/users toggle never
+          // left edge, a horizontal position the voice/users toggle never
           // occupies. Align it with the voice header (top: 72px) so it stops
           // visually crowding the first content row, which under the prior
           // 114px stagger looked like an overlap with the top of the sound
@@ -276,7 +276,7 @@ _setupSoundManagement() {
 
     // The button's position is an inline `right` written by the code above, so
     // it only stays correct while something calls it. It was called on the
-    // toggles and on a resize-handle drag, but nothing else -- so any other
+    // toggles and on a resize-handle drag, but nothing else, so any other
     // change to the panel's real width left the button behind, sitting away
     // from the panel edge with a gap. Resizing the window is the obvious one:
     // the panel is a flex item that shrinks before its requested width, and no
@@ -372,7 +372,7 @@ _openSoundModal(tab = 'soundboard') {
   if (!modal) return;
   // If the soundboard is already popped out AND the caller wants the soundboard
   // tab, bring the PiP into focus instead of reopening the modal. For 'assign'
-  // and 'manage' tabs we still open the modal — the popout only holds the
+  // and 'manage' tabs we still open the modal; the popout only holds the
   // soundboard view, so other tabs would otherwise be unreachable while
   // popped out (#5419, including the admin Custom Sounds button which goes
   // through this path with tab='manage').
@@ -663,7 +663,7 @@ async _loadUserSoundPrefs() {
     if (!res.ok) return;
     const data = await res.json();
     this._soundPrefs = data.prefs || {};
-  } catch { /* non-critical – run with empty prefs if endpoint unavailable */ }
+  } catch { /* non-critical: run with empty prefs if endpoint unavailable */ }
 },
 
 async _saveUserSoundPrefs() {
@@ -1009,7 +1009,7 @@ _renderAssignTab() {
     sel.value = this.notifications.sounds[event] || 'none';
     // Replace the native dropdown with a custom one constrained to the modal,
     // so long sound lists don't render a native popup that overflows the
-    // Haven window (#5418 follow-up). Idempotent — re-renders sync the label.
+    // Haven window (#5418 follow-up). Idempotent: re-renders sync the label.
     this._enhanceSelectAsCustom?.(sel);
 
     // On change, update the main notification select + play preview

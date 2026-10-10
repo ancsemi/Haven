@@ -1,4 +1,4 @@
-// Haven — Flash Game Loader (Ruffle)
+// Haven: Flash Game Loader (Ruffle)
 // Parse game info from URL params: ?swf=URL&title=NAME
 const params = new URLSearchParams(window.location.search);
 const swfUrl = params.get('swf');

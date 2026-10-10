@@ -1,5 +1,5 @@
 ﻿// ═══════════════════════════════════════════════════════════
-// Haven — Mod Mode v4 (layout customisation)
+// Haven: Mod Mode v4 (layout customisation)
 // - All sidebar + right-sidebar sections are controllable.
 // - Sections can be reordered, moved between panels, or
 //   floated as draggable/resizable windows.
@@ -214,7 +214,7 @@ class ModMode {
 
   _getAllSections() { return [...document.querySelectorAll('[data-mod-id]')]; }
 
-  /* Find a label element inside a section — supports both
+  /* Find a label element inside a section; supports both
      .section-label (sidebar) and .panel-title (right sidebar) */
   _findLabels(s) {
     return [...s.querySelectorAll('.section-label, .panel-title')];

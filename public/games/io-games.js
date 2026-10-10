@@ -1,4 +1,4 @@
-// Haven — .io Games Browser
+// Haven: .io Games Browser
 const IO_GAMES = [
   { name: 'Agar.io', url: 'https://agar.io', icon: '\u{1F7E2}', descKey: 'agar', genre: 'classic' },
   { name: 'Slither.io', url: 'https://slither.io', icon: '\u{1F40D}', descKey: 'slither', genre: 'classic' },

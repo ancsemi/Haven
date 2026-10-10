@@ -11,7 +11,7 @@ async switchChannel(code) {
   // Clear any pending image queue from previous channel
   this._clearImageQueue();
 
-  // Voice persists across channel switches — no auto-disconnect
+  // Voice persists across channel switches, no auto-disconnect
 
   this.currentChannel = code;
   // Search panel persists per-context: hide/show it for the channel we just
@@ -32,7 +32,7 @@ async switchChannel(code) {
   // Clear scramble cache so the effect picks up the new channel name
   const headerEl = document.getElementById('channel-header-name');
   if (headerEl) { delete headerEl.dataset.originalText; headerEl._scrambling = false; }
-  // (#5280) Burn-after-read 🔥 button is DM-only — toggle visibility on
+  // (#5280) Burn-after-read 🔥 button is DM-only, so toggle visibility on
   // every channel switch and reset the per-message arming so a stale
   // toggle from another DM doesn't accidentally arm the next message
   // here in a non-DM channel.
@@ -69,7 +69,7 @@ async switchChannel(code) {
   const actionsBox = document.getElementById('header-actions-box');
   if (actionsBox) actionsBox.style.display = 'flex';
   this._labelCallButton?.();
-  // Update voice button state — persist controls if in voice anywhere
+  // Update voice button state: persist controls if in voice anywhere
   if (this.voice && this.voice.inVoice) {
     this._updateVoiceButtons(true);
     // If viewing a different channel from the one we're in voice in, show "Join Voice" instead of "Voice Active"
@@ -121,7 +121,7 @@ async switchChannel(code) {
   // Exit selection mode when switching channels
   if (this._moveSelectionActive) this._exitMoveSelectionMode();
 
-  // Show/hide topic bar — DMs don't have topics; showing the placeholder
+  // Show/hide topic bar. DMs don't have topics; showing the placeholder
   // overlaps the E2E encryption dropdown that lives in the same header.
   if (isDm) {
     const bar = document.getElementById('channel-topic-bar');
@@ -130,12 +130,12 @@ async switchChannel(code) {
     this._updateTopicBar(channel?.topic || '');
   }
 
-  // DM auto-cleanup notice (#5340) — only visible in DMs when admin has enabled
+  // DM auto-cleanup notice (#5340): only visible in DMs when admin has enabled
   // age-based cleanup. Lets users know old messages are pruned, instead of being
   // surprised when history disappears.
   this._updateDmCleanupNotice(channel);
 
-  // Show/hide message input — keep upload button visible for media-only channels
+  // Show/hide message input; keep upload button visible for media-only channels
   const msgInputArea = document.getElementById('message-input-area');
   const _textOff = channel && channel.text_enabled === 0;
   const _mediaOff = channel && channel.media_enabled === 0;
@@ -208,8 +208,8 @@ async switchChannel(code) {
   this.socket.emit('enter-channel', { code });
   // E2E: fetch DM partner's public key BEFORE requesting messages.
   // Must not be allowed to reject: the channel UI is already fully swapped in
-  // by this point, so a thrown key fetch would abandon every emit below it —
-  // get-messages, mark-read, get-channel-members — leaving you sitting in a DM
+  // by this point, so a thrown key fetch would abandon every emit below it
+  // (get-messages, mark-read, get-channel-members), leaving you sitting in a DM
   // with the *previous* channel's member list and @mentions quietly dead.
   // A missing partner key only costs E2E, which the encrypt path handles.
   if (isDm && channel) {
@@ -226,7 +226,7 @@ async switchChannel(code) {
   // a quick re-open of a different channel within the 500 ms debounce
   // window can't clear the timer and silently drop the previous channel's
   // mark-read.  This was the root cause of "I've read this DM 6 times and
-  // it still shows unread" — the user would open the DM, glance at it,
+  // it still shows unread". The user would open the DM, glance at it,
   // switch away within 500 ms, the next switch's clearTimeout dropped the
   // first emit, and the server never recorded the read.  Server uses
   // MAX(last_read, incoming) so an older snapshot id can't clobber a
@@ -236,7 +236,7 @@ async switchChannel(code) {
   //
   // (#5432) This emit MUST come after the get-messages emit above.
   // Socket events are processed in order, so emitting mark-read first
-  // updated read_positions before the history query ran — the history
+  // updated read_positions before the history query ran, so the history
   // response then reported the user as fully caught up, and the
   // "NEW MESSAGES" divider + auto-scroll from #5259 never appeared.
   if (channel && channel.latestMessageId) {
@@ -258,7 +258,7 @@ async switchChannel(code) {
   // Safety net (#post-sleep-channel-desync round 2): if message-history
   // doesn't arrive within 5 s for the channel we just switched to, the
   // socket is likely a zombie (silent disconnect, write buffered but not
-  // flushed). Force a full resync — the 'connect' handler will re-emit
+  // flushed). Force a full resync: the 'connect' handler will re-emit
   // enter-channel + get-messages and unstick the empty chat view. Cleared
   // by the message-history listener in app-socket.js when a response for
   // this code arrives.
@@ -276,7 +276,7 @@ async switchChannel(code) {
   // Auto-focus the message input for quick typing.
   // Skip on touch devices: focusing an input opens the on-screen keyboard, which
   // shrinks the visual viewport and can leave the layout shifted up after the
-  // keyboard closes (especially on Android web — see issue #5285).
+  // keyboard closes (especially on Android web; see issue #5285).
   const msgInput = document.getElementById('message-input');
   const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches
                      || window.matchMedia('(pointer: coarse)').matches
@@ -295,7 +295,7 @@ async switchChannel(code) {
 
 _updateDmCleanupNotice(channel) {
   // Build / locate the notice element. Sits just below the topic bar (or the
-  // header if no topic bar) so the layout is identical for everyone — the
+  // header if no topic bar) so the layout is identical for everyone. The
   // banner is the only thing that toggles.
   let bar = document.getElementById('dm-cleanup-notice');
   if (!bar) {
@@ -444,7 +444,7 @@ _renderChannels() {
   const subPanelBtn = document.getElementById('sub-channel-panel-btn');
   if (subPanelBtn) subPanelBtn.style.display = Object.keys(subChannelMap).length > 0 ? '' : 'none';
 
-  // Sort sub-channels — respect parent's sort_alphabetical setting & per-tag overrides
+  // Sort sub-channels: respect parent's sort_alphabetical setting & per-tag overrides
   // sort_alphabetical: 0=manual, 1=alpha, 2=created, 3=oldest
   // Per-tag overrides (from organize modal) are stored in localStorage
   Object.entries(subChannelMap).forEach(([parentId, arr]) => {
@@ -497,7 +497,7 @@ _renderChannels() {
       arr.sort((a, b) => {
         const g = tagGroup(a, b);
         if (g !== 0) return g;
-        // Same tag group — check per-tag override
+        // Same tag group: check per-tag override
         const tag = a.category || '__untagged__';
         const override = tagOverrides[tag];
         const effectiveMode = override !== undefined ? modeToNum(override) : globalSortMode;
@@ -516,7 +516,7 @@ _renderChannels() {
     });
   });
 
-  // Sort parent channels — respect server-level sort mode & per-tag overrides
+  // Sort parent channels: respect server-level sort mode & per-tag overrides
   const localSortOverride = localStorage.getItem('haven_server_sort_mode');
   const serverSortMode = localSortOverride || this.serverSettings?.channel_sort_mode || 'manual';
   // Per-tag overrides: prefer localStorage (admin's local state) then fall back to server settings
@@ -639,7 +639,7 @@ _renderChannels() {
             bubble.textContent = subTotal > 99 ? '99+' : subTotal;
           }
         } else {
-          // Remove the parent bubble when expanding — individual sub-channel badges are now visible
+          // Remove the parent bubble when expanding; individual sub-channel badges are now visible
           const bubble = el.querySelector('.channel-badge-bubble');
           if (bubble) bubble.remove();
         }
@@ -1093,7 +1093,7 @@ _renderChannels() {
         } else {
           this._openDMPiP?.(ch.code);
         }
-        // On mobile, the sidebar covers the chat — close it so the user
+        // On mobile, the sidebar covers the chat. Close it so the user
         // can actually see the DM they just picked.
         this._closeMobilePanels?.();
       });
@@ -1165,7 +1165,7 @@ _renderChannels() {
         }
       }
     } else {
-      // No tags — flat list (original behavior)
+      // No tags: flat list (original behavior)
       sortedDms.forEach(ch => dmList.appendChild(renderDmItem(ch)));
     }
   }

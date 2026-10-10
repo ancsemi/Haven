@@ -60,12 +60,12 @@ _setupServerBar() {
   // Re-render once the self-fingerprint resolves (hides "self" in sidebar)
   this.serverManager.selfFingerprintReady?.then(() => this._renderServerBar());
 
-  // Desktop notification dots — listen for badge updates from main process
+  // Desktop notification dots: listen for badge updates from main process
   window.addEventListener('haven-server-badges', (e) => this._updateServerBadgeDots(e.detail));
   window.havenDesktop?.getServerBadges?.().then(b => this._updateServerBadgeDots(b));
 
   document.getElementById('home-server').addEventListener('click', () => {
-    // Already home — pulse the icon for fun
+    // Already home: pulse the icon for fun
     const el = document.getElementById('home-server');
     el.classList.add('bounce');
     setTimeout(() => el.classList.remove('bounce'), 400);
@@ -597,7 +597,7 @@ _updateServerBadgeDots(payload) {
       const name = (names && (names[nUrl] || names[nUrl + '/'])) || (() => {
         try { return new URL(nUrl).hostname; } catch { return nUrl; }
       })();
-      // userInitiated:true clears any stale "removed" flag — surfacing an
+      // userInitiated:true clears any stale "removed" flag, surfacing an
       // unread badge counts as the user implicitly wanting that server back.
       if (this.serverManager.add(name, nUrl, null, { userInitiated: true })) {
         this._autoAddedUnreadUrls.add(nUrl);
@@ -620,7 +620,7 @@ _updateServerBadgeDots(payload) {
 // Drag-and-drop reordering of remote server icons in the sidebar.
 // Mirrors the channel sidebar drag pattern: event delegation on the list
 // container, drop reorders the underlying ServerManager list, then
-// re-renders. Idempotent — only attaches handlers once per list element.
+// re-renders. Idempotent: only attaches handlers once per list element.
 _setupServerBarDrag(list) {
   if (!list || list._serverDragSetup) return;
   list._serverDragSetup = true;
@@ -798,11 +798,11 @@ _renderServerBar() {
   this._renderMobileSidebarServers();
 
   // After re-rendering the bar, the set of known server URLs may have
-  // changed — tell main so it can drop phantom taskbar badges from
+  // changed, so tell main so it can drop phantom taskbar badges from
   // background views the user no longer has an icon for. (#5269)
   this._reportKnownServerUrls();
 
-  // Re-apply cached badge dots — _renderServerBar wipes innerHTML so any
+  // Re-apply cached badge dots. _renderServerBar wipes innerHTML so any
   // previously lit dots are destroyed. Reapply immediately from the last
   // known badge state so dots don't vanish until the next IPC event. (#5300)
   if (this._lastServerBadges) this._updateServerBadgeDots(this._lastServerBadges);

@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Mod Mode (layout customisation)
+// Haven: Mod Mode (layout customisation)
 // Lets users drag sidebar sections and snap any panel to
 // any edge: left, right, top, bottom, or center (float)
 // ═══════════════════════════════════════════════════════════
@@ -66,7 +66,7 @@ class ModMode {
       Object.keys(this.panelDefs).forEach(k => {
         if (this.panelDefs[k].positions.includes(raw[k])) this.panelLayout[k] = raw[k];
       });
-    } catch { /* invalid stored layout — ignore */ }
+    } catch { /* invalid stored layout, ignore */ }
   }
 
   toggle() {
@@ -355,7 +355,7 @@ class ModMode {
           sidebarBottom.insertBefore(voicePanel, sidebarBottom.firstChild);
         }
       } else {
-        // Default: right-sidebar — ensure it's in the right sidebar
+        // Default: right-sidebar. Ensure it's in the right sidebar
         if (rightSidebar && voicePanel.closest('.right-sidebar') !== rightSidebar) {
           rightSidebar.appendChild(voicePanel);
         }

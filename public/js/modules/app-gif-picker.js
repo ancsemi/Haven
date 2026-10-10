@@ -49,7 +49,7 @@ _setupGifPicker() {
     }
   });
 
-  // Search on typing with debounce — on the Favorites tab the same box
+  // Search on typing with debounce; on the Favorites tab the same box
   // filters the saved list locally instead of hitting GIPHY.
   searchInput.addEventListener('input', () => {
     clearTimeout(this._gifDebounce);
@@ -108,7 +108,7 @@ _switchGifTab(tab) {
   }
 },
 
-// The proxy reports which provider served the batch — keep the picker
+// The proxy reports which provider served the batch, so keep the picker
 // footer honest ("Powered by Tenor" / "KLIPY" / "GIPHY").
 _setGifFooter(provider) {
   if (!provider) return;
@@ -303,7 +303,7 @@ _toggleGifFavorite(gif) {
 _saveGifFavorites() {
   try {
     localStorage.setItem(GIF_FAVORITES_KEY, JSON.stringify(this._gifFavorites || []));
-  } catch { /* quota exceeded — favorites are best-effort */ }
+  } catch { /* quota exceeded; favorites are best-effort */ }
 },
 
 _sendGifMessage(url) {
@@ -362,7 +362,7 @@ _sendStickerMessage(url) {
     this._sendDMPiPMessage();
     return;
   }
-  // Main composer — go through _sendMessage so E2E DMs and slash-command
+  // Main composer: go through _sendMessage so E2E DMs and slash-command
   // pre-processing apply uniformly.
   const input = document.getElementById('message-input');
   if (!input || !this.currentChannel) return;
@@ -378,7 +378,7 @@ _sendStickerMessage(url) {
   } else this.socket.emit('send-message', { code: this.currentChannel, content: url });
 },
 
-// /gif slash command — inline GIF search results above the input
+// /gif slash command: inline GIF search results above the input
 _showGifSlashResults(query) {
   // Remove any existing picker
   document.getElementById('gif-slash-picker')?.remove();

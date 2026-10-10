@@ -112,7 +112,7 @@ _applyFaviconBranding(iconUrl) {
 },
 
 _initServerBranding() {
-  // Server name — saved via admin Save button (no auto-save)
+  // Server name, saved via admin Save button (no auto-save)
 
   // Server icon upload
   document.getElementById('server-icon-upload-btn')?.addEventListener('click', async () => {

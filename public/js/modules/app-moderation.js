@@ -381,7 +381,7 @@ _applyAutomodSettings() {
     put('automod-mute-at', c.muteAt ?? 3);
     put('automod-mute-minutes', c.muteMinutes ?? 60);
     put('automod-ban-at', c.banAt ?? 5);
-  } catch { /* malformed JSON — leave the fields alone */ }
+  } catch { /* malformed JSON: leave the fields alone */ }
 
   this._syncAutomodVisibility();
 },

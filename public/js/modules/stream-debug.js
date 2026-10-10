@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Stream/Voice Debug Logger
+// Haven: Stream/Voice Debug Logger
 // ═══════════════════════════════════════════════════════════
 //
 // Attach via:  window._streamDebug = new StreamDebugLogger(voiceManager);
@@ -8,11 +8,11 @@
 // be toggled on/off at runtime without reloading the page.
 //
 // In the browser console:
-//   window._streamDebug.enable()   — start recording
-//   window._streamDebug.disable()  — stop recording
-//   window._streamDebug.dump()     — print full log to console
-//   window._streamDebug.download() — save log as a .txt file
-//   window._streamDebug.clear()    — wipe the log
+//   window._streamDebug.enable():   start recording
+//   window._streamDebug.disable():  stop recording
+//   window._streamDebug.dump():     print full log to console
+//   window._streamDebug.download(): save log as a .txt file
+//   window._streamDebug.clear():    wipe the log
 
 // Cap on retained entries while enabled. A long call with a few peers can
 // emit thousands of state changes; keep the newest and drop the oldest.
@@ -250,7 +250,7 @@ class StreamDebugLogger {
       self._log('peer', `[${userId}] signalingState → ${conn.signalingState}`);
     });
 
-    // Track events — the critical part for diagnosing stream issues
+    // Track events: the critical part for diagnosing stream issues
     conn.addEventListener('track', (event) => {
       const track = event.track;
       const src = event.streams?.[0];

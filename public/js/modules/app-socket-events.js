@@ -26,7 +26,7 @@ _listenFeatureEvents() {
       });
     }
 
-    // E2E: thread lives inside a DM channel — decrypt parent + messages
+    // E2E: thread lives inside a DM channel, so decrypt parent + messages
     // before rendering so the preview/header and message bodies show plain text.
     const channelCode = data.channelCode || this.currentChannel;
     if (data.parentContent && window.HavenE2E && HavenE2E.isEncrypted(data.parentContent)) {
@@ -501,7 +501,7 @@ _listenMessageChanges() {
                    && !msgEl.classList.contains('thread-compact')) {
           // Deleting the head of a thread group (a full row): promote the next
           // compact reply so it keeps an author header. Deleting a middle
-          // compact row needs no promotion — the head above it still stands.
+          // compact row needs no promotion; the head above it still stands.
           try { this._promoteThreadCompactToFull(next); } catch (e) { console.warn('[Messages] thread row promotion failed', e); }
         }
         msgEl.remove();
@@ -509,7 +509,7 @@ _listenMessageChanges() {
       this._forumBlogRecount?.();
     }
     // Drop the row from the search panel too, regardless of which channel is
-    // open — results are cross-channel and this only fires on a confirmed
+    // open. Results are cross-channel and this only fires on a confirmed
     // delete, so removal stays truthful. (search-overhaul phase 3)
     this._searchRemoveResult?.(data.channelCode, data.messageId);
   });
@@ -662,7 +662,7 @@ _listenMessageChanges() {
           document.getElementById('pinned-list').innerHTML = `<p class="muted-text" style="padding:12px">${t('pinned_panel.no_messages')}</p>`;
         }
       }
-      // Remove from Pins PiP if it's open — same DOM surgery, no re-fetch needed
+      // Remove from Pins PiP if it's open (same DOM surgery, no re-fetch needed)
       const pipItem = document.querySelector(`#pins-pip-list .pinned-item[data-msg-id="${data.messageId}"]`);
       if (pipItem) {
         pipItem.remove();
@@ -687,7 +687,7 @@ _listenMessageChanges() {
         await this._decryptMessages(data.pins, data.channelCode);
       }
       this._renderPinnedPanel(data.pins);
-      // The user just opened the pinned panel and saw everything in it —
+      // The user just opened the pinned panel and saw everything in it, so
       // mark all current pin ids as seen so the unread dot clears.
       this._markPinsSeen?.(data.pins || []);
     }
@@ -914,10 +914,10 @@ _listenAdminAndPrefs() {
     // first so applyThemeFromServer() applies the saved pick, not the default.
     if (prefs.effects && typeof syncEffectsFromServer === 'function') syncEffectsFromServer(prefs.effects);
     if (prefs.theme) {
-      // User has a saved personal theme preference — apply it
+      // User has a saved personal theme preference: apply it
       applyThemeFromServer(prefs.theme, true, true);
     } else if (this.serverSettings.default_theme) {
-      // No personal preference — apply the server's default theme
+      // No personal preference: apply the server's default theme
       applyThemeFromServer(this.serverSettings.default_theme);
     } else if (prefs.effects && typeof applyEffects === 'function') {
       // No theme pass to carry them, so the restored effects apply here.
@@ -960,7 +960,7 @@ _listenAdminAndPrefs() {
     // is linked, so linking or unlinking one has to refresh them.
     this._syncStatusPickerActivity?.();
     // The link may have completed in a different browser window entirely, so
-    // this push is often the first the app hears of it — announce anything
+    // this push is often the first the app hears of it, so announce anything
     // newly linked rather than letting the row change silently.
     for (const c of (this._connections.connections || [])) {
       if (!prev.has(c.provider)) {
@@ -977,7 +977,7 @@ _listenAdminAndPrefs() {
     this._applyListeningState?.(data?.token || null);
   });
 
-  // Server issued a short-lived link token — hand off to the provider in a
+  // Server issued a short-lived link token: hand off to the provider in a
   // SEPARATE window.
   //
   // This used to navigate the current page. In the desktop app that meant the
@@ -994,7 +994,7 @@ _listenAdminAndPrefs() {
     const url = `/connect/${encodeURIComponent(data.provider)}?token=${encodeURIComponent(data.token)}`;
     const win = window.open(url, 'haven-connect', 'width=820,height=760,menubar=no,toolbar=no');
     if (!win) {
-      // Popup blocked — tell the user rather than silently doing nothing.
+      // Popup blocked: tell the user rather than silently doing nothing.
       this._showToast(t('users.connections.allow_popups'), 'error');
     }
   });

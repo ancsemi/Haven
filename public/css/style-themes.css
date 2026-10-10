@@ -109,7 +109,7 @@
   --radius:        8px;
   --radius-sm:     4px;
   --transition:    0.15s ease;
-  --sidebar-width: 16.875rem; /* 270px — in rem so the sidebar scales with the zoom */
+  --sidebar-width: 16.875rem; /* 270px, in rem so the sidebar scales with the zoom */
   --right-width:   16.25rem;  /* 260px */
 
   --theme-logo:    "⬡";
@@ -195,7 +195,7 @@
   );
 }
 
-/* Matrix accent overrides — glitch aesthetic */
+/* Matrix accent overrides: glitch aesthetic */
 [data-theme="matrix"] .brand-text { text-shadow: 0 0 8px rgba(0, 255, 65, 0.4); }
 [data-theme="matrix"] .channel-badge { background: #00ff41; color: #000; }
 [data-theme="matrix"] .message-avatar, [data-theme="matrix"] .message-avatar-img { border: 1px solid rgba(0, 255, 65, 0.3); }
@@ -274,7 +274,7 @@
   --msg-glow:      0 0 4px rgba(111, 236, 255, 0.08);
 }
 
-/* Tron accent overrides — identity disc glow */
+/* Tron accent overrides: identity disc glow */
 [data-theme="tron"] .brand-text { text-shadow: 0 0 10px rgba(111, 236, 255, 0.4); color: #6fecff; }
 [data-theme="tron"] .server-icon.home { background: transparent; border: 2px solid #6fecff; box-shadow: 0 0 8px rgba(111, 236, 255, 0.4); }
 [data-theme="tron"] .channel-item.active::before { background: #6fecff; box-shadow: 0 0 6px rgba(111, 236, 255, 0.5); }
@@ -320,7 +320,7 @@
   --msg-glow:      0 0 4px rgba(212, 160, 32, 0.06);
 }
 
-/* HALO accent overrides — energy sword blue highlights */
+/* HALO accent overrides: energy sword blue highlights */
 [data-theme="halo"] .channel-item.active::before { background: #4fc3f7; }
 [data-theme="halo"] .btn-send { background: #4fc3f7; }
 [data-theme="halo"] .btn-send:hover { background: #6fd4ff; }
@@ -380,7 +380,7 @@
   );
 }
 
-/* LoTR accent overrides — elvish warmth */
+/* LoTR accent overrides: elvish warmth */
 [data-theme="lotr"] .brand-text { font-style: italic; }
 [data-theme="lotr"] .welcome-icon { color: #d4a844; }
 [data-theme="lotr"] .server-icon.home { background: linear-gradient(135deg, #8a6a20, #d4a844); }
@@ -423,7 +423,7 @@
   --msg-glow:      0 0 4px rgba(255, 45, 111, 0.08);
 }
 
-/* Cyberpunk accent splashes — neon contrasts */
+/* Cyberpunk accent splashes: neon contrasts */
 [data-theme="cyberpunk"] .channel-item.active::before { background: #00f0ff; }
 [data-theme="cyberpunk"] .inline-code { color: #00f0ff; }
 [data-theme="cyberpunk"] .brand-text { background: linear-gradient(90deg, #ff2d6f, #00f0ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
@@ -467,7 +467,7 @@
   --theme-logo:    "❄";
 }
 
-/* Nord accent splashes — aurora colors */
+/* Nord accent splashes: aurora colors */
 [data-theme="nord"] .mention { background: rgba(180, 142, 173, 0.2); color: #b48ead; }
 [data-theme="nord"] .brand-text { color: #88c0d0; }
 
@@ -554,7 +554,7 @@
   --msg-glow:      0 0 6px rgba(204, 0, 32, 0.12);
 }
 
-/* Bloodborne accent overrides — blood and darkness */
+/* Bloodborne accent overrides: blood and darkness */
 [data-theme="bloodborne"] .brand-text { color: #cc0020; text-shadow: 0 0 12px rgba(204, 0, 32, 0.5); }
 [data-theme="bloodborne"] .server-icon.home { background: linear-gradient(135deg, #660010, #cc0020); box-shadow: 0 0 10px rgba(204, 0, 32, 0.4); }
 [data-theme="bloodborne"] .channel-item.active::before { background: #ff0030; box-shadow: 0 0 8px rgba(255, 0, 48, 0.6); }
@@ -603,7 +603,7 @@
   --msg-glow:      0 0 4px rgba(0, 212, 255, 0.08);
 }
 
-/* Ice accent overrides — frozen glow */
+/* Ice accent overrides: frozen glow */
 [data-theme="ice"] .brand-text { color: #00d4ff; text-shadow: 0 0 12px rgba(0, 212, 255, 0.5); }
 [data-theme="ice"] .server-icon.home { background: linear-gradient(135deg, #005580, #00d4ff); box-shadow: 0 0 10px rgba(0, 212, 255, 0.3); }
 [data-theme="ice"] .channel-item.active::before { background: #00d4ff; box-shadow: 0 0 8px rgba(0, 212, 255, 0.5); }
@@ -651,7 +651,7 @@
   --msg-glow:      0 0 4px rgba(26, 90, 255, 0.08);
 }
 
-/* Abyss accent overrides — deep ocean pressure */
+/* Abyss accent overrides: deep ocean pressure */
 [data-theme="abyss"] .brand-text { color: #4488ff; text-shadow: 0 0 12px rgba(26, 90, 255, 0.5); }
 [data-theme="abyss"] .server-icon.home { background: linear-gradient(135deg, #0a2060, #1a5aff); box-shadow: 0 0 10px rgba(26, 90, 255, 0.3); }
 [data-theme="abyss"] .channel-item.active::before { background: #1a5aff; box-shadow: 0 0 8px rgba(26, 90, 255, 0.5); }

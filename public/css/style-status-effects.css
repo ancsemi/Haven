@@ -234,7 +234,7 @@
   line-height: 1;
 }
 .status-bar-toggle-tab:hover { opacity: 1; }
-/* Desktop app has its own footer — never show the toggle tab */
+/* Desktop app has its own footer; never show the toggle tab */
 [data-desktop-app] .status-bar-toggle-tab { display: none !important; }
 
 /* ── Backup restore progress bar (#5438) ── */
@@ -259,7 +259,7 @@
   display: block;
   font-family: var(--font-mono, monospace);
 }
-/* Indeterminate (server extracting, no byte total yet) — sweep animation */
+/* Indeterminate (server extracting, no byte total yet): sweep animation */
 .restore-progress.indeterminate .restore-progress-fill {
   width: 40% !important;
   transition: none;
@@ -523,7 +523,7 @@
   100% { opacity: 1; }
 }
 
-/* ── Win95: No effects — sharp, clean, period-correct ─ */
+/* ── Win95: No effects (sharp, clean, period-correct) ─ */
 
 /* ── FFX: Flowing water overlay ────────────────────── */
 [data-theme="ffx"] .sidebar { position: relative; }
@@ -799,14 +799,14 @@
   --scanline: none; /* scanlines moved to dedicated .fx-crt-scanlines overlay */
 }
 
-/* ── CRT vignette overlay — parabolic CRT glass tube ──
+/* ── CRT vignette overlay: parabolic CRT glass tube ──
    Simulates a convex fishbowl CRT: bright center fading
    to dark curved edges, phosphor glow, glass reflection,
    and subtle screen flicker.  Darkness controlled by the
    --crt-vignette-opacity CSS variable (slider in UI).     */
 .fx-crt-vignette {
   position: fixed; inset: 0;
-  /* Gradient is set dynamically by JS _applyCrtVignette() — this is the
+  /* Gradient is set dynamically by JS _applyCrtVignette(); this is the
      mid-range default so the effect is visible even before the slider fires. */
   background:
     radial-gradient(ellipse 68% 64% at 50% 50%,
@@ -817,7 +817,7 @@
       rgba(0,0,0,0.42) 82%,
       rgba(0,0,0,0.50) 100%);
   animation: crt-flicker calc(0.08s * var(--fx-mult, 1)) infinite alternate;
-  /* Fishbowl curvature — larger radius simulates convex glass */
+  /* Fishbowl curvature: larger radius simulates convex glass */
   border-radius: 22px / 18px;
   box-shadow:
     inset 0 0 120px rgba(0,0,0,0.65),
@@ -826,7 +826,7 @@
   z-index: 99998;
   pointer-events: none;
 }
-/* Glass reflection glint — subtle highlight in upper-left like curved glass */
+/* Glass reflection glint: subtle highlight in upper-left like curved glass */
 .fx-crt-vignette::after {
   content: '';
   position: absolute; inset: 0;
@@ -839,11 +839,11 @@
   pointer-events: none;
 }
 
-/* ── CRT scanline overlay — fades toward screen center ── */
+/* ── CRT scanline overlay: fades toward screen center ── */
 .fx-crt-scanlines {
   position: fixed; inset: 0;
   opacity: var(--crt-scanline-opacity, 0.45);
-  /* Thin 1px dark lines every 3px — mimics phosphor gaps */
+  /* Thin 1px dark lines every 3px, mimics phosphor gaps */
   background: repeating-linear-gradient(
     0deg,
     transparent 0px,
@@ -1321,7 +1321,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  height: 100dvh; /* dynamic viewport height — accounts for mobile browser chrome */
+  height: 100dvh; /* dynamic viewport height, accounts for mobile browser chrome */
   width: 100vw;
   overflow: hidden;
 }

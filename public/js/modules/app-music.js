@@ -243,7 +243,7 @@ _handleMusicShared(data) {
   else if (data.url.includes('youtube.com') || data.url.includes('youtu.be')) iframeH = '200';
 
   // Wrap iframe in a container; overlay blocks direct clicks for SoundCloud (Haven has API control)
-  // For Spotify & YouTube, no overlay — user interacts with their native controls (seek bar, etc.)
+  // For Spotify & YouTube, no overlay: user interacts with their native controls (seek bar, etc.)
   const isSpotify = data.url.includes('spotify.com');
   const isYouTube = data.url.includes('youtube.com') || data.url.includes('youtu.be') || data.url.includes('music.youtube.com');
   const needsOverlay = !isSpotify && !isYouTube; // only SoundCloud gets the click-blocker now
@@ -265,14 +265,14 @@ _handleMusicShared(data) {
   label.innerHTML = `<span class="music-pip-label-icon" aria-hidden="true">🎶</span> ${this._escapeHtml(labelText)}`;
   panel.style.display = 'flex';
 
-  // Update play/pause button — hide for Spotify (no external API)
+  // Update play/pause button; hide for Spotify (no external API)
   const ppBtn = document.getElementById('music-play-pause-btn');
   if (ppBtn) {
     ppBtn.textContent = isSpotify ? '' : (data.syncState?.isPlaying === false ? '▶' : '⏸');
     ppBtn.style.display = isSpotify ? 'none' : '';
   }
 
-  // Seek bar — hide for Spotify (no external API for position tracking)
+  // Seek bar: hide for Spotify (no external API for position tracking)
   const seekSlider = document.getElementById('music-seek-slider');
   const timeCur = document.getElementById('music-time-current');
   const timeDur = document.getElementById('music-time-duration');
@@ -285,7 +285,7 @@ _handleMusicShared(data) {
   const savedVol = parseInt(localStorage.getItem('haven_music_volume') ?? '80');
   document.getElementById('music-volume-slider').value = savedVol;
 
-  // For Spotify: volume can only be controlled inside the embed — show disclaimer
+  // For Spotify: volume can only be controlled inside the embed, so show disclaimer
   const volSlider = document.getElementById('music-volume-slider');
   const muteBtn = document.getElementById('music-mute-btn');
   if (isSpotify) {
@@ -475,7 +475,7 @@ _renderMusicQueueModal() {
     };
     body.querySelectorAll('.music-queue-row').forEach(row => {
       // dragstart fires on the <tr> (the draggable element), so e.target is always the
-      // row — never the handle child. Track mousedown on the handle instead.
+      // row, never the handle child. Track mousedown on the handle instead.
       let dragFromHandle = false;
       row.querySelector('.music-queue-drag-handle')?.addEventListener('mousedown', () => {
         dragFromHandle = true;
@@ -693,7 +693,7 @@ _flushPendingMusicSyncState() {
 },
 
 _initYouTubePlayer(iframe, volume) {
-  // YouTube IFrame API — load the API script once, then create a player
+  // YouTube IFrame API: load the API script once, then create a player
   if (!window.YT || !window.YT.Player) {
     if (!document.getElementById('yt-iframe-api')) {
       const tag = document.createElement('script');
@@ -732,7 +732,7 @@ _createYTPlayer(iframe, volume) {
             this._setMusicPlayingUi(false);
             if (!this._shouldSuppressMusicBroadcasts()) this._emitMusicControl('pause');
           } else if (e.data === YT.PlayerState.ENDED) {
-            // Signal the server — it will pop the queue and emit music-shared for the next track
+            // Signal the server; it will pop the queue and emit music-shared for the next track
             this._setMusicPlayingUi(false);
             this._emitMusicFinished();
           }
@@ -929,7 +929,7 @@ _playMusicEmbed() {
     } else if (this._musicSCWidget) {
       this._musicSCWidget.play();
     } else {
-      // Spotify or fallback — restore paused src to resume
+      // Spotify or fallback: restore paused src to resume
       const iframe = document.getElementById('music-iframe');
       if (iframe) {
         const src = iframe.dataset.pausedSrc || iframe.src;
@@ -947,7 +947,7 @@ _pauseMusicEmbed() {
     } else if (this._musicSCWidget) {
       this._musicSCWidget.pause();
     } else {
-      // Spotify — no external API; remove src to pause, store for resume
+      // Spotify: no external API; remove src to pause, store for resume
       const iframe = document.getElementById('music-iframe');
       if (iframe) {
         iframe.dataset.pausedSrc = iframe.src;
@@ -1039,7 +1039,7 @@ _popOutMusicPlayer() {
     this._syncMusicQueueUi();
     this._applyMusicControlPermissions();
 
-    // Move the embed wrapper (with live iframe) into the PiP overlay — no reload!
+    // Move the embed wrapper (with live iframe) into the PiP overlay. No reload!
     const embedWrapper = container.querySelector('.music-embed-wrapper');
     if (embedWrapper) {
       // Remove the click-blocking overlay so user can interact directly in PiP

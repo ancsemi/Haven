@@ -575,7 +575,7 @@ _closeGroupChannelInfo() {
 // type their persona's name normally in chat without accidentally routing
 // the message through the persona.
 _checkPersonaTrigger(inputEl) {
-  // Personas are not supported in DMs — suppress the dropdown if the current
+  // Personas are not supported in DMs, so suppress the dropdown if the current
   // channel is a DM (covers fullscreen DM view which reuses #message-input).
   const _curCh = this.currentChannel && this.channels && this.channels.find(c => c.code === this.currentChannel);
   if (_curCh && _curCh.is_dm) { this._hidePersonaDropdown(); return; }
@@ -610,7 +610,7 @@ _showPersonaDropdown() {
   const filtered = personas.filter(p => (p.name || '').toLowerCase().startsWith(q)).slice(0, 8);
   if (filtered.length === 0) {
     if (q.length === 0 && personas.length === 0) {
-      // No personas yet — point the user at the profile UI
+      // No personas yet: point the user at the profile UI
       dropdown.innerHTML = `<div class="mention-item" data-persona-empty="1"><strong>${t('personas.dropdown_none')}</strong> <span class="mention-item-handle">${t('personas.dropdown_create')}</span></div>`;
       dropdown.style.display = 'block';
       dropdown.querySelectorAll('[data-persona-empty]').forEach(el => {

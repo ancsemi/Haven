@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Shared Theme Switcher (loaded on all pages)
+// Haven: Shared Theme Switcher (loaded on all pages)
 // ═══════════════════════════════════════════════════════════
 
 // ── Color-conversion helpers ────────────────────────────
@@ -162,7 +162,7 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
 // ── Apply / clear custom theme CSS variables ────────────
 // Sets each CSS custom property directly on :root's inline style.
 // Multiple setProperty calls in one script execution are batched by
-// Chromium into a single style-invalidation pass — no intermediate
+// Chromium into a single style-invalidation pass, with no intermediate
 // recalculations.  This avoids the CSSOM node creation/destruction
 // that happens when writing a <style> element's textContent 20×/s,
 // which was causing progressive Blink Oilpan GC pressure.
@@ -306,7 +306,7 @@ function startRgbCycle() {
   // workload that freezes the renderer within minutes.
   document.documentElement.classList.add('rgb-cycling');
 
-  // Expose updaters so sliders can adjust live (no restart needed — step recalcs each tick)
+  // Expose updaters so sliders can adjust live (no restart needed; step recalcs each tick)
   startRgbCycle._setSpeed = (v) => {
     speed = v;
     localStorage.setItem('haven_rgb_settings', JSON.stringify({ speed, vibrancy }));
@@ -417,7 +417,7 @@ function initEffectSpeedEditor() {
   const editor = document.getElementById('effect-speed-editor');
   if (!editor) return;
 
-  // Restore saved global multiplier (legacy — used as fallback)
+  // Restore saved global multiplier (legacy, used as fallback)
   const saved = parseFloat(localStorage.getItem('haven_fx_mult'));
   if (!isNaN(saved)) {
     document.documentElement.style.setProperty('--fx-mult', saved);
@@ -442,7 +442,7 @@ function _rebuildEffectSpeedSliders() {
   // Clear existing sliders
   editor.innerHTML = '';
 
-  // Get active dynamic effects — exclude CRT and Cyberpunk which have dedicated editors
+  // Get active dynamic effects, excluding CRT and Cyberpunk which have dedicated editors
   const DEDICATED_EDITORS = ['crt', 'cyberpunk'];
   const active = [..._activeFx].filter(fx => DYNAMIC_THEMES.includes(fx) && !DEDICATED_EDITORS.includes(fx));
   if (active.length === 0) return;
@@ -462,7 +462,7 @@ function _rebuildEffectSpeedSliders() {
 
     const slider = row.querySelector('input');
     slider.addEventListener('input', () => {
-      const raw = parseInt(slider.value, 10) / 100; // 0.15–2.0 (canvas: higher = faster)
+      const raw = parseInt(slider.value, 10) / 100; // 0.15-2.0 (canvas: higher = faster)
       _fxSpeedMap[fx] = raw;
 
       // For CSS-based effects: set --fx-mult on overlay layer elements
@@ -487,10 +487,10 @@ function _applyFxSpeedToLayers(effectName, cssMult) {
     layers.forEach(layer => {
       const el = document.getElementById(layer.id);
       if (!el) return;
-      // CRT: widen flicker range — half the slowest speed, double the fastest.
-      // Original --fx-mult ranged 0.15–2.0; new CRT range: 0.075–4.0
+      // CRT: widen flicker range (half the slowest speed, double the fastest).
+      // Original --fx-mult ranged 0.15 to 2.0; new CRT range: 0.075 to 4.0
       if (effectName === 'crt') {
-        const raw = 2.15 - cssMult;                     // 0.15–2.0
+        const raw = 2.15 - cssMult;                     // 0.15-2.0
         const t = (raw - 0.15) / (2.0 - 0.15);         // 0→1 (left→right)
         const crtMult = 4.0 - t * (4.0 - 0.075);       // slow 4.0 → fast 0.075
         el.style.setProperty('--fx-mult', crtMult);
@@ -500,7 +500,7 @@ function _applyFxSpeedToLayers(effectName, cssMult) {
       }
     });
   }
-  // Matrix canvas + matrixbars CSS are paired — speed changes apply to both
+  // Matrix canvas + matrixbars CSS are paired, so speed changes apply to both
   if (effectName === 'matrix') {
     const barLayers = FX_LAYERS['matrixbars'];
     if (barLayers) barLayers.forEach(layer => {
@@ -573,7 +573,7 @@ function initSacredIntensityEditor() {
   }
 
   slider.addEventListener('input', () => {
-    // slider 20-250 → intensity 0.2 – 2.5
+    // slider 20-250 → intensity 0.2-2.5
     const val = parseInt(slider.value, 10) / 100;
     document.documentElement.style.setProperty('--fx-religious-intensity', val);
     localStorage.setItem('haven_fx_sacred_intensity', val);
@@ -709,7 +709,7 @@ function _deactivateAllEffects() {
 function applyEffects(mode, themeOverride) {
   _deactivateAllEffects();
 
-  // Always strip theme pseudo-element effects — JS manages all overlays now
+  // Always strip theme pseudo-element effects; JS manages all overlays now
   document.documentElement.setAttribute('data-fx-custom', '');
 
   if (mode === 'none') return;
@@ -725,7 +725,7 @@ function applyEffects(mode, themeOverride) {
   if (Array.isArray(mode)) mode.forEach(_activateEffect);
 }
 
-// ── Cyberpunk Text Scramble — decodes text with random chars ─
+// ── Cyberpunk Text Scramble: decodes text with random chars ─
 const _SCRAMBLE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^';
 
 function _scrambleElement(el, original) {
@@ -783,7 +783,7 @@ function _collectScrambleTargets() {
     targets.push({ el, original });
   }
 
-  // 1. Brand text (HAVEN logo) — always included
+  // 1. Brand text (HAVEN logo), always included
   addTarget(document.querySelector('.brand-text'));
 
   // 2. Current username
@@ -792,7 +792,7 @@ function _collectScrambleTargets() {
   // 3. Channel names in sidebar
   document.querySelectorAll('.channel-name').forEach(addTarget);
 
-  // 4. Section labels — target the text span inside toggle headers to avoid
+  // 4. Section labels: target the text span inside toggle headers to avoid
   //    destroying child elements (buttons, badges) via textContent assignment.
   //    For section labels that contain a .section-label-text span, scramble that;
   //    otherwise fall back to the label itself (safe for simple labels).
@@ -990,7 +990,7 @@ function _injectCrtSliders(parentEditor) {
   _applyCrtScanline(scanVal);
 }
 
-// ── Matrix Digital Rain (canvas) — scoped to .main area ─
+// ── Matrix Digital Rain (canvas), scoped to .main area ─
 function _startMatrixRain() {
   _stopMatrixRain();
   const mainEl = document.querySelector('.main');
@@ -1183,7 +1183,7 @@ function _stopEmbers() {
   _embers = [];
 }
 
-// ── Elden Ring Grace Embers (canvas — golden, angular, stable glow) ──
+// ── Elden Ring Grace Embers (canvas: golden, angular, stable glow) ──
 function _startGraceEmbers() {
   _stopGraceEmbers();
   const container = _ensureFxLayers();
@@ -1215,7 +1215,7 @@ function _startGraceEmbers() {
       size: 0.5 + Math.random() * 1.2,
       life: 1,
       decay: 0.002 + Math.random() * 0.005,       // longer life than DS embers
-      hue: 42 + Math.random() * 16,               // golden-yellow (42–58)
+      hue: 42 + Math.random() * 16,               // golden-yellow (42-58)
       phase: Math.random() * Math.PI * 2,
       driftAmp: 0.05 + Math.random() * 0.12,      // very subtle sway
       angle: Math.random() * Math.PI * 2           // rotation for diamond shape
@@ -1271,7 +1271,7 @@ function _startGraceEmbers() {
       _graceCtx.fillStyle = 'hsl(' + e.hue + ',85%,' + Math.floor(lightness) + '%)';
       drawDiamond(_graceCtx, e.x, e.y, sz, e.angle);
 
-      // Soft golden glow (tall, stable — no wild flickering)
+      // Soft golden glow (tall, stable, no wild flickering)
       _graceCtx.globalAlpha = alpha * 0.25;
       _graceCtx.save();
       _graceCtx.translate(e.x, e.y);
@@ -1300,7 +1300,7 @@ function _stopGraceEmbers() {
   _graceEmbers = [];
 }
 
-// ── Nord Snowfall (canvas — randomised, fleeting) ───────
+// ── Nord Snowfall (canvas: randomised, fleeting) ───────
 function _startNordSnow() {
   _stopNordSnow();
   const container = _ensureFxLayers();
@@ -1341,7 +1341,7 @@ function _startNordSnow() {
     _snowLastFrame = now;
     _snowCtx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Spawn snowflakes at random intervals — density scales with width
+    // Spawn snowflakes at random intervals; density scales with width
     // Speed multiplier affects spawn rate and fall speed
     const speedM = _getFxSpeed('nord');
     const targetCount = Math.max(20, Math.floor(canvas.width / 18 * Math.max(0.5, speedM)));
@@ -1371,7 +1371,7 @@ function _startNordSnow() {
         continue;
       }
 
-      // Draw snowflake — soft circle with glow
+      // Draw snowflake: soft circle with glow
       _snowCtx.globalAlpha = alpha;
       _snowCtx.fillStyle = '#d8dee9';
       _snowCtx.beginPath();
@@ -1783,7 +1783,7 @@ function initThemeSwitcher(containerId, socket) {
     startRgbCycle();
   }
   // File themes are restored by plugin-loader after it fetches theme metadata.
-  // Nothing to do here for 'file:...' — it will be handled once the loader runs.
+  // Nothing to do here for 'file:...'; it will be handled once the loader runs.
 
   // Set active button (file: theme buttons are injected later by plugin-loader,
   // so they will pick up the active state via injectPublishedThemeButtons)
@@ -1900,13 +1900,13 @@ function applyThemeFromServer(theme, persist = true, syncFallback = false) {
   if (!theme) return;
   if (_isHavenSafeMode() || _isThemeRecoveryPending()) return;
 
-  // File theme — delegate to plugin-loader if available; otherwise fall back to haven
+  // File theme: delegate to plugin-loader if available; otherwise fall back to haven
   if (theme.startsWith('file:')) {
     const file = theme.slice(5);
     if (window.HavenPluginLoader?.applyFileTheme) {
       window.HavenPluginLoader.applyFileTheme(file, persist, syncFallback);
     } else {
-      // Loader not ready yet — store it; loader will restore on init
+      // Loader not ready yet: store it; loader will restore on init
       localStorage.setItem('haven_theme', theme);
     }
     return;
@@ -1942,7 +1942,7 @@ function applyThemeFromServer(theme, persist = true, syncFallback = false) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// Published (file:) themes — shared with the login page
+// Published (file:) themes, shared with the login page
 // ═══════════════════════════════════════════════════════════
 // A theme an admin publishes is a .theme.css file rather than one of the
 // built-in data-theme values, so applying it means injecting a stylesheet.

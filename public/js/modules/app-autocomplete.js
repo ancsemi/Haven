@@ -123,8 +123,8 @@ _showMentionDropdown() {
   if (host && dropdown.parentElement !== host) host.appendChild(dropdown);
   const query = this.mentionQuery;
 
-  // channelMembers is written in exactly one place — the 'channel-members'
-  // socket handler — and that handler drops the payload if it arrives while
+  // channelMembers is written in exactly one place (the 'channel-members'
+  // socket handler), and that handler drops the payload if it arrives while
   // currentChannel has moved on. Any path that leaves it empty (a dropped
   // payload, a switchChannel that threw before its emit, a server-side
   // membership miss) used to surface as "@ silently does nothing", which is
@@ -262,7 +262,7 @@ _checkChannelTrigger(inputEl) {
   const text = input.value.substring(0, cursor);
   // Match a # that follows a non-word, non-# boundary, plus up to 50 trailing
   // chars allowed in channel-link names (letters, numbers, emoji, _ and -).
-  // Spaces aren't allowed in the trigger query — channels with spaces are
+  // Spaces aren't allowed in the trigger query; channels with spaces are
   // resolved with underscores at insert time so the autolink regex picks
   // them up.
   const match = text.match(/(?:^|[^\w#&])#([\p{L}\p{N}\p{Emoji_Presentation}_-]{0,50})$/u);
@@ -369,7 +369,7 @@ _checkEmojiTrigger(inputEl) {
     if (ch === ' ' || ch === '\n') break; // stop at whitespace
   }
 
-  // No emoji token under the cursor — bail and close any open dropdown. A
+  // No emoji token under the cursor: bail and close any open dropdown. A
   // leading "::" counts as "no token": it's the persona trigger, and since no
   // emoji shortcode starts with ':', that colon can only belong to a persona.
   if (colonIdx === -1 || (colonIdx === 1 && text.startsWith('::'))) {

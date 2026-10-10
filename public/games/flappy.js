@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Shippy Container — Haven Mini-Game (External JS for CSP)
+// Shippy Container: Haven Mini-Game (External JS for CSP)
 // ═══════════════════════════════════════════════════════════
 
 // Apply saved theme immediately
@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (_useRest) {
-      // Mobile / no opener — submit via REST and fetch leaderboard
+      // Mobile / no opener: submit via REST and fetch leaderboard
       if (_authToken && score > 0) {
         fetch('/api/high-scores', {
           method: 'POST',
@@ -291,7 +291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (window.opener) {
         window.opener.postMessage({ type: 'get-leaderboard' }, '*');
       }
-    } catch { /* opener closed — try REST */
+    } catch { /* opener closed, try REST */
       fetch('/api/high-scores/flappy').then(r => r.json()).then(d => renderLeaderboard(d.leaderboard)).catch(() => {});
     }
   }

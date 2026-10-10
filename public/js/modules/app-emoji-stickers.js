@@ -89,7 +89,7 @@ _setupEmojiManagement() {
     }
   });
 
-  // Bulk emoji upload — select multiple files, auto-named from filenames
+  // Bulk emoji upload: select multiple files, auto-named from filenames
   const bulkInput = document.getElementById('emoji-bulk-input');
   if (bulkInput) {
     bulkInput.addEventListener('change', async () => {
@@ -346,8 +346,8 @@ async _loadStandardEmojis() {
     if (!res.ok) return;
     const data = await res.json();
     if (!data.categories || !Object.keys(data.categories).length) return;
-    // Keep Haven's bundled flag category — its :flag_xx: images render on every
-    // OS, unlike Unicode's regional-indicator flags — and layer the rest under it.
+    // Keep Haven's bundled flag category (its :flag_xx: images render on every
+    // OS, unlike Unicode's regional-indicator flags) and layer the rest under it.
     const flags = this.emojiCategories.Flags;
     this.emojiCategories = { ...data.categories, ...(flags ? { Flags: flags } : {}) };
     this.emojis = Object.values(this.emojiCategories).flat();

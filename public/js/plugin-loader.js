@@ -20,7 +20,7 @@ window.HavenPluginLoader = (function () {
   'use strict';
 
   // ═══════════════════════════════════════════════════════
-  //  HavenApi — exposed to plugins as window.HavenApi
+  //  HavenApi: exposed to plugins as window.HavenApi
   // ═══════════════════════════════════════════════════════
 
   const HavenApi = {
@@ -104,7 +104,7 @@ window.HavenPluginLoader = (function () {
           window.app._showToast(message, type);
         }
       },
-      /** Show a simple confirm dialog — returns a Promise<boolean> */
+      /** Show a simple confirm dialog; returns a Promise<boolean> */
       confirm(title, message) {
         return new Promise(resolve => {
           const result = window.confirm(`${title}\n\n${message}`);
@@ -113,7 +113,7 @@ window.HavenPluginLoader = (function () {
       },
     },
 
-    // ── Patcher — monkey-patch methods reversibly ──
+    // ── Patcher: monkey-patch methods reversibly ──
     Patcher: {
       _patches: new Map(),
 
@@ -280,7 +280,7 @@ window.HavenPluginLoader = (function () {
   }
   // Published themes are what the theme picker offers, so only one can be
   // active at a time. Palettes (Braid, Compact, anything that sets
-  // --bg-primary) are the same even when an admin has not published them —
+  // --bg-primary) are the same even when an admin has not published them:
   // they replace the built-in tokens, they do not stack on Matrix.
   // Unpublished files without a palette stay additive CSS tweaks.
   function isExclusiveMeta(meta) {
@@ -343,7 +343,7 @@ window.HavenPluginLoader = (function () {
         if (window[baseName] && typeof window[baseName] === 'function') {
           PluginClass = window[baseName];
         } else {
-          // Fallback: look for any class defined via the code — we wrap it
+          // Fallback: look for any class defined via the code (we wrap it)
           // The code itself may call _win.XYZ = class { ... }
           // Just re-execute looking for the return value
           const fn2 = new Function('HavenApi', '_win', code + '\n;return typeof start === "function" ? { start, stop: typeof stop === "function" ? stop : () => {} } : null;');
@@ -446,7 +446,7 @@ window.HavenPluginLoader = (function () {
   function enableTheme(file) {
     const t = loadedThemes.get(file);
     if (!t || t.enabled || suppressExtensions || !t.compatible) return;
-    // A published theme is one of the picker's choices, not a stackable tweak —
+    // A published theme is one of the picker's choices, not a stackable tweak:
     // turning it on means selecting it, so the two surfaces stay in agreement.
     if (isExclusiveMeta({ ...t.meta, file })) {
       applyFileTheme(file);
@@ -700,7 +700,7 @@ window.HavenPluginLoader = (function () {
 
 
   // ═══════════════════════════════════════════════════════
-  //  Init — fetch & load all plugins and themes
+  //  Init: fetch & load all plugins and themes
   // ═══════════════════════════════════════════════════════
 
   async function fetchList(url) {
@@ -905,7 +905,7 @@ window.HavenPluginLoader = (function () {
     if (t) { t.enabled = true; t.suppressed = false; t.linkEl = linkEl; }
 
     // Selecting a published theme deselects any other one, so drop the others
-    // from the enabled list — otherwise the Settings toggles claim a theme is
+    // from the enabled list. Otherwise the Settings toggles claim a theme is
     // on while the picker shows a different one as active.
     const kept = getEnabledThemes().filter(f =>
       f !== file && !isExclusiveTheme(f) && loadedThemes.get(f)?.compatible !== false

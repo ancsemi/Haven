@@ -17,7 +17,7 @@ _setupDebugSection() {
     } catch { /* storage blocked (private mode): nothing is remembered, nothing else breaks */ }
   });
 
-  // #5379 — opt-in toggle to re-apply voice processing (echoCancellation /
+  // #5379: opt-in toggle to re-apply voice processing (echoCancellation /
   // noiseSuppression / autoGainControl) to getDisplayMedia audio. Default
   // off as of 3.17.3 because those filters hollow out music and game audio
   // for listeners. Users sharing tutorial narration or meeting audio can
@@ -34,11 +34,11 @@ _setupDebugSection() {
     });
   }
 
-  // #5426 — screen-share audio now plays straight through the <audio> element
+  // #5426: screen-share audio now plays straight through the <audio> element
   // by default (NetEq stays in charge, so it stays in sync over a TURN relay).
   // This opt-in toggle instead routes it through the Web Audio mixer, which
   // unlocks the >100% per-stream volume boost but can stutter / desync over a
-  // relay — the same createMediaStreamSource-vs-jitter-buffer fight as before,
+  // relay, the same createMediaStreamSource-vs-jitter-buffer fight as before,
   // just no longer the default.
   const sadCb = document.getElementById('pref-debug-screen-audio-direct');
   if (sadCb) {
@@ -55,7 +55,7 @@ _setupDebugSection() {
     });
   }
 
-  // #5426 — opt-in gentler screen-share encoding for relayed calls. 3.18.1
+  // #5426: opt-in gentler screen-share encoding for relayed calls. 3.18.1
   // raised the bitrate ceilings, pinned maxFramerate and set
   // degradationPreference to 'maintain-framerate', which is right on a direct
   // connection and wrong once a TURN relay falls back to TCP: loss is hidden,
@@ -93,7 +93,7 @@ _setupDebugSection() {
     });
   }
 
-  // #5444 — opt-in glare/ICE-restart recovery for voice. When two peers
+  // #5444: opt-in glare/ICE-restart recovery for voice. When two peers
   // reconnect simultaneously their ICE restarts can collide and leave one
   // audio direction dead until a manual rejoin. This re-queues the restart so
   // the connection repairs itself. Off by default while it's unverified; read
@@ -109,7 +109,7 @@ _setupDebugSection() {
     });
   }
 
-  // #5380 — always join voice muted
+  // #5380: always join voice muted
   const moCb = document.getElementById('pref-voice-mute-on-join');
   if (moCb) {
     try { moCb.checked = localStorage.getItem('haven_mute_on_join') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
@@ -121,7 +121,7 @@ _setupDebugSection() {
     });
   }
 
-  // #5380 — listener-only (skip mic) voice mode
+  // #5380: listener-only (skip mic) voice mode
   const loCb = document.getElementById('pref-voice-listener-only');
   if (loCb) {
     try { loCb.checked = localStorage.getItem('haven_listener_only') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
@@ -260,7 +260,7 @@ _setupModalExpand() {
         _overlayMouseDownTarget && _overlayMouseDownTarget !== e.target) {
       e.stopImmediatePropagation();
     }
-  }, true); // capturing phase — fires before individual handlers
+  }, true); // capturing phase, fires before individual handlers
 
   // Auto-inject expand/maximize + close buttons into every modal.
   // Buttons live in an absolutely positioned .modal-controls group at the
@@ -269,16 +269,16 @@ _setupModalExpand() {
   const _injectModalControls = () => {
     document.querySelectorAll('.modal').forEach(modal => {
       // Skip promo/centered popups and the media gallery (which has its own
-      // header close button) — they're not regular modals (#5352)
+      // header close button); they're not regular modals (#5352)
       if (modal.classList.contains('android-beta-promo') ||
           modal.classList.contains('desktop-promo') ||
           modal.classList.contains('donors-modal-box') ||
           modal.classList.contains('media-gallery-modal')) return;
-      // Idempotent — skip already-injected
+      // Idempotent: skip already-injected
       if (modal.dataset.modalControlsInjected === '1') return;
       modal.dataset.modalControlsInjected = '1';
 
-      // Settings/activities headers have their own close button — keep it
+      // Settings/activities headers have their own close button, so keep it
       // but inject the expand toggle next to it.
       const settingsClose = modal.querySelector('.settings-close-btn');
 
@@ -374,7 +374,7 @@ _unhideImage(u) {
   this._saveHiddenImages();
 },
 
-// Slashed-eye ("closed eye") icon — there is no standalone closed-eye emoji,
+// Slashed-eye ("closed eye") icon. There is no standalone closed-eye emoji,
 // so we reuse the same eye-off glyph the password fields use for "hidden".
 // `off` true → closed/slashed eye; false → open eye.
 _eyeIcon(off, size = 14) {
@@ -647,7 +647,7 @@ _showImageContextMenu(e, src, opts = {}) {
 
   // Warm the image bytes while the menu is on screen. By the time "Copy Image"
   // is clicked this is usually already resolved, so the clipboard write is the
-  // first thing that awaits rather than the last. Errors are swallowed here —
+  // first thing that awaits rather than the last. Errors are swallowed here;
   // the copy handler re-fetches and reports properly if this didn't land.
   this._ctxImageBlobSrc = src;
   this._ctxImageBlob = (async () => {
@@ -715,7 +715,7 @@ _showImageContextMenu(e, src, opts = {}) {
               const blob = await new Promise((res, rej) =>
                 canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob null')), 'image/png'));
               if (blob) return blob;
-            } catch { /* tainted canvas or detached node — try next */ }
+            } catch { /* tainted canvas or detached node, try next */ }
           }
           return null;
         };
@@ -751,7 +751,7 @@ _showImageContextMenu(e, src, opts = {}) {
           }
         };
 
-        // Strategy 1: Electron desktop IPC (most reliable — main process
+        // Strategy 1: Electron desktop IPC (most reliable: main process
         // clipboard has no user-gesture requirement). Prefer raw base64 over
         // a data: URL so IPC doesn't pay the "data:image/png;base64," tax on
         // multi‑MB screenshots.
@@ -763,7 +763,7 @@ _showImageContextMenu(e, src, opts = {}) {
             const res = await window.havenDesktop.clipboardWriteImage(b64);
             if (res?.ok) { this._showToast(t('media_runtime.image.copied'), 'success'); return; }
             console.warn('[Haven] IPC clipboard write failed:', res?.reason);
-            // Fall through — still try web/desktop text fallbacks.
+            // Fall through; still try web/desktop text fallbacks.
           } catch (err) {
             console.warn('[Haven] IPC clipboard path errored:', err);
           }
@@ -776,7 +776,7 @@ _showImageContextMenu(e, src, opts = {}) {
             throw new Error('Clipboard API unavailable');
           }
           // Chromium rejects clipboard writes with "Write permission denied"
-          // whenever the document isn't focused — which is the normal state
+          // whenever the document isn't focused, which is the normal state
           // right after dismissing a context menu, and the reported failure
           // here. Pull focus back before asking, and give the focus change a
           // frame to land.
@@ -796,7 +796,7 @@ _showImageContextMenu(e, src, opts = {}) {
           console.error('[Haven] Web clipboard.write failed:', err);
           // Strategy 3: at least put the URL on the clipboard so the
           // user has something to paste. On desktop, route text through
-          // main-process IPC too — navigator.clipboard is often gesture-
+          // main-process IPC too: navigator.clipboard is often gesture-
           // locked in Electron BrowserViews after a context menu closes.
           try {
             if (window.havenDesktop?.clipboardWriteText) {

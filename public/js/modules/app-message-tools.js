@@ -7,7 +7,7 @@ export default {
 // ── Pinned Messages Panel ─────────────────────────────
 
 _renderPinnedPanel(pins) {
-  // Always cache the latest pin list — used by the pop-out button and by
+  // Always cache the latest pin list. It's used by the pop-out button and by
   // the PiP to refresh after a pin/unpin event without a full re-open.
   this._lastPins = pins;
 
@@ -38,13 +38,13 @@ _renderPinnedPanel(pins) {
   }
 
   // When this render was triggered by a PiP auto-refresh (message-pinned
-  // event), skip showing/re-showing the sidebar panel — only update it if
+  // event), skip showing/re-showing the sidebar panel; only update it if
   // the user already has it visible.
   const silentRefresh = this._pinsPipSilentRefresh;
   this._pinsPipSilentRefresh = false;
   if (silentRefresh) {
     if (panel.style.display === 'block') {
-      // Sidebar is already open — re-wire its click handlers to the fresh DOM
+      // Sidebar is already open: re-wire its click handlers to the fresh DOM
       this._rewirePinnedSidebarHandlers(list, panel);
     }
   } else {
@@ -73,7 +73,7 @@ _rewirePinnedSidebarHandlers(list, panel) {
     });
   });
 
-  // Unpin buttons — stop propagation so click doesn't also jump to message
+  // Unpin buttons: stop propagation so click doesn't also jump to message
   list.querySelectorAll('.pinned-unpin-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -114,7 +114,7 @@ _closePinsPiP() {
 },
 
 /** Render the pin list inside the PiP overlay.
- *  Uses delegated click handlers (wired once in app-ui.js) — no inline
+ *  Uses delegated click handlers (wired once in app-ui.js), no inline
  *  event listeners attached here to avoid double-binding on refresh. */
 _renderPinsPiPList(pins) {
   const list = document.getElementById('pins-pip-list');
@@ -413,9 +413,9 @@ _showMessageContextMenu(e, msgEl) {
   const canEditTags  = !isDm && hasAttachment &&
                        (isOwn || this.user?.isAdmin || this._hasPerm('manage_tags'));
 
-  // Layout: the actions defined first (Edit, Reply, Quote, Pin) — separator —
-  // the remaining hover-toolbar actions (React, Thread, Copy Link, Protect) —
-  // separator — Delete. Every item carries the same data-action the toolbar
+  // Layout: the actions defined first (Edit, Reply, Quote, Pin), separator,
+  // the remaining hover-toolbar actions (React, Thread, Copy Link, Protect),
+  // separator, Delete. Every item carries the same data-action the toolbar
   // uses, and each action is gated on the same permission, so the two menus
   // stay behaviourally identical.
   const items = [];
@@ -476,7 +476,7 @@ _showMessageContextMenu(e, msgEl) {
     } else if (action === 'react') {
       this._showReactionPicker(msgEl, msgId);
     } else if (action === 'thread') {
-      // Defence in depth — threads never exist in DMs.
+      // Defence in depth: threads never exist in DMs.
       if (this.channels?.find(c => c.code === this.currentChannel)?.is_dm) {
         this._showToast?.(t('thread_list.unavailable_in_dm'), 'info');
       } else {
@@ -505,8 +505,8 @@ _showMessageContextMenu(e, msgEl) {
     }
   });
 
-  // Dismiss on outside click, another right-click, or scroll of the pane —
-  // mirrors the image context menu's self-closing lifecycle.
+  // Dismiss on outside click, another right-click, or scroll of the pane.
+  // This mirrors the image context menu's self-closing lifecycle.
   const closer = (ev) => {
     if (ev && ev.type !== 'scroll' && menu.contains(ev.target)) return;
     this._hideMessageContextMenu();

@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — WebRTC Voice Chat Manager
+// Haven: WebRTC Voice Chat Manager
 // ═══════════════════════════════════════════════════════════
 
 // iOS Safari (and every "browser" on iOS, since they all wrap WebKit) has a
@@ -45,8 +45,8 @@ class VoiceManager {
     this.audioCtx = null;           // Web Audio context for volume boost
     this.gainNodes = new Map();     // userId → GainNode
     this.localUserId = null;        // set by app.js so stopScreenShare can reference own tile
-    this.onScreenStream = null;     // callback(userId, stream|null) — set by app.js
-    this.onWebcamStream = null;     // callback(userId, stream|null) — set by app.js
+    this.onScreenStream = null;     // callback(userId, stream|null), set by app.js
+    this.onWebcamStream = null;     // callback(userId, stream|null), set by app.js
     this.onVoiceJoin = null;        // callback(userId, username)
     this.onVoiceLeave = null;       // callback(userId, username)
     this.onTalkingChange = null;    // callback(userId, isTalking)
@@ -54,7 +54,7 @@ class VoiceManager {
     this.webcamUsers = new Set();    // userIds currently broadcasting webcam
     // userIds whose current screen share we have actually handed to the UI.
     // Reset on every screen-share-started so a *re*share has to prove itself
-    // again — see _watchForScreenStream for why "a live receiver exists" is
+    // again (see _watchForScreenStream for why "a live receiver exists" is
     // not the same thing as "the viewer is seeing the stream".
     this._screenDelivered = new Set();
     this.screenGainNodes = new Map(); // userId → GainNode for screen share audio
@@ -62,12 +62,12 @@ class VoiceManager {
     this._screenStartInFlight = false;
     this._pendingScreenStop = null;
     this._screenWatchdogTimers = new Map();
-    this.onScreenAudio = null;       // callback(userId) — screen share audio available
+    this.onScreenAudio = null;       // callback(userId): screen share audio available
     this.talkingState = new Map();  // userId → boolean
     this.analysers = new Map();     // userId → { analyser, dataArray, interval }
-    this.onScreenShareStarted = null; // callback(userId, username) — someone started streaming
-    this.onWebcamStatusChange = null; // callback() — webcam started/stopped, re-render user list
-    this.onConnectivityWarning = null; // (#5399) callback(message) — fired when no STUN server responds
+    this.onScreenShareStarted = null; // callback(userId, username): someone started streaming
+    this.onWebcamStatusChange = null; // callback(): webcam started/stopped, re-render user list
+    this.onConnectivityWarning = null; // (#5399) callback(message): fired when no STUN server responds
     this._connectivityWarned = false;  // only warn once per session to avoid toast spam
     this.deafenedUsers = new Set();   // userIds we've muted our audio towards
     this._localTalkInterval = null;
@@ -124,10 +124,10 @@ class VoiceManager {
     this._relayScreenNeedsPublish = false;
 
     // The old per-resolution bitrate table was replaced by the user bitrate
-    // setting (screenBitrate, 300–10000 Kbps + unlimited). Relayed peers still
+    // setting (screenBitrate, 300 to 10000 Kbps + unlimited). Relayed peers still
     // get the gentler fixed profile inside _screenBitrateFor.
 
-    // Default STUN pool — non-Google by preference. Each entry is tried
+    // Default STUN pool, non-Google by preference. Each entry is tried
     // simultaneously by the browser during ICE gathering, so listing several
     // gives natural redundancy. If admin configures their own servers via
     // /api/ice-servers (typically with a TURN), that takes precedence over
@@ -137,7 +137,7 @@ class VoiceManager {
     // stun.nextcloud.com) both went offline. stunprotocol's domain is gone
     // entirely; nextcloud's STUN stopped responding to binding requests.
     // Result was every Haven server using default ICE config lost external
-    // WebRTC simultaneously — LAN-to-LAN still worked because host
+    // WebRTC simultaneously. LAN-to-LAN still worked because host
     // candidates don't need STUN, but anyone outside the server's subnet
     // got stuck on "ICE: Connecting...". The defaults below are a pool of
     // three independent, non-Google providers. If they all fail the runtime
@@ -176,7 +176,7 @@ class VoiceManager {
     try {
       const token = localStorage.getItem('haven_token');
       if (!token) return;
-      // 4s hard cap — if the server is restarting or unreachable, we
+      // 4s hard cap: if the server is restarting or unreachable, we
       // fall back to the default STUN-only config rather than hanging
       // join() indefinitely. Without the timeout, a click on Start Voice
       // during a server reboot stays in-flight while the user mashes the
@@ -487,7 +487,7 @@ class VoiceManager {
   // `inVoice` / `currentChannel` are local bookkeeping, and the whole UI is
   // driven off them by fire-and-forget calls scattered across half a dozen
   // call sites. When they get out of step with reality there is nothing that
-  // ever puts them back — the user is stranded looking at a "Join Voice"
+  // ever puts them back, and the user is stranded looking at a "Join Voice"
   // button while still talking to their friends. The peer connections are the
   // real source of truth: if any of them is still connected, we are in voice,
   // whatever the flags say.
@@ -522,7 +522,7 @@ class VoiceManager {
     if (!code) {
       try { code = localStorage.getItem('haven_voice_channel'); } catch { /* storage blocked (private mode): keep the default */ }
     }
-    if (!code) return false; // live media but no idea which channel — leave it alone
+    if (!code) return false; // live media but no idea which channel, so leave it alone
     console.warn('[Voice] Local state said not-in-voice but media is live',
       `(peers=${live}, micLive=${micLive}): restoring session state for`, code);
     this.currentChannel = code;
@@ -567,7 +567,7 @@ class VoiceManager {
 
   /**
    * Re-deliver every active sharer's screen to the UI. Used after the tiles
-   * were torn down while the media session stayed alive — the packets never
+   * were torn down while the media session stayed alive. The packets never
    * stopped arriving, so in the common case this restores the picture without
    * any signalling at all.
    */
@@ -594,7 +594,7 @@ class VoiceManager {
   // Exactly one side of each pair must be "polite" (yields to an incoming
   // offer) and the other "impolite" (ignores it and lets its own offer win).
   // Comparing user ids gives both ends the same verdict without extra
-  // signalling. If we somehow don't know our own id yet, be polite —
+  // signalling. If we somehow don't know our own id yet, be polite:
   // yielding is always safe, whereas two impolite peers would deadlock.
   _isPolite(remoteUserId) {
     const mine = this.localUserId;
@@ -632,7 +632,7 @@ class VoiceManager {
   }
 
   // True when an incoming offer arrives while we have an offer of our own in
-  // flight — the only situation where politeness matters.
+  // flight, the only situation where politeness matters.
   _isCollision(peer, connection) {
     return !!(peer && (peer._makingOffer || peer._awaitingAnswer ||
       connection.signalingState !== 'stable'));
@@ -703,7 +703,7 @@ class VoiceManager {
       }
       // Fast-path: server told us this is a transient rejoin and our
       // existing RTCPeerConnections are still live. Skip creating fresh
-      // peers — that would tear down working audio for no reason. See
+      // peers; that would tear down working audio for no reason. See
       // [VoiceDiag] fast-path in src/socketHandlers/voice.js.
       if (data.skipRenegotiate) {
         console.log('[Voice] voice-existing-users with skipRenegotiate, keeping existing peers');
@@ -756,7 +756,7 @@ class VoiceManager {
       }
     });
 
-    // Someone new joined our voice channel — they'll send us an offer
+    // Someone new joined our voice channel; they'll send us an offer
     this.socket.on('voice-user-joined', (data) => {
       // The new user handles creating offers to existing users,
       // so we just wait for their offer via 'voice-offer'.
@@ -766,16 +766,16 @@ class VoiceManager {
       }
     });
 
-    // Received an offer — create peer & answer
+    // Received an offer: create peer & answer
     this.socket.on('voice-offer', async (data) => {
       const { from, offer } = data;
 
       let peer = this.peers.get(from.id);
       // If we have a stale peer (connection failed/closed/disconnected from a
-      // previous session — e.g. the remote user just reconnected), tear it
+      // previous session, e.g. the remote user just reconnected), tear it
       // down so we negotiate a clean RTCPeerConnection. Without this, the
       // setRemoteDescription below applies the new offer on top of dead ICE
-      // and the audio never recovers — see #5347 ("rejoin doesn't restore
+      // and the audio never recovers. See #5347 ("rejoin doesn't restore
       // audio until you leave and rejoin again").
       if (peer) {
         const cs = peer.connection.connectionState;
@@ -812,7 +812,7 @@ class VoiceManager {
         // each peer ends up having applied the *other's* offer and its own
         // answer, and neither peer's answer is ever applied by the other. The
         // two halves describe different negotiations, so the ICE/DTLS
-        // parameters don't line up and media dies in both directions — while
+        // parameters don't line up and media dies in both directions, while
         // signalingState sits happily at 'stable' so nothing self-heals.
         //
         // This is the "rejoined voice and can't hear one specific person"
@@ -821,10 +821,10 @@ class VoiceManager {
         // only ever hit whoever happened to be streaming.
         //
         // Perfect negotiation needs exactly one polite peer. Tie-break on user
-        // id — deterministic and both sides compute the same answer.
+        // id: deterministic, and both sides compute the same answer.
         if (this._isCollision(peer, conn) && !this._isPolite(from.id)) {
           // Impolite peer: ignore the incoming offer. The polite side will roll
-          // its own offer back and answer ours, so we still converge — with one
+          // its own offer back and answer ours, so we still converge, with one
           // negotiation instead of two conflicting ones.
           console.warn('[Voice] offer glare with', from.id, 'so ignoring their offer (we are impolite)');
           return;
@@ -865,7 +865,7 @@ class VoiceManager {
           // renegotiation because the restart intent wasn't carried across the
           // rollback. On a reconnect where both peers ICE-restart at once (the
           // #5427 heal), that left the media path un-restarted and crossed the
-          // two sides' ICE credentials — producing "answer indicates ICE
+          // two sides' ICE credentials, producing "answer indicates ICE
           // restart but offer did not request ICE restart" plus a flood of
           // "Unknown ufrag" candidate errors, and audio stayed dead until a
           // manual rejoin. Re-queuing the restart makes the follow-up offer
@@ -890,7 +890,7 @@ class VoiceManager {
         // Flush any ICE candidates that arrived before the remote
         // description was set. Without this, intermittently a late-joiner's
         // first peer can't hear the existing user (or vice-versa) until one
-        // of them rejoins the channel — the lost candidates leave the
+        // of them rejoins the channel. The lost candidates leave the
         // connection unable to traverse NAT. (haven#vc-late-join)
         if (peer._pendingCandidates && peer._pendingCandidates.length) {
           for (const c of peer._pendingCandidates) {
@@ -987,7 +987,7 @@ class VoiceManager {
           console.error('Error adding ICE candidate:', err);
         }
       } else {
-        // Peer not yet created — stash the candidate so it can be applied
+        // Peer not yet created: stash the candidate so it can be applied
         // once the offer arrives and _createPeer runs.
         (this._pendingCandidatesByUser ||= new Map());
         const list = this._pendingCandidatesByUser.get(data.from.id) || [];
@@ -1067,7 +1067,7 @@ class VoiceManager {
       if (!data || data.channelCode !== this.currentChannel) return;
       this.screenSharers.add(data.userId);
       this._cancelScreenWatchdog(data.userId);
-      // New share — the previous one's delivery says nothing about this one.
+      // New share: the previous one's delivery says nothing about this one.
       this._screenDelivered.delete(data.userId);
       // A deliberate new share deserves a clean renegotiation budget; the
       // cap exists to stop a loop on one stuck share, not to punish someone
@@ -1088,9 +1088,9 @@ class VoiceManager {
       if (this.onWebcamStatusChange) this.onWebcamStatusChange();
 
       // Safety net: if screen-share-started fires but the video never reaches
-      // our UI — the renegotiation offer was dropped, the sharer's
+      // our UI (the renegotiation offer was dropped, the sharer's
       // _renegotiate bailed on a non-stable signaling state, or the reshare
-      // coalesced so no track event fired — recover instead of leaving the
+      // coalesced so no track event fired), recover instead of leaving the
       // viewer with a LIVE badge and an empty grid. (#5347 v3.15.5)
       this._watchForScreenStream(data.userId);
     });
@@ -1169,7 +1169,7 @@ class VoiceManager {
       if (!this.screenStream) return;
 
       // Peer may not exist yet (joiner's offer still in flight). Retry a
-      // few times instead of silently dropping the request — that silent
+      // few times instead of silently dropping the request. That silent
       // drop is a common "stream visible at join, then gone forever"
       // path: server fires renegotiate-screen at T+2s, joiner's peer
       // isn't registered yet, and nothing ever re-asks.
@@ -1191,7 +1191,7 @@ class VoiceManager {
         }
 
         // Add screen share tracks if they aren't already on this peer.
-        // Match by track identity — the previous "any video sender" check
+        // Match by track identity. The previous "any video sender" check
         // wrongly considered a webcam sender as proof that the screen tracks
         // were already attached, leaving late joiners with audio but no
         // screen video when the sharer also had their webcam on.
@@ -1207,7 +1207,7 @@ class VoiceManager {
 
         // Renegotiate to include the video tracks (or refresh an existing
         // screen-share m-section that the receiver lost frames on), then nudge
-        // the encoder for a fresh keyframe — same black-tile-on-GPU rationale
+        // the encoder for a fresh keyframe (same black-tile-on-GPU rationale
         // as the initial share path below.
         await this._renegotiate(targetUserId, conn);
         this._requestScreenKeyframe(targetUserId);
@@ -1318,7 +1318,7 @@ class VoiceManager {
   // Ask the video sender(s) carrying our screen share for an immediate
   // keyframe. Hardware encoders can otherwise sit on deltas for seconds after
   // a (re)negotiation, leaving viewers with a black tile even though the
-  // track is live and unmuted — the exact "black until rejoin" shape, since a
+  // track is live and unmuted: the exact "black until rejoin" shape, since a
   // rejoin forces a fresh negotiation that eventually carries an IDR.
   // generateKeyFrame exists on Chromium video senders; elsewhere it is a
   // guarded no-op.
@@ -1339,7 +1339,7 @@ class VoiceManager {
             sender.generateKeyFrame().catch(() => { /* the encoder refused; its next regular keyframe still comes */ });
           }
         }
-      } catch { /* sender gone mid-iteration — ignore */ }
+      } catch { /* sender gone mid-iteration, ignore */ }
     }
   }
 
@@ -1363,7 +1363,7 @@ class VoiceManager {
   // browser only fires a track event when a transceiver's direction changes
   // into receiving. When a sharer stops and immediately restarts (stop a
   // screen, start an application), addTrack reuses the transceiver the removed
-  // track left behind — and if the stop and start renegotiations coalesce into
+  // track left behind, and if the stop and start renegotiations coalesce into
   // one SDP exchange, which they do whenever the first one is still waiting on
   // an answer, the viewer's transceiver goes sendonly → sendonly. Only the msid
   // changed, so no track event fires. Video packets arrive and decode into a
@@ -1388,7 +1388,7 @@ class VoiceManager {
     if (!peer || !this.screenSharers.has(sharerId)) return false;
     // A peer can be sending webcam and screen at once. We can't tell the two
     // apart from the receiver alone, so exclude whichever track ontrack
-    // previously classified as their webcam — and, when given, the track the
+    // previously classified as their webcam and, when given, the track the
     // UI tile is already rendering, so recovery doesn't "adopt" the same
     // black receiver and stall.
     const camTrackId = peer._webcamTrackId || null;
@@ -1437,12 +1437,12 @@ class VoiceManager {
         if (this._screenStillLive(sharerId)) return;
         this._screenDelivered.delete(sharerId);
       }
-      // Media may already be flowing into an unrendered receiver — adopt it
+      // Media may already be flowing into an unrendered receiver, so adopt it
       // rather than paying for a round of signalling we don't need. The
       // tile's own track is excluded: re-adopting the same receiver the tile
       // already renders changes nothing and would mark it delivered, stalling
       // recovery on the GPU black-tile shape (live receiver, zero decoded
-      // frames — needs renegotiation + keyframe, not a re-adopt). A genuinely
+      // frames, which needs renegotiation + keyframe, not a re-adopt). A genuinely
       // new track (reshare without ontrack) is still adopted.
       const tileTrackId = this._screenTileTrackId(sharerId);
       if (this._deliverScreenFromReceivers(sharerId, { skipTrackId: tileTrackId })) {
@@ -1520,7 +1520,7 @@ class VoiceManager {
       const preservedMuteState = this.isMuted;
       const preservedDeafenState = this.isDeafened;
 
-      // #5380 — "Always join muted" user preference. If set, force mute on
+      // #5380: "Always join muted" user preference. If set, force mute on
       // every join so users who like to lurk-first never accidentally hot-mic.
       let muteOnJoin = false;
       try { muteOnJoin = localStorage.getItem('haven_mute_on_join') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
@@ -1567,7 +1567,7 @@ class VoiceManager {
       };
       if (savedInputId) audioConstraints.deviceId = { exact: savedInputId };
 
-      // #5380 — listener-only mode flag; set if mic acquisition fails or
+      // #5380: listener-only mode flag; set if mic acquisition fails or
       // the user has explicitly opted out via "Join without microphone".
       this.isListenerOnly = false;
       const lurkPref = (() => { try { return localStorage.getItem('haven_listener_only') === '1'; } catch { return false; } })();
@@ -1580,7 +1580,7 @@ class VoiceManager {
           });
         } catch (deviceErr) {
           if (savedInputId) {
-            // Saved device may be stale — retry with default mic
+            // Saved device may be stale, so retry with default mic
             console.warn('Saved mic device failed, falling back to default:', deviceErr.message);
             localStorage.removeItem('haven_input_device');
             delete audioConstraints.deviceId;
@@ -1609,7 +1609,7 @@ class VoiceManager {
       }
 
       if (this.isListenerOnly) {
-        // #5380 — Listener-only path: skip mic, noise gate, RNNoise, talk
+        // (#5380) Listener-only path: skip mic, noise gate, RNNoise, talk
         // detection. We still publish a silent placeholder track to peer
         // connections so the existing offer/answer flow doesn't need any
         // changes. The track is force-disabled (muted) so peers receive
@@ -1699,7 +1699,7 @@ class VoiceManager {
       }
 
       // Start local talk indicator (use raw stream for accurate detection).
-      // Skip in listener-only mode — there's no mic to detect.
+      // Skip in listener-only mode; there's no mic to detect.
       if (!this.isListenerOnly) this._startLocalTalkDetection();
 
       return true;
@@ -1713,7 +1713,7 @@ class VoiceManager {
   }
 
   leave() {
-    // Breadcrumb for the maximize/resize "fake disconnect" bug — if leave()
+    // Breadcrumb for the maximize/resize "fake disconnect" bug: if leave()
     // runs when the user didn't click Disconnect, the stack tells us why.
     console.warn('[Voice] leave() invoked', {
       channel: this.currentChannel,
@@ -1748,11 +1748,11 @@ class VoiceManager {
 
     if (leavingChannel) {
       // Use Socket.IO acknowledgment to confirm server received the leave.
-      // If no ack within 2s (socket glitch, transport switch), retry — but
+      // If no ack within 2s (socket glitch, transport switch), retry, but
       // ONLY if the user hasn't already rejoined a voice channel in the
       // meantime. Without this guard, the retry can fire after a quick
       // leave→rejoin and silently kick the user out of voice server-side
-      // while their client still believes it's connected (#5347 — the
+      // while their client still believes it's connected (#5347: the
       // "Voice Connected" bar with an empty voice panel).
       let acked = false;
       this.socket.emit('voice-leave', { code: leavingChannel }, (response) => {
@@ -1986,7 +1986,7 @@ class VoiceManager {
   }
 
   toggleMute() {
-    // #5380 — listener-only mode has no mic; force-stay muted.
+    // #5380: listener-only mode has no mic; force-stay muted.
     if (this.isListenerOnly) { this.isMuted = true; return true; }
     this.isMuted = !this.isMuted;
     this._applyMuteStateToLocalTracks();
@@ -2055,7 +2055,7 @@ class VoiceManager {
   // moved the stepper while they were in flight, and the debounced update
   // scheduled by that change returns early (no producer yet), so publishing
   // with the stale value would stick until the next change (#5672 review).
-  // Any timer armed mid-startup is dropped — this publish already carries the
+  // Any timer armed mid-startup is dropped. This publish already carries the
   // latest cap, so a re-produce would be pure churn; later changes re-arm it.
   // The key is recorded only after a successful publish so a failed start
   // leaves truthful state for the recovery path in _republishRelayScreenBitrate.
@@ -2158,7 +2158,7 @@ class VoiceManager {
         audio: true,
       };
 
-      // #5379 — Default to raw screen audio. Chromium normally applies
+      // #5379: Default to raw screen audio. Chromium normally applies
       // echoCancellation / noiseSuppression / autoGainControl to
       // getDisplayMedia audio (tuned for voice), which hollows out music
       // and game audio for listeners. Power users sharing a tutorial or
@@ -2173,7 +2173,7 @@ class VoiceManager {
         ? true
         : { echoCancellation: false, autoGainControl: false, noiseSuppression: false };
 
-      // These options aren't supported in Electron's Chromium — only add them
+      // These options aren't supported in Electron's Chromium, so only add them
       // when running in a regular browser to avoid immediate rejection.
       const isElectron = !!(window.havenDesktop || navigator.userAgent.includes('Electron'));
       if (!isElectron) {
@@ -2198,14 +2198,14 @@ class VoiceManager {
 
       this.isScreenSharing = true;
 
-      // 3.18.1 (#5379) — hint the encoder that this is motion content (games,
+      // 3.18.1 (#5379): hint the encoder that this is motion content (games,
       // videos, scrolling). Without this hint, browsers may bias toward
       // "detail" mode which sacrifices framerate for sharpness, the opposite
       // of what most screen-share use cases want.
       try {
         const vTrack = this.screenStream.getVideoTracks()[0];
         if (vTrack && 'contentHint' in vTrack) vTrack.contentHint = 'motion';
-      } catch { /* unsupported — ignore */ }
+      } catch { /* unsupported, ignore */ }
 
       // When user clicks browser "Stop sharing" button
       this.screenStream.getVideoTracks()[0].onended = () => {
@@ -2266,7 +2266,7 @@ class VoiceManager {
       // Hardware encoders (notably H.264 on GPU) can take a long time to emit
       // the first keyframe, and the setParameters call above can restart the
       // encoder mid-negotiation. Viewers whose decoder never got an IDR show a
-      // black tile until a rejoin forces a fresh negotiation — request one
+      // black tile until a rejoin forces a fresh negotiation, so request one
       // explicitly now that every peer has settled.
       this._requestScreenKeyframe();
 
@@ -2354,14 +2354,14 @@ class VoiceManager {
     // 5s for signaling state to settle), this function would return, kill
     // the tracks, and leave that peer's transceiver mid-direction-change.
     // On the next startScreenShare the new addTrack would reuse that broken
-    // transceiver and ontrack would never fire on the viewer side — exactly
+    // transceiver and ontrack would never fire on the viewer side, exactly
     // the symptom users reported. Use allSettled with a generous safety cap.
     await Promise.race([
       Promise.allSettled(renegotiations),
       new Promise(resolve => setTimeout(resolve, 8000))
     ]);
 
-    // Now safe to stop tracks — all peers have detached them
+    // Now safe to stop tracks: all peers have detached them
     tracks.forEach(t => t.stop());
 
     this.screenStream = null;
@@ -2370,7 +2370,7 @@ class VoiceManager {
     this.screenSharers.delete(this.localUserId);
 
     this._emitOrQueueScreenStop(this.currentChannel);
-    // Notify local UI — pass localUserId so tile is found by its real ID
+    // Notify local UI; pass localUserId so tile is found by its real ID
     if (this.onScreenStream) this.onScreenStream(this.localUserId, null);
   }
 
@@ -2525,7 +2525,7 @@ class VoiceManager {
     if (this.isScreenSharing) this._applyLiveQualityChange();
   }
 
-  // Bitrate cap in kbps (0 = unlimited). Anything outside 300–10000 wraps:
+  // Bitrate cap in kbps (0 = unlimited). Anything outside 300 to 10000 wraps:
   // below clamps to 300, above wraps to unlimited (the + stepper's top stop).
   // Default 8000 keeps the #5379 1080p ceiling for fresh profiles.
   _normalizeScreenBitrate(value) {
@@ -2582,7 +2582,7 @@ class VoiceManager {
    * Cap the video bitrate on screen-share senders for a given peer connection.
    * Uses RTCRtpSender.setParameters() which is widely supported.
    *
-   * 3.18.1 (#5379) — also sets `degradationPreference: 'maintain-framerate'` so
+   * 3.18.1 (#5379): also sets `degradationPreference: 'maintain-framerate'` so
    * the encoder drops resolution before dropping frames when bandwidth gets
    * tight. Default browser behaviour is `balanced`, which on screen share
    * tends to chop framerate first (bad for motion content like games/video).
@@ -2732,7 +2732,7 @@ class VoiceManager {
   //
   // "Unlimited" (null/0) gets an explicit high cap instead of omitting
   // maxBitrate: voice-relay.js falls back to `maxBitrate || 2500000`, so an
-  // omitted cap would pin an unlimited share to 2.5 Mbps — below the default.
+  // omitted cap would pin an unlimited share to 2.5 Mbps, below the default.
   // 14 Mbps matches the old #5379 1440p ceiling (the highest pre-stepper cap)
   // and sits above the stepper's 10 Mbps top stop.
   _relayScreenOpts(maxBitrate = this._screenBitrateFor(this.screenResolution)) {
@@ -2750,7 +2750,7 @@ class VoiceManager {
   // always carries the newest cap.
   //
   // Recovery: if a previous publish failed after the unpublish (producer
-  // missing but a key recorded), this publishes instead of returning early —
+  // missing but a key recorded), this publishes instead of returning early;
   // otherwise one transient failure strands the share unpublished until the
   // next user change. Publish failures retry bounded (3x, linear backoff)
   // while the same share is live. The key is committed only after a
@@ -2857,7 +2857,7 @@ class VoiceManager {
           await new Promise(r => setTimeout(r, base * failures));
           continue;
         }
-        // NOTE: a falsy resolve is treated as success (key commit) — the real
+        // NOTE: a falsy resolve is treated as success (key commit). The real
         // adapter only returns null when track is null, which callers exclude
         // (v is checked live above); produce failures throw and retry above.
         failures = 0;
@@ -2893,7 +2893,7 @@ class VoiceManager {
           // browsers that respect it (Chromium-based ones do). Under the relay
           // profile the framerate stays unpinned on purpose, so the encoder can
           // shed frames instead of filling a queue it cannot drain. A null cap
-          // is the "unlimited" setting — remove any previous limit instead of
+          // is the "unlimited" setting, so remove any previous limit instead of
           // writing zero, which some browsers read as "send nothing".
           if (relayProfile) {
             params.encodings[0].maxBitrate = this._screenBitrateFor(this.screenResolution, true);
@@ -2911,7 +2911,7 @@ class VoiceManager {
       }
       // Protect audio from the video ramp-up. (#5426)
       this._prioritiseAudioSenders(connection);
-    } catch (e) { /* setParameters not supported — adaptive bitrate remains */ }
+    } catch (e) { /* setParameters not supported: adaptive bitrate remains */ }
   }
 
   // Mark every audio sender on this connection as high network priority.
@@ -2919,7 +2919,7 @@ class VoiceManager {
   // When a screen share negotiates up to 1080p the encoder ramps hard, and on
   // a constrained uplink that burst takes the whole pipe for a moment. Audio
   // packets queue behind it, arrive late, and NetEq fills the gap with
-  // concealment — which is the robotic warble people describe. @RCCore caught
+  // concealment, which is the robotic warble people describe. @RCCore caught
   // this in a WebRTC-internals dump: packetsLost jumping 4 -> 249 and
   // concealedSamples going from 0 to over 100k as the share started.
   //
@@ -2937,7 +2937,7 @@ class VoiceManager {
         params.encodings[0].priority = 'high';   // older Chromium spelling
         sender.setParameters(params).catch(() => { /* browser rejected the hint: audio still flows */ });
       }
-    } catch { /* unsupported — audio still flows, just without the hint */ }
+    } catch { /* unsupported: audio still flows, just without the hint */ }
   }
 
   /**
@@ -3073,7 +3073,7 @@ class VoiceManager {
     // Wait for the signaling state to be stable before issuing a fresh
     // offer. RTCPeerConnection.createOffer() throws if called while a
     // previous local-offer or remote-offer is still pending, and the only
-    // catch handler used to silently swallow the error — leaving the
+    // catch handler used to silently swallow the error, leaving the
     // peer with no video and no retry, which is a leading cause of the
     // "audio works, video tile is black" screen-share bug. Wait up to ~5s
     // for the connection to settle, then proceed. (#5347 v3.15.5)
@@ -3169,7 +3169,7 @@ class VoiceManager {
       }
     }
 
-    // Handle incoming remote tracks — route audio and video separately
+    // Handle incoming remote tracks: route audio and video separately
     const remoteAudioStream = new MediaStream();
     const knownScreenStreamIds = new Set();
     let voiceStreamId = null;
@@ -3228,7 +3228,7 @@ class VoiceManager {
             // server's screen-share-started/stopped events) is still true
             // until we get screen-share-stopped. If we cleared the tile
             // here on every onended, the viewer would see the tile vanish
-            // and the next track would have to recreate everything — which
+            // and the next track would have to recreate everything, which
             // is fine in theory but masked the stuck-transceiver bug for
             // months by making it look like "the new share never arrived".
             // Only clear when the server has actually told us they stopped.
@@ -3256,7 +3256,7 @@ class VoiceManager {
         // different from the first voice stream id we saw, treat as screen
         // audio".  That heuristic broke under renegotiation: when a peer
         // started screen-sharing, their voice track frequently re-fired
-        // ontrack with a fresh stream id — getting misclassified as screen
+        // ontrack with a fresh stream id, getting misclassified as screen
         // audio and routed to a tile (silently) instead of the voice mixer.
         // The user lost the other person's voice the moment either side
         // started sharing.  Now we trust the server-signaled state
@@ -3277,7 +3277,7 @@ class VoiceManager {
         // permanently. deferredAudio existed for exactly this and was drained
         // in the video branch, but nothing ever pushed into it, so the case
         // was unreachable. Park it briefly instead, and fall back to voice if
-        // no video shows up — never silently drop someone's speech. (#5426)
+        // no video shows up. Never silently drop someone's speech. (#5426)
         const mayBeScreenAudio = !isScreenAudio && peerIsSharing && !streamHasVideo &&
                                  sourceStream && sourceStream.id !== voiceStreamId;
         if (mayBeScreenAudio) {
@@ -3296,7 +3296,7 @@ class VoiceManager {
         if (isScreenAudio) {
           this._playScreenAudio(userId, sourceStream);
         } else {
-          // Voice path \u2014 update voiceStreamId so it tracks the latest
+          // Voice path: update voiceStreamId so it tracks the latest
           // negotiation rather than being permanently pinned to the first.
           if (sourceStream) voiceStreamId = sourceStream.id;
           remoteAudioStream.addTrack(track);
@@ -3342,7 +3342,7 @@ class VoiceManager {
       } else if (state === 'disconnected') {
         // 'disconnected' is often transient during renegotiation (e.g. after
         // screen-share stops). Give the connection time to recover before
-        // tearing it down — Chrome frequently goes disconnected→connected.
+        // tearing it down, because Chrome frequently goes disconnected→connected.
         if (!this._disconnectTimers) this._disconnectTimers = {};
         if (this._disconnectTimers[userId]) clearTimeout(this._disconnectTimers[userId]);
         this._disconnectTimers[userId] = setTimeout(() => {
@@ -3353,7 +3353,7 @@ class VoiceManager {
           delete this._disconnectTimers[userId];
         }, 8000);
       } else if (state === 'connected') {
-        // Clear any pending disconnect timer — connection recovered
+        // Clear any pending disconnect timer: connection recovered
         if (this._disconnectTimers?.[userId]) {
           clearTimeout(this._disconnectTimers[userId]);
           delete this._disconnectTimers[userId];
@@ -3361,7 +3361,7 @@ class VoiceManager {
         // Relay or direct? Decides which screen share profile this viewer gets. (#5426)
         this._detectRelayPath(userId, connection);
         // ICE/DTLS just came (back) up. If this peer is screen-sharing,
-        // the video m-line may need a fresh delivery into the UI — ontrack
+        // the video m-line may need a fresh delivery into the UI. ontrack
         // does not always re-fire after an ICE restart, so the tile that
         // was live before the blip can stay black/missing until we adopt
         // the receiver track ourselves. Same tile-track exclusion as the
@@ -3574,7 +3574,7 @@ class VoiceManager {
     // later, re-attempt the ICE restart a bounded number of times. An ICE
     // restart continues the SAME RTCPeerConnection and is applied bilaterally
     // by the remote via 'voice-offer', so re-issuing it is safe and
-    // near-seamless on a healthy pair — unlike tearing the peer down, which
+    // near-seamless on a healthy pair, unlike tearing the peer down, which
     // would need both sides to rebuild in lock-step.
     await this._renegotiate(userId, connection, { iceRestart: true });
 
@@ -3583,7 +3583,7 @@ class VoiceManager {
     this._iceHealTimers[userId] = setTimeout(() => {
       delete this._iceHealTimers[userId];
       const peer = this.peers.get(userId);
-      // Peer was replaced, removed, or we left voice — nothing to do.
+      // Peer was replaced, removed, or we left voice: nothing to do.
       if (!this.inVoice || !peer || peer.connection !== connection) return;
       const cs = connection.connectionState;
       const ics = connection.iceConnectionState;
@@ -3614,7 +3614,7 @@ class VoiceManager {
   // reporting 'connected'/'completed' even though no media is flowing. The
   // server's fast-path rejoin keeps everyone's existing peer connections (no
   // voice-user-left / -joined churn), so the *other* peers also never rebuild
-  // their side — leaving the rejoiner audible to some people and silent to
+  // their side, leaving the rejoiner audible to some people and silent to
   // others, with nothing on either end self-correcting. That's the
   // "voice activity shows server-side but some people can't hear me" report.
   //
@@ -3622,8 +3622,8 @@ class VoiceManager {
   // *every* peer. A single RTCPeerConnection carries both directions, so a
   // restart initiated from the rejoiner repairs the media path both ways for
   // that pair (the remote handles our iceRestart offer in 'voice-offer'). On a
-  // genuinely-healthy connection an ICE restart is cheap and near-seamless —
-  // media keeps flowing on the old candidate pair until the new one validates —
+  // genuinely-healthy connection an ICE restart is cheap and near-seamless
+  // (media keeps flowing on the old candidate pair until the new one validates),
   // so over-restarting is far better than leaving a dead path silent. This only
   // runs in response to an actual socket reconnect, not routinely, so the cost
   // is bounded to the rare flap that triggered it. Stagger the restarts so we
@@ -3974,7 +3974,7 @@ class VoiceManager {
     // pulls at its own fixed clock while NetEq is busy adapting to relay jitter,
     // so the two clocks drift apart. Over a TURN relay this builds up over a
     // minute or two and then stutters/desyncs from the video continuously (LAN
-    // is jitter-free so it never shows there) — exactly the #5426 report. Native
+    // is jitter-free so it never shows there): exactly the #5426 report. Native
     // <audio> playout keeps NetEq in charge end to end, so it stays in sync.
     //
     // This used to be an opt-in Debug toggle that defaulted to the broken Web
@@ -3994,7 +3994,7 @@ class VoiceManager {
       }
       audioEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
       // Native playout is now the default path, so still announce that this
-      // share has audio — this is what reveals the 🔊 badge and the per-stream
+      // share has audio. This is what reveals the 🔊 badge and the per-stream
       // volume controls on the tile. (#5426)
       if (this.onScreenAudio) this.onScreenAudio(userId);
       return;
@@ -4054,7 +4054,7 @@ class VoiceManager {
   }
 
   setStreamVolume(userId, volume) {
-    // Map keys may be number or string depending on caller — try both
+    // Map keys may be number or string depending on caller, so try both
     const gainNode = this.screenGainNodes.get(userId)
       || this.screenGainNodes.get(String(userId))
       || this.screenGainNodes.get(Number(userId));
@@ -4063,7 +4063,7 @@ class VoiceManager {
     const audioEl = document.getElementById(`voice-audio-screen-${userId}`);
     if (gainNode) {
       // The Web Audio graph is the active output for this stream. Drive volume
-      // through the gain node and keep the <audio> element muted — if we let the
+      // through the gain node and keep the <audio> element muted. If we let the
       // element play too, the screen audio comes out of BOTH the gain node and
       // the element at once, which is the "screen audio duplicates" report. The
       // old "belt-and-suspenders" element sync was the cause, not a safety net.
@@ -4071,7 +4071,7 @@ class VoiceManager {
       gainNode.gain.value = clampedGain;
       if (audioEl) audioEl.volume = 0;
     } else if (audioEl) {
-      // No gain node (iOS / Web-Audio fallback path) — the element itself is
+      // No gain node (iOS / Web-Audio fallback path): the element itself is
       // the output, so volume rides on the element.
       audioEl.volume = clampedVol;
     }
@@ -4112,14 +4112,14 @@ class VoiceManager {
       const saved = parseInt(localStorage.getItem('haven_ns_value') || '10', 10);
       this.setNoiseSensitivity(saved);
     } else {
-      // Off — disable both
+      // Off: disable both
       this._disableRNNoise();
       this.setNoiseSensitivity(0);
     }
   }
 
   async _initRNNoise() {
-    // Loads the worklet module + wasm bytes. Does NOT set _rnnoiseReady —
+    // Loads the worklet module + wasm bytes. Does NOT set _rnnoiseReady;
     // that only flips true when the worklet posts {type:'ready'} (#5458).
     if (!this.audioCtx) return;
     // addModule() registers the processor on ONE AudioContext, but the wasm
@@ -4162,7 +4162,7 @@ class VoiceManager {
     if (!this._rnnoiseWasmBytes || !this._rnnoiseSource || this._rnnoiseNode) return;
     try {
       // RNNoise is locked to 48 kHz frames. Warn (don't hard-fail) if the
-      // AudioContext landed on a different rate — suppression still runs
+      // AudioContext landed on a different rate. Suppression still runs
       // but frequency mapping is wrong and quality drops (#5458).
       if (this.audioCtx && this.audioCtx.sampleRate !== 48000) {
         console.warn(
@@ -4201,7 +4201,7 @@ class VoiceManager {
 
       // Post raw bytes (transfer a copy so our cached buffer stays usable
       // for the next enable). WebAssembly.Module does NOT survive structured
-      // clone into AudioWorkletGlobalScope — that was the whole bug.
+      // clone into AudioWorkletGlobalScope. That was the whole bug.
       const bytesCopy = this._rnnoiseWasmBytes.slice(0);
       node.port.postMessage({ type: 'wasm-bytes', bytes: bytesCopy }, [bytesCopy]);
 
@@ -4283,7 +4283,7 @@ class VoiceManager {
       // nulls it but the interval can still fire once before we clear it).
       if (!this.audioCtx) return;
       if (avg > threshold) {
-        // Signal is above threshold — confirm it sustains before opening
+        // Signal is above threshold: confirm it sustains before opening
         aboveCount++;
         if (holdTimeout) { clearTimeout(holdTimeout); holdTimeout = null; }
         if (!gateOpen && aboveCount > OPEN_CONFIRM) {
@@ -4293,7 +4293,7 @@ class VoiceManager {
       } else {
         aboveCount = 0;
         if (gateOpen && !holdTimeout) {
-          // Signal dropped below threshold — start hold timer before closing
+          // Signal dropped below threshold: start hold timer before closing
           holdTimeout = setTimeout(() => {
             if (!this.audioCtx) return;
             gain.gain.setTargetAtTime(0, this.audioCtx.currentTime, RELEASE);
@@ -4334,7 +4334,7 @@ class VoiceManager {
       // device picker, which is exactly the symptom in #184 (audio routes
       // to speakers when the user already chose their headset).
       //
-      // sampleRate: 48000 — RNNoise is fixed at 48 kHz frames. Leaving the
+      // sampleRate: 48000. RNNoise is fixed at 48 kHz frames. Leaving the
       // context free to follow a 96 kHz headset silently halves the model's
       // frequency mapping and defeats AI suppression even when WASM loads
       // correctly (#5458). Browsers resample to the device as needed.
@@ -4347,7 +4347,7 @@ class VoiceManager {
       try {
         this.audioCtx = new (window.AudioContext || window.webkitAudioContext)(ctxOpts);
       } catch {
-        // Older Chromium throws when sinkId is passed in options — retry
+        // Older Chromium throws when sinkId is passed in options, so retry
         // with just sampleRate, then fully bare.
         try {
           this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
@@ -4399,7 +4399,7 @@ class VoiceManager {
           if (this.onTalkingChange) this.onTalkingChange(userId, true);
         }
       } else if (wasTalking && !holdTimer) {
-        // Start hold timer — keep "talking" for HOLD_MS after silence
+        // Start hold timer: keep "talking" for HOLD_MS after silence
         holdTimer = setTimeout(() => {
           wasTalking = false;
           holdTimer = null;
@@ -4447,7 +4447,7 @@ class VoiceManager {
         // self: if the socket ever briefly loses voice-room membership (e.g.
         // after a reconnect grace-period window), the echo never arrives and
         // the indicator stays permanently dark.  Audio and the server-side
-        // speaking events for OTHER users are unaffected — we still emit
+        // speaking events for OTHER users are unaffected; we still emit
         // voice-speaking to the server so peers see the indicator too.
         if (talking) this.talkingState.set('self', true);
         else this.talkingState.delete('self');
@@ -4533,7 +4533,7 @@ class VoiceManager {
     // is silent (WebKit bug, unfixed for years). Skip the entire Web Audio
     // routing and let the <audio> element play natively. Trade-off: no
     // per-user volume boost above 100% and no remote-speaker analyser, but
-    // audio actually plays — which is the whole point. Local mic talk
+    // audio actually plays, which is the whole point. Local mic talk
     // detection still works because that's getUserMedia-side, not PC-side.
     if (_IS_IOS_WEBKIT) {
       const savedVolume = Math.min(1, this._getSavedVolume(userId));
@@ -4573,7 +4573,7 @@ class VoiceManager {
       gainNode.connect(this.audioCtx.destination);
       this.gainNodes.set(userId, gainNode);
 
-      // Mute element playback — audio routes through GainNode instead
+      // Mute element playback; audio routes through GainNode instead
       audioEl.volume = 0;
     } catch {
       // Fallback: use element volume directly (no boost beyond 100%)

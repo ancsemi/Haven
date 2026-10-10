@@ -13,7 +13,7 @@ _setupStatusPicker() {
 
   // Insert status dot to the right of the username block. The dot sits inside
   // a real <button> so it looks and behaves like the control it has always
-  // been — on its own an 8px dot reads as a status indicator, not something
+  // been. On its own an 8px dot reads as a status indicator, not something
   // clickable. _updateStatusPickerUI still owns the inner dot's classes.
   const statusBtn = document.createElement('button');
   statusBtn.id = 'user-status-btn';
@@ -206,7 +206,7 @@ _syncStatusPickerActivity() {
   const master = prefs.share_activity !== 'false';
   const music = document.getElementById('status-music-activity');
   const game  = document.getElementById('status-game-activity');
-  // Absent sub-preference means "on" — matches the server's read in activity.js.
+  // Absent sub-preference means "on", matching the server's read in activity.js.
   if (music) music.checked = master && prefs.share_music_activity !== 'false'
                              && this._activityProviderReady('music');
   if (game)  game.checked  = master && prefs.share_game_activity  !== 'false'
@@ -264,7 +264,7 @@ _setupIdleDetection() {
 
   const resetIdle = () => {
     lastActivity = Date.now();
-    // Restore from away if needed (debounced — only emit once)
+    // Restore from away if needed (debounced, only emit once)
     if (this.userStatus === 'away' && !this._manualStatusOverride && !idleEmitPending) {
       idleEmitPending = true;
       setTimeout(() => { idleEmitPending = false; goOnline(); }, 300);
@@ -280,7 +280,7 @@ _setupIdleDetection() {
   // Expose so voice speech detection can reset idle & presence
   this._resetIdle = resetIdle;
 
-  // Only fire on intentional input — NOT mousemove (micro-jitters keep resetting)
+  // Only fire on intentional input, NOT mousemove (micro-jitters keep resetting)
   ['keydown', 'click', 'scroll', 'touchstart', 'mousedown'].forEach(evt => {
     document.addEventListener(evt, resetIdle, { passive: true });
   });

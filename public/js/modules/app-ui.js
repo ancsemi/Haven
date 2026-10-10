@@ -26,7 +26,7 @@ _setupUI() {
 },
 
 _bindSearchAndPins() {
-  // Search — the panel/cache/pager live in app-search.js. Here we just wire
+  // Search: the panel/cache/pager live in app-search.js. Here we just wire
   // the header input to it. The panel persists across channel switches and
   // only closes on its own X (or this input's close button).
   this._searchInit();
@@ -99,7 +99,7 @@ _bindSearchAndPins() {
     if (panel) panel.classList.toggle('pins-pip-maximized');
   });
 
-  // Pins PiP: pop-in button — close PiP and re-open the sidebar panel
+  // Pins PiP: pop-in button (close PiP and re-open the sidebar panel)
   const pinsPipPopin = document.getElementById('pins-pip-popin');
   if (pinsPipPopin) pinsPipPopin.addEventListener('click', () => {
     this._closePinsPiP?.();
@@ -112,7 +112,7 @@ _bindSearchAndPins() {
   const pinsPipList = document.getElementById('pins-pip-list');
   if (pinsPipList) {
     pinsPipList.addEventListener('click', async (e) => {
-      // Unpin button — handled first; stops propagation so item click doesn't also fire
+      // Unpin button, handled first; stops propagation so item click doesn't also fire
       const unpinBtn = e.target.closest('.pinned-unpin-btn');
       if (unpinBtn) {
         e.stopPropagation();
@@ -175,7 +175,7 @@ _bindAppChrome() {
     this._requireE2E(() => this._showE2EVerification());
   });
 
-  // E2E recover-from-backup button — re-fetches the server-side encrypted
+  // E2E recover-from-backup button: re-fetches the server-side encrypted
   // backup and unwraps it with the user's password. Works even when the
   // local key is in ghost-state or IndexedDB is stale. Does NOT generate
   // new keys, so existing encrypted messages remain readable once recovered.
@@ -185,7 +185,7 @@ _bindAppChrome() {
   });
 
   // E2E reset encryption keys button (inside dropdown)
-  // Reset does NOT go through _requireE2E — it must work even when E2E
+  // Reset does NOT go through _requireE2E; it must work even when E2E
   // can't initialize (e.g. server backup can't be decrypted after password change).
   document.getElementById('e2e-reset-btn')?.addEventListener('click', () => {
     document.getElementById('e2e-dropdown').style.display = 'none';
@@ -211,7 +211,7 @@ _bindAppChrome() {
   document.addEventListener('keydown', (e) => {
     // Type-to-focus: start typing anywhere and the message box takes over.
     // No preventDefault, so the browser inserts the keystroke into the newly
-    // focused textarea — nothing is dropped.
+    // focused textarea. Nothing is dropped.
     if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !e.isComposing) {
       const ae = document.activeElement;
       const tag = ae?.tagName;
@@ -290,15 +290,15 @@ _bindAppChrome() {
     if (!msgArea || msgArea.style.display === 'none') return;
     // An in-progress message edit owns Escape (it cancels the edit) and its
     // handler sits on the textarea in the bubble phase, so this capture-phase
-    // listener would otherwise scroll away from — or, on a trimmed window,
-    // re-render out of existence — the box being typed into. Editing an old
+    // listener would otherwise scroll away from (or, on a trimmed window,
+    // re-render out of existence) the box being typed into. Editing an old
     // message is exactly the scrolled-up case, so check it first.
     if (document.querySelector('.edit-textarea')) return;
-    // getClientRects().length is 0 for hidden/display:none nodes — same popup
+    // getClientRects().length is 0 for hidden/display:none nodes, the same popup
     // detection the type-to-focus guard uses above.
     // The PiP DM, thread and pins panels each own Escape for their own input;
     // jumping the main channel behind them is never what was meant. Haven's
-    // context menu is .channel-ctx-menu — there is no .context-menu element.
+    // context menu is .channel-ctx-menu; there is no .context-menu element.
     const somethingOpen = [...document.querySelectorAll(
       '.modal-overlay, #quick-switcher-overlay, #theme-popup, #search-container, ' +
       '#search-panel, #image-lightbox, .image-lightbox, #emoji-picker, ' +
@@ -330,7 +330,7 @@ _bindAppChrome() {
   });
 
   // ── Games / Activities system ─────────────────────────────
-  // Registry of available games — add new games here
+  // Registry of available games: add new games here
   this._gamesRegistry = [
     { id: 'flappy', name: 'Shippy Container', icon: '🚢', path: '/games/flappy.html', description: t('activities_registry.flappy') },
     { id: 'flight', name: 'Flight', icon: '✈️', path: '/games/flash.html?swf=/games/roms/flight-759879f9.swf&title=Flight', description: t('activities_registry.flight'), type: 'flash' },
@@ -381,7 +381,7 @@ _bindAppChrome() {
   document.getElementById('game-iframe-close')?.addEventListener('click', () => this._closeGameIframe());
   document.getElementById('game-iframe-popout')?.addEventListener('click', () => this._popoutGame());
 
-  // Game volume slider — forward volume changes into the game iframe
+  // Game volume slider: forward volume changes into the game iframe
   const gameVolSlider = document.getElementById('game-volume-slider');
   const gameVolPct = document.getElementById('game-volume-pct');
   if (gameVolSlider) {
@@ -458,7 +458,7 @@ _copyTextFallback(text, onCopied) {
 },
 
 // ═══════════════════════════════════════════════════════
-// SERVER BAR — multi-server with live status
+// SERVER BAR: multi-server with live status
 // ═══════════════════════════════════════════════════════
 
 /** (#5381) Lock down the UI for guest accounts:
@@ -476,7 +476,7 @@ _applyGuestMode() {
 },
 
 // ═══════════════════════════════════════════════════════
-// IMAGE UPLOAD — button, paste, drag & drop
+// IMAGE UPLOAD: button, paste, drag & drop
 // ═══════════════════════════════════════════════════════
 
 _setupImageUpload() {
@@ -497,7 +497,7 @@ _setupImageUpload() {
     fileInput.value = '';
   });
 
-  // Paste from clipboard — images (incl. SVG) get queued for preview; non-image
+  // Paste from clipboard: images (incl. SVG) get queued for preview; non-image
   // files now also queue (#5417) rather than uploading on paste.
   document.getElementById('message-input').addEventListener('paste', (e) => {
     const items = e.clipboardData?.items;
@@ -508,7 +508,7 @@ _setupImageUpload() {
     this._queueComposerFiles(files);
   });
 
-  // Drag & drop — QUEUE instead of uploading immediately
+  // Drag & drop: QUEUE instead of uploading immediately
   messageArea.addEventListener('dragover', (e) => {
     e.preventDefault();
     messageArea.classList.add('drag-over');
@@ -558,7 +558,7 @@ _setupCollapsibleSections() {
 // ── Upload with progress bar ───────────────────────────
 // Every in-flight request is kept in _activeUploads so the bar's × can abort
 // them. The general file queue fires its uploads without awaiting, so there
-// can be several at once — hence a set, and hence hiding the bar only once
+// can be several at once, hence a set, and hence hiding the bar only once
 // the last one settles rather than whenever any single one does.
 _uploadWithProgress(url, formData) {
   return new Promise((resolve, reject) => {
@@ -607,7 +607,7 @@ _uploadWithProgress(url, formData) {
 
     xhr.addEventListener('abort', () => {
       settle();
-      // Flagged so the callers can skip their own "upload failed" toast —
+      // Flagged so the callers can skip their own "upload failed" toast:
       // cancelling on purpose isn't an error, and the cancel already toasts.
       const err = new Error(t('toasts.upload_cancelled'));
       err.aborted = true;
@@ -666,7 +666,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
     return this._showToast(t('toasts.image_too_large', { max: _maxMb }), 'error');
   }
 
-  // Detect E2E DM — encrypt file bytes before uploading
+  // Detect E2E DM: encrypt file bytes before uploading
   // A DM picture that can't be encrypted goes up only if the sender agrees.
   const ch = this.channels.find(c => c.code === targetChannel);
   const isDm = ch && ch.is_dm && (ch.dm_target || ch.is_group);
@@ -748,7 +748,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
 // ═══════════════════════════════════════════════════════
 
 _setupFileUpload() {
-  // Merged into upload-btn — no separate file button needed.
+  // Merged into upload-btn, no separate file button needed.
   // The unified upload button opens a file picker that accepts all types;
   // images are queued (with preview), other files upload immediately.
 },
@@ -760,7 +760,7 @@ _handleFileUpload(input) {
   input.value = '';
 },
 
-/** Upload any file via /api/upload-file — used by drag & drop, paste, and 📎 button */
+/** Upload any file via /api/upload-file (used by drag & drop, paste, and 📎 button) */
 _uploadGeneralFile(file, targetCode) {
   const code = targetCode || this.currentChannel;
   if (!code) return this._showToast(t('media.select_channel_first'), 'error');

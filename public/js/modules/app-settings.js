@@ -62,7 +62,7 @@ _bindSettings() {
   });
   document.getElementById('settings-modal').addEventListener('click', (e) => {
     if (e.target !== e.currentTarget) return;
-    // Don't close while TOTP setup flow is active — user could lose progress
+    // Don't close while TOTP setup flow is active; user could lose progress
     const setupArea  = document.getElementById('totp-setup-area');
     const backupArea = document.getElementById('totp-backup-area');
     if ((setupArea  && setupArea.style.display  !== 'none') ||
@@ -488,7 +488,7 @@ _bindSettings() {
         if (totpSetupStatus) { totpSetupStatus.textContent = data.error || t('settings.two_factor_section.verify_failed'); totpSetupStatus.classList.add('error'); }
         return;
       }
-      // Store fresh token — server bumped password_version to invalidate other sessions
+      // Store fresh token: server bumped password_version to invalidate other sessions
       if (data.token) {
         this._justEnabledTotp = true;
         this.token = data.token;
@@ -732,7 +732,7 @@ _bindSettings() {
           overlay.querySelector('.self-delete-confirm').disabled = false;
           return;
         }
-        // Account deleted — clear local storage and redirect to login
+        // Account deleted: clear local storage and redirect to login
         this._clearChannelCodeMap?.();
         localStorage.removeItem('haven_token');
         localStorage.removeItem('haven_e2e_privkey');
@@ -789,7 +789,7 @@ _bindSettings() {
 },
 
 // ═══════════════════════════════════════════════════════
-// CHANNEL & MESSAGE LINKS — copy/share deep-links
+// CHANNEL & MESSAGE LINKS: copy/share deep-links
 // ═══════════════════════════════════════════════════════
 
 /**
@@ -800,7 +800,7 @@ _bindSettings() {
  * back to the bare two-letter code, so "🇬🇧 English" displayed as "GB English".
  * The emoji picker already solved this by shipping SVGs (see builtinEmojis in
  * app.js), but that fix can't apply here: an <option> element renders text
- * only — no images, no markup — so no amount of CSS or emoji font work will
+ * only (no images, no markup), so no amount of CSS or emoji font work will
  * put a flag inside a native select.
  *
  * The original <select> is kept in the DOM as the source of truth and still

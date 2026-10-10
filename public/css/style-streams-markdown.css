@@ -530,7 +530,7 @@ video:-webkit-full-screen {
 .screen-share-tile:hover .stream-close-btn { opacity: 1; }
 .stream-close-btn:hover { background: rgba(220,53,69,0.7); }
 
-/* Collapse tile when popped out — free up Haven space */
+/* Collapse tile when popped out, free up Haven space */
 .screen-share-tile.stream-popped-out {
   height: 1.75rem !important;
   min-height: 0 !important;
@@ -581,7 +581,7 @@ video:-webkit-full-screen {
   display: block;
 }
 
-/* Maximized state — fill the whole window so the stream can take up a full
+/* Maximized state: fill the whole window so the stream can take up a full
    monitor. !important is required to beat the inline width/height the drag +
    browser resize handles write onto the element. */
 .stream-pip-overlay.stream-pip-maximized {
@@ -754,7 +754,7 @@ video:-webkit-full-screen {
   gap: 0.25rem;
   padding-top: 0.125rem;
 }
-/* Soundboard sidebar toggle button — fixed; sits at the LEFT edge of the
+/* Soundboard sidebar toggle button: fixed; sits at the LEFT edge of the
    soundboard panel (which is directly LEFT of the voice/users panel).
    JS keeps `right` synced with the combined width of voice + soundboard. */
 .sb-sidebar-toggle-btn {
@@ -1258,7 +1258,7 @@ ul.chat-list { list-style-type: disc; }
   border: 0;
 }
 
-/* ── Rich embed card (Bluesky / X / generic) — mobile-parity layout ───── */
+/* ── Rich embed card (Bluesky / X / generic): mobile-parity layout ───── */
 .link-preview--rich {
   flex-direction: column;
   gap: 0.375rem;

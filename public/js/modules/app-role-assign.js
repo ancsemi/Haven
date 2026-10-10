@@ -6,7 +6,7 @@ import { ALL_PERMS, ADMIN_ONLY_PERMS, PERM_LABELS } from './perm-catalog.js?v=4.
 export default {
 
 // ═══════════════════════════════════════════════════════
-// CENTRALIZED ROLE ASSIGNMENT — Three-Pane Modal
+// CENTRALIZED ROLE ASSIGNMENT: Three-Pane Modal
 // ═══════════════════════════════════════════════════════
 
 _openRoleAssignCenter(preSelectUserId = null) {
@@ -738,7 +738,7 @@ _initRoleAssignCenter() {
   // Manage Roles button (admin only - opens main role management modal)
   document.getElementById('rac-manage-roles-btn')?.addEventListener('click', () => {
     document.getElementById('role-assign-center-modal').style.display = 'none';
-    // _openRoleModal shows the modal first, then loads — ensures the sidebar
+    // _openRoleModal shows the modal first, then loads. This ensures the sidebar
     // re-renders once roles arrive (fixes #5xxx: blank role list when opened from RAC).
     this._openRoleModal();
   });

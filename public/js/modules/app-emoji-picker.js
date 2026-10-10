@@ -65,7 +65,7 @@ _applySkinTone(emoji, tone) {
   return out.join('');
 },
 
-// Apply the user's current tone — used at every render/insert surface.
+// Apply the user's current tone, used at every render/insert surface.
 _toneEmoji(emoji) {
   return this._applySkinTone(emoji, this._getEmojiSkinTone());
 },
@@ -200,7 +200,7 @@ _toggleEmojiPicker(anchorEl) {
 
     renderStickers();
 
-    // Anchor positioning + display reused below — fall through to common code.
+    // Anchor positioning + display reused below, so fall through to common code.
     if (anchorEl) {
       if (picker.parentElement !== document.body) {
         picker._havenOrigParent = picker.parentElement;
@@ -262,7 +262,7 @@ _toggleEmojiPicker(anchorEl) {
   searchRow.appendChild(skinMenu);
   picker.appendChild(searchRow);
 
-  // Build combined categories — custom first so they sit front and centre,
+  // Build combined categories, custom first so they sit front and centre,
   // then the standard sets.
   const allCategories = {};
   const hasCustom = this.customEmojis && this.customEmojis.length > 0;
@@ -272,7 +272,7 @@ _toggleEmojiPicker(anchorEl) {
   Object.assign(allCategories, this.emojiCategories);
   this._emojiActiveCategory = Object.keys(allCategories)[0];
 
-  // Category tabs — clicking scrolls the grid to that section rather than
+  // Category tabs: clicking scrolls the grid to that section rather than
   // swapping it out, so every category is reachable by scrolling too.
   const tabRow = document.createElement('div');
   tabRow.className = 'emoji-tab-row';
@@ -414,7 +414,7 @@ _toggleEmojiPicker(anchorEl) {
   }
 
   // Scroll-spy: highlight the tab of whichever section is at the top. Compares
-  // stable offsetTop values against scrollTop — no sticky-poisoned measurements.
+  // stable offsetTop values against scrollTop, no sticky-poisoned measurements.
   grid.addEventListener('scroll', () => {
     if (searchInput.value.trim()) return;
     const y = grid.scrollTop;
@@ -594,7 +594,7 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
   // Remove any existing editor AND any open full picker. Both panels carry the
   // .reaction-full-picker class and both are absolutely positioned at
   // bottom:100%/right:0 on the same message, so leaving one behind stacks two
-  // 320px panels on the exact same spot — which reads as "the emoji pane
+  // 320px panels on the exact same spot, which reads as "the emoji pane
   // covered everything and I can't reach the slot row". _showFullReactionPicker
   // already clears both directions; this is the missing mirror of that.
   document.querySelectorAll('.quick-emoji-editor, .reaction-full-picker').forEach(el => el.remove());
@@ -728,8 +728,8 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
 
   // Placement parity with _showReactionPicker. Without this the editor is
   // positioned by CSS alone (always above the message), so opening it on a
-  // message near the top of the viewport — or inside a PiP panel, which clips
-  // overflow — pushes the slot row off-screen.
+  // message near the top of the viewport (or inside a PiP panel, which clips
+  // overflow) pushes the slot row off-screen.
   const pipParent = msgEl.closest('.dm-pip-panel, .thread-panel.pip');
   if (pipParent) {
     const msgRect = msgEl.getBoundingClientRect();

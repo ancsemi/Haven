@@ -335,7 +335,7 @@
   visibility: hidden;
 }
 
-/* Spoiler images (sender marked the image as a spoiler) — blurred behind a
+/* Spoiler images (sender marked the image as a spoiler): blurred behind a
    label until clicked. The inner .chat-image is the actual image. */
 .spoiler-media {
   position: relative;
@@ -409,7 +409,7 @@
   display: none;
 }
 
-/* Hidden image placeholder (viewer chose "Hide Image") — a compact pill that
+/* Hidden image placeholder (viewer chose "Hide Image"): a compact pill that
    restores the image when clicked. */
 .hidden-image {
   display: inline-flex;
@@ -559,7 +559,7 @@
   gap: 0.625rem;
 }
 
-/* Admin save bar — fixed at bottom of settings modal */
+/* Admin save bar: fixed at bottom of settings modal */
 .admin-save-bar {
   display: flex;
   flex-direction: column;

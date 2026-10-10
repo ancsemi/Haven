@@ -1,5 +1,5 @@
 /**
- * Haven — group DM crypto primitives (v1)
+ * Haven: group DM crypto primitives (v1)
  *
  * Deliberately free of storage, sockets and DOM so the same file runs in the
  * browser and under `node --test`. All state is passed in; nothing is cached
@@ -67,7 +67,7 @@
     const jwk = await subtle.exportKey('jwk', key);
     // Only the fields that define the point. Local keys carry ext/key_ops that
     // server-fetched copies do not, and any digest over the JWK must match
-    // across both — the same normalisation the pairwise safety number uses.
+    // across both, the same normalisation the pairwise safety number uses.
     return { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y };
   }
 
@@ -152,7 +152,7 @@
   }
 
   /**
-   * Verify then decrypt — in that order, and never the reverse. Returns
+   * Verify then decrypt, in that order, and never the reverse. Returns
    * { ok, plaintext, reason }. A caller that ignores `ok` and reads
    * `plaintext` gets null, so a forged message cannot be rendered by mistake.
    */
@@ -246,7 +246,7 @@
 
   /**
    * Walk a channel's messages and report transcript breaks. Concurrent sends
-   * legitimately share a `prev`, so a fork is not a fault — only a `prev`
+   * legitimately share a `prev`, so a fork is not a fault. Only a `prev`
    * naming an envelope that never arrived is.
    */
   function verifyChain(envelopeHashes, messages) {

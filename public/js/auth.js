@@ -33,7 +33,7 @@
       const raw = sessionStorage.getItem('haven_oidc_handoff');
       sessionStorage.removeItem('haven_oidc_handoff');
       if (raw) _oidcHandoff = JSON.parse(raw);
-    } catch { /* malformed handoff — fall through to the normal login page */ }
+    } catch { /* malformed handoff, fall through to the normal login page */ }
     history.replaceState({}, '', window.location.pathname);
   }
   const _oidcError = _urlParams.get('oidc_error') || '';
@@ -429,7 +429,7 @@
       });
       const data = await res.json();
       if (!res.ok) return showError(data.error || t('auth.errors.recovery_failed'));
-      // Success — go back to login with a success message
+      // Success: go back to login with a success message
       hideRecoverForm();
       showError(t('auth.errors.password_reset_success'));
       document.getElementById('auth-error').style.color = 'var(--success, #2ecc71)';
@@ -797,7 +797,7 @@
       hideError();
     }
 
-    // Step 1 — Connect to home server
+    // Step 1: Connect to home server
     ssoConnectBtn.addEventListener('click', () => {
       hideError();
       let raw = ssoServerInput.value.trim();
@@ -859,13 +859,13 @@
       applySsoProfile(data.profile, data.serverOrigin || expectedOrigin);
     });
 
-    // Back button — return to step 1
+    // Back button: return to step 1
     ssoBackBtn.addEventListener('click', (e) => {
       e.preventDefault();
       ssoReset();
     });
 
-    // Step 2 — Register with imported profile
+    // Step 2: Register with imported profile
     ssoRegisterBtn.addEventListener('click', async () => {
       hideError();
       if (!checkEula()) return;
@@ -992,7 +992,7 @@
 
   // ── Register ──────────────────────────────────────────
   // (#5344) If the server requires a registration token, reveal the
-  // token field. Best-effort fetch — if it fails we just leave the
+  // token field. Best-effort fetch: if it fails we just leave the
   // field hidden and the server will reject without the token.
   // field is also hidden if an invite link is used and is allowed to override the token requirement.
   async function _initRegistrationForm() {
@@ -1089,7 +1089,7 @@
     } catch (err) { console.warn('[Auth] could not check guest access', err); }
   })();
 
-  // ── (#12) SSO button — only when the server reports OIDC usable ──
+  // ── (#12) SSO button, only when the server reports OIDC usable ──
   (async () => {
     try {
       const r = await fetch('/api/public-config');

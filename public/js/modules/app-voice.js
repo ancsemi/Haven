@@ -17,7 +17,7 @@ async _joinVoice() {
   // finally block below regardless of outcome.
   if (this._joiningVoice) return;
   // If the socket is currently disconnected (e.g. user is mashing the
-  // button during a server restart) refuse to start — emits would be
+  // button during a server restart) refuse to start. Emits would be
   // buffered by socket.io and replayed N times on reconnect, producing
   // the multi-toast / multi-join behaviour. The auto-rejoin code in the
   // 'connect' handler will re-join voice automatically once we're back.
@@ -77,7 +77,7 @@ async _joinVoice() {
     // Server's broadcastVoiceUsers (fired on our voice-join) prunes stale
     // entries and emits both voice-users-update + voice-count-update, so
     // the right panel and sidebar reconcile authoritatively a tick later.
-    // Don't emit get-voice-counts here — it can race the broadcast and
+    // Don't emit get-voice-counts here; it can race the broadcast and
     // re-seed the sidebar with stale counts on older builds.
     this.socket.emit('request-voice-users', { code: joinedCode });
     // Disable stream/music buttons if the channel has them off
@@ -113,7 +113,7 @@ async _joinVoice() {
 _leaveVoice() {
   // Capture the channel BEFORE voice.leave() nulls currentChannel so we
   // can immediately clear the right voice panel and sidebar count for it.
-  // Don't wait for the server's voice-users-update broadcast — if we left
+  // Don't wait for the server's voice-users-update broadcast. If we left
   // the voice room before the broadcast fires, it may not reach us, and
   // the panel would stay stuck showing us as a participant (#5347).
   const leftCode = this.voice && this.voice.currentChannel;
@@ -124,12 +124,12 @@ _leaveVoice() {
   this._updateVoiceStatus(false);
   this._updateVoiceBar();
   this._hideMusicPanel();
-  // Optimistic local clear — mirrors the optimistic seed done in _joinVoice.
+  // Optimistic local clear, mirroring the optimistic seed done in _joinVoice.
   if (leftCode) {
     delete this.voiceCounts[leftCode];
     delete this.voiceChannelUsers[leftCode];
     // Clear the right VOICE panel whenever it was bound to the channel we
-    // just left — including the case where we're reading a different text
+    // just left, including the case where we're reading a different text
     // channel (DM etc.) while the panel was still showing the VC roster.
     if (this.currentChannel === leftCode || this._lastVoiceUsersChannel === leftCode) {
       this._renderVoiceUsers([], leftCode);
@@ -137,7 +137,7 @@ _leaveVoice() {
     this._updateChannelVoiceIndicators();
   }
   this._showToast(t('voice.left'), 'info');
-  // Close the soundboard panel/popup/modal — sounds can't route to VC
+  // Close the soundboard panel/popup/modal, since sounds can't route to VC
   // anymore, and the panel doubles as a 'you're in voice' affordance.
   this._closeSoundboardForVoiceLeave?.();
 },
@@ -145,7 +145,7 @@ _leaveVoice() {
 _toggleMute() {
   const wasMuted = this.voice.isMuted;
   if (wasMuted && this._mutedByDeafen) {
-    // Mute was auto-applied by deafen — clear both together
+    // Mute was auto-applied by deafen, so clear both together
     if (this.voice.isMuted) this.voice.toggleMute();
     if (this.voice.isDeafened) this.voice.toggleDeafen();
     this._mutedByDeafen = false;
@@ -205,8 +205,8 @@ _toggleDeafen() {
 //
 // The voice UI is written imperatively by _updateVoiceButtons/_updateVoiceStatus/
 // _updateVoiceBar from several unrelated call sites, and nothing ever recomputes
-// it. If it is torn down while the session is actually alive — which is what
-// produced "Haven shows Join Voice but I can still hear and talk to everyone" —
+// it. If it is torn down while the session is actually alive (which is what
+// produced "Haven shows Join Voice but I can still hear and talk to everyone"),
 // the only way back is for the user to click Join Voice, which is a needless
 // renegotiation of a session that never broke.
 //
@@ -218,7 +218,7 @@ _toggleDeafen() {
 // This runs on a timer and on focus/resize and repairs whichever side is stale.
 // IMPORTANT: this is UI-only. It must NEVER emit voice-rejoin / voice-leave.
 // A previous revision did, and on window maximize that tore down live peers
-// via voice-existing-users (no skipRenegotiate) — the "instant disconnect
+// via voice-existing-users (no skipRenegotiate): the "instant disconnect
 // on first resize while streaming" bug.
 _reconcileVoiceUi() {
   if (!this.voice) return;
@@ -246,9 +246,9 @@ _reconcileVoiceUi() {
   if (!repaired && !sessionInVoice && joinVisible === joinExpected && !barShowsVoice) return;
 
   // Only repair UPWARD when media is live. Never tear UI down on a flaky
-  // layout read during maximize — that wiped stream tiles.
+  // layout read during maximize; that wiped stream tiles.
   if (!sessionInVoice) {
-    // Genuinely idle — leave UI alone unless it still shows connected chrome.
+    // Genuinely idle: leave UI alone unless it still shows connected chrome.
     if (!barShowsVoice && joinVisible === joinExpected) return;
     // Bar still says connected but media is dead: clear chrome.
     if (barShowsVoice || joinVisible !== joinExpected) {
@@ -280,7 +280,7 @@ _startVoiceUiReconciler() {
   if (this._voiceUiReconcilerBound) return;
   this._voiceUiReconcilerBound = true;
   // Debounce resize heavily: maximize fires a burst of events. We only
-  // need to fix chrome after the layout settles — never mid-drag.
+  // need to fix chrome after the layout settles, never mid-drag.
   let resizeTimer = null;
   const run = () => { try { this._reconcileVoiceUi(); } catch (e) { console.warn('[Voice] reconcile failed:', e); } };
   const runDebounced = () => {
@@ -338,7 +338,7 @@ _updateVoiceButtons(inVoice) {
 
   const useSidebar = localStorage.getItem('haven_sidebar_voice_controls') === 'true';
 
-  // Show/hide mute/deafen header buttons (voice panel — default location)
+  // Show/hide mute/deafen header buttons (voice panel, default location)
   const voiceHeaderMute = document.getElementById('voice-mute-btn-header');
   if (voiceHeaderMute) voiceHeaderMute.style.display = (inVoice && !useSidebar) ? '' : 'none';
   const voiceHeaderDeafen = document.getElementById('voice-deafen-btn-header');
@@ -389,7 +389,7 @@ _updateVoiceButtons(inVoice) {
 
     // Only destroy stream/webcam tiles when media is actually dead.
     // A UI-only desync (maximize/resize flipping Join Voice on while
-    // WebRTC is still carrying the stream) used to wipe the grid here —
+    // WebRTC is still carrying the stream) used to wipe the grid here:
     // audio kept playing with no tile and no way to restore without
     // leave/rejoin. If peers or screen receivers are still live, leave
     // the tiles alone; the reconciler will re-show the voice chrome.
@@ -599,7 +599,7 @@ _runMicMeter() {
   let lastWidth = null;
   const tick = () => {
     const level = (this.voice && this.voice.inVoice) ? this.voice.currentMicLevel : 0;
-    // Whole percents only — the bar is a few hundred pixels wide, so finer
+    // Whole percents only. The bar is a few hundred pixels wide, so finer
     // steps cost a layout + paint per frame and change nothing visually.
     const width = Math.round(level) + '%';
     if (width !== lastWidth) {

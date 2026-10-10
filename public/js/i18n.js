@@ -13,11 +13,11 @@ const I18n = (() => {
   let _fallback = null;   // English base map for per-key fallback (#5451)
   let _locale = 'en';
   let _preference = 'auto';
-  let _ready = null;  // shared init promise — ensures init() is only run once
+  let _ready = null;  // shared init promise, ensures init() is only run once
   let _loadVersion = 0;
   let _languageChangeBound = false;
 
-  // Locales available — add entries here as you create new locale files
+  // Locales available: add entries here as you create new locale files
   const SUPPORTED = ['en', 'fr', 'de', 'es', 'pl', 'ru', 'zh', 'pt'];
   const DEFAULT   = 'en';
   const FLAGS = { en: 'gb', fr: 'fr', de: 'de', es: 'es', pl: 'pl', ru: 'ru', zh: 'cn', pt: 'br' };
@@ -47,7 +47,7 @@ const I18n = (() => {
       return stored;
     }
     _preference = 'auto';
-    // Try server default — only blocks for first-time visitors with no stored
+    // Try server default. This only blocks for first-time visitors with no stored
     // choice (or an explicit Automatic choice), and uses a short timeout so a
     // slow/offline server can't hang init.
     try {
@@ -61,7 +61,7 @@ const I18n = (() => {
           return cfg.default_locale;
         }
       }
-    } catch { /* offline / not ready — fall through to browser detection */ }
+    } catch { /* offline / not ready, fall through to browser detection */ }
     return _browserLocale();
   }
 
@@ -78,7 +78,7 @@ const I18n = (() => {
         try {
           const fb = await fetch(`/locales/${DEFAULT}.json`);
           if (fb.ok) fallback = await fb.json();
-        } catch { /* no fallback available — t() shows raw keys as before */ }
+        } catch { /* no fallback available; t() shows raw keys as before */ }
       }
       // A slower earlier request must never overwrite a newer language choice.
       if (version !== _loadVersion) return false;
@@ -118,13 +118,13 @@ const I18n = (() => {
     let val = _lookup(_translations, key);
     // Fall back to English for keys the active locale is missing, so the UI
     // shows real text instead of a raw dotted key like "modals.foo.title"
-    // (#5451). The raw key is only returned when English lacks it too — a
+    // (#5451). The raw key is only returned when English lacks it too, a
     // genuine gap worth surfacing.
     if ((val === null || val === undefined) && _fallback && _fallback !== _translations) {
       val = _lookup(_fallback, key);
     }
     if (val === null || val === undefined) {
-      // Key not found anywhere — return the raw key so the gap is visible.
+      // Key not found anywhere: return the raw key so the gap is visible.
       return key;
     }
     let str = String(val);
@@ -390,6 +390,6 @@ window.t = (key, params) => I18n.t(key, params);
 // <script>i18n.init()</script> call. The page CSP forbids inline scripts
 // (no 'unsafe-inline' in script-src), and the inline tag was being refused on
 // strict clients (e.g. Haven Desktop preload), leaving the page stuck on
-// "Loading Haven…". init() is idempotent — auth.js's await still resolves
+// "Loading Haven…". init() is idempotent, so auth.js's await still resolves
 // against the same shared promise.
 I18n.init();

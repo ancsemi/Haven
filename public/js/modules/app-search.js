@@ -36,7 +36,7 @@ _searchInit() {
   document.getElementById('search-panel-close')?.addEventListener('click', () => this._searchClose());
   document.getElementById('search-page-prev')?.addEventListener('click', () => this._searchGoToPage(-1));
   document.getElementById('search-page-next')?.addEventListener('click', () => this._searchGoToPage(1));
-  // Direct page entry — commit on Enter or blur (never per keystroke), so
+  // Direct page entry: commit on Enter or blur (never per keystroke), so
   // jumping to page 20 is one fetch instead of 19 arrow clicks. Out-of-range
   // and non-numeric input is clamped/reverted in _searchGoToPageAbsolute.
   const pageInput = document.getElementById('search-page-input');
@@ -263,7 +263,7 @@ _searchJumpTo(code, msgId) {
   }
 },
 
-// Called from switchChannel — hide/show the panel for the new context.
+// Called from switchChannel: hide/show the panel for the new context.
 _searchOnChannelSwitch() {
   const key = this._searchContextKey();
   const st = this._searchGetState(key);
@@ -283,7 +283,7 @@ _searchOnChannelSwitch() {
   this._sfpSync();
 },
 
-// channels-list arrived — the user's channel set changing (add/remove) can make
+// channels-list arrived. The user's channel set changing (add/remove) can make
 // cached rows outlive their access. Signature-gate it so a plain reconnect that
 // re-pushes an identical list doesn't false-trigger, then mark stale.
 _searchInvalidate(channels) {
@@ -295,7 +295,7 @@ _searchInvalidate(channels) {
 },
 
 // Force the PUBLIC search context stale regardless of the channel signature.
-// Used when the user's channel set or their own roles/permissions change — that
+// Used when the user's channel set or their own roles/permissions change; that
 // can revoke access without altering which channels appear in the list, so the
 // signature wouldn't catch it. Only the public context is touched: DM search is
 // local, E2E, and per-DM, so server roles/channel membership never affect it.
@@ -341,7 +341,7 @@ _searchFilterInit() {
   pop.querySelectorAll('.sfp-chip[data-sfp-filter]').forEach(chip => {
     chip.addEventListener('click', () => {
       const f = chip.dataset.sfpFilter;
-      // pinned is a plain boolean — no sub-picker, append straight away.
+      // pinned is a plain boolean: no sub-picker, append straight away.
       if (f === 'pinned') this._sfpAppend('pinned:true');
       else this._sfpOpenPicker(f);
     });
@@ -364,7 +364,7 @@ _searchFilterInit() {
     else pop.style.display = 'none';
   });
   // Clicking into the text box reopens the popover too (parity with the filter
-  // button), so dismissing it by clicking away isn't a dead end. Public only —
+  // button), so dismissing it by clicking away isn't a dead end. Public only:
   // DM search has no filters. If it's already open we leave it alone.
   document.getElementById('search-input')?.addEventListener('click', () => {
     const ch = (this.channels || []).find(c => c.code === this.currentChannel);
@@ -383,7 +383,7 @@ _searchFilterInit() {
   });
 },
 
-// Show the popover with the search box, but only for public channels — filters
+// Show the popover with the search box, but only for public channels; filters
 // don't apply to local DM search.
 _sfpSync() {
   const pop = document.getElementById('search-filter-popover');
@@ -666,8 +666,8 @@ _searchRenderPanel() {
     if (highlightQuery) this._searchHighlightTextNodes(content, highlightQuery);
     this._searchDeferEmbeds(item);
     // Row click jumps to the message, but never when the click lands on
-    // interactive content (media, links, the Load button, or the thread badge)
-    // — those have their own behaviour and must not trigger a jump.
+    // interactive content (media, links, the Load button, or the thread badge).
+    // Those have their own behaviour and must not trigger a jump.
     item.addEventListener('click', (e) => {
       if (e.target.closest('a, img, video, audio, .chat-image, .file-video, .file-audio, .link-preview, .search-load-embed, .search-result-thread, .spoiler, .message-tag')) return;
       this._searchJumpTo(item.dataset.channelCode, parseInt(item.dataset.msgId, 10));
@@ -675,7 +675,7 @@ _searchRenderPanel() {
   });
   this._setupVideos(list);
 
-  // Pager — only when more than one page.
+  // Pager: only when more than one page.
   if (pager) {
     if (pages > 1) {
       pager.style.display = 'flex';

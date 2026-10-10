@@ -12,7 +12,7 @@
   margin-bottom: 0 !important;
 }
 
-/* When collapsed, the channel-list is display:none — section label no gap */
+/* When collapsed, the channel-list is display:none; section label no gap */
 #channels-pane .section-label {
   margin-bottom: 0.25rem;
 }
@@ -22,7 +22,7 @@
   margin-bottom: 0;
 }
 
-/* ── Fix: Mobile servers section — compact circular icon instead of dropdown ── */
+/* ── Fix: Mobile servers section, compact circular icon instead of dropdown ── */
 @media (max-width: 768px) {
   /* Tighten the mobile servers section */
   .mobile-servers-section {

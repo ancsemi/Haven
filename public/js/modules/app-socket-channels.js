@@ -11,9 +11,9 @@ _listenChannelsAndMessages() {
     this._channelsListGotResponse = true;
     // A change in the user's channel/role set can make cached search results
     // show messages they no longer have access to. Invalidate the panel off
-    // this already-broadcast event — no new server plumbing. (search-overhaul)
+    // this already-broadcast event, so no new server plumbing. (search-overhaul)
     this._searchInvalidate?.(channels);
-    // Fresh authoritative state — an optimistic Channel Functions toggle that
+    // Fresh authoritative state: an optimistic Channel Functions toggle that
     // was still awaiting a verdict has just been accepted, so drop its undo.
     this._cfnPendingToggle = null;
     if (this._channelsWatchdog) {
@@ -62,7 +62,7 @@ _listenChannelsAndMessages() {
     // Seed client-side unreadCounts from server-reported values so the
     // desktop badge, tab title, and DM section badge stay in sync.
     // Only import counts for channels we haven't touched yet this session.
-    // Skip muted channels entirely — server has no knowledge of client-side
+    // Skip muted channels entirely; server has no knowledge of client-side
     // mute state, so bot/webhook messages can leave stale unread counts on
     // the server that would otherwise re-appear on every reconnect.
     const _mutedChsAtSeed = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
@@ -161,7 +161,7 @@ _listenChannelsAndMessages() {
     }
   });
 
-  // Channel renamed — update header if we're in that channel
+  // Channel renamed: update header if we're in that channel
   this.socket.on('channel-renamed', (data) => {
     if (data.code === this.currentChannel) {
       const el = document.getElementById('channel-header-name');
@@ -226,7 +226,7 @@ _listenChannelsAndMessages() {
     // We render the PiP regardless of currentChannel so the loading
     // placeholder always clears even when the same DM is also the active
     // main channel (e.g. user opened the DM in fullscreen previously,
-    // then opened the PiP — issue: SerChiz v3.10.3).
+    // then opened the PiP; issue: SerChiz v3.10.3).
     if (this._activeDMPip && data.channelCode === this._activeDMPip) {
       // E2E: ensure partner key is fetched before decrypting (self-DMs included)
       const pipCh = this.channels.find(c => c.code === data.channelCode);
@@ -261,7 +261,7 @@ _listenChannelsAndMessages() {
       return;
     }
     if (this._historyBefore) {
-      // Pagination request — prepend older messages
+      // Pagination request: prepend older messages
       this._historyBefore = null;
       if (data.messages.length === 0) {
         this._noMoreHistory = true;
@@ -276,7 +276,7 @@ _listenChannelsAndMessages() {
       // don't fire while _prependMessages is adjusting scroll position.
       this._loadingHistory = false;
     } else if (this._historyAfter) {
-      // Forward pagination — append newer messages
+      // Forward pagination: append newer messages
       this._historyAfter = null;
       if (data.messages.length === 0) {
         this._noMoreFuture = true;
@@ -288,7 +288,7 @@ _listenChannelsAndMessages() {
       this._appendMessages(data.messages);
       this._loadingFuture = false;
     } else if (data.around) {
-      // Jump-to-message — replace everything and scroll to target
+      // Jump-to-message: replace everything and scroll to target
       if (data.messages.length > 0) {
         this._oldestMsgId = data.messages[0].id;
         this._newestMsgId = data.messages[data.messages.length - 1].id;
@@ -299,10 +299,10 @@ _listenChannelsAndMessages() {
       this._loadingFuture = false;
       this._historyBefore = null;
       this._historyAfter = null;
-      // _jumpTargetId is already set by _jumpToMessage — _renderMessages reads it
+      // _jumpTargetId is already set by _jumpToMessage; _renderMessages reads it
       this._renderMessages(data.messages);
     } else {
-      // Initial load — replace everything
+      // Initial load: replace everything
       this._noMoreFuture = true;
       if (data.messages.length > 0) {
         this._oldestMsgId = data.messages[0].id;
@@ -351,7 +351,7 @@ _listenChannelsAndMessages() {
         // artificial and re-coupling would yank the user forward.
         this._coupledToBottom = true;
       } else if (st < lastScrollTop) {
-        // User scrolled up — decouple immediately
+        // User scrolled up: decouple immediately
         this._coupledToBottom = false;
       }
       lastScrollTop = st;
@@ -419,7 +419,7 @@ _listenChannelsAndMessages() {
     if (data.channelCode === this.currentChannel) {
       const isOwnMessage = data.message.user_id === this.user.id;
       // Treat the channel as "not actively being read" when the page is
-      // hidden — this happens for backgrounded server BrowserViews in
+      // hidden. This happens for backgrounded server BrowserViews in
       // Desktop, and for any tab the user has alt-tabbed away from. We
       // still want to append the message so it's there when they come
       // back, but we skip mark-read and bump the unread badge instead.
@@ -432,12 +432,12 @@ _listenChannelsAndMessages() {
         (!window.havenDesktop?.pageFocusFollowsWindow || document.hasFocus());
 
       // If the user is scrolled into history and the DOM window has been
-      // trimmed (doesn't include the latest messages), skip appending —
+      // trimmed (doesn't include the latest messages), skip appending;
       // the message will be loaded via forward pagination when the user
       // scrolls back down.  Exception: own messages always snap to present.
       if (this._noMoreFuture !== false || isOwnMessage) {
         if (isOwnMessage && this._noMoreFuture === false) {
-          // User sent a message while browsing history — snap back to
+          // User sent a message while browsing history: snap back to
           // the present by doing a fresh load of the channel.
           this._oldestMsgId = null;
           this._noMoreHistory = false;
@@ -454,17 +454,17 @@ _listenChannelsAndMessages() {
         }
         if (isActivelyViewing) {
           this._markRead(data.message.id);
-          // Clear any stale badge — but only when the user has actually seen
+          // Clear any stale badge, but only when the user has actually seen
           // the new message (coupled to the bottom of the feed).
           if (this._coupledToBottom && this.unreadCounts[data.channelCode]) {
             this.unreadCounts[data.channelCode] = 0;
             this._updateBadge(data.channelCode);
           }
         } else if (!isOwnMessage) {
-          // Page hidden (backgrounded server view, alt-tabbed, minimised) —
+          // Page hidden (backgrounded server view, alt-tabbed, minimised):
           // count it as unread even though it's the "current" channel, so
           // the sidebar dot + taskbar badge actually fire.
-          // Skip the unread bump for muted channels — muting should also silence badges.
+          // Skip the unread bump for muted channels; muting should also silence badges.
           const _hiddenMutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
           if (!_hiddenMutedChs.includes(data.channelCode)) {
             this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
@@ -512,9 +512,9 @@ _listenChannelsAndMessages() {
       const _isMuted2 = _mutedChs2.includes(data.channelCode) || localStorage.getItem('haven_server_muted') === '1';
       // If this message is for the active DM PiP and the user is actively
       // viewing the app, treat it as read instead of bumping the unread
-      // badge — the message is already visible in the floating PiP panel.
+      // badge. The message is already visible in the floating PiP panel.
       const _inActivePiP = this._activeDMPip && data.channelCode === this._activeDMPip && !document.hidden;
-      // Only count unread for messages from other users — own message echoes arriving after a
+      // Only count unread for messages from other users. Own message echoes arriving after a
       // channel switch (race condition) would otherwise trigger a ghost badge.
       if (data.message.user_id !== this.user.id) {
         if (_inActivePiP) {
@@ -642,8 +642,8 @@ _listenPresenceAndVoice() {
     const isViewing = data.channelCode === this.currentChannel;
     // Repair the local flags from the live peer connections before reading
     // them. Without this, a stale `inVoice === false` makes the filter below
-    // delete us from our own voice panel — the "everyone sees me in voice
-    // except me" report — and nothing ever undoes it.
+    // delete us from our own voice panel (the "everyone sees me in voice
+    // except me" report), and nothing ever undoes it.
     try { this.voice?.reassertSessionIfLive(); } catch (err) { console.warn('[Voice] reassertSessionIfLive failed', err); }
     const isInVoice = !!(this.voice && this.voice.inVoice && this.voice.currentChannel === data.channelCode);
     // (#5347 v3.16.1) Defensively filter ourselves out of the user list
@@ -699,7 +699,7 @@ _listenPresenceAndVoice() {
     if (isViewing && localStorage.getItem('haven_hide_voice_panel') !== 'true') {
       // Anti-flicker: while viewing a channel we're in voice on, ignore
       // transient empty snapshots from prune/rejoin races. Keep the last
-      // good list and re-poll — otherwise the panel strobes
+      // good list and re-poll; otherwise the panel strobes
       // empty ↔ everyone. Legitimate "everyone left" still lands once the
       // follow-up poll returns a stable empty/self-only roster.
       const sameChannelList = this._lastVoiceUsersChannel === data.channelCode;
@@ -726,7 +726,7 @@ _listenPresenceAndVoice() {
     // from this single authoritative event so they cannot disagree.
     //
     // Exception: when we're in voice on this channel and the snapshot is
-    // transiently empty, don't wipe the sidebar either — same race as the
+    // transiently empty, don't wipe the sidebar either. Same race as the
     // panel guard above.
     const usersForSidebar = users.map(u => ({
       id: u.id, username: u.username,
@@ -752,13 +752,13 @@ _listenPresenceAndVoice() {
     }
   });
 
-  // Lightweight sidebar voice count — fires for every voice join/leave.
+  // Lightweight sidebar voice count: fires for every voice join/leave.
   // Kept for cross-channel notifications (the user gets count updates for
   // channels they're not currently viewing) and as a safety net if a
   // voice-users-update is dropped. The voice-users-update handler is the
   // primary source of truth.
   this.socket.on('voice-count-update', (data) => {
-    // (#5347 v3.16.1) Same defensive self-filter as voice-users-update —
+    // (#5347 v3.16.1) Same defensive self-filter as voice-users-update:
     // if we're not actually in voice on this channel, strip ourselves
     // from the broadcast so a stale message can't keep our own entry on
     // the sidebar after we've left.
@@ -811,7 +811,7 @@ _listenPresenceAndVoice() {
     }
   });
 
-  // Persisted new-member welcome message — appended live for anyone currently
+  // Persisted new-member welcome message, appended live for anyone currently
   // viewing the channel. It's also saved server-side, so it renders in history
   // on reload (unlike the old ephemeral welcome, which was never saved).
   this.socket.on('welcome-message', (data) => {
@@ -842,7 +842,7 @@ _listenPresenceAndVoice() {
     }
   });
 
-  // #5390 — sister event of channel-deleted: messages were wiped via the
+  // #5390, sister event of channel-deleted: messages were wiped via the
   // auto-clear self-destruct mode but the channel itself still exists.
   // If the user is viewing the affected channel, refetch its messages by
   // resetting the view. Otherwise nothing visual needs to change.
@@ -896,7 +896,7 @@ _listenPresenceAndVoice() {
 
   this.socket.on('pong-check', () => {
     // Pair with the oldest outstanding probe (see _pingSend). If the queue is
-    // empty this pong belongs to a probe sent before a reconnect — ignore it
+    // empty this pong belongs to a probe sent before a reconnect, so ignore it
     // rather than inventing a number.
     const sentAt = this._pingQueue && this._pingQueue.shift();
     if (sentAt == null) return;

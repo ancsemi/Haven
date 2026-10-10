@@ -743,7 +743,7 @@ _showAdminActionModal(action, userId, username) {
     scrubCheckbox.onchange = null;
   }
 
-  // Purge option: replace messages with placeholder. Ban-only for now —
+  // Purge option: replace messages with placeholder. Ban-only for now;
   // it's a softer, less destructive alternative to scrub. Mutually exclusive
   // with scrub (you can't both delete and replace the same messages).
   const purgeGroup = document.getElementById('admin-purge-group');

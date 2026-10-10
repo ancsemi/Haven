@@ -40,7 +40,7 @@
     if (input.type !== 'password') return;
     // Skip hidden / off-screen inputs (e.g. honeypot)
     if (input.offsetParent === null && getComputedStyle(input).display === 'none') {
-      // Still attach — form may be revealed later. Continue.
+      // Still attach, since the form may be revealed later. Continue.
     }
 
     const wrap = document.createElement('span');

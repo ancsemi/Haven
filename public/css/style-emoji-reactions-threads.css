@@ -123,7 +123,7 @@
 }
 
 /* ── Stickers ───────────────────────────────────────── */
-/* Inline rendered sticker in messages — larger than chat-image, no background. */
+/* Inline rendered sticker in messages: larger than chat-image, no background. */
 .sticker-img {
   max-width: 11.25rem;
   max-height: 11.25rem;
@@ -381,7 +381,7 @@
   position: relative;
 }
 
-/* Favorite star — revealed on hover, always visible once starred */
+/* Favorite star: revealed on hover, always visible once starred */
 .gif-fav-btn {
   position: absolute;
   top: 4px;
@@ -413,7 +413,7 @@
 
 .gif-fav-btn.favorited { color: #ffc93c; }
 
-/* Touch devices never hover — keep the star reachable */
+/* Touch devices never hover; keep the star reachable */
 @media (hover: none) {
   .gif-fav-btn { opacity: 1; }
 }
@@ -839,7 +839,7 @@
   transition-delay: 0s;
 }
 
-/* Only show toolbar on real mouse hover — not on touch-triggered :hover.
+/* Only show toolbar on real mouse hover, not on touch-triggered :hover.
    Require BOTH hover:hover AND pointer:fine so mobile browsers that
    falsely report hover:hover (common on Android Chrome/Brave) don't
    show the toolbar on tap. */
@@ -1184,7 +1184,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-radius: 0.75rem;
   resize: both;
   overflow: hidden;
-  /* Must sit above .message-input-area (z:99995) — same reason the docked
+  /* Must sit above .message-input-area (z:99995). Same reason the docked
      thread panel was bumped to 99996. (#5373) */
   z-index: 99999;
 }
@@ -1312,7 +1312,7 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
   border-radius: var(--radius-sm);
   transition: background var(--transition), box-shadow var(--transition);
 }
-/* Compact thread reply — grouped under the previous reply from the same
+/* Compact thread reply: grouped under the previous reply from the same
    author. Avatar/author header are dropped; a timestamp shows in the avatar
    gutter on hover, like the main channel's compact rows. */
 .thread-message.thread-compact {

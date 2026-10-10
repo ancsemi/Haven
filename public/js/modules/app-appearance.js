@@ -508,7 +508,7 @@ _setupAnimateChatPicker() {
 // ── Interface Zoom slider ──
 // Scales the whole UI by setting the root font-size through --ui-scale (a
 // percentage). Everything is sized in rem, so one change rescales the entire
-// interface crisply and the layout reflows — no CSS zoom/transform.
+// interface crisply and the layout reflows, with no CSS zoom/transform.
 _setupZoomSlider() {
   const slider = document.getElementById('ui-zoom-slider');
   if (!slider) return;

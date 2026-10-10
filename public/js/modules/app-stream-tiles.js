@@ -44,7 +44,7 @@ _updateScreenShareVisibility() {
     // Clean up hidden streams bar
     document.getElementById('hidden-streams-bar')?.remove();
   } else if (visibleCount === 0) {
-    // All tiles hidden — collapse the container to avoid empty gray space,
+    // All tiles hidden: collapse the container to avoid empty gray space,
     // but keep the "hidden streams" bar in the header so user can restore.
     container.style.display = 'none';
   } else if (this._screenShareMinimized) {
@@ -60,7 +60,7 @@ _updateScreenShareVisibility() {
 _hideScreenShare() {
   const container = document.getElementById('screen-share-container');
   const grid = document.getElementById('screen-share-grid');
-  // Just minimize — don't destroy streams or stop sharing
+  // Just minimize; don't destroy streams or stop sharing
   container.style.display = 'none';
   this._screenShareMinimized = true;
   // Show a "streams hidden" indicator if there are still tiles
@@ -142,11 +142,11 @@ _showStreamTile(tileId, userId) {
       // Resume the audio element that was paused when hiding
       const audioEl = document.getElementById(`voice-audio-screen-${userId}`);
       if (audioEl && audioEl.paused) audioEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
-      // Check if the user had manually muted the stream before closing —
+      // Check if the user had manually muted the stream before closing;
       // if so, keep it muted instead of restoring volume
       const muteBtn = tile.querySelector('.stream-mute-btn');
       if (muteBtn && muteBtn.dataset.muted === 'true') {
-        // User had it muted — re-mute
+        // User had it muted: re-mute
         if (userId) this.voice.setStreamVolume(userId, 0);
       } else {
         const volSlider = tile.querySelector('.stream-vol-slider');
@@ -184,7 +184,7 @@ _updateHiddenStreamsBar() {
 
   bar.innerHTML = `<button class="hidden-stream-restore-btn" title="${t('media.show_hidden_streams')}">🖥 ${t(hiddenTiles.length === 1 ? 'media.hidden_streams_one' : 'media.hidden_streams_other', { count: hiddenTiles.length })}</button>`;
 
-  // Bind restore button — clicking it restores all hidden streams
+  // Bind restore button: clicking it restores all hidden streams
   bar.querySelector('.hidden-stream-restore-btn').addEventListener('click', () => {
     hiddenTiles.forEach(t => {
       t.style.display = '';
@@ -218,7 +218,7 @@ _updateHiddenStreamsBar() {
     this._updateScreenShareVisibility();
   });
 
-  // Show the container only if there are still visible tiles — _updateScreenShareVisibility handles this.
+  // Show the container only if there are still visible tiles; _updateScreenShareVisibility handles this.
   // (Removed forced container.style.display = 'flex' that caused empty gray space.)
 },
 
@@ -229,17 +229,17 @@ _closeScreenShare() {
   // hidden-streams bar or the LIVE badge.
   //
   // This deliberately does NOT:
-  //   • stop the local user's own outgoing share — that's the job of the
+  //   • stop the local user's own outgoing share; that's the job of the
   //     screen-share toggle button. Closing the *viewer* must never kill your
   //     *broadcast* (this used to call _toggleScreenShare()).
-  //   • remove tiles or null their <video> srcObject — destroying the only
+  //   • remove tiles or null their <video> srcObject, destroying the only
   //     reference to a sharer's still-live track leaves no ontrack/onunmute
   //     event to rebuild from, so the stream could never be reopened and a
   //     reshare wouldn't reattach without a full reload. That was the root
   //     cause of the "one X breaks everything" report.
   const grid = document.getElementById('screen-share-grid');
   if (!grid) return;
-  // Snapshot first — _hideStreamTile flips data-hidden as it goes, which would
+  // Snapshot first. _hideStreamTile flips data-hidden as it goes, which would
   // otherwise mutate a live NodeList mid-iteration.
   const visibleTiles = Array.from(
     grid.querySelectorAll('.screen-share-tile:not([data-hidden="true"])')
@@ -286,7 +286,7 @@ _handleScreenAudio(userId) {
 },
 
 // Update the streamer's own audio badge to reflect the actual capture mode
-// reported by the desktop app. Browser users won't have this info — they'll
+// reported by the desktop app. Browser users won't have this info; they'll
 // just see the generic "🔊 Audio" badge.
 _applyShareAudioModeBadge(modeInfo) {
   if (!modeInfo) return;
@@ -340,7 +340,7 @@ _handleScreenNoAudio(userId) {
   this._cancelScreenNoAudioTimer(userId);
   const tile = document.getElementById(tileId);
   if (!tile) {
-    // Tile may not exist yet — defer until it's created
+    // Tile may not exist yet, so defer until it's created
     const checkInterval = setInterval(() => {
       const t = document.getElementById(tileId);
       if (t) {
@@ -636,7 +636,7 @@ _popOutStreamWindow(tile, userId) {
 
   let cleanupTrack = null;
 
-  // Pop-in handler (minimize — return to inline grid)
+  // Pop-in handler (minimize: return to inline grid)
   const popIn = () => {
     cleanupTrack?.();
     pipVideo.srcObject = null;
@@ -654,7 +654,7 @@ _popOutStreamWindow(tile, userId) {
     if (popoutBtn) { popoutBtn.textContent = '⧉'; popoutBtn.title = t('media.pop_out_stream'); }
     tile.classList.remove('stream-popped-out');
     this._updateStreamContainerCollapse();
-    // Also hide the stream tile — user wants to close the stream, not just pop back in
+    // Also hide the stream tile; user wants to close the stream, not just pop back in
     const name2 = this.voice.peerName(userId);
     const who2 = userId === null || userId === this.user.id ? t('voice_runtime.you') : (name2 || t('voice_runtime.stream'));
     this._hideStreamTile(tile, userId, who2, true);
@@ -673,7 +673,7 @@ _popOutStreamWindow(tile, userId) {
     }
   });
 
-  // Maximize toggle — snap the overlay to fill the whole window (a full monitor
+  // Maximize toggle: snap the overlay to fill the whole window (a full monitor
   // when the browser is maximized on it), then restore the previous size.
   const maxBtn = pip.querySelector('.stream-pip-maximize');
   maxBtn.addEventListener('click', (e) => {

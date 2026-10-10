@@ -4,7 +4,7 @@
 export default {
 
 // ═══════════════════════════════════════════════════════
-// MOBILE — hamburger, overlay, swipe gestures
+// MOBILE: hamburger, overlay, swipe gestures
 // ═══════════════════════════════════════════════════════
 
 _setupMobile() {
@@ -13,7 +13,7 @@ _setupMobile() {
   const overlay = document.getElementById('mobile-overlay');
   const appBody = document.getElementById('app-body');
 
-  // Hamburger — toggle left sidebar
+  // Hamburger: toggle left sidebar
   menuBtn.addEventListener('click', () => {
     const isOpen = appBody.classList.toggle('mobile-sidebar-open');
     appBody.classList.remove('mobile-right-open');
@@ -21,7 +21,7 @@ _setupMobile() {
     else overlay.classList.remove('active');
   });
 
-  // Users button — toggle right sidebar
+  // Users button: toggle right sidebar
   usersBtn.addEventListener('click', () => {
     const isOpen = appBody.classList.toggle('mobile-right-open');
     appBody.classList.remove('mobile-sidebar-open');
@@ -29,7 +29,7 @@ _setupMobile() {
     else overlay.classList.remove('active');
   });
 
-  // Overlay click — close everything
+  // Overlay click: close everything
   overlay.addEventListener('click', () => this._closeMobilePanels());
 
   // Close buttons inside panels
@@ -110,7 +110,7 @@ _setupMobile() {
   if (isTouchDevice) {
     const messagesEl = document.getElementById('messages');
     let _suppressDismissUntil = 0;
-    // Hide the old floating singleton "⋯" button — each message now has its own
+    // Hide the old floating singleton "⋯" button; each message now has its own
     const oldMoreBtn = document.getElementById('msg-more-btn');
     if (oldMoreBtn) oldMoreBtn.style.display = 'none';
 
@@ -455,7 +455,7 @@ _setupMobileBridge() {
         break;
 
       case 'haven:resume':
-        // App returned to foreground — reconnect socket if needed
+        // App returned to foreground: reconnect socket if needed
         if (this.socket && !this.socket.connected) {
           this.socket.connect();
         }
@@ -554,7 +554,7 @@ _handleMobileBack() {
     return;
   }
 
-  // Nothing to close — tell shell
+  // Nothing to close: tell shell
   this._postToShell({ type: 'haven:back-exhausted' });
 },
 

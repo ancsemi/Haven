@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Main Client Application
+// Haven: Main Client Application
 // Features: chat, voice, themes, images, multi-server,
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
@@ -194,7 +194,7 @@ class HavenApp {
       return;
     }
 
-    // Permission helper — true if user is admin or has mod role
+    // Permission helper: true if user is admin or has mod role
     this._canModerate = () => this.user.isAdmin || (this.user.effectiveLevel || 0) >= 25;
     this._isServerMod = () => this.user.isAdmin || (this.user.effectiveLevel || 0) >= 50;
     this._hasPerm = (p) => this.user.isAdmin || (this.user.permissions || []).includes('*') || (this.user.permissions || []).includes(p);
@@ -216,7 +216,7 @@ class HavenApp {
     // top-level channel, regardless of which channel is active). (#5433)
     this._hasGlobalPerm = (p) => this.user.isAdmin || (this.user.globalPermissions || []).includes('*') || (this.user.globalPermissions || []).includes(p);
 
-    this.customEmojis = []; // [{name, url}] — loaded from server
+    this.customEmojis = []; // [{name, url}], loaded from server
     // Bundled image emoji shipped with Haven (rendered like custom emoji but
     // built into the app, so every client on this version resolves them).
     // Country flags are image-based on purpose: Windows browsers refuse to
@@ -314,9 +314,9 @@ class HavenApp {
       { name: 'us_betsy_ross', url: '/emoji/us-betsy-ross.svg', keywords: 'betsy ross flag united states america usa stars stripes colonies historical patriotic' },
       { name: 'gadsden', url: '/emoji/us-gadsden.svg', keywords: 'gadsden dont tread on me snake rattlesnake flag united states america usa liberty patriotic' },
     ];
-    this.stickers = []; // [{id, name, pack_name, url}] — loaded from server
-    this._emojiPickerContext = 'main'; // 'main' | 'thread' | 'dmpip' — set by emoji button handlers
-    this._emojiPickerSection = 'emoji'; // 'emoji' | 'sticker' — last-used picker tab
+    this.stickers = []; // [{id, name, pack_name, url}], loaded from server
+    this._emojiPickerContext = 'main'; // 'main' | 'thread' | 'dmpip', set by emoji button handlers
+    this._emojiPickerSection = 'emoji'; // 'emoji' | 'sticker': last-used picker tab
 
     this._init();
   }

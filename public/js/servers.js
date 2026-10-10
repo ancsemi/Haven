@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Multi-Server Manager
+// Haven: Multi-Server Manager
 // See other Haven servers in your sidebar with live status
 // ═══════════════════════════════════════════════════════════
 
@@ -362,7 +362,7 @@ class ServerManager {
 
     const removed = this._loadRemoved();
     if (opts.userInitiated) {
-      // User explicitly adding — clear from removed set so sync won't fight it
+      // User explicitly adding: clear from removed set so sync won't fight it
       if (removed.has(url)) {
         removed.delete(url);
         this._saveRemoved(removed);
@@ -677,7 +677,7 @@ class ServerManager {
           remoteServers = JSON.parse(decrypted);
           if (!Array.isArray(remoteServers)) remoteServers = [];
         } catch {
-          // Decryption failed — blob was encrypted with a different password
+          // Decryption failed: blob was encrypted with a different password
           // or is corrupted. Start fresh from localStorage.
           console.warn('[ServerSync] Could not decrypt server blob, using local list');
         }

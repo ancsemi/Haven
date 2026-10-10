@@ -262,7 +262,7 @@ _wizardComplete() {
 
 /**
  * (#12) Fill the SSO fields from server settings, and warn when the toggle is
- * on but the server still reports SSO unusable — which in practice always
+ * on but the server still reports SSO unusable, which in practice always
  * means OIDC_CLIENT_SECRET is missing from the environment, the one piece of
  * this configuration that is not stored in the database.
  */
@@ -300,7 +300,7 @@ _envHintFields: [
   { key: 'turn_url',      input: 'turn-url-input' },
   { key: 'turn_username', input: 'turn-username-input' },
   { key: 'turn_password', input: 'turn-password-input' },
-  // TURN_SECRET has no field of its own — it belongs to the TURN block as a
+  // TURN_SECRET has no field of its own; it belongs to the TURN block as a
   // whole, so its note hangs off the TURN server row.
   { key: 'turn_secret',   input: 'turn-url-input', standalone: true }
 ],
@@ -477,7 +477,7 @@ _applyServerSettings() {
       emojiAutoUpdate.checked = this.serverSettings.unicode_emoji_auto_update === 'true';
     }
 
-    // ── Voice & Connectivity (STUN/TURN) — #5399 ───
+    // ── Voice & Connectivity (STUN/TURN), #5399 ───
     const stunUrls = document.getElementById('stun-urls-input');
     if (stunUrls) stunUrls.value = this.serverSettings.stun_urls || '';
     const iceDisabled = document.getElementById('voice-ice-disabled');
@@ -537,7 +537,7 @@ _applyServerSettings() {
     if (typeof this._renderPermThresholds === 'function') this._renderPermThresholds();
   }
 
-  // Server invite code — always update even while modal is open (live action, not Save flow)
+  // Server invite code: always update even while modal is open (live action, not Save flow)
   const serverCodeEl = document.getElementById('server-code-value');
   if (serverCodeEl) {
     const code = this.serverSettings.server_code;
@@ -545,7 +545,7 @@ _applyServerSettings() {
     serverCodeEl.style.opacity = code ? '1' : '0.4';
   }
 
-  // (#5344) Registration token — same live-update pattern as server code
+  // (#5344) Registration token: same live-update pattern as server code
   const tokenEl = document.getElementById('registration-token-value');
   if (tokenEl) {
     const tok = this.serverSettings.registration_token;
@@ -576,17 +576,17 @@ _applyServerSettings() {
   }
   
 
-  // (#5345) Default join channels — re-render when settings or channel list refresh
+  // (#5345) Default join channels: re-render when settings or channel list refresh
   if (typeof this._renderDefaultJoinChannels === 'function') {
     try { this._renderDefaultJoinChannels(); } catch (err) { console.warn('[Admin] _renderDefaultJoinChannels failed', err); }
   }
 
-  // (#5381) Guest channel whitelist — re-render when settings change
+  // (#5381) Guest channel whitelist: re-render when settings change
   if (typeof this._renderGuestChannels === 'function') {
     try { this._renderGuestChannels(); } catch (err) { console.warn('[Admin] _renderGuestChannels failed', err); }
   }
 
-  // Managed invite links — paint the create-form channel list and pull the
+  // Managed invite links: paint the create-form channel list and pull the
   // current set of codes from the server (list arrives via 'invite-codes-list').
   if (typeof this._renderInviteCreateChannels === 'function') {
     try { this._renderInviteCreateChannels(); } catch (err) { console.warn('[Admin] _renderInviteCreateChannels failed', err); }
@@ -614,13 +614,13 @@ _applyServerSettings() {
     this._updateDmCleanupNotice(ch);
   }
 
-  // Vanity code — update input if modal is open
+  // Vanity code: update input if modal is open
   if (!modalOpen) {
     const vanityInput = document.getElementById('vanity-code-input');
     if (vanityInput) vanityInput.value = this.serverSettings.vanity_code || '';
   }
 
-  // Server banner — always update display (display prefs from localStorage)
+  // Server banner: always update display (display prefs from localStorage)
   const bannerDisplay = document.getElementById('server-banner-display');
   const bannerImg = document.getElementById('server-banner-img');
   const bannerPreview = document.getElementById('server-banner-preview');
@@ -711,7 +711,7 @@ _renderWebhooksList(webhooks) {
     container.innerHTML = `<p class="muted-text">${t('settings.admin.no_bots')}</p>`;
     return;
   }
-  // Simple preview list for server settings — full management is in the bot modal
+  // Simple preview list for server settings; full management is in the bot modal
   container.innerHTML = webhooks.map(wh => {
     const statusDot = `<span class="webhook-status-icon" aria-hidden="true">${wh.is_active ? '🟢' : '🔴'}</span>`;
     const avatarHtml = wh.avatar_url
@@ -938,7 +938,7 @@ _snapshotAdminSettings() {
   const tosEl = document.getElementById('custom-tos-input');
   if (tosEl) tosEl.value = this._adminSnapshot.custom_tos;
   // _applyServerSettings skips its input pass while the modal is open, so
-  // refresh the environment notes here too — otherwise they stay stale from
+  // refresh the environment notes here too, otherwise they stay stale from
   // whenever the panel was last closed. (#5489)
   this._applyEnvSettingHints?.();
   // Load webhooks list for admin preview
@@ -1104,7 +1104,7 @@ _saveAdminSettings() {
     changed = true;
   }
 
-  // session_duration_days: 0 means "never expire"; 1–365 days otherwise (#5391)
+  // session_duration_days: 0 means "never expire"; 1 to 365 days otherwise (#5391)
   const sessionDurDays = String(Math.max(0, Math.min(365, parseInt(document.getElementById('session-duration-days')?.value) || 0)));
   if (sessionDurDays !== (snap.session_duration_days ?? '0')) {
     this.socket.emit('update-server-setting', { key: 'session_duration_days', value: sessionDurDays });
@@ -1243,7 +1243,7 @@ _saveAdminSettings() {
     changed = true;
   }
 
-  // ── Voice & Connectivity (STUN/TURN) — #5399 ───
+  // ── Voice & Connectivity (STUN/TURN), #5399 ───
   const iceDisabledVal = document.getElementById('voice-ice-disabled')?.checked ? 'true' : 'false';
   if (iceDisabledVal !== (snap.voice_ice_disabled || 'false')) {
     this.socket.emit('update-server-setting', { key: 'voice_ice_disabled', value: iceDisabledVal });

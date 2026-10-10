@@ -216,7 +216,7 @@
 }
 .music-queue-remove-btn:hover { opacity: 0.8; }
 
-/* Overlay blocks direct clicks on the iframe — sync goes through Haven controls only */
+/* Overlay blocks direct clicks on the iframe; sync goes through Haven controls only */
 .music-embed-wrapper {
   position: relative;
   width: 100%;

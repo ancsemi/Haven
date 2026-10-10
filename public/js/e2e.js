@@ -1,5 +1,5 @@
 /**
- * Haven — End-to-End Encryption for DMs (v3 — True E2E)
+ * Haven: End-to-End Encryption for DMs (v3, True E2E)
  *
  * Crypto: ECDH P-256 key agreement → HKDF-SHA256 → AES-256-GCM
  *
@@ -7,7 +7,7 @@
  *   - Each user has an ECDH key pair generated in the browser.
  *   - The private key is wrapped (PBKDF2 + AES-GCM) with a key derived
  *     from the user's PASSWORD (never sent to the server as a wrapping key).
- *   - The server stores only the encrypted blob — it cannot decrypt.
+ *   - The server stores only the encrypted blob; it cannot decrypt.
  *   - Local IndexedDB caches the key pair for fast startup.
  *   - On login the password is available → wrapping key is derived client-side.
  *   - On auto-login (JWT, no password) IndexedDB provides the cached key pair.
@@ -40,7 +40,7 @@ class HavenE2E {
 
   /**
    * Derive a wrapping key from the user's password.
-   * This is a one-way derivation — password cannot be recovered from the result.
+   * This is a one-way derivation: password cannot be recovered from the result.
    * Uses PBKDF2 with a fixed domain-separation salt (the final wrap adds a random salt).
    * @param  {string} password - The user's plaintext password
    * @return {Promise<string>} 64-char hex string
@@ -72,14 +72,14 @@ class HavenE2E {
       this._divergent = false;              // local pub != server pub
       this._ghostState = false;             // init aborted to protect a possibly-good server backup
 
-      /* 1. Fast path — local IndexedDB */
+      /* 1. Fast path: local IndexedDB */
       this._keyPair = await this._loadLocal();
 
       /* 1b. If loaded from IndexedDB, probe server state explicitly.
        *     Three outcomes:
-       *       present — verify local pub matches server pub; flag divergence if not
-       *       none    — server actually has no backup; re-upload ours
-       *       unknown — request timed out; do NOT mutate server state */
+       *       present: verify local pub matches server pub; flag divergence if not
+       *       none:    server actually has no backup; re-upload ours
+       *       unknown: request timed out; do NOT mutate server state */
       if (this._keyPair && socket && wrappingKey) {
         const probe = await this._fetchBackupWithState(socket);
         this._serverBackupState = probe.status;
@@ -93,17 +93,17 @@ class HavenE2E {
             }
           } catch { /* best-effort divergence check */ }
         } else if (probe.status === 'none') {
-          // Server confirmed empty — safe to re-upload our local key
+          // Server confirmed empty, so safe to re-upload our local key
           try { await this._uploadBackup(socket, wrappingKey); this._serverBackupExists = true; }
           catch (err) { console.warn('[E2E] Re-upload after recovery failed:', err.message); }
         } else {
-          // probe.status === 'unknown' — flaky network. Do NOT upload; it would
+          // probe.status === 'unknown': flaky network. Do NOT upload; it would
           // clobber whatever the server actually has.
           console.warn('[E2E] Could not reach server for backup probe, skipping re-upload to avoid clobber');
         }
       }
 
-      /* 2. Cross-device — try server backup (only if we have a wrapping key) */
+      /* 2. Cross-device: try server backup (only if we have a wrapping key) */
       if (!this._keyPair && socket && wrappingKey) {
         const restored = await this._restoreFromServerWithState(socket, wrappingKey);
         this._keyPair = restored.pair;
@@ -111,7 +111,7 @@ class HavenE2E {
         if (restored.status === 'present') this._serverBackupExists = true;
       }
 
-      /* 3. No key anywhere — generate ONLY if we affirmatively confirmed the
+      /* 3. No key anywhere: generate ONLY if we affirmatively confirmed the
        *    server has no backup. On 'unknown' we bail out entirely: generating
        *    a fresh key here and uploading would clobber a potentially-good
        *    backup once the network comes back. A 5-min cooldown prevents
@@ -136,7 +136,7 @@ class HavenE2E {
         console.log('[E2E] Generated new key pair (first-time setup, server confirmed empty)');
       }
 
-      /* 4. Auto-login without IndexedDB — E2E unavailable until real login */
+      /* 4. Auto-login without IndexedDB: E2E unavailable until real login */
       if (!this._keyPair) {
         if (this._serverBackupExists) {
           console.warn('[E2E] Server backup exists but could not be decrypted; password may be wrong');
@@ -151,7 +151,7 @@ class HavenE2E {
 
       /* Upload encrypted backup so other devices can sync.
        * Only upload when we just GENERATED a new key (first-time setup).
-       * Do NOT upload when loaded from IndexedDB — the server backup may
+       * Do NOT upload when loaded from IndexedDB: the server backup may
        * contain a NEWER key from another device, and overwriting it would
        * break cross-device sync and cause infinite conflict loops. */
       if (socket && wrappingKey && this._freshlyGenerated) {
@@ -295,7 +295,7 @@ class HavenE2E {
     const sorted = [myJwk, theirJwk].sort((a, b) => (a.x < b.x ? -1 : a.x > b.x ? 1 : 0));
     // Normalize to only the essential fields in a fixed order so that local keys
     // (which may carry 'ext', 'key_ops', etc.) and server-fetched keys (plain JSON)
-    // produce identical strings — and therefore identical safety numbers.
+    // produce identical strings, and therefore identical safety numbers.
     const normalize = jwk => ({ kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y });
     const data = new TextEncoder().encode(JSON.stringify(normalize(sorted[0])) + JSON.stringify(normalize(sorted[1])));
     const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
@@ -410,9 +410,9 @@ class HavenE2E {
   /**
    * Fetch encrypted key backup with explicit status tracking.
    * Returns { status, data, serverPublicKey }:
-   *   status = 'present' — server returned a backup blob
-   *   status = 'none'    — server confirmed there is no backup (safe to generate)
-   *   status = 'unknown' — request timed out or errored (do NOT treat as empty)
+   *   status = 'present': server returned a backup blob
+   *   status = 'none':    server confirmed there is no backup (safe to generate)
+   *   status = 'unknown': request timed out or errored (do NOT treat as empty)
    * Retries once before giving up, so transient network blips aren't treated as "no backup".
    * This distinction is load-bearing: the previous 5s-timeout-returns-null design
    * conflated "confirmed empty" with "unreachable", which could let the client
@@ -442,7 +442,7 @@ class HavenE2E {
         } else if (data && data.state === 'empty') {
           resolve({ status: 'none', data: null, serverPublicKey: null });
         } else {
-          // Legacy server returned null blob but has a public key — ambiguous.
+          // Legacy server returned null blob but has a public key: ambiguous.
           // Treat as unknown to be safe; we'd rather retry than risk a clobber.
           resolve({ status: 'unknown', data: null, serverPublicKey: null });
         }
@@ -481,11 +481,11 @@ class HavenE2E {
       socket.once('public-key-conflict', (data) => {
         clearTimeout(t);
         if (force) {
-          // Explicit key reset — overwrite server key
+          // Explicit key reset: overwrite server key
           socket.emit('publish-public-key', { jwk: this._publicKeyJwk, force: true });
           resolve({ ok: true, conflict: false });
         } else {
-          // Server has a different key — don't auto-overwrite.
+          // Server has a different key, so don't auto-overwrite.
           // Return conflict so the caller can decide (sync from server, prompt user, etc.)
           console.warn('[E2E] Public key conflict: server has a different key');
           resolve({ ok: false, conflict: true, serverKey: data?.existing || null });
@@ -616,9 +616,9 @@ class HavenE2E {
 
   /**
    * Restore with status awareness. Returns { pair, status }:
-   *   status = 'present' — backup found (pair may still be null if unwrap failed)
-   *   status = 'none'    — server confirmed empty; caller may generate fresh keys
-   *   status = 'unknown' — network issue; caller MUST NOT overwrite server state
+   *   status = 'present': backup found (pair may still be null if unwrap failed)
+   *   status = 'none':    server confirmed empty; caller may generate fresh keys
+   *   status = 'unknown': network issue; caller MUST NOT overwrite server state
    */
   async _restoreFromServerWithState(socket, secret) {
     const probe = await this._fetchBackupWithState(socket);
@@ -688,7 +688,7 @@ class HavenE2E {
     try {
       await this._openDB();
 
-      // Probe state FIRST before clearing local keys — if the server is
+      // Probe state FIRST before clearing local keys: if the server is
       // unreachable or returns 'unknown', we must NOT wipe a working local
       // keypair. Old behaviour cleared local first, then tried to fetch,
       // which left the user keyless on flaky networks.
@@ -704,7 +704,7 @@ class HavenE2E {
       try {
         jwk = await this._unwrap(wrappingKey, probe.data.encryptedKey, probe.data.salt);
       } catch (unwrapErr) {
-        // AES-GCM auth tag failure — wrapping key (password-derived) is wrong.
+        // AES-GCM auth tag failure: wrapping key (password-derived) is wrong.
         // Do NOT clear local keys: the user might still have a usable keypair
         // from a previous session. The original bug here treated this as
         // 'no backup' which prompted the user to Reset and lose all DMs.
@@ -712,7 +712,7 @@ class HavenE2E {
         return { ok: false, reason: 'bad-password' };
       }
 
-      // Unwrap succeeded — NOW it's safe to swap the local keypair.
+      // Unwrap succeeded, so NOW it's safe to swap the local keypair.
       await this._clearLocal();
       this._sharedKeys = {};
       this._keyPair = await this._importPair(jwk);

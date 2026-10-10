@@ -10,7 +10,7 @@ export default {
 
 // Every role-editor emit that expects an ack goes through this wrapper. A
 // server that predates an event never sends the ack, so the plain callback
-// form waits forever and the UI does nothing — no toast, no error, nothing.
+// form waits forever and the UI does nothing: no toast, no error, nothing.
 // That is exactly what happens on partially-updated self-hosts (new public/
 // files served by an old server.js asked for an event it doesn't know yet).
 // Surface it as an actionable error instead.
@@ -221,7 +221,7 @@ _renderRoleSidebar() {
 // can only add or remove permissions they personally hold; admin-only perms
 // and perms they lack are locked. Mirrors the server rule in update-role
 // (socketHandlers/roles.js), which preserves any locked perm the role already
-// has rather than deleting it — so the UI disables those toggles instead of
+// has rather than deleting it, so the UI disables those toggles instead of
 // letting the user check/uncheck them and be silently overridden.
 _canControlRolePerm(p) {
   return !!(this.user && this.user.isAdmin) || (!ADMIN_ONLY_PERMS.includes(p) && this._hasPerm(p));
@@ -430,7 +430,7 @@ _renderRoleDetail() {
   // Duplicate: prompt for new name (default = "<original> (copy)") then
   // create a fresh role with the same level, color (gradient included), icon,
   // and permissions.
-  // Channel-access linkage and auto-assign are intentionally NOT copied —
+  // Channel-access linkage and auto-assign are intentionally NOT copied;
   // both are rarely what an admin wants on a freshly cloned role.
   document.getElementById('duplicate-role-btn')?.addEventListener('click', async () => {
     const defaultName = t('settings.admin.roles_copy_name', { name: role.name }).slice(0, 30);
@@ -462,7 +462,7 @@ _renderRoleDetail() {
 
   // Role hierarchy gate: a non-admin may only edit roles strictly below their
   // own level. Roles at or above them are shown read-only (every field and
-  // mutating action disabled) — mirrors the server guard in update-role and
+  // mutating action disabled), mirroring the server guard in update-role and
   // the RAC's grantable-roles lock. Runs last so it overrides the Save button
   // being re-shown above. Viewing members stays available (read-only).
   this._applyRoleEditGate(panel, role, {

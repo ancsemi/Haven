@@ -5,7 +5,7 @@
 export default {
 
 _bindMessageClicks() {
-  // Image click — open lightbox overlay (CSP-safe — no inline handlers)
+  // Image click: open lightbox overlay (CSP-safe, no inline handlers)
   document.getElementById('messages').addEventListener('click', (e) => {
     // A forum card handles its own clicks: the thumbnail opens the topic,
     // not the lightbox (#5646).
@@ -23,7 +23,7 @@ _bindMessageClicks() {
     }
   });
 
-  // Image click in thread panel, DM PiP, and the search results panel — same
+  // Image click in thread panel, DM PiP, and the search results panel: same
   // lightbox with container-aware navigation, spoiler reveal, and image
   // right-click menu. Search reuses this wholesale. (search-overhaul phase 3)
   for (const containerId of ['thread-messages', 'dm-pip-messages', 'search-panel-list']) {
@@ -67,7 +67,7 @@ _bindMessageClicks() {
     this._openImageInNewTab(img);
   });
 
-  // Image right-click — custom context menu for chat thumbnails. Forum cards
+  // Image right-click: custom context menu for chat thumbnails. Forum cards
   // open their own menus, so both menus no longer stack up there (#5650).
   document.getElementById('messages').addEventListener('contextmenu', (e) => {
     if (e.target.closest('.forum-topic')) return;
@@ -77,13 +77,13 @@ _bindMessageClicks() {
     }
   });
 
-  // Message right-click — custom context menu (edit / reply / quote / pin / delete).
+  // Message right-click: custom context menu (edit / reply / quote / pin / delete).
   // Reuses the hover-toolbar actions; only opens over a real message row.
   document.getElementById('messages').addEventListener('contextmenu', (e) => {
-    // Images have their own Save/Copy/Open menu (handled above) — leave them.
+    // Images have their own Save/Copy/Open menu (handled above), so leave them.
     if (e.target.closest('.chat-image')) return;
     // Inside the inline message-edit box, defer to the browser's native menu
-    // so spell-check suggestions work — none of our items apply while editing.
+    // so spell-check suggestions work; none of our items apply while editing.
     if (e.target.closest('.edit-textarea')) return;
     // Don't hijack right-click while picking messages to move.
     if (this._moveSelectionActive) return;
@@ -108,7 +108,7 @@ _bindMessageClicks() {
     this._showMessageContextMenu(e, msgEl);
   });
 
-  // Risky file download warning — intercept clicks on potentially harmful files
+  // Risky file download warning: intercept clicks on potentially harmful files
   document.getElementById('messages').addEventListener('click', (e) => {
     const link = e.target.closest('a.risky-file');
     if (!link) return;
@@ -118,7 +118,7 @@ _bindMessageClicks() {
     this._showRiskyDownloadWarning(fileName, ext, link.href);
   });
 
-  // Masked markdown link warning — show URL confirmation before navigating
+  // Masked markdown link warning: show URL confirmation before navigating
   document.getElementById('messages').addEventListener('click', (e) => {
     const link = e.target.closest('a[data-masked-link]');
     if (!link) return;
@@ -126,7 +126,7 @@ _bindMessageClicks() {
     this._showExternalLinkWarning(link.textContent, link.href);
   });
 
-  // Reply banner click — scroll to the original message
+  // Reply banner click: scroll to the original message
   document.getElementById('messages').addEventListener('click', (e) => {
     const banner = e.target.closest('.reply-banner');
     if (!banner) return;
@@ -135,7 +135,7 @@ _bindMessageClicks() {
     this._jumpToMessage(parseInt(replyMsgId, 10));
   });
 
-  // Tag chip click (message footer / search result) — run a search for exactly
+  // Tag chip click (message footer / search result): run a search for exactly
   // that tag. Delegated on document so it works in every surface that renders a
   // Tags footer without per-container wiring. (#tagging phase 2)
   document.addEventListener('click', (e) => {
@@ -146,7 +146,7 @@ _bindMessageClicks() {
     this._searchByTag?.(chip.dataset.tag);
   });
 
-  // #channel-name link click — switch to the referenced channel.
+  // #channel-name link click: switch to the referenced channel.
   // Delegated globally so it works inside the main pane, thread panel, and
   // DM PiP without per-container wiring.
   document.addEventListener('click', (e) => {
@@ -164,7 +164,7 @@ _bindMessageClicks() {
     }
   });
 
-  // Thread preview click — open thread panel
+  // Thread preview click: open thread panel
   document.getElementById('messages').addEventListener('click', (e) => {
     const preview = e.target.closest('.thread-preview');
     if (!preview) return;
@@ -174,7 +174,7 @@ _bindMessageClicks() {
 },
 
 _bindMessageActions() {
-  // Messages container — move-selection mode intercept (supports Shift+click range)
+  // Messages container: move-selection mode intercept (supports Shift+click range)
   document.getElementById('messages').addEventListener('click', (e) => {
     if (!this._moveSelectionActive) return;
     // Don't intercept toolbar button clicks
@@ -210,7 +210,7 @@ _bindMessageActions() {
     }
   }, true); // capture phase so it fires before the toolbar action handler
 
-  // Messages container — delegate reaction and reply button clicks
+  // Messages container: delegate reaction and reply button clicks
   document.getElementById('messages').addEventListener('click', async (e) => {
     const target = e.target.closest('[data-action]');
     if (!target) return;
@@ -376,7 +376,7 @@ _bindMessageActions() {
   bindOverflowDirection(threadMessages);
   bindOverflowDirection(document.getElementById('dm-pip-messages'));
 
-  // Reaction badge hover — show popout with user list
+  // Reaction badge hover: show popout with user list
   {
     let _popoutTimer = null;
     const msgs = document.getElementById('messages');

@@ -1,5 +1,5 @@
 ﻿/* Haven core styles, part 8 of 16: attachment tags, uploads, dropdowns, forums, the /time picker, pins, personas and search. Loaded in order by style.css; the order matters. */
-/* ── Attachment tagging (composer) — (#tagging) ─────── */
+/* ── Attachment tagging (composer, #tagging) ─────── */
 /* The active attachment (the one the tag bar edits) gets an accent ring; any
    attachment carrying tags gets a subtle accent underline. */
 .image-queue-thumb.is-active,
@@ -546,7 +546,7 @@
   color: var(--accent-text);
 }
 
-/* File queue chip — non-image attachments queued before send (#5417) */
+/* File queue chip: non-image attachments queued before send (#5417) */
 .file-queue-chip {
   position: relative;
   display: flex;
@@ -855,7 +855,7 @@
   font-size: 0.85em;
 }
 
-/* Persona autocomplete (::Name) avatar — scale/crop to a small circle the way
+/* Persona autocomplete (::Name) avatar: scale/crop to a small circle the way
    the sent-message avatar does, rather than showing the raw, oversized image. */
 .persona-dd-avatar {
   width: 1.5rem;
@@ -1040,7 +1040,7 @@
   font-weight: 600;
 }
 
-/* Search results overlay — fills the right sidebar, sitting over voice +
+/* Search results overlay: fills the right sidebar, sitting over voice +
    member list (Discord-style). Persists across channel switches. */
 .search-panel {
   position: absolute;
@@ -1402,7 +1402,7 @@
   vertical-align: middle;
 }
 
-/* Per-link "Load embed" button — defers preview fetches until the user opts in. */
+/* Per-link "Load embed" button: defers preview fetches until the user opts in. */
 .search-load-embed {
   display: inline-block;
   margin-left: 0.35rem;

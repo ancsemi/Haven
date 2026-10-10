@@ -78,7 +78,7 @@ _bindChannelMenu() {
   // ── Channel context menu ("..." on hover) ──────────
   this._initChannelContextMenu();
   this._initDmContextMenu();
-  // Delete channel — themed confirm (issue #5307: was using two chained native confirm() calls)
+  // Delete channel: themed confirm (issue #5307: was using two chained native confirm() calls)
   document.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
@@ -166,7 +166,7 @@ _bindChannelMenu() {
       }
     });
   });
-  // Hide channel (admin declutter — local only, channel stays accessible) (#5409)
+  // Hide channel (admin declutter, local only, channel stays accessible) (#5409)
   document.querySelector('[data-action="hide-channel"]')?.addEventListener('click', () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
@@ -178,7 +178,7 @@ _bindChannelMenu() {
     this._closeChannelCtxMenu();
     this._leaveVoice();
   });
-  // Channel Functions panel toggle — sideways popout
+  // Channel Functions panel toggle: sideways popout
   document.querySelector('[data-action="channel-functions"]')?.addEventListener('click', (e) => {
     e.stopPropagation();
     const panel = document.getElementById('channel-functions-panel');
@@ -214,7 +214,7 @@ _bindChannelMenu() {
       panel.style.display = 'none';
     }
   });
-  // Channel Functions panel — row clicks
+  // Channel Functions panel: row clicks
   document.getElementById('channel-functions-panel')?.addEventListener('click', (e) => {
     const row = e.target.closest('.cfn-row');
     if (!row || row.classList.contains('cfn-disabled')) return;
@@ -225,8 +225,8 @@ _bindChannelMenu() {
     const ch = this.channels.find(c => c.code === code);
 
     // Helper: optimistically update ch, re-render panel.
-    // The server can still refuse the change — a permission it doesn't grant,
-    // or a rule like "enable voice first" — and it answers a refusal with
+    // The server can still refuse the change (a permission it doesn't grant,
+    // or a rule like "enable voice first"), and it answers a refusal with
     // error-msg and no new channel state. Remember what the row held before
     // the click so _revertPendingChannelToggle can put it back; without that
     // the switch sat on its new value while the toast said it hadn't moved.
@@ -402,7 +402,7 @@ _bindChannelMenu() {
       input.focus(); input.select();
       const commitLimit = () => {
         const raw = parseInt(input.value);
-        // Blank or less than 2 = unlimited (0). Valid range: 2–99.
+        // Blank or less than 2 = unlimited (0). Valid range: 2 to 99.
         const limit = (!isNaN(raw) && raw >= 2 && raw <= 99) ? raw : 0;
         optimistic({ voice_user_limit: limit });
         this.socket.emit('set-voice-user-limit', { code, limit });
@@ -439,7 +439,7 @@ _bindChannelMenu() {
       if (row.querySelector('.cfn-input')) return;
       const badge = row.querySelector('.cfn-badge');
       if (!badge) return;
-      // #5390 — self-destruct now has two modes: 'delete' (legacy: remove
+      // #5390: self-destruct now has two modes: 'delete' (legacy: remove
       // the whole channel when the timer fires) and 'clear' (wipe messages
       // only, then rearm the timer at the same interval). We render the
       // hours input next to a mode select so admins can pick both at once.
@@ -597,7 +597,7 @@ _bindChannelMenu() {
     const sortMode = e.target.value; // 'server_default', 'manual', 'alpha', 'created', 'oldest', 'dynamic'
     if (this._organizeServerLevel) {
       if (sortMode === 'server_default') {
-        // Use server default — remove any personal override
+        // Use server default: remove any personal override
         localStorage.removeItem('haven_server_sort_mode');
       } else if (this.user?.isAdmin || this._hasPerm('manage_server')) {
         // Admin: update the server-wide default sort mode

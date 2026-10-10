@@ -71,7 +71,7 @@
 [data-theme="win95"] .btn-sm.btn-danger { background: #bfbfbf; color: #cc0000; border: 3px outset #fff; }
 
 
-/* Win95 icon buttons near username (rename, logout) — beveled */
+/* Win95 icon buttons near username (rename, logout): beveled */
 [data-theme="win95"] .icon-btn {
   background: #bfbfbf; color: #000; border: 2px outset #fff;
   border-radius: 0 !important; padding: 0.1875rem 0.3125rem;
@@ -94,11 +94,11 @@
 [data-theme="win95"] .btn-settings-popout svg,
 [data-theme="win95"] .btn-invite-popout svg { color: #000; }
 
-/* Win95 status picker dot — beveled */
+/* Win95 status picker dot: beveled */
 [data-theme="win95"] .status-picker-dot { border: 2px outset #fff; border-radius: 0 !important; }
 [data-theme="win95"] .status-picker-btn { border: 2px outset #fff; border-radius: 0 !important; background: #c0c0c0; }
 
-/* Win95 generic modal buttons — always black text on gray */
+/* Win95 generic modal buttons: always black text on gray */
 [data-theme="win95"] .modal button,
 [data-theme="win95"] .modal-overlay button {
   background: #bfbfbf; color: #000; border: 3px outset #fff; border-radius: 0 !important;
@@ -158,7 +158,7 @@
 [data-theme="win95"] .input-actions-box .btn-gif { border-color: #808080; }
 [data-theme="win95"] input[type="text"], [data-theme="win95"] textarea { background: #fff; border: 3px inset #808080 !important; border-radius: 0 !important; }
 [data-theme="win95"] .right-sidebar { background: #bfbfbf; border-left: 3px outset #fff; }
-/* Bulletproof win95 backgrounds — explicitly paint every major surface in
+/* Bulletproof win95 backgrounds: explicitly paint every major surface in
    #bfbfbf so a stale inline custom-theme CSS variable on :root (e.g. left
    over from a prior 'custom' / 'rgb' theme session that wasn't cleared by
    the time the user landed on win95) can't leave the main message area or
@@ -252,7 +252,7 @@
     linear-gradient(to top,    #ffffff 0, #ffffff 2px, transparent 2px),
     #bfbfbf !important;
 }
-/* Hide duplicate scrollbar arrows — keep only one button at each end.
+/* Hide duplicate scrollbar arrows; keep only one button at each end.
    display:none alone is unreliable in some Chromium builds for scrollbar
    pseudo-elements, so also collapse them to zero size. */
 [data-theme="win95"] ::-webkit-scrollbar-button:vertical:start:increment,
@@ -273,7 +273,7 @@
 [data-theme="win95"] .status-bar .status-item { border: 1px inset #808080; border-radius: 0; }
 [data-theme="win95"] * { border-radius: 0 !important; }
 
-/* Win95 sliders — rectangular gray boxes with proper 3D bevel */
+/* Win95 sliders: rectangular gray boxes with proper 3D bevel */
 [data-theme="win95"] input[type="range"] {
   -webkit-appearance: none; appearance: none;
   height: 1.375rem; background: transparent;
@@ -342,7 +342,7 @@
   width: 1.375rem; height: 0.75rem; margin-top: 0; margin-left: -0.625rem;
 }
 
-/* Win95 text color — white text on navy backgrounds (hover/active/selected states) */
+/* Win95 text color: white text on navy backgrounds (hover/active/selected states) */
 [data-theme="win95"] .channel-item:hover *,
 [data-theme="win95"] .channel-item.active *,
 [data-theme="win95"] .user-item:hover .user-item-name,
@@ -358,13 +358,13 @@
 [data-theme="win95"] .settings-section .toggle-row:hover,
 [data-theme="win95"] .settings-section .select-row:hover { background: transparent; }
 
-/* Win95 checkboxes — square, period-correct */
+/* Win95 checkboxes: square, period-correct */
 [data-theme="win95"] input[type="checkbox"] {
   -webkit-appearance: auto; appearance: auto;
   accent-color: #000080;
 }
 
-/* Win95 settings modal — full blue title bar like real Win95 */
+/* Win95 settings modal: full blue title bar like real Win95 */
 [data-theme="win95"] .settings-header,
 [data-theme="win95"] .forum-modal-header {
   background: linear-gradient(90deg, #000080, #1084d0);
@@ -396,7 +396,7 @@
 [data-theme="win95"] .settings-close-btn:hover,
 [data-theme="win95"] .modal-close:hover { background: #dfdfdf; }
 
-/* Win95 admin save bar — beveled gray box with black text */
+/* Win95 admin save bar: beveled gray box with black text */
 [data-theme="win95"] .admin-save-bar {
   background: #bfbfbf;
   border-top: 3px outset #fff;
@@ -411,7 +411,7 @@
 [data-theme="win95"] .btn-admin-save:hover { background: #dfdfdf !important; }
 [data-theme="win95"] .btn-admin-save:active { border: 3px inset #808080; }
 
-/* Win95 number inputs — boxy inset, no rounded corners */
+/* Win95 number inputs: boxy inset, no rounded corners */
 [data-theme="win95"] .settings-number-input,
 [data-theme="win95"] input[type="number"] {
   background: #fff;
@@ -438,14 +438,14 @@
   font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif, var(--font-emoji);
 }
 
-/* Win95 settings section titles — black text */
+/* Win95 settings section titles: black text */
 [data-theme="win95"] .settings-section-title,
 [data-theme="win95"] .settings-section-subtitle {
   color: #000;
 }
 [data-theme="win95"] .settings-hint { color: #444; }
 
-/* Win95 context menus — beveled 3D edges like real Win95 menus */
+/* Win95 context menus: beveled 3D edges like real Win95 menus */
 [data-theme="win95"] .channel-ctx-menu {
   background: #bfbfbf;
   border: 3px outset #fff;
@@ -475,7 +475,7 @@
   margin: 0.125rem 0;
 }
 
-/* Win95 emoji picker — beveled box */
+/* Win95 emoji picker: beveled box */
 [data-theme="win95"] .emoji-picker {
   background: #bfbfbf;
   border: 3px outset #fff;
@@ -483,7 +483,7 @@
   box-shadow: 2px 2px 0 #000;
 }
 
-/* Win95 message toolbar — beveled */
+/* Win95 message toolbar: beveled */
 [data-theme="win95"] .msg-toolbar {
   background: #bfbfbf;
   border: 2px outset #fff;
@@ -491,7 +491,7 @@
   box-shadow: 1px 1px 0 #000;
 }
 
-/* Win95 toasts — beveled */
+/* Win95 toasts: beveled */
 [data-theme="win95"] .toast {
   background: #bfbfbf;
   border: 3px outset #fff;
@@ -537,7 +537,7 @@
   --theme-logo:    "☀";
   --scanline:      none;
 }
-/* Daylight accent overrides — warm amber tones */
+/* Daylight accent overrides: warm amber tones */
 [data-theme="daylight"] .sidebar { background: var(--bg-secondary); }
 [data-theme="daylight"] .right-sidebar { background: var(--bg-secondary); }
 [data-theme="daylight"] .channel-header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
@@ -589,7 +589,7 @@
   --theme-logo:    "☁";
   --scanline:      none;
 }
-/* Cloudy accent overrides — cool blue-gray tones */
+/* Cloudy accent overrides: cool blue-gray tones */
 [data-theme="cloudy"] .sidebar { background: var(--bg-secondary); }
 [data-theme="cloudy"] .right-sidebar { background: var(--bg-secondary); }
 [data-theme="cloudy"] .channel-header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
@@ -674,7 +674,7 @@ input[type="range"]:not(.rgb-slider)::-moz-range-track {
   border-radius: var(--track-r, 0.1875rem);
   border: var(--track-border, 1px solid rgba(255,255,255,0.15));
 }
-/* Range thumb — centered on track */
+/* Range thumb: centered on track */
 input[type="range"]:not(.rgb-slider)::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 0.875rem;

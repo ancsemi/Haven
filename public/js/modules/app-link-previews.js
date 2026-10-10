@@ -86,7 +86,7 @@ _setupVideos(containerEl) {
  * Replace a media element that failed to decode with a plain download link.
  * The extension told us the container looked playable but the codecs inside
  * weren't (ProRes/HEVC .mov being the common case), so the user still gets the
- * file — just not inline. Built with DOM nodes rather than innerHTML because
+ * file, just not inline. Built with DOM nodes rather than innerHTML because
  * the filename is attacker-controlled.
  */
 _fallbackToDownload(mediaEl) {
@@ -190,7 +190,7 @@ _generateVideoThumbnail(video) {
 
   helper.addEventListener('error', cleanup, { once: true });
 
-  // Safety timeout — don't hang forever if the video can't be loaded
+  // Safety timeout: don't hang forever if the video can't be loaded
   setTimeout(() => { if (!_thumbCache.has(src)) cleanup(); }, 8000);
 },
 
@@ -267,7 +267,7 @@ _fetchLinkPreviews(containerEl) {
         // Don't add duplicate previews
         if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
 
-        // Unified rich embed card — social posts (Bluesky / X) gain an author
+        // Unified rich embed card: social posts (Bluesky / X) gain an author
         // row, avatar and engagement stats; everything else renders the same
         // chrome (accent header, size toggle, collapse) with title/text/media.
         const collapsed = this._collapsedEmbeds.has(url);
@@ -298,7 +298,7 @@ _fetchLinkPreviews(containerEl) {
         const textContent = data.text || data.description;
         if (textContent) meta += `<span class="lp-text">${this._escapeHtml(textContent)}</span>`;
 
-        // Media — gallery grid, inline player, or image (with play badge if a
+        // Media: gallery grid, inline player, or image (with play badge if a
         // non-inline video is linked, e.g. a Bluesky video post).
         let media = '';
         if (hasGallery) {
@@ -309,7 +309,7 @@ _fetchLinkPreviews(containerEl) {
           });
           media += '</div>';
         } else if (isInlineVideo) {
-          // Video is NOT proxied — streaming it through Haven would need Range
+          // Video is NOT proxied: streaming it through Haven would need Range
           // support and a lot of bandwidth. Instead the poster comes from the
           // proxy and preload drops to "none" when proxying is on, so the
           // remote host is contacted only if the viewer actually presses play.
@@ -321,7 +321,7 @@ _fetchLinkPreviews(containerEl) {
           media += `<a class="lp-media" href="${this._escapeHtml(url)}" target="_blank" rel="noopener noreferrer nofollow"><img class="lp-image" ${this._imgSrcAttr(data.image)} alt="" loading="lazy">${data.video ? '<span class="lp-play"></span>' : ''}</a>`;
         }
 
-        // Engagement stats (Bluesky / X) — skip any the source didn't provide.
+        // Engagement stats (Bluesky / X); skip any the source didn't provide.
         let stats = '';
         if (data.stats) {
           const parts = [['💬', data.stats.replies], ['🔁', data.stats.reposts], ['❤️', data.stats.likes], ['👁', data.stats.views]]
@@ -343,7 +343,7 @@ _fetchLinkPreviews(containerEl) {
         const wasAtBottom = this._coupledToBottom;
         msgContent.appendChild(card);
 
-        // Scroll if coupled to bottom — uses the tracked flag rather than
+        // Scroll if coupled to bottom. Uses the tracked flag rather than
         // a point-in-time scrollHeight check that content-visibility can skew.
         if (wasAtBottom) this._scrollToBottom(true);
       })
@@ -416,7 +416,7 @@ _runLinkPreviewTask(task) {
     headers: { 'Authorization': `Bearer ${this.token}` }
   })
     .then(r => {
-      // Rate limited — free the slot and re-queue after a backoff so the rest
+      // Rate limited: free the slot and re-queue after a backoff so the rest
       // of the batch can proceed. Honour Retry-After when the server sends it,
       // otherwise exponential backoff, both with jitter to avoid a thundering
       // herd when several messages retry at once.
@@ -447,7 +447,7 @@ _runLinkPreviewTask(task) {
 // A link wrapped in a || spoiler || carries that spoiler onto its embed
 // card: the card is blurred behind the same tag used for spoiler images
 // until it is clicked to reveal (handled by _maybeRevealConcealed). We read
-// the rendered DOM — the <a> sits inside the .spoiler span — so detection
+// the rendered DOM (the <a> sits inside the .spoiler span), so detection
 // stays in sync with however the message was marked up (auto-link, masked
 // [text](url), YouTube, etc.).
 _applyEmbedSpoiler(embedEl, link) {
