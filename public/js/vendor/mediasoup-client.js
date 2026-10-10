@@ -39,9 +39,9 @@
   var __privateAdd = (obj, member, value) => member.has(obj) ? __typeError("Cannot add the same private member more than once") : member instanceof WeakSet ? member.add(obj) : member.set(obj, value);
   var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "write to private field"), setter ? setter.call(obj, value) : member.set(obj, value), value);
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/ms/index.js
+  // node_modules/ms/index.js
   var require_ms = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/ms/index.js"(exports, module) {
+    "node_modules/ms/index.js"(exports, module) {
       var s = 1e3;
       var m = s * 60;
       var h = m * 60;
@@ -155,9 +155,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/debug/src/common.js
+  // node_modules/debug/src/common.js
   var require_common = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/debug/src/common.js"(exports, module) {
+    "node_modules/debug/src/common.js"(exports, module) {
       function setup(env) {
         createDebug.debug = createDebug;
         createDebug.default = createDebug;
@@ -332,9 +332,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/debug/src/browser.js
+  // node_modules/debug/src/browser.js
   var require_browser = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/debug/src/browser.js"(exports, module) {
+    "node_modules/debug/src/browser.js"(exports, module) {
       exports.formatArgs = formatArgs;
       exports.save = save;
       exports.load = load;
@@ -502,17 +502,17 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/types.js
+  // node_modules/mediasoup-client/lib/types.js
   var require_types = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/types.js"(exports) {
+    "node_modules/mediasoup-client/lib/types.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/Logger.js
+  // node_modules/mediasoup-client/lib/Logger.js
   var require_Logger = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/Logger.js"(exports) {
+    "node_modules/mediasoup-client/lib/Logger.js"(exports) {
       "use strict";
       var __importDefault = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
@@ -553,9 +553,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/events-alias/events.js
+  // node_modules/events-alias/events.js
   var require_events = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/events-alias/events.js"(exports, module) {
+    "node_modules/events-alias/events.js"(exports, module) {
       "use strict";
       var R = typeof Reflect === "object" ? Reflect : null;
       var ReflectApply = R && typeof R.apply === "function" ? R.apply : function ReflectApply2(target, receiver, args) {
@@ -922,9 +922,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/enhancedEvents.js
+  // node_modules/mediasoup-client/lib/enhancedEvents.js
   var require_enhancedEvents = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/enhancedEvents.js"(exports) {
+    "node_modules/mediasoup-client/lib/enhancedEvents.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.EnhancedEventEmitter = void 0;
@@ -1006,9 +1006,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/errors.js
+  // node_modules/mediasoup-client/lib/errors.js
   var require_errors = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/errors.js"(exports) {
+    "node_modules/mediasoup-client/lib/errors.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.InvalidStateError = exports.UnsupportedError = void 0;
@@ -1039,9 +1039,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/utils.js
+  // node_modules/mediasoup-client/lib/utils.js
   var require_utils = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/utils.js"(exports) {
+    "node_modules/mediasoup-client/lib/utils.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.clone = clone;
@@ -1074,9 +1074,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/h264-profile-level-id/lib/Logger.js
+  // node_modules/h264-profile-level-id/lib/Logger.js
   var require_Logger2 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/h264-profile-level-id/lib/Logger.js"(exports) {
+    "node_modules/h264-profile-level-id/lib/Logger.js"(exports) {
       "use strict";
       var __importDefault = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
@@ -1117,9 +1117,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/h264-profile-level-id/lib/index.js
+  // node_modules/h264-profile-level-id/lib/index.js
   var require_lib = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/h264-profile-level-id/lib/index.js"(exports) {
+    "node_modules/h264-profile-level-id/lib/index.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ProfileLevelId = exports.Level = exports.Profile = void 0;
@@ -1556,9 +1556,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/ortc.js
+  // node_modules/mediasoup-client/lib/ortc.js
   var require_ortc = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/ortc.js"(exports) {
+    "node_modules/mediasoup-client/lib/ortc.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -2297,9 +2297,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/awaitqueue/lib/Logger.js
+  // node_modules/awaitqueue/lib/Logger.js
   var require_Logger3 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/awaitqueue/lib/Logger.js"(exports) {
+    "node_modules/awaitqueue/lib/Logger.js"(exports) {
       "use strict";
       var __importDefault = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
@@ -2340,9 +2340,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/awaitqueue/lib/errors.js
+  // node_modules/awaitqueue/lib/errors.js
   var require_errors2 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/awaitqueue/lib/errors.js"(exports) {
+    "node_modules/awaitqueue/lib/errors.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.AwaitQueueRemovedTaskError = exports.AwaitQueueStoppedError = void 0;
@@ -2369,9 +2369,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/awaitqueue/lib/AwaitQueue.js
+  // node_modules/awaitqueue/lib/AwaitQueue.js
   var require_AwaitQueue = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/awaitqueue/lib/AwaitQueue.js"(exports) {
+    "node_modules/awaitqueue/lib/AwaitQueue.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.AwaitQueue = void 0;
@@ -2502,9 +2502,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/awaitqueue/lib/index.js
+  // node_modules/awaitqueue/lib/index.js
   var require_lib2 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/awaitqueue/lib/index.js"(exports) {
+    "node_modules/awaitqueue/lib/index.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.AwaitQueueRemovedTaskError = exports.AwaitQueueStoppedError = exports.AwaitQueue = void 0;
@@ -2522,9 +2522,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/Producer.js
+  // node_modules/mediasoup-client/lib/Producer.js
   var require_Producer = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/Producer.js"(exports) {
+    "node_modules/mediasoup-client/lib/Producer.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Producer = void 0;
@@ -2825,9 +2825,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/Consumer.js
+  // node_modules/mediasoup-client/lib/Consumer.js
   var require_Consumer = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/Consumer.js"(exports) {
+    "node_modules/mediasoup-client/lib/Consumer.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Consumer = void 0;
@@ -3036,9 +3036,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/DataProducer.js
+  // node_modules/mediasoup-client/lib/DataProducer.js
   var require_DataProducer = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/DataProducer.js"(exports) {
+    "node_modules/mediasoup-client/lib/DataProducer.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.DataProducer = void 0;
@@ -3231,9 +3231,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/DataConsumer.js
+  // node_modules/mediasoup-client/lib/DataConsumer.js
   var require_DataConsumer = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/DataConsumer.js"(exports) {
+    "node_modules/mediasoup-client/lib/DataConsumer.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.DataConsumer = void 0;
@@ -3409,9 +3409,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/Transport.js
+  // node_modules/mediasoup-client/lib/Transport.js
   var require_Transport = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/Transport.js"(exports) {
+    "node_modules/mediasoup-client/lib/Transport.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -4224,9 +4224,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/sdp-transform/lib/grammar.js
+  // node_modules/sdp-transform/lib/grammar.js
   var require_grammar = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/sdp-transform/lib/grammar.js"(exports, module) {
+    "node_modules/sdp-transform/lib/grammar.js"(exports, module) {
       var grammar = module.exports = {
         v: [{
           name: "version",
@@ -4693,9 +4693,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/sdp-transform/lib/parser.js
+  // node_modules/sdp-transform/lib/parser.js
   var require_parser = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/sdp-transform/lib/parser.js"(exports) {
+    "node_modules/sdp-transform/lib/parser.js"(exports) {
       var toIntIfInt = function(v) {
         return String(Number(v)) === v ? Number(v) : v;
       };
@@ -4800,9 +4800,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/sdp-transform/lib/writer.js
+  // node_modules/sdp-transform/lib/writer.js
   var require_writer = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/sdp-transform/lib/writer.js"(exports, module) {
+    "node_modules/sdp-transform/lib/writer.js"(exports, module) {
       var grammar = require_grammar();
       var formatRegExp = /%[sdv%]/g;
       var format = function(formatStr) {
@@ -4906,9 +4906,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/sdp-transform/lib/index.js
+  // node_modules/sdp-transform/lib/index.js
   var require_lib3 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/sdp-transform/lib/index.js"(exports) {
+    "node_modules/sdp-transform/lib/index.js"(exports) {
       var parser = require_parser();
       var writer = require_writer();
       var grammar = require_grammar();
@@ -4924,9 +4924,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/scalabilityModes.js
+  // node_modules/mediasoup-client/lib/scalabilityModes.js
   var require_scalabilityModes = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/scalabilityModes.js"(exports) {
+    "node_modules/mediasoup-client/lib/scalabilityModes.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.parse = parse;
@@ -4948,9 +4948,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/sdp/RemoteMediaSection.js
+  // node_modules/mediasoup-client/lib/handlers/sdp/RemoteMediaSection.js
   var require_RemoteMediaSection = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/sdp/RemoteMediaSection.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/sdp/RemoteMediaSection.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -5418,9 +5418,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/sdp/RemoteSdp.js
+  // node_modules/mediasoup-client/lib/handlers/sdp/RemoteSdp.js
   var require_RemoteSdp = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/sdp/RemoteSdp.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/sdp/RemoteSdp.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -5713,9 +5713,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/sdp/commonUtils.js
+  // node_modules/mediasoup-client/lib/handlers/sdp/commonUtils.js
   var require_commonUtils = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/sdp/commonUtils.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/sdp/commonUtils.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -5923,9 +5923,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/sdp/unifiedPlanUtils.js
+  // node_modules/mediasoup-client/lib/handlers/sdp/unifiedPlanUtils.js
   var require_unifiedPlanUtils = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/sdp/unifiedPlanUtils.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/sdp/unifiedPlanUtils.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.getRtpEncodings = getRtpEncodings;
@@ -6044,9 +6044,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/ortc/utils.js
+  // node_modules/mediasoup-client/lib/handlers/ortc/utils.js
   var require_utils2 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/ortc/utils.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/ortc/utils.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.addNackSupportForOpus = addNackSupportForOpus;
@@ -6096,9 +6096,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/Chrome111.js
+  // node_modules/mediasoup-client/lib/handlers/Chrome111.js
   var require_Chrome111 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/Chrome111.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/Chrome111.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -6877,9 +6877,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/Chrome74.js
+  // node_modules/mediasoup-client/lib/handlers/Chrome74.js
   var require_Chrome74 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/Chrome74.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/Chrome74.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -7676,9 +7676,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/Firefox120.js
+  // node_modules/mediasoup-client/lib/handlers/Firefox120.js
   var require_Firefox120 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/Firefox120.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/Firefox120.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -8451,9 +8451,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/Safari12.js
+  // node_modules/mediasoup-client/lib/handlers/Safari12.js
   var require_Safari12 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/Safari12.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/Safari12.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -9241,9 +9241,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/ReactNative106.js
+  // node_modules/mediasoup-client/lib/handlers/ReactNative106.js
   var require_ReactNative106 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/ReactNative106.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/ReactNative106.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -10051,9 +10051,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/Device.js
+  // node_modules/mediasoup-client/lib/Device.js
   var require_Device = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/Device.js"(exports) {
+    "node_modules/mediasoup-client/lib/Device.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -10591,9 +10591,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/@lukeed/uuid/dist/index.js
+  // node_modules/@lukeed/uuid/dist/index.js
   var require_dist = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/@lukeed/uuid/dist/index.js"(exports) {
+    "node_modules/@lukeed/uuid/dist/index.js"(exports) {
       var IDX = 256;
       var HEX = [];
       var BUFFER;
@@ -10619,9 +10619,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/fake-mediastreamtrack/lib/fakeEvents/FakeEventTarget.js
+  // node_modules/fake-mediastreamtrack/lib/fakeEvents/FakeEventTarget.js
   var require_FakeEventTarget = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/fake-mediastreamtrack/lib/fakeEvents/FakeEventTarget.js"(exports) {
+    "node_modules/fake-mediastreamtrack/lib/fakeEvents/FakeEventTarget.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.FakeEventTarget = void 0;
@@ -10679,9 +10679,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/fake-mediastreamtrack/lib/fakeEvents/FakeEvent.js
+  // node_modules/fake-mediastreamtrack/lib/fakeEvents/FakeEvent.js
   var require_FakeEvent = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/fake-mediastreamtrack/lib/fakeEvents/FakeEvent.js"(exports) {
+    "node_modules/fake-mediastreamtrack/lib/fakeEvents/FakeEvent.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.FakeEvent = void 0;
@@ -10749,9 +10749,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/fake-mediastreamtrack/lib/utils.js
+  // node_modules/fake-mediastreamtrack/lib/utils.js
   var require_utils3 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/fake-mediastreamtrack/lib/utils.js"(exports) {
+    "node_modules/fake-mediastreamtrack/lib/utils.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.clone = clone;
@@ -10769,9 +10769,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/fake-mediastreamtrack/lib/index.js
+  // node_modules/fake-mediastreamtrack/lib/index.js
   var require_lib4 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/fake-mediastreamtrack/lib/index.js"(exports) {
+    "node_modules/fake-mediastreamtrack/lib/index.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.FakeMediaStreamTrack = void 0;
@@ -11024,9 +11024,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/fakeEvents/FakeEventTarget.js
+  // node_modules/mediasoup-client/lib/handlers/fakeEvents/FakeEventTarget.js
   var require_FakeEventTarget2 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/fakeEvents/FakeEventTarget.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/fakeEvents/FakeEventTarget.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.FakeEventTarget = void 0;
@@ -11080,9 +11080,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/FakeHandler.js
+  // node_modules/mediasoup-client/lib/handlers/FakeHandler.js
   var require_FakeHandler = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/handlers/FakeHandler.js"(exports) {
+    "node_modules/mediasoup-client/lib/handlers/FakeHandler.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -11562,9 +11562,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/test/fakeParameters.js
+  // node_modules/mediasoup-client/lib/test/fakeParameters.js
   var require_fakeParameters = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/test/fakeParameters.js"(exports) {
+    "node_modules/mediasoup-client/lib/test/fakeParameters.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
@@ -12276,9 +12276,9 @@
     }
   });
 
-  // ../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/index.js
+  // node_modules/mediasoup-client/lib/index.js
   var require_lib5 = __commonJS({
-    "../claude/C--Users-cjr29-Desktop-Tools---MISC---Bots-Haven/1b830bea-5911-4703-ac45-a9e105aee66d/scratchpad/ms_try/node_modules/mediasoup-client/lib/index.js"(exports) {
+    "node_modules/mediasoup-client/lib/index.js"(exports) {
       "use strict";
       var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;

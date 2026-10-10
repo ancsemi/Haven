@@ -52,6 +52,14 @@ try {
   fs.rmSync(scratch, { recursive: true, force: true });
 }
 
+// esbuild names each bundled file by its path from the build folder, in
+// comments and in the keys that wire modules together. Cut every such path
+// down to its node_modules part so no folder of the machine that built it
+// (user name included) ends up in the committed file. Keys stay unique and
+// consistent because the same cut is applied everywhere.
+const stripBuildPaths = (text) => text.replace(/(["'\s])[^"'\s]*?(node_modules\/)/g, '$1$2');
+fs.writeFileSync(OUT, stripBuildPaths(fs.readFileSync(OUT, 'utf8')));
+
 // Every package with a file in the bundle, with its license text.
 const packages = new Map();
 for (const input of Object.keys(result.metafile.inputs)) {
