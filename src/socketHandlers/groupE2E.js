@@ -9,8 +9,6 @@
  *   - an epoch must cover EXACTLY the current membership
  *   - epochs are append-only and strictly sequential
  *   - a member reads only their own wrapped blob
- *
- * Design: docs/group-dm-e2e-plan.md
  */
 const { isInt } = require('./helpers');
 

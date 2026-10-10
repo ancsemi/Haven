@@ -1127,7 +1127,7 @@ function initDatabase() {
   // ── Migration: E2E signing key (ECDSA P-256) ────────────
   // Separate from public_key because P-256 cannot both agree and sign. This is
   // what gives messages a sender the recipient can verify, rather than one the
-  // server asserts. See docs/group-dm-e2e-plan.md.
+  // server asserts.
   addColumn('users', 'signing_key', "TEXT DEFAULT NULL");
 
   // ── Migration: group DM epoch keys ──────────────────────

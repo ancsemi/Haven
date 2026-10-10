@@ -5,8 +5,6 @@
  * browser and under `node --test`. All state is passed in; nothing is cached
  * here. `HavenE2E` owns key management and calls into this.
  *
- * Design: docs/group-dm-e2e-plan.md
- *
  *   confidentiality  epoch key, AES-256-GCM, wrapped per member over the
  *                    existing pairwise ECDH secret
  *   authenticity     ECDSA P-256 signature per message, over a digest that

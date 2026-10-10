@@ -3,7 +3,7 @@
  *
  * Run: node --test test/e2e-group.test.js
  *
- * These assert the claims in docs/group-dm-e2e-plan.md, and most of them are
+ * These assert the group DM security claims, and most of them are
  * written as attacks: a test that only shows the happy path would pass just as
  * well with the signature check deleted.
  */
