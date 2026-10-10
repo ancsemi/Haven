@@ -196,14 +196,14 @@ module.exports = function registerMaintenance(deps) {
           }
         }
         if (orphansDeleted > 0) {
-          console.log(`ðŸ—‘ï¸  Auto-cleanup: removed ${orphansDeleted} orphan DM channel(s)`);
+          console.log(`🗑️  Auto-cleanup: removed ${orphansDeleted} orphan DM channel(s)`);
         }
       } catch (e) {
         console.warn('[orphan-DM] Sweep failed:', e.message);
       }
 
       if (totalDeleted > 0) {
-        console.log(`ðŸ—‘ï¸  Auto-cleanup: deleted ${totalDeleted} old messages`);
+        console.log(`🗑️  Auto-cleanup: deleted ${totalDeleted} old messages`);
       }
     } catch (err) {
       console.error('Auto-cleanup error:', err);
