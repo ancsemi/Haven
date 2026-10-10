@@ -64,8 +64,8 @@
    A group leader indents its text by (row padding + avatar + gap). A compact
    follow-up has no avatar, so it must pad by that exact same total or the
    lines of one conversation don't share a left edge. Those numbers used to be
-   spelled out independently in five places — base, two breakpoints, two
-   density tiers — and the spacious tier never got its compact value at all,
+   spelled out independently in five places (base, two breakpoints, two
+   density tiers), and the spacious tier never got its compact value at all,
    so every follow-up sat 14px left of the message above it. One side is now
    derived from the other: overrides set these variables and both move
    together, so the two can't drift apart again. */

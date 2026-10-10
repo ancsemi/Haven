@@ -1,5 +1,5 @@
 <# 
-  Haven — Let's Encrypt SSL Certificate Setup (Windows)
+  Haven: Let's Encrypt SSL Certificate Setup (Windows)
 
   This script uses win-acme (ACME client for Windows) to obtain a free
   Let's Encrypt certificate for your Haven server.

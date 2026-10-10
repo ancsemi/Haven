@@ -507,7 +507,7 @@
 }
 /* Bottom overlay holding the tags (top) and the date/size line (bottom). A
    grid tile is a fixed aspect-ratio box with overflow:hidden and a 100%-height
-   image, so normal-flow children get clipped off the tile -- the meta must be
+   image, so normal-flow children get clipped off the tile, so the meta must be
    an absolute overlay to show over the image (#tagging phase 3b). */
 .media-grid-item .media-grid-meta {
   position: absolute;

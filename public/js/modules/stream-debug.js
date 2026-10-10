@@ -267,7 +267,7 @@ class StreamDebugLogger {
         peerIsSharing,
         streamHasVideo,
       };
-      self._log('track', `[${userId}] ontrack — ${track.kind} track received`, info);
+      self._log('track', `[${userId}] ontrack: ${track.kind} track received`, info);
 
       // Also log when the track unmutes / ends
       track.addEventListener('unmute', () => {

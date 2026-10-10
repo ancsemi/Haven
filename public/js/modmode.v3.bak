@@ -151,7 +151,7 @@ class ModMode {
 
     this._persistFromDom();
     this._saveState();
-    this._showToast('Mod Mode OFF \u2014 layout saved');
+    this._showToast('Mod Mode OFF, layout saved');
   }
 
   _onBreakpointChange() {

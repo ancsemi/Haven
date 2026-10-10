@@ -3,7 +3,7 @@ kind: Template
 metadata:
   name: Haven
 spec:
-  description: "Self-hosted private chat — your server, your rules. No cloud. No tracking. Free forever."
+  description: "Self-hosted private chat: your server, your rules. No cloud. No tracking. Free forever."
   icon: https://raw.githubusercontent.com/ancsemi/Haven/main/Haven-Desktop/assets/icon.png
   tags:
     - Chat

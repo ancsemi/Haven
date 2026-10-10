@@ -34,7 +34,7 @@
   cursor: pointer;
   margin-bottom: 0.0625rem;
   /* Wrap rather than truncate. The nav is a fixed width the user can't drag,
-     so an ellipsis here is unrecoverable — there is no way to reveal the rest
+     so an ellipsis here is unrecoverable: there is no way to reveal the rest
      of the label. Two short lines beat "Activity & Conne…".
      The hanging indent keeps a wrapped second line aligned with the text
      instead of starting underneath the leading emoji. */
@@ -87,7 +87,7 @@
 
 .modal-settings {
   /* Opens at the original 640px. `resize: both` gives a drag handle, but
-     max-width is what actually caps it — it used to be 640px too, so dragging
+     max-width is what actually caps it. It used to be 640px too, so dragging
      stopped dead at the default size. Raising only max-width keeps the
      familiar default while letting the handle go somewhere. */
   width: min(40rem, 92vw);       /* 640px at Normal; scales with the font setting */
@@ -444,7 +444,7 @@
 /* Invite Links closes out the Server Invite Code section, so it carries a
    divider. For someone holding only invite_users the rest of that section is
    hidden and the block stands alone, leaving a rule with nothing above it to
-   separate — .invite-links-flush drops it. (#5470) */
+   separate; .invite-links-flush drops it. (#5470) */
 #invite-links-block {
   margin-top: 18px;
   padding-top: 12px;

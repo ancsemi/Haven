@@ -231,7 +231,7 @@ module.exports = function register(socket, ctx) {
         const turn = db.prepare("SELECT value FROM server_settings WHERE key = 'turn_url'").get();
         const envTurn = (process.env.TURN_URL || '').trim();
         if (!((turn && turn.value && turn.value.trim()) || envTurn)) {
-          return socket.emit('error-msg', 'Set a TURN server under Voice & Connectivity first — relay-only voice cannot work without one.');
+          return socket.emit('error-msg', 'Set a TURN server under Voice & Connectivity first. Relay-only voice cannot work without one.');
         }
       }
     }
@@ -373,7 +373,7 @@ module.exports = function register(socket, ctx) {
           db.prepare('SELECT 1 FROM channels WHERE code = ?').get(value) ||
           db.prepare('SELECT 1 FROM invite_codes WHERE code = ?').get(value) ||
           db.prepare("SELECT 1 FROM server_settings WHERE key = 'server_code' AND value = ?").get(value);
-        if (conflicts) return socket.emit('error-msg', 'That code is already in use — pick another.');
+        if (conflicts) return socket.emit('error-msg', 'That code is already in use. Pick another.');
       }
     }
     if (key === 'registration_token_enabled') {
@@ -466,7 +466,7 @@ module.exports = function register(socket, ctx) {
       else save();
     } catch (err) {
       console.error('Failed to save server setting:', key, err.message);
-      return socket.emit('error-msg', 'Failed to save setting — database write error');
+      return socket.emit('error-msg', 'Failed to save setting: database write error');
     }
 
     emitSettingChanged(key, value);
@@ -782,7 +782,7 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'Custom code must be 3-32 chars (letters, numbers, - and _)');
       }
       if (_inviteCodeTaken(code)) {
-        return socket.emit('error-msg', 'That code is already in use — pick another.');
+        return socket.emit('error-msg', 'That code is already in use. Pick another.');
       }
     } else {
       code = generateUniqueSharedCode();
@@ -904,7 +904,7 @@ module.exports = function register(socket, ctx) {
     }
     if (typeof global.runAutoCleanup === 'function') {
       global.runAutoCleanup();
-      socket.emit('error-msg', 'Cleanup ran — check server console for details');
+      socket.emit('error-msg', 'Cleanup ran. Check server console for details');
     } else {
       socket.emit('error-msg', 'Cleanup function not available');
     }

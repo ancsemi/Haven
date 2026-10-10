@@ -47,7 +47,7 @@ const path = require('path');
     console.error('  Fix: delete the file(s) listed above (the folders contain the');
     console.error('  current code), or update by replacing the whole Haven folder');
     console.error('  instead of copying new files over an old install. Your data is');
-    console.error(`  safe — it lives in ${DATA_DIR}, not in the install folder.\n`);
+    console.error(`  safe: it lives in ${DATA_DIR}, not in the install folder.\n`);
     process.exit(1);
   }
 }
@@ -1195,7 +1195,7 @@ app.get('/api/ice-servers', (req, res) => {
     return res.json({ iceServers, iceTransportPolicy: 'relay' });
   }
   if (wantsRelay && !hasTurn) {
-    console.warn('⚠️  voice_force_relay is on but no TURN server is configured — serving normal ICE so voice keeps working');
+    console.warn('⚠️  voice_force_relay is on but no TURN server is configured; serving normal ICE so voice keeps working');
   }
 
   res.json({ iceServers });
@@ -1496,7 +1496,7 @@ function uploadLimiter(req, res, next) {
   if (!uploadLimitStore.has(ip)) uploadLimitStore.set(ip, []);
   const stamps = uploadLimitStore.get(ip).filter(t => now - t < windowMs);
   uploadLimitStore.set(ip, stamps);
-  if (stamps.length >= maxUploads) return res.status(429).json({ error: 'Upload rate limit — try again in a minute' });
+  if (stamps.length >= maxUploads) return res.status(429).json({ error: 'Upload rate limit: try again in a minute' });
   stamps.push(now);
   next();
 }
@@ -1680,7 +1680,7 @@ app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res)
       const isPng  = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
       const isGif  = hdr.slice(0, 6).toString().startsWith('GIF8');
       const isWebp = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-      if (!isJpeg && !isPng && !isGif && !isWebp) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image — only JPG, PNG, GIF, or WebP' }); }
+      if (!isJpeg && !isPng && !isGif && !isWebp) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image: only JPG, PNG, GIF, or WebP' }); }
     } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
     const bannerUrl = `/uploads/${req.file.filename}`;
@@ -1700,7 +1700,7 @@ function gifLimiter(req, res, next) {
   if (!gifLimitStore.has(ip)) gifLimitStore.set(ip, []);
   const stamps = gifLimitStore.get(ip).filter(t => now - t < windowMs);
   gifLimitStore.set(ip, stamps);
-  if (stamps.length >= maxReqs) return res.status(429).json({ error: 'Rate limited — try again shortly' });
+  if (stamps.length >= maxReqs) return res.status(429).json({ error: 'Rate limited, try again shortly' });
   stamps.push(now);
   next();
 }
@@ -3142,7 +3142,7 @@ let server;
 // headers, which have to know whether this process serves TLS.
 
 if (forceHttp) {
-  console.log('⚡ FORCE_HTTP=true — running plain HTTP (reverse proxy mode)');
+  console.log('⚡ FORCE_HTTP=true, running plain HTTP (reverse proxy mode)');
 }
 
 if (useSSL) {
@@ -3198,7 +3198,7 @@ if (useSSL) {
   }
 } else {
   server = createServer(app);
-  console.log('âš ï¸  Running HTTP — voice chat requires HTTPS for remote connections');
+  console.log('âš ï¸  Running HTTP: voice chat requires HTTPS for remote connections');
 }
 
 // Socket.IO — locked down
@@ -3259,7 +3259,7 @@ if (process.env.ADMIN_RESET_PASSWORD) {
       console.error(`   Could not remove ADMIN_RESET_PASSWORD from ${ENV_PATH}; delete that line by hand:`, err.message);
     }
   } else {
-    console.warn(`âš ï¸  ADMIN_RESET_PASSWORD set but no user "${adminName}" found — skipping`);
+    console.warn(`âš ï¸  ADMIN_RESET_PASSWORD set but no user "${adminName}" found, skipping`);
   }
   delete process.env.ADMIN_RESET_PASSWORD;
 }
@@ -3644,9 +3644,9 @@ server.timeout = 120000;           // 2 min socket inactivity timeout (resets on
 server.on('error', (err) => {
   if (err && (err.code === 'EADDRINUSE' || err.code === 'EACCES' || err.code === 'EADDRNOTAVAIL')) {
     const why = err.code === 'EADDRINUSE'
-      ? `port ${PORT} is already in use — is another Haven instance (or other app) running?`
+      ? `port ${PORT} is already in use. Is another Haven instance (or other app) running?`
       : err.code === 'EADDRNOTAVAIL'
-        ? `this machine has no network interface with address ${HOST} — check HOST in your .env`
+        ? `this machine has no network interface with address ${HOST}; check HOST in your .env`
         : process.platform === 'win32'
           ? `Windows refused port ${PORT}. Ports below 1024 need an elevated prompt; otherwise the port is usually inside a reserved range held by Hyper-V/WSL (see: netsh interface ipv4 show excludedportrange protocol=tcp). Pick another PORT in your .env, or free the range with: net stop winnat && net start winnat`
           : `no permission to bind port ${PORT} (ports below 1024 need elevation)`;
@@ -3692,7 +3692,7 @@ function gracefulShutdown(signal) {
   const ts = new Date().toISOString();
   const line = `[${ts}] Graceful shutdown: ${signal}\n`;
   try { rotateCrashLogIfNeeded(); fs.appendFileSync(CRASH_LOG, line); } catch { /* crash log is a diagnostic extra; shutdown continues */ }
-  console.log(`\n${signal} received — shutting down`);
+  console.log(`\n${signal} received, shutting down`);
   botAudioManager?.shutdown();
   io.close();
   server.close(() => process.exit(0));

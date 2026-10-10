@@ -725,7 +725,7 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
       if (data?.error || !data?.user) return { ok: false, reason: 'No Last.fm user by that name' };
       return { ok: true, name: clean(data.user.name, 30) || username };
     } catch (err) {
-      return { ok: false, reason: 'Could not reach Last.fm — try again in a moment' };
+      return { ok: false, reason: 'Could not reach Last.fm. Try again in a moment' };
     }
   }
 

@@ -252,7 +252,7 @@ _reconcileVoiceUi() {
     if (!barShowsVoice && joinVisible === joinExpected) return;
     // Bar still says connected but media is dead: clear chrome.
     if (barShowsVoice || joinVisible !== joinExpected) {
-      console.warn('[Voice] UI shows voice but media is dead — clearing chrome');
+      console.warn('[Voice] UI shows voice but media is dead, clearing chrome');
       this._updateVoiceButtons(false);
       this._updateVoiceStatus(false);
       this._updateVoiceBar();
@@ -260,7 +260,7 @@ _reconcileVoiceUi() {
     return;
   }
 
-  console.warn('[Voice] UI/session desync — repairing UI upward', {
+  console.warn('[Voice] UI/session desync: repairing UI upward', {
     flagsInVoice, peersLive, micLive, joinVisible, barShowsVoice, repaired
   });
 
@@ -418,7 +418,7 @@ _updateVoiceButtons(inVoice) {
       this._removeScreenShareIndicator();
       this._hideMusicPanel();
     } else {
-      console.warn('[Voice] _updateVoiceButtons(false) skipped stream wipe — media still live');
+      console.warn('[Voice] _updateVoiceButtons(false) skipped stream wipe (media still live)');
     }
   }
 },

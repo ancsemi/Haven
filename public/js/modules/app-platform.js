@@ -635,7 +635,7 @@ async _setupDesktopShortcuts() {
   };
 
   const formatAccel = (accel) => {
-    if (!accel) return '—';
+    if (!accel) return '-';
     return accel.replace('CommandOrControl', 'Ctrl/Cmd').replace('Control', 'Ctrl');
   };
 
@@ -781,7 +781,7 @@ async _setupDesktopShortcuts() {
       try {
         await window.havenDesktop.shortcuts.setConfig({ [action]: '' });
         config[action] = '';
-        keyEl.textContent = '—';
+        keyEl.textContent = '-';
       } catch (err) { console.warn('[Desktop] could not clear the shortcut', err); }
     });
   });
@@ -955,8 +955,8 @@ async _initE2E() {
         }, 500);
       }
     } else {
-      console.warn('[E2E] Init returned false — encryption unavailable');
-      // Don't null out e2e if server backup exists — we may sync later
+      console.warn('[E2E] Init returned false, encryption unavailable');
+      // Don't null out e2e if server backup exists; we may sync later
       if (!this.e2e._serverBackupExists) this.e2e = null;
     }
   } catch (err) {
@@ -1019,7 +1019,7 @@ async _e2eSetupListeners() {
   // Handle publish conflict: server has a different key (another device changed it).
   // Sync from the server backup instead of overwriting.
   if (result.conflict) {
-    console.warn('[E2E] Server has a different key — syncing from server backup...');
+    console.warn('[E2E] Server has a different key, syncing from server backup...');
     const wrappingKey = this._e2eWrappingKey || sessionStorage.getItem('haven_e2e_wrap') || null;
     if (wrappingKey) {
       const synced = await this.e2e.syncFromServer(this.socket, wrappingKey);
@@ -1066,7 +1066,7 @@ async _e2eSetupListeners() {
 
     if (changed && this.e2e) {
       this.e2e.clearSharedKey(data.userId);
-      console.warn(`[E2E] Partner ${data.userId} key changed — cache invalidated`);
+      console.warn(`[E2E] Partner ${data.userId} key changed, cache invalidated`);
       // Noted in their DM for the rest of the session (see _renderMessages).
       this._noteE2EKeyChange(data.userId);
     }
@@ -1081,7 +1081,7 @@ async _e2eSetupListeners() {
 
   // Listen for key sync from another session of the same user
   this.socket.on('e2e-key-sync', async () => {
-    console.log('[E2E] Key changed on another session — syncing...');
+    console.log('[E2E] Key changed on another session, syncing...');
     const wrappingKey = this._e2eWrappingKey || sessionStorage.getItem('haven_e2e_wrap') || null;
     if (wrappingKey && this.e2e) {
       const synced = await this.e2e.syncFromServer(this.socket, wrappingKey);

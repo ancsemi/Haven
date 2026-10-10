@@ -52,7 +52,7 @@ function validate(key, value) {
   // check is the one that must never be removed if a looser key is ever added.
   if (/[\r\n]/.test(trimmed)) return { ok: false, reason: 'value cannot contain line breaks' };
   if (!ALLOWED_KEYS[key].test(trimmed)) {
-    return { ok: false, reason: 'that does not look like a valid key — expected 32 hex characters' };
+    return { ok: false, reason: 'that does not look like a valid key (expected 32 hex characters)' };
   }
   return { ok: true };
 }
@@ -103,7 +103,7 @@ function setEnvValue(key, value) {
     // meaningful on the Linux/Docker deployments where Haven usually runs.
     fs.writeFileSync(ENV_PATH, lines.join('\n') + '\n', { mode: 0o600 });
   } catch {
-    return { ok: false, reason: 'could not write .env — check file permissions' };
+    return { ok: false, reason: 'could not write .env; check file permissions' };
   }
 
   process.env[key] = trimmed;
@@ -126,7 +126,7 @@ function clearEnvValue(key) {
   try {
     fs.writeFileSync(ENV_PATH, lines.join('\n') + '\n', { mode: 0o600 });
   } catch {
-    return { ok: false, reason: 'could not write .env — check file permissions' };
+    return { ok: false, reason: 'could not write .env; check file permissions' };
   }
   delete process.env[key];
   return { ok: true };

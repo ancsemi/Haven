@@ -599,7 +599,7 @@ _listenSession() {
       try {
         const savedVoiceChannel = localStorage.getItem('haven_voice_channel');
         if (savedVoiceChannel && this.voice && !this.voice.inVoice && this.socket?.connected) {
-          console.log('[Voice] Mobile foreground — rejoining voice channel:', savedVoiceChannel);
+          console.log('[Voice] Mobile foreground, rejoining voice channel:', savedVoiceChannel);
           setTimeout(async () => {
             if (this.voice && !this.voice.inVoice) {
               const ok = await this.voice.join(savedVoiceChannel);
@@ -724,11 +724,11 @@ _listenSession() {
         // Light recovery only — rebind voice + refresh rosters. Do NOT
         // disconnect; that is what knocks us out of the server voice map
         // while leaving WebRTC audio running.
-        console.warn(`[wake-detect] no pong in ${probeMs}ms on focus while in voice (probe ${Date.now()-probeStart}ms) — light resync, not disconnect`);
+        console.warn(`[wake-detect] no pong in ${probeMs}ms on focus while in voice (probe ${Date.now()-probeStart}ms), light resync, not disconnect`);
         this._lightVoiceResync('focus-zombie-in-voice');
         return;
       }
-      console.log(`[wake-detect] no pong in ${probeMs}ms on focus (probe ${Date.now()-probeStart}ms), zombie socket — forcing resync`);
+      console.log(`[wake-detect] no pong in ${probeMs}ms on focus (probe ${Date.now()-probeStart}ms), zombie socket, forcing resync`);
       this._forceFullResync('focus-zombie');
     }, probeMs);
   });
@@ -770,10 +770,10 @@ _listenSession() {
         const micLive = !!(this.voice.localStream &&
           this.voice.localStream.getTracks().some(t => t.readyState === 'live'));
         if (peersLive || micLive) {
-          console.warn('[Voice] socket still down after 2s but WebRTC media is live — keeping session (no soft-leave)');
+          console.warn('[Voice] socket still down after 2s but WebRTC media is live, keeping session (no soft-leave)');
           return;
         }
-        console.warn('[Voice] socket still down after 2s — soft-leaving voice');
+        console.warn('[Voice] socket still down after 2s, soft-leaving voice');
         this.voice._softLeave();
         this._updateVoiceButtons(false);
         this._updateVoiceStatus(false);

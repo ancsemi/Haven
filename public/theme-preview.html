@@ -35,7 +35,7 @@
   <div id="app" data-haven-region="app-shell" data-status-pos="bottom">
     <div id="app-body" data-haven-region="workspace">
 
-      <!-- ─── Server Bar (far left — like Discord) ─────── -->
+      <!-- ─── Server Bar (far left, like Discord) ─────── -->
       <nav class="server-bar" id="server-bar" data-haven-region="server-rail" data-panel-pos="left">
         <div class="server-icon home active" id="home-server" data-i18n-title="app.sidebar.this_server" title="Haven">
           <span class="server-icon-text">⬡</span>
@@ -379,7 +379,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
             </button>
             <button id="search-close-btn" class="icon-btn small" data-i18n-title="header.search_close" title="Close search">×</button>
-            <!-- Filter picker popover — appears with the search box, appends
+            <!-- Filter picker popover: appears with the search box, appends
                  filter tokens client-side. Public search only. (phase 3) -->
             <div id="search-filter-popover" class="search-filter-popover" style="display:none">
               <div class="sfp-root" id="sfp-root">
@@ -997,7 +997,7 @@ console.log(haven);</code></pre></div></div>
         </div>
       </main>
 
-      <!-- ─── Soundboard Sidebar (twin to voice/users — sits directly LEFT of right-sidebar) ─── -->
+      <!-- ─── Soundboard Sidebar (twin to voice/users, sits directly LEFT of right-sidebar) ─── -->
       <!-- Soundboard toggle arrow, fixed, sits at left edge of soundboard panel.
            The note marks it apart from the members handle right above it, which
            is otherwise the same little arrow in the same place. (#5534) -->
@@ -1011,13 +1011,13 @@ console.log(haven);</code></pre></div></div>
         </div>
       </aside>
 
-      <!-- Voice/users sidebar collapse arrow — fixed, sits at left edge of voice/users panel -->
+      <!-- Voice/users sidebar collapse arrow: fixed, sits at left edge of voice/users panel -->
       <button id="sidebar-toggle-btn" class="sidebar-collapse-btn" data-i18n-title="app.actions.toggle_members_panel" data-i18n-aria-label="app.actions.toggle_members_panel" title="Toggle members panel" aria-label="Toggle members panel" style="right: 260px;">❯</button>
 
       <!-- ─── Right Sidebar ───────────────────────────── -->
       <aside class="right-sidebar" id="right-sidebar" data-haven-region="context-sidebar" data-panel-pos="right">
         <div class="right-sidebar-resize-handle" id="right-sidebar-resize-handle"></div>
-        <!-- Search results overlay — sits over voice + member list, persists across
+        <!-- Search results overlay: sits over voice + member list, persists across
              channel switches, only closes on the X. (search-overhaul phase 1) -->
         <div id="search-panel" class="search-panel" data-haven-region="search-results" style="display:none">
           <div class="search-panel-header">
@@ -1064,7 +1064,7 @@ console.log(haven);</code></pre></div></div>
               <input type="search" id="user-search" class="user-search-input" autocomplete="off" spellcheck="false" data-i18n-placeholder="right_sidebar.search_members" placeholder="Search members...">
               <button type="button" class="user-search-clear" id="user-search-clear" style="display:none" data-i18n-title="right_sidebar.search_clear" title="Clear">×</button>
             </div>
-            <div id="online-users" class="user-list"><div class="user-group-label">Online — 1</div>
+            <div id="online-users" class="user-list"><div class="user-group-label">Online (1)</div>
     <div class="user-item" data-user-id="1">
       <div class="user-avatar-wrapper"><div class="user-item-avatar avatar-circle" style="background-color:#82aaff">F</div><span class="user-status-dot"></span></div>
       <div class="user-item-text">
@@ -1328,7 +1328,7 @@ console.log(haven);</code></pre></div></div>
         <nav class="settings-nav" id="settings-nav"><div class="settings-search-wrap"><input type="search" id="settings-search" class="settings-search" placeholder="Search settings (Ctrl+F)" autocomplete="off"></div>
           <!-- Grouped nav. The settings body is one long scrolling column and
                these are scroll-to anchors, so every section that exists needs
-               an entry here — anything missing is findable only by scrolling
+               an entry here; anything missing is findable only by scrolling
                past it, which is how Activity ended up effectively hidden. -->
           <div class="settings-nav-user">
           <div class="settings-nav-group-label" data-i18n="settings.nav.group_appearance">Appearance</div>
@@ -1439,15 +1439,15 @@ console.log(haven);</code></pre></div></div>
         <div class="settings-subsection" id="layout-density-subsection">
           <small class="settings-group-label">📏 <span data-i18n="settings.layout.density.title">Layout Density</span></small>
           <div class="density-picker" id="density-picker">
-            <button type="button" class="density-btn" data-density="compact" data-i18n-title="settings.layout.density.compact_hint" title="Compact — tighter spacing, smaller avatars">
+            <button type="button" class="density-btn" data-density="compact" data-i18n-title="settings.layout.density.compact_hint" title="Compact: tighter spacing, smaller avatars">
               <span class="density-icon">▪️</span>
               <span class="density-label" data-i18n="settings.layout.density.compact">Compact</span>
             </button>
-            <button type="button" class="density-btn active" data-density="cozy" data-i18n-title="settings.layout.density.cozy_hint" title="Cozy — default balanced layout">
+            <button type="button" class="density-btn active" data-density="cozy" data-i18n-title="settings.layout.density.cozy_hint" title="Cozy: default balanced layout">
               <span class="density-icon">◾</span>
               <span class="density-label" data-i18n="settings.layout.density.cozy">Cozy</span>
             </button>
-            <button type="button" class="density-btn" data-density="spacious" data-i18n-title="settings.layout.density.spacious_hint" title="Spacious — more breathing room">
+            <button type="button" class="density-btn" data-density="spacious" data-i18n-title="settings.layout.density.spacious_hint" title="Spacious: more breathing room">
               <span class="density-icon">⬛</span>
               <span class="density-label" data-i18n="settings.layout.density.spacious">Spacious</span>
             </button>
@@ -1456,11 +1456,11 @@ console.log(haven);</code></pre></div></div>
         <div class="settings-subsection" id="channel-scrolling-subsection">
           <small class="settings-group-label">📜 <span data-i18n="settings.layout.channel_scrolling.title">Channel Scrolling</span></small>
           <div class="channel-scroll-picker" id="channel-scroll-picker">
-            <button type="button" class="density-btn active" data-channel-scroll="separate" data-i18n-title="settings.layout.channel_scrolling.separate_hint" title="Separate — separate scrollbars for channels and DMs">
+            <button type="button" class="density-btn active" data-channel-scroll="separate" data-i18n-title="settings.layout.channel_scrolling.separate_hint" title="Separate: separate scrollbars for channels and DMs">
               <span class="density-icon">📜📜</span>
               <span class="density-label" data-i18n="settings.layout.channel_scrolling.separate">Separate</span>
             </button>
-            <button type="button" class="density-btn" data-channel-scroll="combined" data-i18n-title="settings.layout.channel_scrolling.combined_hint" title="Combined — one scrollbar for both channels and DMs">
+            <button type="button" class="density-btn" data-channel-scroll="combined" data-i18n-title="settings.layout.channel_scrolling.combined_hint" title="Combined: one scrollbar for both channels and DMs">
               <span class="density-icon">📜</span>
               <span class="density-label" data-i18n="settings.layout.channel_scrolling.combined">Combined</span>
             </button>
@@ -1625,11 +1625,11 @@ console.log(haven);</code></pre></div></div>
         <div class="settings-subsection" id="image-mode-subsection">
           <small class="settings-group-label">🖼️ <span data-i18n="settings.image_display.image_mode.title">Image Display Mode</span></small>
           <div class="density-picker" id="image-mode-picker">
-            <button type="button" class="density-btn active" data-image-mode="thumbnail" data-i18n-title="settings.image_display.image_mode.thumbnail_hint" title="Thumbnail — small preview, click to enlarge">
+            <button type="button" class="density-btn active" data-image-mode="thumbnail" data-i18n-title="settings.image_display.image_mode.thumbnail_hint" title="Thumbnail: small preview, click to enlarge">
               <span class="density-icon">🔍</span>
               <span class="density-label" data-i18n="settings.image_display.image_mode.thumbnail">Thumbnail</span>
             </button>
-            <button type="button" class="density-btn" data-image-mode="full" data-i18n-title="settings.image_display.image_mode.full_hint" title="Full — large inline images like Discord">
+            <button type="button" class="density-btn" data-image-mode="full" data-i18n-title="settings.image_display.image_mode.full_hint" title="Full: large inline images like Discord">
               <span class="density-icon">🖼️</span>
               <span class="density-label" data-i18n="settings.image_display.image_mode.full">Full</span>
             </button>
@@ -1685,19 +1685,19 @@ console.log(haven);</code></pre></div></div>
       <div class="settings-section" id="section-embed-size" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
         <h5 class="settings-section-title">🔗 <span data-i18n="settings.embed_display.title">Link Previews</span></h5>
         <div class="density-picker" id="embed-size-picker">
-          <button type="button" class="density-btn" data-embed-size="off" title="Off — hide all link previews" data-i18n-title="settings.embed_display.off_hint">
+          <button type="button" class="density-btn" data-embed-size="off" title="Off: hide all link previews" data-i18n-title="settings.embed_display.off_hint">
             <span class="density-icon">🚫</span>
             <span class="density-label" data-i18n="settings.embed_display.off">Off</span>
           </button>
-          <button type="button" class="density-btn" data-embed-size="small" title="Small — compact card with small media" data-i18n-title="settings.embed_display.small_hint">
+          <button type="button" class="density-btn" data-embed-size="small" title="Small: compact card with small media" data-i18n-title="settings.embed_display.small_hint">
             <span class="density-icon">🔗</span>
             <span class="density-label" data-i18n="settings.embed_display.small">Small</span>
           </button>
-          <button type="button" class="density-btn active" data-embed-size="medium" title="Medium — balanced card with medium media" data-i18n-title="settings.embed_display.medium_hint">
+          <button type="button" class="density-btn active" data-embed-size="medium" title="Medium: balanced card with medium media" data-i18n-title="settings.embed_display.medium_hint">
             <span class="density-icon">🖼️</span>
             <span class="density-label" data-i18n="settings.embed_display.medium">Medium</span>
           </button>
-          <button type="button" class="density-btn" data-embed-size="full" title="Full — large media, author, and post stats" data-i18n-title="settings.embed_display.full_hint">
+          <button type="button" class="density-btn" data-embed-size="full" title="Full: large media, author, and post stats" data-i18n-title="settings.embed_display.full_hint">
             <span class="density-icon">📰</span>
             <span class="density-label" data-i18n="settings.embed_display.full">Full</span>
           </button>
@@ -2002,7 +2002,7 @@ console.log(haven);</code></pre></div></div>
         
       <div class="connection-setup-form" data-provider="lastfm" hidden="">
         <a class="connection-help" href="https://www.last.fm/api/account/create" target="_blank" rel="noopener noreferrer">Get a Last.fm API key ↗</a>
-        <ol class="connection-steps"><li>Sign in with a Last.fm account and fill in the short form (name it "Haven"; the other fields can be anything).</li><li>Copy the <b>API key</b> it shows you and paste it below. Ignore the shared secret — Haven does not need it.</li></ol>
+        <ol class="connection-steps"><li>Sign in with a Last.fm account and fill in the short form (name it "Haven"; the other fields can be anything).</li><li>Copy the <b>API key</b> it shows you and paste it below. Ignore the shared secret. Haven does not need it.</li></ol>
         
           <label class="connection-field">
             <span>API Key</span>
@@ -2028,7 +2028,7 @@ console.log(haven);</code></pre></div></div>
         
       <div class="connection-setup-form" data-provider="steam" hidden="">
         <a class="connection-help" href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener noreferrer">Open the Steam key page ↗</a>
-        <ol class="connection-steps"><li>Sign in with your Steam account.</li><li>Where it asks for a domain, any value works — Steam does not check it. Put <code>localhost</code>.</li><li>Copy the key it gives you and paste it below.</li></ol>
+        <ol class="connection-steps"><li>Sign in with your Steam account.</li><li>Where it asks for a domain, any value works (Steam does not check it). Put <code>localhost</code>.</li><li>Copy the key it gives you and paste it below.</li></ol>
         
           <label class="connection-field">
             <span>API Key</span>
@@ -2057,7 +2057,7 @@ console.log(haven);</code></pre></div></div>
         
       <div class="connection-setup-form" data-provider="spotify" hidden="">
         <a class="connection-help" href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener noreferrer">Open the Spotify developer dashboard ↗</a>
-        <ol class="connection-steps"><li>Use the link above — it goes to <b>developer.spotify.com</b>.</li><li>Sign in with your Spotify account. <b>This needs Spotify Premium.</b> As of 2026 the Web API is no longer available on free accounts, so the rest of these steps will not work without it (#5528). Accept the developer terms if it asks.</li><li>Click <b>Create app</b>. You are not building software — this just registers a name. Call it "Haven".</li><li>Paste this into <b>Redirect URI</b>:<code class="setup-uri">https://your-haven-address/connect/spotify/callback</code></li><li>Tick <b>Web API</b>, save, then open <b>Settings</b> on the app you just made.</li><li>Copy <b>Client ID</b>, then click <b>View client secret</b> and copy that too.</li></ol>
+        <ol class="connection-steps"><li>Use the link above. It goes to <b>developer.spotify.com</b>.</li><li>Sign in with your Spotify account. <b>This needs Spotify Premium.</b> As of 2026 the Web API is no longer available on free accounts, so the rest of these steps will not work without it (#5528). Accept the developer terms if it asks.</li><li>Click <b>Create app</b>. You are not building software. This just registers a name. Call it "Haven".</li><li>Paste this into <b>Redirect URI</b>:<code class="setup-uri">https://your-haven-address/connect/spotify/callback</code></li><li>Tick <b>Web API</b>, save, then open <b>Settings</b> on the app you just made.</li><li>Copy <b>Client ID</b>, then click <b>View client secret</b> and copy that too.</li></ol>
         
           <label class="connection-field">
             <span>Client ID</span>
@@ -2076,7 +2076,7 @@ console.log(haven);</code></pre></div></div>
         
       </div>
       </details></div>
-        <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.activity_section.connections_hint">Haven's own music player needs no connection — it shares automatically while you're listening in a voice channel.</small>
+        <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.activity_section.connections_hint">Haven's own music player needs no connection. It shares automatically while you're listening in a voice channel.</small>
 
         <!-- Listening presence (any music player) -->
         <div id="listening-connection" style="margin-top:14px">
@@ -2204,7 +2204,7 @@ console.log(haven);</code></pre></div></div>
       <!-- Account Recovery Codes Section -->
       <div class="settings-section" id="section-recovery">
         <h5 class="settings-section-title">🔑 <span data-i18n="settings.recovery_section.title">Account Recovery</span></h5>
-        <p class="settings-hint" style="margin-bottom:8px" data-i18n="settings.recovery_section.desc">Generate one-time recovery codes to regain access if you forget your password. Store them somewhere safe — they work like a last-resort key.</p>
+        <p class="settings-hint" style="margin-bottom:8px" data-i18n="settings.recovery_section.desc">Generate one-time recovery codes to regain access if you forget your password. Store them somewhere safe: they work like a last-resort key.</p>
         <div class="settings-warning-box" id="recovery-e2e-warning" style="background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:0.82rem;color:var(--text-secondary)">
           <span data-i18n-html="settings.recovery_section.e2e_warning"><strong>Important:</strong> Using a recovery code to reset your password will permanently and irreversibly destroy your end-to-end encryption keys. All encrypted direct message history will become unreadable. There is no way to undo this.</span>
         </div>
@@ -2220,7 +2220,7 @@ console.log(haven);</code></pre></div></div>
         </div>
         <!-- Codes display (shown after generation) -->
         <div id="recovery-codes-area" style="display:none">
-          <p class="settings-hint" style="margin-bottom:8px" data-i18n="settings.recovery_section.save_hint">Save these codes now — they will not be shown again. Each code can only be used once.</p>
+          <p class="settings-hint" style="margin-bottom:8px" data-i18n="settings.recovery_section.save_hint">Save these codes now. They will not be shown again. Each code can only be used once.</p>
           <div id="recovery-codes-list" style="font-family:monospace;font-size:0.9375rem;line-height:2;background:var(--bg-primary);padding:12px;border-radius:8px;text-align:center;user-select:all"></div>
           <button class="btn-sm btn-full" id="recovery-copy-btn" style="margin-top:8px">📋 <span data-i18n="settings.recovery_section.copy_codes_btn">Copy Codes</span></button>
           <button class="btn-sm btn-full" id="recovery-codes-done-btn" data-i18n="settings.recovery_section.done_btn" style="margin-top:6px">Done</button>
@@ -2285,7 +2285,7 @@ console.log(haven);</code></pre></div></div>
         <div id="theme-list" class="plugin-list"><div class="plugin-card">
           <div class="plugin-card-info">
             <div class="plugin-card-name">Braid Light</div>
-            <div class="plugin-card-desc">Braid's airy light look — white surfaces, deep green accent, soft rounded corners. Pairs with the Braid Layout plugin.</div>
+            <div class="plugin-card-desc">Braid's airy light look: white surfaces, deep green accent, soft rounded corners. Pairs with the Braid Layout plugin.</div>
             <div class="plugin-card-meta">Amnibro • v1.0 • Legacy theme</div>
           </div>
           <label class="plugin-toggle">
@@ -2318,11 +2318,11 @@ console.log(haven);</code></pre></div></div>
       <!-- Desktop Shortcuts Section (only shown in Haven Desktop) -->
       <div class="settings-section" id="section-desktop-shortcuts" style="display:none">
         <h5 class="settings-section-title">⌨️ <span data-i18n="settings.desktop_shortcuts_section.title">Desktop Shortcuts</span></h5>
-        <p class="settings-desc" data-i18n="settings.desktop_shortcuts_section.desc">Global keyboard shortcuts — active even when Haven is in the background. Click a row to rebind, or “Clear” to disable.</p>
+        <p class="settings-desc" data-i18n="settings.desktop_shortcuts_section.desc">Global keyboard shortcuts, active even when Haven is in the background. Click a row to rebind, or “Clear” to disable.</p>
         <div class="shortcut-table" id="shortcut-table">
           <div class="shortcut-row" id="shortcut-row-mute">
             <span class="shortcut-label" data-i18n="settings.desktop_shortcuts_section.mute_unmute">Mute / Unmute</span>
-            <span class="shortcut-key" id="shortcut-key-mute">—</span>
+            <span class="shortcut-key" id="shortcut-key-mute">-</span>
             <div class="shortcut-btns">
               <button class="btn-xs shortcut-record-btn" data-action="mute" data-i18n="settings.desktop_shortcuts_section.change_btn">Change</button>
               <button class="btn-xs shortcut-clear-btn" data-action="mute" data-i18n="settings.desktop_shortcuts_section.clear_btn">Clear</button>
@@ -2330,7 +2330,7 @@ console.log(haven);</code></pre></div></div>
           </div>
           <div class="shortcut-row" id="shortcut-row-deafen">
             <span class="shortcut-label" data-i18n="settings.desktop_shortcuts_section.deafen_undeafen">Deafen / Undeafen</span>
-            <span class="shortcut-key" id="shortcut-key-deafen">—</span>
+            <span class="shortcut-key" id="shortcut-key-deafen">-</span>
             <div class="shortcut-btns">
               <button class="btn-xs shortcut-record-btn" data-action="deafen" data-i18n="settings.desktop_shortcuts_section.change_btn">Change</button>
               <button class="btn-xs shortcut-clear-btn" data-action="deafen" data-i18n="settings.desktop_shortcuts_section.clear_btn">Clear</button>
@@ -2406,7 +2406,7 @@ console.log(haven);</code></pre></div></div>
             <input type="checkbox" id="pref-debug-local-talk-indicator">
             <span class="toggle-label" data-i18n="settings.debug_section.local_talk_indicator">Local mic talk indicator</span>
           </label>
-          <p class="settings-hint" data-i18n="settings.debug_section.local_talk_indicator_hint">Highlight your own avatar the moment your mic crosses the talk threshold, instead of waiting for the server to echo it back. Default off — the server echo is usually preferred because it confirms your audio actually reached the server.</p>
+          <p class="settings-hint" data-i18n="settings.debug_section.local_talk_indicator_hint">Highlight your own avatar the moment your mic crosses the talk threshold, instead of waiting for the server to echo it back. Default off: the server echo is usually preferred because it confirms your audio actually reached the server.</p>
         </div>
 
         <div class="desktop-pref-row">
@@ -2636,7 +2636,7 @@ console.log(haven);</code></pre></div></div>
           <div class="settings-group" style="margin-top:12px">
             <small class="settings-group-label" data-i18n="settings.admin.custom_themes_title">Custom Themes</small>
             <p class="settings-hint" style="margin:0 0 8px" data-i18n-html="settings.admin.custom_themes_hint">Drop <code>.theme.css</code> files into the <code>themes/</code> folder, then check the ones you want to appear in the theme picker for all users.</p>
-            <div id="admin-theme-list" style="display:flex;flex-direction:column;gap:6px" data-loaded="1"><label style="display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; cursor: pointer;"><input type="checkbox" data-file="braid-light.theme.css"><span>Braid Light</span><span style="font-size: 0.6875rem; color: var(--text-muted);">Braid's airy light look — white surfaces, deep green accent, soft rounded corners. Pairs with the Braid Layout plugin.</span></label><label style="display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; cursor: pointer;"><input type="checkbox" data-file="braid.theme.css"><span>Braid</span><span style="font-size: 0.6875rem; color: var(--text-muted);">Mint-on-slate with soft rounded corners and a calm, decluttered look. Pairs with the Braid Layout plugin.</span></label><label style="display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; cursor: pointer;"><input type="checkbox" data-file="compact.theme.css"><span>Compact</span><span style="font-size: 0.6875rem; color: var(--text-muted);">Dense graphite chrome with narrow panels and crisp cyan accents. Respects the selected message density.</span></label></div>
+            <div id="admin-theme-list" style="display:flex;flex-direction:column;gap:6px" data-loaded="1"><label style="display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; cursor: pointer;"><input type="checkbox" data-file="braid-light.theme.css"><span>Braid Light</span><span style="font-size: 0.6875rem; color: var(--text-muted);">Braid's airy light look: white surfaces, deep green accent, soft rounded corners. Pairs with the Braid Layout plugin.</span></label><label style="display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; cursor: pointer;"><input type="checkbox" data-file="braid.theme.css"><span>Braid</span><span style="font-size: 0.6875rem; color: var(--text-muted);">Mint-on-slate with soft rounded corners and a calm, decluttered look. Pairs with the Braid Layout plugin.</span></label><label style="display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; cursor: pointer;"><input type="checkbox" data-file="compact.theme.css"><span>Compact</span><span style="font-size: 0.6875rem; color: var(--text-muted);">Dense graphite chrome with narrow panels and crisp cyan accents. Respects the selected message density.</span></label></div>
           </div>
         </div>
 
@@ -2820,8 +2820,8 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           <small class="settings-hint" style="display:block" data-i18n="settings.admin.referrer_policy_desc">Sets the Referrer-Policy header Haven sends to browsers, which controls how much of the current page's address is shared when the browser loads resources or follows links to other sites. The recommended options cover almost every server; the advanced policies are standard browser values left to your discretion. Policies that would send the full page address to other sites are not offered, because Haven invite links live in that address.</small>
           <ul class="settings-hint" style="margin:6px 0 0;padding-left:20px">
             <li data-i18n-html="settings.admin.referrer_policy_opt_same"><strong>Same-Origin (default):</strong> within this server, shares the full address; to other sites, shares nothing.</li>
-            <li style="margin-top:4px" data-i18n-html="settings.admin.referrer_policy_opt_none"><strong>No-Referrer:</strong> shares nothing anywhere — not even within this server.</li>
-            <li style="margin-top:4px" data-i18n-html="settings.admin.referrer_policy_opt_default"><strong>Strict-Origin-When-Cross-Origin:</strong> within this server, shares the full address; to other sites, shares only the origin. This was Haven's default before 3.41.0 — pick it to go back to the old behaviour.</li>
+            <li style="margin-top:4px" data-i18n-html="settings.admin.referrer_policy_opt_none"><strong>No-Referrer:</strong> shares nothing anywhere, not even within this server.</li>
+            <li style="margin-top:4px" data-i18n-html="settings.admin.referrer_policy_opt_default"><strong>Strict-Origin-When-Cross-Origin:</strong> within this server, shares the full address; to other sites, shares only the origin. This was Haven's default before 3.41.0. Pick it to go back to the old behaviour.</li>
           </ul>
           <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.admin.referrer_policy_note">Same-Origin and No-Referrer send nothing to other sites, so either one fixes embeds whose CDN rejects a cross-origin referrer, such as Twitter/X video. If an image or embed somewhere else stops loading after this change, that host wants a referrer: switch to Strict-Origin-When-Cross-Origin to restore the pre-3.41.0 behaviour.</small>
           <label class="select-row" style="margin-top:8px">
@@ -2832,7 +2832,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
                 <option value="no-referrer" data-i18n="settings.admin.referrer_no_referrer">No-Referrer</option>
                 <option value="strict-origin-when-cross-origin" data-i18n="settings.admin.referrer_strict_cross_origin">Strict-Origin-When-Cross-Origin (Haven's pre-3.41.0 default)</option>
               </optgroup>
-              <optgroup label="Advanced — use at your own discretion" data-i18n-label="settings.admin.referrer_advanced">
+              <optgroup label="Advanced: use at your own discretion" data-i18n-label="settings.admin.referrer_advanced">
                 <option value="strict-origin">Strict-Origin</option>
                 <option value="origin">Origin</option>
                 <option value="origin-when-cross-origin">Origin-When-Cross-Origin</option>
@@ -2873,9 +2873,9 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
             <label class="select-row">
               <span data-i18n="settings.admin.automod_mode_label">Link policy</span>
               <select id="automod-link-mode">
-                <option value="off" data-i18n="settings.admin.automod_mode_off">Off — allow every link</option>
-                <option value="allowlist" data-i18n="settings.admin.automod_mode_allowlist">Allowlist — block everything not listed</option>
-                <option value="blocklist" data-i18n="settings.admin.automod_mode_blocklist">Blocklist — allow everything except listed</option>
+                <option value="off" data-i18n="settings.admin.automod_mode_off">Off: allow every link</option>
+                <option value="allowlist" data-i18n="settings.admin.automod_mode_allowlist">Allowlist: block everything not listed</option>
+                <option value="blocklist" data-i18n="settings.admin.automod_mode_blocklist">Blocklist: allow everything except listed</option>
               </select>
             </label>
             <small class="settings-hint" data-i18n="settings.admin.automod_mode_hint">Allowlist is the strict option and the one that stops links you have never seen before. Blocklist only stops domains you already know about.</small>
@@ -2900,7 +2900,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         archive.org <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="archive.org">✕</button>
     </div>
@@ -2911,7 +2911,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         bsky.app <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="bsky.app">✕</button>
     </div>
@@ -2922,7 +2922,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         giphy.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="giphy.com">✕</button>
     </div>
@@ -2933,7 +2933,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         github.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="github.com">✕</button>
     </div>
@@ -2944,7 +2944,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         gitlab.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="gitlab.com">✕</button>
     </div>
@@ -2955,7 +2955,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         imgur.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="imgur.com">✕</button>
     </div>
@@ -2966,7 +2966,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         last.fm <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="last.fm">✕</button>
     </div>
@@ -2977,7 +2977,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         reddit.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="reddit.com">✕</button>
     </div>
@@ -2988,7 +2988,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         soundcloud.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="soundcloud.com">✕</button>
     </div>
@@ -2999,7 +2999,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         spotify.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="spotify.com">✕</button>
     </div>
@@ -3010,7 +3010,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         stackoverflow.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="stackoverflow.com">✕</button>
     </div>
@@ -3021,7 +3021,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         steamcommunity.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="steamcommunity.com">✕</button>
     </div>
@@ -3032,7 +3032,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         steampowered.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="steampowered.com">✕</button>
     </div>
@@ -3043,7 +3043,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         tenor.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="tenor.com">✕</button>
     </div>
@@ -3054,7 +3054,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         twitch.tv <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="twitch.tv">✕</button>
     </div>
@@ -3065,7 +3065,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         twitter.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="twitter.com">✕</button>
     </div>
@@ -3076,7 +3076,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         wikipedia.org <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="wikipedia.org">✕</button>
     </div>
@@ -3087,7 +3087,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         x.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="x.com">✕</button>
     </div>
@@ -3098,7 +3098,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         youtu.be <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="youtu.be">✕</button>
     </div>
@@ -3109,7 +3109,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           ALLOW
         </strong>
         youtube.com <span class="muted-text">+ subdomains</span>
-        <span class="muted-text"> — Seeded default</span>
+        <span class="muted-text"> (Seeded default)</span>
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="youtube.com">✕</button>
     </div>
@@ -3145,7 +3145,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
             <small class="settings-hint" data-i18n="settings.admin.automod_preview_hint">Strongly recommended. Link previews load images straight from the other site in every viewer's browser, which hands that site everyone's IP address without a single click.</small>
 
             <small class="settings-group-label" style="margin-top:14px;display:block">⚖️ <span data-i18n="settings.admin.automod_escalation_group">Escalation</span></small>
-            <small class="settings-hint" style="display:block" data-i18n="settings.admin.automod_escalation_hint">Counts blocked attempts within a rolling window. Set any threshold to 0 to disable that step. Note that a muted member cannot send anything at all, so they stop collecting strikes until the mute runs out — if you want a fast automatic ban, set the ban threshold close to the mute threshold, or turn muting off.</small>
+            <small class="settings-hint" style="display:block" data-i18n="settings.admin.automod_escalation_hint">Counts blocked attempts within a rolling window. Set any threshold to 0 to disable that step. Note that a muted member cannot send anything at all, so they stop collecting strikes until the mute runs out. If you want a fast automatic ban, set the ban threshold close to the mute threshold, or turn muting off.</small>
             <label class="select-row" style="margin-top:6px"><span data-i18n="settings.admin.automod_window">Window (hours)</span><input type="number" id="automod-window-hours" min="1" max="8760" step="1" style="max-width:90px"></label>
             <label class="select-row"><span data-i18n="settings.admin.automod_warn_at">Warn after</span><input type="number" id="automod-warn-at" min="0" max="1000" step="1" style="max-width:90px"></label>
             <label class="select-row"><span data-i18n="settings.admin.automod_mute_at">Mute after</span><input type="number" id="automod-mute-at" min="0" max="1000" step="1" style="max-width:90px"></label>
@@ -3179,7 +3179,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
             </div>
             <div id="whitelist-list" class="whitelist-list"><p class="muted-text">No whitelisted users</p></div>
           </div>
-          <!-- (#5344) Registration token — independent of whitelist; can be used together or alone -->
+          <!-- (#5344) Registration token: independent of whitelist; can be used together or alone -->
           <div style="margin-top:14px; padding-top:10px; border-top:1px dashed var(--border);">
             <label class="toggle-row">
               <span data-i18n="settings.admin.registration_token_required">🔑 Require invite token</span>
@@ -3191,7 +3191,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
               <input type="checkbox" id="invites-bypass-registration-token">
             </label>
             <div id="registration-token-display" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
-              <code id="registration-token-value" style="font-family: monospace; font-size: 1rem; letter-spacing: 0.05em; opacity: 0.4;">—</code>
+              <code id="registration-token-value" style="font-family: monospace; font-size: 1rem; letter-spacing: 0.05em; opacity: 0.4;">-</code>
               <button class="btn-sm" id="copy-registration-token-btn" data-i18n-title="settings.admin.registration_token_copy" title="Copy token">📋</button>
             </div>
             <div style="display:flex;gap:4px;margin-top:4px;">
@@ -3235,7 +3235,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           <small class="settings-hint invite-server-config" data-i18n="settings.admin.invite_hint">A single code that adds people to every channel &amp; sub-channel on the server</small>
           <div class="invite-server-config" style="margin-top:8px;">
             <div id="server-code-display" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-              <code id="server-code-value" style="font-family: monospace; font-size: 1rem; letter-spacing: 0.05em; opacity: 0.4;">—</code>
+              <code id="server-code-value" style="font-family: monospace; font-size: 1rem; letter-spacing: 0.05em; opacity: 0.4;">-</code>
               <button class="btn-sm" id="copy-server-code-btn" data-i18n-title="settings.admin.copy_code_title" title="Copy code">📋</button>
             </div>
             <div style="display:flex;gap:4px;">
@@ -3278,7 +3278,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
                so keep the settings panel uncluttered). -->
           <div id="invite-links-block">
             <h6 style="margin:0 0 4px;font-size:0.85rem;font-weight:600" data-i18n="settings.admin.invite_links_title">🔗 Invite Links</h6>
-            <small class="settings-hint" data-i18n="settings.admin.invite_links_hint">Shareable links that drop people straight into the channels you pick — no code to type. Each link can be turned off, limited to a number of people, or set to expire.</small>
+            <small class="settings-hint" data-i18n="settings.admin.invite_links_hint">Shareable links that drop people straight into the channels you pick, no code to type. Each link can be turned off, limited to a number of people, or set to expire.</small>
             <button class="btn-sm btn-accent" id="open-invite-links-btn" type="button" style="margin-top:8px">🔗 <span data-i18n="settings.admin.invite_links_manage">Manage Invite Links</span> <span id="invite-links-count" class="muted-text" style="font-weight:normal"></span></button>
           </div>
           <div id="invite-links-settings-block" class="invite-server-config">
@@ -3290,7 +3290,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
           </div>
         </div>
 
-        <!-- (#5381) Guest mode — password-less drop-in access scoped to a whitelist of channels -->
+        <!-- (#5381) Guest mode: password-less drop-in access scoped to a whitelist of channels -->
         <div class="admin-settings" id="section-guests" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle" data-i18n="settings.admin.guests_title">👤 Join as Guest</h5>
           <small class="settings-hint" data-i18n="settings.admin.guests_hint">Show a "Join as Guest" button on the login page. Guests pick a username, get a temporary account with no password, and can only see the channels you whitelist below. Guests cannot DM, and their account is deleted when they disconnect (username freed).</small>
@@ -3358,7 +3358,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
             <span data-i18n="settings.admin.max_upload">Max Upload Size (MB)</span>
             <input type="number" id="max-upload-mb" min="1" max="102400" value="25" class="settings-number-input">
           </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_upload_hint">Maximum file size users can upload in MB (default 25). No hard cap — limited by available disk space.</small>
+          <small class="settings-hint" data-i18n="settings.admin.max_upload_hint">Maximum file size users can upload in MB (default 25). No hard cap: limited by available disk space.</small>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_attachments">Max Attachments per Message</span>
             <input type="number" id="max-attachments" min="1" max="50" value="10" class="settings-number-input">
@@ -3368,27 +3368,27 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
             <span data-i18n="settings.admin.max_message_chars">Max Message Length (characters)</span>
             <input type="number" id="max-message-chars" min="200" max="100000" value="2000" class="settings-number-input">
           </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_message_chars_hint">Maximum characters per message, post, or DM (200–100000, default 2000)</small>
+          <small class="settings-hint" data-i18n="settings.admin.max_message_chars_hint">Maximum characters per message, post, or DM (200-100000, default 2000)</small>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_sound">Max Sound File Size (KB)</span>
             <input type="number" id="max-sound-kb" min="256" max="10240" value="1024" class="settings-number-input">
           </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_sound_hint">Max soundboard upload size (256–10240 KB, default 1024 / 1 MB)</small>
+          <small class="settings-hint" data-i18n="settings.admin.max_sound_hint">Max soundboard upload size (256-10240 KB, default 1024 / 1 MB)</small>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_emoji">Max Emoji File Size (KB)</span>
             <input type="number" id="max-emoji-kb" min="64" max="1024" value="256" class="settings-number-input">
           </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_emoji_hint">Max custom emoji upload size (64–1024 KB, default 256)</small>
+          <small class="settings-hint" data-i18n="settings.admin.max_emoji_hint">Max custom emoji upload size (64-1024 KB, default 256)</small>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_sticker">Max Sticker File Size (KB)</span>
             <input type="number" id="max-sticker-kb" min="256" max="10240" value="1024" class="settings-number-input">
           </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_sticker_hint">Max sticker upload size (256–10240 KB, default 1024 / 1 MB). Bump this up to allow larger GIF-style stickers.</small>
+          <small class="settings-hint" data-i18n="settings.admin.max_sticker_hint">Max sticker upload size (256-10240 KB, default 1024 / 1 MB). Bump this up to allow larger GIF-style stickers.</small>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_poll_options">Max Poll Options</span>
             <input type="number" id="max-poll-options" min="2" max="25" value="10" class="settings-number-input">
           </label>
-          <small class="settings-hint" data-i18n="settings.admin.max_poll_hint">Maximum answer choices per poll (2–25, default 10)</small>
+          <small class="settings-hint" data-i18n="settings.admin.max_poll_hint">Maximum answer choices per poll (2-25, default 10)</small>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.session_duration">Login session duration</span>
             <select id="session-duration-days" class="settings-select">
@@ -3466,7 +3466,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
               <small class="settings-hint restore-progress-label" id="restore-progress-label" data-i18n="header.uploading">Uploading...</small>
             </div>
             <small class="settings-hint" style="margin-top:6px;display:block" data-i18n="settings.admin.backup_restore_full_note">A backup can be restored here when it was made with Messages ticked: that is the whole database. Uploaded files is optional; when the backup has none, the uploads folder is left as it is. A channels/users/settings-only backup has no database to restore from.</small>
-            <small class="settings-hint" style="margin-top:6px;display:block;color:var(--danger,#e84a4a)" data-i18n-html="settings.admin.backup_restore_warning"><strong>Warning:</strong> Restoring overwrites the current server data. The server will restart automatically — your hosting setup must support auto-restart (Docker, systemd, the Haven installer service, etc.). The previous database is preserved as <code>haven.db.pre-restore</code> for one cycle.</small>
+            <small class="settings-hint" style="margin-top:6px;display:block;color:var(--danger,#e84a4a)" data-i18n-html="settings.admin.backup_restore_warning"><strong>Warning:</strong> Restoring overwrites the current server data. The server will restart automatically, so your hosting setup must support auto-restart (Docker, systemd, the Haven installer service, etc.). The previous database is preserved as <code>haven.db.pre-restore</code> for one cycle.</small>
           </div>
           <div class="settings-group" style="margin-top:14px">
             <small class="settings-group-label" data-i18n="settings.admin.auto_backup_label">Automatic Backups</small>
@@ -3559,7 +3559,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
       </div>
         </div><!-- /settings-body-admin -->
       </div><!-- /settings-layout -->
-      <!-- Admin save bar — changes only apply when Save is clicked -->
+      <!-- Admin save bar: changes only apply when Save is clicked -->
       <div class="admin-save-bar" style="display:none">
         <button class="btn-accent btn-admin-save" id="admin-save-btn">💾 <span data-i18n="settings.admin.save_btn">Save Settings</span></button>
         <small class="settings-hint" style="text-align:center;margin-top:4px" data-i18n="settings.admin.save_hint">Changes only apply when you click Save. Close (✕) to cancel.</small>
@@ -3718,11 +3718,11 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
         <span class="cfn-badge cfn-off" data-i18n="channel_functions.voice_bitrate_auto">Auto</span>
       </div>
       <div class="cfn-divider"></div>
-      <div class="cfn-row" data-fn="self-destruct" data-i18n-title="channel_functions.self_destruct_hint" title="Set a self-destruct timer — channel auto-deletes after the specified hours (0 = off)">
+      <div class="cfn-row" data-fn="self-destruct" data-i18n-title="channel_functions.self_destruct_hint" title="Set a self-destruct timer: channel auto-deletes after the specified hours (0 = off)">
         <span class="cfn-label">⏱️ <span data-i18n="channel_functions.self_destruct">Self Destruct</span></span>
         <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
       </div>
-      <div class="cfn-row" data-fn="announcement" data-i18n-title="channel_functions.announcement_hint" title="Announcement channel — messages use a distinct notification sound and gold highlight">
+      <div class="cfn-row" data-fn="announcement" data-i18n-title="channel_functions.announcement_hint" title="Announcement channel: messages use a distinct notification sound and gold highlight">
         <span class="cfn-label">📢 <span data-i18n="channel_functions.announcement">Announcement</span></span>
         <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
       </div>
@@ -3731,7 +3731,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
         <span class="cfn-badge cfn-off" data-i18n="channel_functions.none">None</span>
       </div>
       <div class="cfn-divider cfn-afk-divider" style="display:none"></div>
-      <div class="cfn-row cfn-afk-row" data-fn="afk-sub" style="display:none" data-i18n-title="channel_functions.afk_sub_hint" title="Designate a sub-channel as the AFK voice room — idle users are moved here">
+      <div class="cfn-row cfn-afk-row" data-fn="afk-sub" style="display:none" data-i18n-title="channel_functions.afk_sub_hint" title="Designate a sub-channel as the AFK voice room: idle users are moved here">
         <span class="cfn-label">💤 <span data-i18n="channel_functions.afk_sub">AFK Sub</span></span>
         <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
       </div>
@@ -3876,7 +3876,7 @@ stun:global.stun.twilio.com:3478" style="flex:1; resize:vertical; font-family:mo
         <span class="profile-popup-username">@forumtester</span>
       </div>
       <div id="profile-popup-status-slot"></div>
-      <div class="profile-popup-bio profile-bio-empty">No bio yet — click Edit Profile to add one</div>
+      <div class="profile-popup-bio profile-bio-empty">No bio yet. Click Edit Profile to add one</div>
       <div class="profile-popup-divider"></div>
       <div id="profile-popup-activity-slot"></div>
       <div class="profile-popup-section-label">Roles</div><div class="profile-popup-roles"><span class="profile-popup-role" style="border-color:#e74c3c; color:#e74c3c"><span class="profile-role-dot" style="background:#e74c3c"></span>Admin</span></div>

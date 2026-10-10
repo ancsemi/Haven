@@ -171,7 +171,7 @@ module.exports = function registerLinkPreview(deps) {
       // instead of hammering (or, worse, silently dropping the embed). The
       // client-side scheduler honours this header. (#5337 follow-up)
       res.set('Retry-After', '3');
-      return res.status(429).json({ error: 'Rate limited — try again shortly' });
+      return res.status(429).json({ error: 'Rate limited, try again shortly' });
     }
 
     // Validate the initial URL is safe (protocol, hostname, DNS)

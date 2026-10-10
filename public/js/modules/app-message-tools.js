@@ -389,7 +389,7 @@ _initMoveMessages() {
    API surface), gates each item on the same permissions the toolbar uses, and
    borrows the channel context menu's CSS classes (.channel-ctx-menu /
    .channel-ctx-item / .channel-ctx-sep / .danger) so it inherits every
-   theme — including win95 — for free. Cursor-positioned and self-closing,
+   theme (including win95) for free. Cursor-positioned and self-closing,
    modelled on _showImageContextMenu. */
 _showMessageContextMenu(e, msgEl) {
   this._hideMessageContextMenu();

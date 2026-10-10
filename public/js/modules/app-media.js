@@ -387,7 +387,7 @@ _hiddenImagePlaceholder(u) {
   const abs = this._escapeHtml(this._normalizeImgSrc(u));
   const label = t('app.messages.image_hidden');
   const hint = t('app.messages.click_to_show');
-  return `<span class="hidden-image" role="button" tabindex="0" data-hidden-src="${abs}" title="${this._escapeHtml(hint)}">${this._eyeIcon(true)} ${this._escapeHtml(label)} — ${this._escapeHtml(hint)}</span>`;
+  return `<span class="hidden-image" role="button" tabindex="0" data-hidden-src="${abs}" title="${this._escapeHtml(hint)}">${this._eyeIcon(true)} ${this._escapeHtml(label)}: ${this._escapeHtml(hint)}</span>`;
 },
 
 // Swap a clicked "hidden image" placeholder back to a live image element.

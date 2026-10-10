@@ -63,10 +63,10 @@ function schedulePendingVoiceLeave({
     const entry = room.get(userId);
     if (!entry) return;
     if (entry.socketId !== oldSocketId) {
-      log(`[VoiceDiag] grace eviction skipped — ${socket.user.username} rebound to ${entry.socketId}`);
+      log(`[VoiceDiag] grace eviction skipped: ${socket.user.username} rebound to ${entry.socketId}`);
       return;
     }
-    log(`[VoiceDiag] grace eviction firing for ${socket.user.username} on ${pending.code} — never reconnected`);
+    log(`[VoiceDiag] grace eviction firing for ${socket.user.username} on ${pending.code}, never reconnected`);
     handleVoiceLeave(socket, pending.code, { softDisconnect: true });
   }, delay);
   pendingVoiceLeave.set(key, pending);

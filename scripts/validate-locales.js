@@ -103,12 +103,12 @@ function validateLocale(filePath, master) {
   for (const [k, t] of shape) {
     if (k.startsWith('_meta')) continue;
     if (!master.has(k)) {
-      result.warnings.push(`Unknown key "${k}" — not present in en.json (possible typo or stale)`);
+      result.warnings.push(`Unknown key "${k}": not present in en.json (possible typo or stale)`);
       continue;
     }
     const masterType = master.get(k);
     if (masterType !== t) {
-      result.errors.push(`Key "${k}" type mismatch — en.json has "${masterType}", this file has "${t}"`);
+      result.errors.push(`Key "${k}" type mismatch: en.json has "${masterType}", this file has "${t}"`);
     }
   }
   // Missing keys (warn only)
@@ -118,7 +118,7 @@ function validateLocale(filePath, master) {
     if (!shape.has(k)) missing++;
   }
   if (missing > 0) {
-    result.warnings.push(`${missing} keys missing from this locale (partial translation — OK, English will be used as fallback)`);
+    result.warnings.push(`${missing} keys missing from this locale (partial translation: OK, English will be used as fallback)`);
   }
   return result;
 }

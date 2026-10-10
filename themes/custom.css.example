@@ -22,7 +22,7 @@
   The @haven-theme-api line declares which public token and region contract
   this theme targets. See docs/theme-authoring.md for the complete reference.
 
-  All variables are optional — omit the ones you want to inherit from the
+  All variables are optional; omit the ones you want to inherit from the
   base Haven theme. Only override what you actually want to change.
 */
 

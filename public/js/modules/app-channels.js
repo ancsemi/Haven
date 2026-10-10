@@ -266,7 +266,7 @@ async switchChannel(code) {
   this._pendingChannelHistoryCode = code;
   this._switchChannelSafetyTimer = setTimeout(() => {
     if (this._pendingChannelHistoryCode === code && this.currentChannel === code) {
-      console.warn(`[switch-channel] no message-history for ${code} within 5s — forcing resync`);
+      console.warn(`[switch-channel] no message-history for ${code} within 5s, forcing resync`);
       this._forceFullResync?.('switch-channel-timeout');
     }
   }, 5000);

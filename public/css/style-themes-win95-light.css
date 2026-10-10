@@ -118,7 +118,7 @@
 [data-theme="win95"] .modal { background: #bfbfbf; border: 3px outset #fff; border-radius: 0; box-shadow: 2px 2px 0 #000; }
 [data-theme="win95"] .modal h3 { background: linear-gradient(90deg, #000080, #1084d0); color: #fff; margin: -1.25rem -1.5rem 1rem -1.5rem; padding: 0.25rem 0.5rem; border-radius: 0; font-weight: 700; font-size: 0.75rem; }
 /* Message group separators were attempted twice (per-row, then group-only)
-   and both produced visually inconsistent results — sometimes a line, sometimes
+   and both produced visually inconsistent results: sometimes a line, sometimes
    a half-line, sometimes a doubled line depending on whether the previous
    author's last message was a compact follow-up vs a group-leader.  The Win95
    theme already gives enough vertical separation via avatar bevels and the
@@ -126,7 +126,7 @@
    the rule out entirely is the cleanest option. */
 [data-theme="win95"] .message-row:hover { background: #dfdfdf; }
 /* Win95 user-group separator: the global rule paints a 1px line in
-   `var(--border)` which on win95 is #808080 — almost black on the
+   `var(--border)` which on win95 is #808080, almost black on the
    #bfbfbf surface, reading as a thick line and (paired with the avatar's
    3px outset highlight) often appearing doubled.  Override with the
    lighter palette colour and shrink the spacing so it matches the
@@ -137,7 +137,7 @@
   padding-top: 0.125rem !important;
 }
 /* And explicitly suppress any phantom border that could land on
-   .message-row itself — nothing should ever draw one, but if a stray
+   .message-row itself. Nothing should ever draw one, but if a stray
    inherited rule does, this will neutralise it on win95. */
 [data-theme="win95"] .message > .message-row,
 [data-theme="win95"] .message-compact > .message-row {

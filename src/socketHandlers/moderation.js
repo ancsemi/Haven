@@ -319,7 +319,7 @@ module.exports = function register(socket, ctx) {
     if (data.banIp) {
       const canBanIp = socket.user.isAdmin || userHasPermission(socket.user.id, 'ban_ip');
       if (!canBanIp) {
-        socket.emit('error-msg', 'IP ban skipped — you don\'t have ban_ip permission');
+        socket.emit('error-msg', 'IP ban skipped: you don\'t have ban_ip permission');
       } else {
         try {
           const ipRows = db.prepare('SELECT ip FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC LIMIT 5').all(data.userId);
@@ -481,7 +481,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Failed to delete user');
     }
 
-    socket.emit('error-msg', `Deleted user "${targetUser.displayName}" — username is now available`);
+    socket.emit('error-msg', `Deleted user "${targetUser.displayName}". Username is now available`);
 
     for (const [, s] of io.sockets.sockets) {
       if (s.user && s.user.isAdmin) {
@@ -582,7 +582,7 @@ module.exports = function register(socket, ctx) {
         purgeAll(targets);
       } catch (err) {
         console.error('bulk-remove-users purge error:', err);
-        return cb({ error: `Failed partway — removed ${removed} of ${targets.length}` });
+        return cb({ error: `Failed partway: removed ${removed} of ${targets.length}` });
       }
 
       _audit({ actor: socket.user, action: 'user_bulk_remove', target_type: 'user', target_id: null, target_name: null,
@@ -599,7 +599,7 @@ module.exports = function register(socket, ctx) {
     const zeroMessages = f.zeroMessages === true;
     const newOnly = f.newOnly === true;   // 'New' badge == joined within 7 days
     if (!joinedWithinHours && !zeroMessages && !newOnly) {
-      return cb({ error: 'Pick at least one filter — refusing to select every account.' });
+      return cb({ error: 'Pick at least one filter. Refusing to select every account.' });
     }
 
     // Hard exclusions keep staff safe no matter what filters are set. A

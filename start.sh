@@ -20,7 +20,7 @@ mkdir -p "$HAVEN_DATA"
 
 echo ""
 echo -e "${GREEN}${BOLD}  ========================================${NC}"
-echo -e "${GREEN}${BOLD}       HAVEN — Private Chat Server${NC}"
+echo -e "${GREEN}${BOLD}       HAVEN: Private Chat Server${NC}"
 echo -e "${GREEN}${BOLD}  ========================================${NC}"
 echo ""
 
@@ -44,9 +44,9 @@ fi
 
 if [ "$NODE_VER" -ge 27 ]; then
     echo -e "${YELLOW}  [!] Node.js v${NODE_VER} detected. Haven is tested on Node 18-26.${NC}"
-    echo "  Continuing — native modules are verified functionally below."
+    echo "  Continuing. Native modules are verified functionally below."
 elif [ "$NODE_VER" -ge 24 ]; then
-    echo "  [*] Node.js v${NODE_VER} — verifying native modules load (below)."
+    echo "  [*] Node.js v${NODE_VER}: verifying native modules load (below)."
 fi
 
 # ── Install dependencies ───────────────────────────────────
@@ -54,7 +54,7 @@ fi
 # node_modules/.package-lock.json, so a newer package-lock.json means new or
 # changed dependencies to fetch.
 if [ ! -d "node_modules" ]; then
-    echo "  [*] First run — installing dependencies..."
+    echo "  [*] First run: installing dependencies..."
     npm install
     echo ""
 elif [ package-lock.json -nt node_modules/.package-lock.json ]; then
@@ -67,7 +67,7 @@ fi
 #    native module actually loads on THIS node. Same check the Windows
 #    launcher uses. A load failure gets one rebuild attempt first.
 if ! node -e "require('better-sqlite3')" &> /dev/null; then
-    echo -e "${YELLOW}  [!] better-sqlite3 failed to load on Node $(node -v) — rebuilding...${NC}"
+    echo -e "${YELLOW}  [!] better-sqlite3 failed to load on Node $(node -v), rebuilding...${NC}"
     npm rebuild better-sqlite3 || true
     if ! node -e "require('better-sqlite3')" &> /dev/null; then
         echo -e "${RED}  [ERROR] better-sqlite3 cannot load on Node $(node -v).${NC}"
@@ -87,7 +87,7 @@ echo "  [✓] Native modules OK"
 if [ ! -f "$HAVEN_DATA/.env" ]; then
     if [ -f ".env.example" ]; then
         cp .env.example "$HAVEN_DATA/.env"
-        echo -e "${YELLOW}  [!] Created .env in $HAVEN_DATA — edit it before going live!${NC}"
+        echo -e "${YELLOW}  [!] Created .env in $HAVEN_DATA. Edit it before going live!${NC}"
     else
         echo -e "${YELLOW}  [!] No .env file found. Server will use defaults.${NC}"
     fi
@@ -95,7 +95,7 @@ fi
 
 # ── Generate SSL certs in data directory if missing (skip if FORCE_HTTP=true) ──
 if [ "${FORCE_HTTP:-false}" = "true" ]; then
-    echo "  [*] FORCE_HTTP=true — skipping SSL certificate generation"
+    echo "  [*] FORCE_HTTP=true, skipping SSL certificate generation"
 elif [ ! -f "$HAVEN_DATA/certs/cert.pem" ]; then
     echo "  [*] Generating self-signed SSL certificate..."
     mkdir -p "$HAVEN_DATA/certs"
@@ -176,7 +176,7 @@ done
 
 if [ "$PROBE_OK" -ne 1 ]; then
     echo -e "${YELLOW}  [!] Could not confirm readiness on port ${HAVEN_PORT} after 30s,${NC}"
-    echo -e "${YELLOW}      but the server process is running — leaving it up.${NC}"
+    echo -e "${YELLOW}      but the server process is running, so leaving it up.${NC}"
     echo "      If it never becomes reachable, check $HAVEN_DATA/crash.log,"
     echo "      the PORT in $HAVEN_DATA/.env, and any firewall on ${HAVEN_PORT}."
 fi

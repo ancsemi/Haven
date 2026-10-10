@@ -60,8 +60,8 @@
      it 26px short of the window and left an empty bar below it. The desktop
      app has since dropped its footer, but an install that hasn't been updated
      still injects both, and no amount of styling the status bar itself can
-     reach it. Overruled here — this selector outranks the bare `#app` the
-     preload injects — so the status bar ends at the bottom of the window
+     reach it. Overruled here (this selector outranks the bare `#app` the
+     preload injects), so the status bar ends at the bottom of the window
      whichever desktop build is hosting us. */
   padding-bottom: 0 !important;
 }

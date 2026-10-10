@@ -514,8 +514,8 @@
   },
   "users": {
     "no_one_here": "这里没有人",
-    "online_count": "在线 — {{count}}",
-    "offline_count": "离线 — {{count}}",
+    "online_count": "在线 ({{count}})",
+    "offline_count": "离线 ({{count}})",
     "opening_dm": "正在打开与 {{name}} 的私信…",
     "direct_message": "私信",
     "more_actions": "更多操作",

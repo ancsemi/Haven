@@ -91,7 +91,7 @@ module.exports = function register(socket, ctx) {
     if (current && current.signing_key && !data.force) {
       const existing = JSON.parse(current.signing_key);
       if (existing.x !== publicJwk.x || existing.y !== publicJwk.y) {
-        console.warn(`[E2E] User ${socket.user.id} tried to overwrite signing key — blocked`);
+        console.warn(`[E2E] User ${socket.user.id} tried to overwrite signing key, blocked`);
         return socket.emit('signing-key-conflict', { existing, rid });
       }
     }
@@ -149,7 +149,7 @@ module.exports = function register(socket, ctx) {
     if (users.length !== ids.length) return socket.emit('error-msg', 'One or more users were not found');
     const unusable = users.filter((u) => u.is_guest || !u.public_key || !u.signing_key);
     if (unusable.length) {
-      return socket.emit('error-msg', `Cannot start an encrypted group with ${unusable.map((u) => u.username).join(', ')} — no encryption key published yet`);
+      return socket.emit('error-msg', `Cannot start an encrypted group with ${unusable.map((u) => u.username).join(', ')}: no encryption key published yet`);
     }
 
     const existing = findExistingGroup(ids);
@@ -264,7 +264,7 @@ module.exports = function register(socket, ctx) {
     const users = db.prepare(`SELECT u.id, u.public_key, u.signing_key, u.is_guest, COALESCE(u.display_name, u.username) AS username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE u.id IN (${ph}) AND b.id IS NULL`).all(...ids);
     if (users.length !== ids.length) return socket.emit('error-msg', 'One or more users were not found');
     const unusable = users.filter((u) => u.is_guest || !u.public_key || !u.signing_key);
-    if (unusable.length) return socket.emit('error-msg', `Cannot add ${unusable.map((u) => u.username).join(', ')} to an encrypted group — no encryption key published yet`);
+    if (unusable.length) return socket.emit('error-msg', `Cannot add ${unusable.map((u) => u.username).join(', ')} to an encrypted group: no encryption key published yet`);
     const ins = db.prepare('INSERT OR IGNORE INTO dm_group_invites (channel_id, user_id, invited_by) VALUES (?, ?, ?)');
     db.transaction(() => { for (const id of ids) ins.run(ch.id, id, socket.user.id); })();
     const payload = groupPayload(ch);

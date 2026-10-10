@@ -540,7 +540,7 @@ video:-webkit-full-screen {
 .screen-share-tile.stream-popped-out video { display: none; }
 .screen-share-tile.stream-popped-out .stream-controls { display: none; }
 .screen-share-tile.stream-popped-out::after {
-  content: '⧉ Popped out — click to restore';
+  content: '⧉ Popped out, click to restore';
   position: relative;
   display: flex;
   align-items: center;
@@ -776,8 +776,8 @@ video:-webkit-full-screen {
   cursor: pointer;
   padding: 0;
   z-index: 100;
-  /* `right` and `top` are set imperatively in JS when sidebars open/close
-     — animate them so the button slides with the panel rather than popping
+  /* `right` and `top` are set imperatively in JS when sidebars open/close;
+     animate them so the button slides with the panel rather than popping
      into place. `top` animates because the open-state position (72px,
      aligned with header) and the closed-state position (114px, staggered
      below the voice toggle) differ. */

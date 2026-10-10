@@ -470,7 +470,7 @@ module.exports = function register(socket, ctx) {
       // A redemption counts on the link itself, so it survives the user (#5562).
       if (use.changes) db.prepare('UPDATE invite_codes SET spent = spent + 1 WHERE id = ?').run(inviteRow.id);
       socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
-      socket.emit('error-msg', `Invite accepted — joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
+      socket.emit('error-msg', `Invite accepted: joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
       return;
     }
 
@@ -482,7 +482,7 @@ module.exports = function register(socket, ctx) {
     if (isVanity) {
       const joinedCount = _doAutoJoin();
       socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
-      socket.emit('error-msg', `Invite accepted — joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
+      socket.emit('error-msg', `Invite accepted: joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
       return;
     }
 
@@ -496,13 +496,13 @@ module.exports = function register(socket, ctx) {
     if (serverCodeRow && serverCodeRow.value && serverCodeRow.value === code) {
       const joinedCount = _doAutoJoin();
       socket.emit('channels-list', getEnrichedChannels(socket.user.id, socket.user.isAdmin, (room) => socket.join(room)));
-      socket.emit('error-msg', `Server code accepted — joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
+      socket.emit('error-msg', `Server code accepted: joined ${joinedCount} channel${joinedCount !== 1 ? 's' : ''}`);
       return;
     }
 
     const channel = db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
     if (!channel) {
-      return socket.emit('error-msg', 'Invalid channel code — double-check it');
+      return socket.emit('error-msg', 'Invalid channel code. Double-check it');
     }
 
     // (#5348) DMs are private one-to-one channels. Their codes must never be
@@ -510,7 +510,7 @@ module.exports = function register(socket, ctx) {
     // (who is talking to whom, timing, frequency). Reject silently with the
     // same generic error so callers can't distinguish "no channel" from "is DM".
     if (channel.is_dm) {
-      return socket.emit('error-msg', 'Invalid channel code — double-check it');
+      return socket.emit('error-msg', 'Invalid channel code. Double-check it');
     }
 
     const membership = db.prepare(
@@ -534,7 +534,7 @@ module.exports = function register(socket, ctx) {
       // matching the public-only auto-join rule); public subs require parent
       // membership. Reuse the generic error so the code's existence stays hidden.
       if (isPrivateSub || !parentMember) {
-        return socket.emit('error-msg', 'Invalid channel code — double-check it');
+        return socket.emit('error-msg', 'Invalid channel code. Double-check it');
       }
     }
 
@@ -1065,7 +1065,7 @@ module.exports = function register(socket, ctx) {
     const newVal = current ? 0 : 1;
 
     if ((permission === 'streams' || permission === 'music') && newVal === 1 && channel.voice_enabled === 0) {
-      return socket.emit('error-msg', 'Enable voice first — streams and music require voice');
+      return socket.emit('error-msg', 'Enable voice first: streams and music require voice');
     }
 
     try {
@@ -1264,7 +1264,7 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const limit = typeof data.limit === 'number' ? data.limit : parseInt(data.limit);
     if (isNaN(limit) || limit < 0 || limit > 99) {
-      return socket.emit('error-msg', 'Voice user limit must be 0 (unlimited) or 2–99');
+      return socket.emit('error-msg', 'Voice user limit must be 0 (unlimited) or 2 to 99');
     }
     const normalizedLimit = (limit === 1) ? 0 : limit;
     const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
@@ -1688,7 +1688,7 @@ module.exports = function register(socket, ctx) {
       rotateChannelCode(channelId, oldCode);
     } catch (err) {
       console.warn(`[ChannelRotation] Manual rotation failed for channel ${channelId}:`, err.message);
-      socket.emit('error-msg', 'Channel code rotation failed — please try again.');
+      socket.emit('error-msg', 'Channel code rotation failed. Please try again.');
     }
   });
 

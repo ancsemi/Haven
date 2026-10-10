@@ -541,8 +541,8 @@
   },
   "users": {
     "no_one_here": "Здесь никого нет",
-    "online_count": "В сети — {{count}}",
-    "offline_count": "Не в сети — {{count}}",
+    "online_count": "В сети ({{count}})",
+    "offline_count": "Не в сети ({{count}})",
     "opening_dm": "Открываем ЛС с {{name}}…",
     "direct_message": "Личное сообщение",
     "more_actions": "Ещё действия",

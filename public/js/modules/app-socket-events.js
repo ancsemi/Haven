@@ -1098,7 +1098,7 @@ _listenAdminAndPrefs() {
         const lastUsers = Array.isArray(this._lastVoiceUsers) ? this._lastVoiceUsers : [];
         const selfPresentLocally = myId && lastUsers.some(u => u && u.id === myId);
         if (myId && !selfPresentLocally) {
-          console.warn('[VoiceWatchdog] Self ABSENT from local roster while inVoice — polling server', {
+          console.warn('[VoiceWatchdog] Self ABSENT from local roster while inVoice, polling server', {
             channel: code,
             inVoice: this.voice.inVoice,
             socketConnected: !!this.socket?.connected,

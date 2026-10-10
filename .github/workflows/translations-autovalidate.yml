@@ -136,4 +136,4 @@ jobs:
           # If reviews are required, the PR sits with auto-merge enabled
           # until a maintainer approves.
           gh pr merge "${{ github.event.pull_request.number }}" --auto --squash || \
-            echo "Could not enable auto-merge (likely disabled at repo level — that's fine, label is still set)."
+            echo "Could not enable auto-merge (likely disabled at repo level; that's fine, label is still set)."

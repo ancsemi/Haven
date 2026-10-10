@@ -1152,7 +1152,7 @@ _tsmUpdatePreview() {
       if (btn) { btn.disabled = false; btn.setAttribute('aria-label', `${t('modals.time.insert_btn')}: ${prev.textContent}`); }
     } else {
       prev.classList.add('tsm-invalid');
-      prev.textContent = '—';
+      prev.textContent = '-';
       if (btn) btn.disabled = true;
     }
   });

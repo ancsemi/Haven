@@ -325,7 +325,7 @@ router.post('/guest-login', authLimiter, async (req, res) => {
       if (!existing.is_guest) {
         return res.status(409).json({ error: 'That username is taken by a registered member' });
       }
-      return res.status(409).json({ error: 'That username is currently in use — try another' });
+      return res.status(409).json({ error: 'That username is currently in use. Try another' });
     }
 
     // Random unusable hash — the row needs a password_hash but guests
@@ -1560,7 +1560,7 @@ router.post('/recover-account', authLimiter, async (req, res) => {
     db.prepare('DELETE FROM totp_backup_codes WHERE user_id = ?').run(user.id);
     db.prepare('DELETE FROM account_recovery_codes WHERE user_id = ?').run(user.id);
 
-    console.log(`🔑 Account recovery used for "${user.username}" from ${req.ip || 'unknown'} — E2E keys cleared`);
+    console.log(`🔑 Account recovery used for "${user.username}" from ${req.ip || 'unknown'}; E2E keys cleared`);
     res.json({ success: true });
   } catch (err) {
     console.error('Account recovery error:', err);
@@ -1812,8 +1812,8 @@ router.get('/SSO', (req, res) => {
       <p>Another Haven server wants to use your identity to pre-fill registration.</p>
       ${safeOrigin ? `<p>Requesting server: <span class="origin">${safeOrigin}</span></p>` : ''}
       <div class="info">
-        <div class="info-row"><span class="info-label">Username</span><span class="info-value" id="sso-username">—</span></div>
-        <div class="info-row"><span class="info-label">Profile picture</span><span class="info-value" id="sso-avatar">—</span></div>
+        <div class="info-row"><span class="info-label">Username</span><span class="info-value" id="sso-username">-</span></div>
+        <div class="info-row"><span class="info-label">Profile picture</span><span class="info-value" id="sso-avatar">-</span></div>
       </div>
       <p style="font-size:12px;color:#666">Your password is <strong>never</strong> shared. Only your username and profile picture.</p>
       <div id="buttons">
@@ -1912,8 +1912,8 @@ router.get('/SSO', (req, res) => {
         }
         const userData = await verifyRes.json();
         approvedProfile = {
-          username: userData.username || '—',
-          displayName: userData.displayName || userData.username || '—',
+          username: userData.username || '-',
+          displayName: userData.displayName || userData.username || '-',
           profilePicture: userData.avatar || null
         };
 
@@ -1934,8 +1934,8 @@ router.get('/SSO', (req, res) => {
           }
 
           approvedProfile = {
-            username: user.username || '—',
-            displayName: user.displayName || user.username || '—',
+            username: user.username || '-',
+            displayName: user.displayName || user.username || '-',
             profilePicture: user.avatar || null
           };
 
@@ -2080,7 +2080,7 @@ router.options('/SSO/authenticate', (req, res) => {
 
    The E2E half of this lives entirely in the browser. Haven wraps your private
    key with a key derived from what you type at login, and an SSO user never
-   types a password here — so on first login the client asks for a separate
+   types a password here, so on first login the client asks for a separate
    encryption passphrase and derives from that instead. The server's only part
    is telling the client whether a wrapped key already exists (`e2eReady`); it
    never sees the passphrase, and there is nothing to store for it.

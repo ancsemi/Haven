@@ -32,7 +32,7 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin) {
       const lock = db.prepare('SELECT display_name_locked FROM users WHERE id = ?').get(socket.user.id);
       if (lock && lock.display_name_locked) {
-        return socket.emit('error-msg', 'A moderator set your display name — you cannot change it yourself');
+        return socket.emit('error-msg', 'A moderator set your display name, so you cannot change it yourself');
       }
     }
 
@@ -467,7 +467,7 @@ module.exports = function register(socket, ctx) {
       if (current && current.public_key && !data.force) {
         const existing = JSON.parse(current.public_key);
         if (existing.x !== publicJwk.x || existing.y !== publicJwk.y) {
-          console.warn(`[E2E] User ${socket.user.id} (${socket.user.username}) tried to overwrite public key — blocked`);
+          console.warn(`[E2E] User ${socket.user.id} (${socket.user.username}) tried to overwrite public key, blocked`);
           socket.emit('public-key-conflict', { existing });
           return;
         }
@@ -967,7 +967,7 @@ module.exports = function register(socket, ctx) {
       callback({ ok: true });
     } catch (err) {
       console.error('Beta signup error:', err);
-      callback({ ok: false, error: 'Server error — try again later.' });
+      callback({ ok: false, error: 'Server error. Try again later.' });
     }
   });
 

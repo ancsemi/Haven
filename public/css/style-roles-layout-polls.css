@@ -575,7 +575,7 @@
 /* ── Interface scale ─────────────────────────────────────
    The Zoom slider scales the whole UI by driving the root font-size through
    --ui-scale (a percentage; 100% = 16px root). Because every size in this file
-   — text, spacing, avatars, rails, sidebars, icons — is expressed in rem, one
+   (text, spacing, avatars, rails, sidebars, icons) is expressed in rem, one
    root change rescales the entire interface crisply, and the flex layout
    reflows instead of overflowing. JS sets --ui-scale from the slider; it is
    also applied pre-paint in theme-init.js. The root rule lives up in `html {}`. */
@@ -692,7 +692,7 @@
 .online-overlay-status-dot.offline { background: #72767d; }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   MOD MODE — Layout customisation drag & drop
+   MOD MODE: Layout customisation drag & drop
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 .sidebar-mod-container {
@@ -895,7 +895,7 @@
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   SIDEBAR SPLIT — channels + DM panes with drag divider
+   SIDEBAR SPLIT: channels + DM panes with drag divider
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 .sidebar-split {
@@ -1297,7 +1297,7 @@
 /* (moved to main .channel-collapse-arrow block above) */
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   ORGANIZE MODAL — styled
+   ORGANIZE MODAL: styled
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 .organize-toolbar {

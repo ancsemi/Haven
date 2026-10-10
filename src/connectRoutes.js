@@ -162,7 +162,7 @@ function createConnectRoutes(getActivity) {
   // Every route needs the engine; bail cleanly if it isn't up yet.
   router.use((req, res, next) => {
     const engine = getActivity();
-    if (!engine) return res.status(503).send('Server still starting — try again in a moment.');
+    if (!engine) return res.status(503).send('Server still starting. Try again in a moment.');
     req.activity = engine;
     next();
   });
@@ -173,7 +173,7 @@ function createConnectRoutes(getActivity) {
   router.get('/steam', (req, res) => {
     if (!req.activity.isSteamConfigured()) return res.status(503).send('Steam integration not configured on this server');
     const userId = connectUserId(req.query.token, 'steam');
-    if (!userId) return res.status(401).send('Link session expired — close this tab and try again from Haven.');
+    if (!userId) return res.status(401).send('Link session expired. Close this tab and try again from Haven.');
 
     // The connect token rides along in return_to so the callback can re-verify
     // who started the flow. It is signed and short-lived, so a tampered or
@@ -227,7 +227,7 @@ function createConnectRoutes(getActivity) {
       const claimed = String(req.query['openid.claimed_id'] || '');
       const match = claimed.match(/^https?:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/);
       if (!match) {
-        console.error('[Haven activity] Steam callback: claimed_id did not match — got:', claimed);
+        console.error('[Haven activity] Steam callback: claimed_id did not match, got:', claimed);
         return finish(res, 'error', 'steam');
       }
       const steamId = match[1];
@@ -269,7 +269,7 @@ function createConnectRoutes(getActivity) {
   router.get('/spotify', (req, res) => {
     if (!req.activity.isSpotifyConfigured()) return res.status(503).send('Spotify integration not configured on this server');
     const userId = connectUserId(req.query.token, 'spotify');
-    if (!userId) return res.status(401).send('Link session expired — close this tab and try again from Haven.');
+    if (!userId) return res.status(401).send('Link session expired. Close this tab and try again from Haven.');
 
     const params = new URLSearchParams({
       client_id: process.env.SPOTIFY_CLIENT_ID,

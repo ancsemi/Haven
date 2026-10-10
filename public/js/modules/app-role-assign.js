@@ -70,7 +70,7 @@ _renderRacUsers(filter = '') {
       <div class="rac-user-avatar" style="background-color:${color};${shapeStyle}">${avatarInner}</div>
       <div class="rac-user-info">
         <span class="rac-user-name">${this._escapeHtml(this._getNickname(u.id, u.displayName))}</span>
-        <span class="rac-user-level">${this._escapeHtml(roleNames)} – Lv.${u.serverLevel}</span>
+        <span class="rac-user-level">${this._escapeHtml(roleNames)} (Lv.${u.serverLevel})</span>
       </div>
     </div>`;
   }).join('');
@@ -429,7 +429,7 @@ _renderRacConfig() {
 
   body.innerHTML = `
     <div class="rac-config-section">
-      <div class="rac-config-label">${this._escapeHtml(t('settings.admin.roles_assigning_to', { name: user.displayName }))} — ${this._escapeHtml(scopeLabel)}</div>
+      <div class="rac-config-label">${this._escapeHtml(t('settings.admin.roles_assigning_to', { name: user.displayName }))} (${this._escapeHtml(scopeLabel)})</div>
       <p class="rac-card-hint">${this._escapeHtml(t('settings.admin.roles_multi_hint'))}</p>
     </div>
 
@@ -459,7 +459,7 @@ _renderRacConfig() {
       <div class="rac-config-row">
         <select class="rac-role-select" id="rac-add-role-dropdown" ${addableRoles.length ? '' : 'disabled'}>
           <option value="">${this._escapeHtml(t(addableRoles.length ? 'settings.admin.roles_select_to_add' : 'settings.admin.roles_no_addable'))}</option>
-          ${addableRoles.map(r => `<option value="${r.id}">● ${this._escapeHtml(r.name)} — Lv.${r.level}</option>`).join('')}
+          ${addableRoles.map(r => `<option value="${r.id}">● ${this._escapeHtml(r.name)} (Lv.${r.level})</option>`).join('')}
         </select>
       </div>
     </div>

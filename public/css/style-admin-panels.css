@@ -1005,11 +1005,11 @@
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   Centralized Role Assignment — 3-Pane Modal (RAC)
+   Centralized Role Assignment: 3-Pane Modal (RAC)
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .role-assign-center-box {
   /* Default size: spacious-but-bounded. The user can drag the bottom-right
-     corner to grow the modal to whatever fits their screen — the previous
+     corner to grow the modal to whatever fits their screen. The previous
      `max-width: 960px !important` made the corner-resize one-way (shrink
      only) on large displays. We keep a sensible upper cap (98vw / 92vh)
      so the modal can never exceed the viewport. */

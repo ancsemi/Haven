@@ -765,7 +765,7 @@
 /* Let a long "Full Date/Time" wrap in the row instead of overflowing. */
 .tsm-style-preview .chat-timestamp { white-space: normal; }
 .tsm-style-insert { flex: 0 0 auto; }
-.tsm-style-preview:empty::after { content: "—"; color: var(--text-muted); }
+.tsm-style-preview:empty::after { content: "-"; color: var(--text-muted); }
 .tsm-style-preview.tsm-invalid { color: var(--text-muted); }
 
 .mention {
@@ -1425,7 +1425,7 @@
   word-break: break-word;
 }
 /* Results now render through the real message formatter (images, video, audio,
-   embeds), so the old 3-line clamp is gone — it would have cropped media.
+   embeds), so the old 3-line clamp is gone; it would have cropped media.
    Keep inline media from overflowing the narrow panel. (search-overhaul p3) */
 .search-result-content img.chat-image,
 .search-result-content video,

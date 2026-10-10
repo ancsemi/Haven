@@ -537,8 +537,8 @@
   },
   "users": {
     "no_one_here": "Nikogo tu nie ma",
-    "online_count": "Online — {{count}}",
-    "offline_count": "Offline — {{count}}",
+    "online_count": "Online ({{count}})",
+    "offline_count": "Offline ({{count}})",
     "opening_dm": "Otwieranie wiadomości prywatnej z {{name}}…",
     "direct_message": "Wiadomość prywatna",
     "more_actions": "Więcej akcji",

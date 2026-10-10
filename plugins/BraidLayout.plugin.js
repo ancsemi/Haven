@@ -6,9 +6,9 @@
  */
 class BraidLayout {
   static _DENSITIES = [
-    { id: 'compact', label: 'Compact', hint: 'Tighter than stock — more messages on screen', tick: '3px' },
+    { id: 'compact', label: 'Compact', hint: 'Tighter than stock, more messages on screen', tick: '3px' },
     { id: 'cozy', label: 'Cozy', hint: 'The shipped Braid spacing', tick: '5px' },
-    { id: 'spacious', label: 'Spacious', hint: 'Roomier than stock — more air around each run', tick: '7px' },
+    { id: 'spacious', label: 'Spacious', hint: 'Roomier than stock, more air around each run', tick: '7px' },
   ];
 
   start() {
@@ -61,7 +61,7 @@ class BraidLayout {
     const layoutOn = HavenApi.Data.load('BraidLayout', 'layoutOn', '1') !== '0';
     if (layoutOn && !document.documentElement.hasAttribute('data-haven-layout-editing')) this._engage();
     else if (layoutOn) console.log('[BraidLayout] Waiting for Mod Mode to finish');
-    else console.log('[BraidLayout] Started dormant — classic layout (pill or Ctrl+Shift+B to re-engage)');
+    else console.log('[BraidLayout] Started dormant: classic layout (pill or Ctrl+Shift+B to re-engage)');
   }
 
   _toggleLayout() {
@@ -205,7 +205,7 @@ class BraidLayout {
       HavenApi.DOM.removeStyle('BraidDensityCSS');
       this._suspended = false;
       if (persist) HavenApi.Data.save('BraidLayout', 'layoutOn', '0');
-      console.log('[BraidLayout] Disengaged — classic layout');
+      console.log('[BraidLayout] Disengaged: classic layout');
     } finally {
       HavenApi.Layout?.release('BraidLayout');
       this._transitioning = false;
@@ -691,7 +691,7 @@ ${BraidLayout._DENSITIES.map((d) => `#braid-density-card .braid-density-btn[data
       </div>`;
     card.innerHTML = `
       <h5 class="settings-section-subtitle">🪢 Braid text size</h5>
-      <p style="font-size:.75rem;color:var(--text-muted);margin:.25rem 0 0">Continuous sliders, layered on top of Zoom — chat text and interface text scale independently.</p>
+      <p style="font-size:.75rem;color:var(--text-muted);margin:.25rem 0 0">Continuous sliders, layered on top of Zoom. Chat text and interface text scale independently.</p>
       ${row('braid-chat-scale', 'Chat text', 80, 160)}
       ${row('braid-ui-scale', 'Interface text', 85, 140)}`;
     anchor.after(card);
@@ -1052,7 +1052,7 @@ html[data-braid-layout="1"] .voice-controls div[style*="background"],
 html[data-braid-layout="1"] .voice-controls span[style*="background"]{background:var(--bg-tertiary)!important;color:var(--text-secondary)!important;border:1px solid var(--border)!important;border-radius:999px!important;box-shadow:none!important}
 /* ── Voice dock ── the relocated stock controls, bottom-left. Camera,
    screen share, soundboard, listen-together, settings (stream quality
-   lives in there), people, leave — every streaming option in reach. */
+   lives in there), people, leave: every streaming option in reach. */
 html[data-braid-layout="1"] #braid-voice-dock{flex-shrink:0;display:flex;flex-direction:column;min-width:0}
 html[data-braid-layout="1"] #braid-voice-dock .voice-panel{border-top:1px solid var(--border)!important;border-bottom:0!important;background:var(--bg-secondary)!important;padding:.4375rem .5rem!important;gap:.25rem!important;justify-content:flex-start!important;flex-wrap:wrap}
 html[data-braid-layout="1"] #braid-voice-dock .voice-panel-btn,
@@ -1150,7 +1150,7 @@ html[data-braid-form="1"]{
 --braid-me:color-mix(in srgb,var(--accent) 8%,var(--bg-secondary));
 --braid-me-line:color-mix(in srgb,var(--accent) 26%,var(--border));
 /* Spacing scale. Every gap in a run card and a channel row reads one of
-   these, so a density level only has to restate the tokens — the corner
+   these, so a density level only has to restate the tokens. The corner
    radii are deliberately NOT in here, the cards stay equally rounded at
    all three levels. --braid-gutter must stay derived: a continuation
    indents by exactly the leader's inset + avatar + row gap, so shrinking
@@ -1320,7 +1320,7 @@ html[data-braid-layout="1"] .settings-nav{background:var(--bg-secondary)!importa
 html[data-braid-layout="1"] .settings-nav-group-label{font-size:.625rem!important;font-weight:650!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:var(--text-muted)!important;margin:.875rem .375rem .25rem!important}
 /* Full-width pills. Stock uses a hanging-indent hack (padding-left
    1.625rem + negative text-indent) so wrapped lines clear the leading
-   emoji — with a real icon element that hack would push the first line
+   emoji. With a real icon element that hack would push the first line
    left OUT of the pill, which is why highlights never covered the row. */
 html[data-braid-layout="1"] .settings-nav-item{display:flex!important;align-items:center;gap:.5rem;width:100%;box-sizing:border-box;border-radius:.625rem!important;padding:.4375rem .625rem!important;text-indent:0!important;margin:1px 0!important;font-size:calc(.8125rem*var(--braid-ui-scale,1))!important;font-weight:550!important;border:1px solid transparent!important}
 html[data-braid-layout="1"] .settings-nav-item svg{flex:0 0 auto;opacity:.75}

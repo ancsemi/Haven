@@ -148,7 +148,7 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   Toggle Style — sliding switches for on/off settings
+   Toggle Style: sliding switches for on/off settings
    ═══════════════════════════════════════════════════════════════════
    Settings > Layout & Density picks between sliders (default) and classic
    boxes; the choice lands on <html data-toggle-style>. theme-init.js sets it
@@ -158,7 +158,7 @@
    checkbox says "this item is selected", so only genuine settings rows are
    listed here. Permission grids (.rac-perm-item, .cr-perm-toggle), channel and
    media pickers, backup contents (.backup-include), poll votes and the ToS box
-   stay as checkboxes on purpose — they are lists you tick, and a column of
+   stay as checkboxes on purpose: they are lists you tick, and a column of
    switches there would read as a wall of settings and take twice the width.
 
    These stay real <input type="checkbox"> elements, so keyboard focus, the
@@ -589,7 +589,7 @@
 .connection-row.is-unavailable { opacity: 0.55; }
 
 /* Link / Unlink / Set up.
-   .btn-sm's default background is var(--bg-tertiary) — the exact colour of
+   .btn-sm's default background is var(--bg-tertiary), the exact colour of
    the row these sit on, so they rendered as plain text with no affordance.
    Give them their own surface plus a border. The accent override also resets
    .btn-sm.btn-accent's 16px font, which is sized for icon glyphs, not words. */

@@ -114,7 +114,7 @@ _renderImageQueue() {
       const chip = document.createElement('div');
       chip.className = 'file-queue-chip' + (file === this._activeAttachment ? ' is-active' : '');
       if (file._tags && file._tags.length) chip.classList.add('has-tags');
-      chip.title = file.name + ' — ' + this._formatFileSize(file.size);
+      chip.title = file.name + ' (' + this._formatFileSize(file.size) + ')';
       const icon = document.createElement('span');
       icon.className = 'file-queue-chip-icon';
       icon.textContent = '📎';

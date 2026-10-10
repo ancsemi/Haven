@@ -173,7 +173,7 @@
 }
 
 /* The admin-set server icon is injected into #home-server as a bare <img>
-   (no class) — without sizing it renders at natural size and sprawls
+   (no class); without sizing it renders at natural size and sprawls
    behind the neighboring server tiles. Constrain any direct img child. */
 .server-icon > img {
   width: 100%;
@@ -633,7 +633,7 @@
 /* When the expand button is slotted directly inside a settings-style
    header (next to .settings-close-btn) it needs to match the close
    button's box and lose the floating-group margin so the two stay
-   aligned across viewport sizes — including narrow mobile widths
+   aligned across viewport sizes, including narrow mobile widths
    where the absolute .modal-controls wrap was misaligning with the
    close × in the header. */
 .modal-expand-btn.modal-expand-btn-inline {
@@ -1465,7 +1465,7 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
 }
 
 /* Read-only banner shown when a non-admin opens a role at or above their own
-   level — they can view it but not edit it. */
+   level: they can view it but not edit it. */
 .role-readonly-note {
   margin: 0 0 0.625rem;
   padding: 0.375rem 0.5rem;

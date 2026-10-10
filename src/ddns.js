@@ -130,7 +130,7 @@ async function _updateDuckDns(ip) {
   const { status, body } = await _httpGetText(url);
   const text = (body || '').trim();
   if (status === 200 && text === 'OK') return { ok: true, message: `DuckDNS updated for ${domains}` };
-  return { ok: false, message: `DuckDNS rejected update (HTTP ${status}, body: ${text || '<empty>'}) — check DDNS_TOKEN and DDNS_DOMAINS` };
+  return { ok: false, message: `DuckDNS rejected update (HTTP ${status}, body: ${text || '<empty>'}). Check DDNS_TOKEN and DDNS_DOMAINS` };
 }
 
 async function _updateCloudflare(ip) {
@@ -170,7 +170,7 @@ async function _runOnce() {
     const ip = await _detectPublicIp();
     if (!ip) {
       lastResult = { enabled: true, provider, ok: false, ip: null,
-        message: 'Could not determine public IP (all probes failed — offline?)',
+        message: 'Could not determine public IP (all probes failed, offline?)',
         updatedAt: new Date().toISOString() };
       _err(lastResult.message);
       return;
@@ -195,7 +195,7 @@ function startDdns() {
   const provider = (process.env.DDNS_PROVIDER || '').trim().toLowerCase();
   if (!provider) {
     lastResult = { enabled: false, provider: null, ok: null, ip: null,
-      message: 'DDNS_PROVIDER not set — dynamic DNS disabled', updatedAt: null };
+      message: 'DDNS_PROVIDER not set, dynamic DNS disabled', updatedAt: null };
     return;
   }
   const minutes = Math.max(1, parseInt(process.env.DDNS_INTERVAL_MINUTES || '5', 10) || 5);

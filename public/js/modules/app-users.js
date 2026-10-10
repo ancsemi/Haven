@@ -590,8 +590,8 @@ _activityMeta(act) {
   return {
     icon: isGame ? '🎮' : '🎵',
     verb: t(isGame ? 'users.activity_playing' : 'users.activity_listening'),
-    // "Track — Artist" reads better than two separate fields in one line.
-    label: act.details ? `${act.name} — ${act.details}` : act.name,
+    // "Track · Artist" reads better than two separate fields in one line.
+    label: act.details ? `${act.name} · ${act.details}` : act.name,
   };
 },
 
@@ -1145,7 +1145,7 @@ _renderVoiceUsers(users, channelCode) {
       const viewerNames = viewers.map(v => v.username).join(', ');
       // The badge is also the way back into a share you dismissed or did not
       // auto-accept, so the tooltip says so (#5636).
-      const liveTitle = this._escapeHtml(`${viewerNames ? `${liveLabel} — ${viewerNames}` : liveLabel}. ${t('users.stream_click_to_watch')}`);
+      const liveTitle = this._escapeHtml(`${viewerNames ? `${liveLabel}: ${viewerNames}` : liveLabel}. ${t('users.stream_click_to_watch')}`);
       streamBadge = `<span class="voice-stream-badge live" title="${liveTitle}">🔴${viewerCount ? ' ' + viewerCount : ''}</span>`;
     }
     if (hasWebcam) {

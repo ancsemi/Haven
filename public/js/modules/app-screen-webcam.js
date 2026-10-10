@@ -860,7 +860,7 @@ _startStreamStallWatchdog(tileId, userId) {
       // ~3s without a new frame. Re-attach the stream: a fresh srcObject
       // assignment rebuilds the element's decode pipeline, which is what the
       // accidental resize was really doing.
-      console.warn('[Stream] No frames for', tileId, '— re-attaching srcObject');
+      console.warn('[Stream] No frames for', tileId, ': re-attaching srcObject');
       const s = videoEl.srcObject;
       videoEl.srcObject = null;
       videoEl.srcObject = s;
@@ -886,14 +886,14 @@ _startStreamStallWatchdog(tileId, userId) {
 
       if (b.count >= 3) {
         console.warn('[Stream] Renegotiate budget spent for', userId,
-          '— not asking again this window. The stream is likely bandwidth-starved, not stuck.');
+          '(not asking again this window). The stream is likely bandwidth-starved, not stuck.');
       } else if (now < b.nextAllowed) {
         // Backing off; say nothing and let the next tick reconsider.
       } else {
         b.count++;
         b.nextAllowed = now + (5000 * b.count);   // 5s, 10s, 15s
         this._renegBudget[userId] = b;
-        console.warn('[Stream] Still no frames for', tileId, '— requesting renegotiate',
+        console.warn('[Stream] Still no frames for', tileId, ': requesting renegotiate',
           `(${b.count}/3 this window)`);
         this.socket.emit('request-screen-renegotiate', {
           code: this.voice.currentChannel,

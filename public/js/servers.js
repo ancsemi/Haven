@@ -679,7 +679,7 @@ class ServerManager {
         } catch {
           // Decryption failed — blob was encrypted with a different password
           // or is corrupted. Start fresh from localStorage.
-          console.warn('[ServerSync] Could not decrypt server blob — using local list');
+          console.warn('[ServerSync] Could not decrypt server blob, using local list');
         }
       }
 

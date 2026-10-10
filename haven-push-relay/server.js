@@ -29,7 +29,7 @@ const messaging = admin.messaging();
 console.log(`Firebase project: ${serviceAccount.project_id}`);
 if (!PUSH_KEY) {
   const generated = crypto.randomBytes(32).toString('hex');
-  console.log(`\nNo HAVEN_PUSH_KEY set — generated: ${generated}`);
+  console.log(`\nNo HAVEN_PUSH_KEY set. Generated: ${generated}`);
   console.log(`Set: HAVEN_PUSH_KEY=${generated}`);
   console.log(`Haven .env: FCM_RELAY_URL=http://YOUR_HOST:${PORT}/sendPush`);
   console.log(`Haven .env: FCM_PUSH_KEY=${generated}\n`);

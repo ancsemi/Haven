@@ -65,7 +65,7 @@ _renderIpBanList(bans) {
       <div class="ban-info">
         <strong>${this._escapeHtml(b.ip)}</strong>
         <span class="ban-reason">${b.reason ? this._escapeHtml(b.reason) : t('settings.admin.no_reason')}</span>
-        <span class="ban-date">${this._fmtDate(b.created_at)}${b.banned_by_name ? ` — ${this._escapeHtml(b.banned_by_name)}` : ''}</span>
+        <span class="ban-date">${this._fmtDate(b.created_at)}${b.banned_by_name ? ` by ${this._escapeHtml(b.banned_by_name)}` : ''}</span>
       </div>
       <div class="ban-actions">
         <button class="btn-sm btn-unban" data-ip="${this._escapeHtml(b.ip)}">${t('settings.admin.unban_btn')}</button>
@@ -720,7 +720,7 @@ _showAdminActionModal(action, userId, username) {
     mute: t('modals.admin_action.label_mute'),
     'delete-user': t('modals.admin_action.label_delete_user')
   };
-  title.textContent = `${labels[action] || action} — ${username}`;
+  title.textContent = `${labels[action] || action}: ${username}`;
   desc.textContent = action === 'ban'
     ? t('modals.admin_action.desc_ban')
     : action === 'mute'

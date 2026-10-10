@@ -749,7 +749,7 @@
       } else {
         ssoPreviewAvatar.textContent = (previewName || '?')[0].toUpperCase();
       }
-      ssoPreviewUsername.textContent = previewName || '—';
+      ssoPreviewUsername.textContent = previewName || '-';
       // The imported name may already belong to someone here (#5734), so it
       // is only a suggestion the person can change.
       let suggested = normalizeSsoUsername(profileUsername);
@@ -790,7 +790,7 @@
       ssoStepServer.style.display = '';
       ssoStepRegister.style.display = 'none';
       ssoPreviewAvatar.innerHTML = '?';
-      ssoPreviewUsername.textContent = '—';
+      ssoPreviewUsername.textContent = '-';
       ssoUsernameInput.value = '';
       document.getElementById('sso-password').value = '';
       document.getElementById('sso-confirm').value = '';
@@ -1168,7 +1168,7 @@
      there is nothing to derive the private-key wrapping key from. We ask for
      a passphrase, stretch it exactly like a password (same PBKDF2 salt and
      iteration count), and drop the result into the same sessionStorage slot
-     the password path uses — so everything downstream is unchanged. */
+     the password path uses, so everything downstream is unchanged. */
 
   const OIDC_ERRORS = {
     cancelled: 'auth.oidc.errors.cancelled',

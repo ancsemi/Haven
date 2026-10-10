@@ -514,8 +514,8 @@
   },
   "users": {
     "no_one_here": "Nadie aquí",
-    "online_count": "En línea — {{count}}",
-    "offline_count": "Desconectado — {{count}}",
+    "online_count": "En línea ({{count}})",
+    "offline_count": "Desconectado ({{count}})",
     "opening_dm": "Abriendo DM con {{name}}…",
     "direct_message": "Mensaje directo",
     "more_actions": "Más acciones",

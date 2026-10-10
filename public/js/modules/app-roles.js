@@ -724,7 +724,7 @@ _openChannelRolesModal(channelCode) {
       const roleSel = document.getElementById('channel-roles-role-select');
       roleSel.innerHTML = `<option value="">${t('settings.admin.roles_select_dropdown')}</option>` +
         this._allRoles.map(r =>
-          `<option value="${r.id}">● ${this._escapeHtml(r.name)} — Lv.${r.level}</option>`
+          `<option value="${r.id}">● ${this._escapeHtml(r.name)} (Lv.${r.level})</option>`
         ).join('');
     });
   });
@@ -1022,7 +1022,7 @@ _refreshChannelRolesDropdown() {
   if (!roleSel) return;
   roleSel.innerHTML = `<option value="">${t('settings.admin.roles_select_dropdown')}</option>` +
     this._allRoles.map(r =>
-      `<option value="${r.id}">● ${this._escapeHtml(r.name)} — Lv.${r.level}</option>`
+      `<option value="${r.id}">● ${this._escapeHtml(r.name)} (Lv.${r.level})</option>`
     ).join('');
 },
 

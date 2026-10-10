@@ -514,8 +514,8 @@
   },
   "users": {
     "no_one_here": "Personne ici",
-    "online_count": "En ligne — {{count}}",
-    "offline_count": "Hors ligne — {{count}}",
+    "online_count": "En ligne ({{count}})",
+    "offline_count": "Hors ligne ({{count}})",
     "opening_dm": "Ouverture d'un MP avec {{name}}…",
     "direct_message": "Message privé",
     "more_actions": "Plus d'actions",

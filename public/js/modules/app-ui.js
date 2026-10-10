@@ -699,7 +699,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
     } catch (err) {
       if (err?.aborted) return;
       console.error('[E2E] Image encryption failed:', err);
-      const detail = err?.message ? ` — ${err.message}` : '';
+      const detail = err?.message ? ` (${err.message})` : '';
       this._showToast(`${t('toasts.encrypted_image_failed')}${detail}`, 'error');
     }
     return;
@@ -873,7 +873,7 @@ async _maybeUploadEncryptedDmFile(file, code, ch) {
   } catch (err) {
     if (err?.aborted) return true;
     console.error('[E2E] File encryption failed:', err);
-    const _detail = err?.message ? ` — ${err.message}` : '';
+    const _detail = err?.message ? ` (${err.message})` : '';
     this._showToast(`${t('toasts.encrypted_image_failed')}${_detail}`, 'error');
     return true;
   }

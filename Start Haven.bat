@@ -127,7 +127,7 @@ if not exist "%HAVEN_DATA%\.env" (
 :: no longer needed. Windows ships OpenSSH, which is not OpenSSL, and machines without
 :: openssl.exe used to fall back to HTTP silently.
 if /I "%FORCE_HTTP%"=="true" (
-    echo  [*] FORCE_HTTP=true -- skipping SSL certificate generation
+    echo  [*] FORCE_HTTP=true, skipping SSL certificate generation
     echo.
     goto :ssl_done
 )

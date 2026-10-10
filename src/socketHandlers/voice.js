@@ -219,7 +219,7 @@ module.exports = function register(socket, ctx) {
     if (pendingTempDelete && pendingTempDelete.has(code)) {
       clearTimeout(pendingTempDelete.get(code));
       pendingTempDelete.delete(code);
-      console.log(`[Temporary] Grace-period deletion cancelled — user rejoined "${code}"`);
+      console.log(`[Temporary] Grace-period deletion cancelled, user rejoined "${code}"`);
     }
 
     // If this user is already in the same voice channel (e.g. from another
@@ -722,10 +722,10 @@ module.exports = function register(socket, ctx) {
       try {
         const vch = db.prepare('SELECT id, voice_enabled FROM channels WHERE code = ?').get(code);
         if (!vch) {
-          console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — channel ${code} not in DB; signalling client to clean up.`);
+          console.warn(`[VoiceDiag] PROACTIVE HEAL skipped: channel ${code} not in DB; signalling client to clean up.`);
           socket.emit('voice-channel-gone', { code });
         } else if (vch.voice_enabled === 0) {
-          console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — voice disabled in channel ${code}; signalling client to clean up.`);
+          console.warn(`[VoiceDiag] PROACTIVE HEAL skipped: voice disabled in channel ${code}; signalling client to clean up.`);
           socket.emit('error-msg', 'Voice is disabled in this channel');
           socket.emit('voice-channel-gone', { code });
         } else {
@@ -734,7 +734,7 @@ module.exports = function register(socket, ctx) {
           ).get(vch.id, socket.user.id);
           const healRefusal = vMember ? voiceEntryRefusal(code, vch.id) : null;
           if (!vMember) {
-            console.warn(`[VoiceDiag] PROACTIVE HEAL skipped — ${socket.user.username} is not a member of channel ${code}; signalling client to clean up.`);
+            console.warn(`[VoiceDiag] PROACTIVE HEAL skipped: ${socket.user.username} is not a member of channel ${code}; signalling client to clean up.`);
             socket.emit('voice-channel-gone', { code });
           } else if (healRefusal) {
             console.warn(`[VoiceDiag] PROACTIVE HEAL skipped for ${socket.user.username} on ${code}: ${healRefusal}`);
@@ -857,26 +857,26 @@ module.exports = function register(socket, ctx) {
     // catch every silent early-return below.
     console.log(`[VoiceDiag] voice-rejoin RECEIVED from ${socket.user?.username} (id=${socket.user?.id}) socket=${socket.id} data=${JSON.stringify(data)}`);
     if (!data || typeof data !== 'object') {
-      console.warn(`[VoiceDiag] voice-rejoin REJECTED — bad payload`);
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED: bad payload`);
       return;
     }
     socket.relayCapable = data.relay === 1;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) {
-      console.warn(`[VoiceDiag] voice-rejoin REJECTED — invalid code "${code}"`);
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED: invalid code "${code}"`);
       return;
     }
 
     const vch = db.prepare('SELECT id, voice_enabled FROM channels WHERE code = ?').get(code);
     if (!vch) {
-      console.warn(`[VoiceDiag] voice-rejoin REJECTED — channel ${code} not in DB (user=${socket.user.username}). Telling client channel is gone so it can clean local state.`);
-      // Break the infinite watchdog/self-heal loop — tell the client the
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED: channel ${code} not in DB (user=${socket.user.username}). Telling client channel is gone so it can clean local state.`);
+      // Break the infinite watchdog/self-heal loop: tell the client the
       // channel no longer exists so it stops thinking it's in voice.
       socket.emit('voice-channel-gone', { code });
       return;
     }
     if (vch.voice_enabled === 0) {
-      console.warn(`[VoiceDiag] voice-rejoin REJECTED — voice disabled in channel ${code} (user=${socket.user.username}).`);
+      console.warn(`[VoiceDiag] voice-rejoin REJECTED: voice disabled in channel ${code} (user=${socket.user.username}).`);
       socket.emit('error-msg', 'Voice is disabled in this channel');
       socket.emit('voice-channel-gone', { code });
       return;
@@ -885,7 +885,7 @@ module.exports = function register(socket, ctx) {
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).get(vch.id, socket.user.id);
     if (!vMember) {
-      console.warn(`[VoiceDiag] voice-rejoin from ${socket.user.username} (id=${socket.user.id}) on ${code} REJECTED — not a channel member`);
+      console.warn(`[VoiceDiag] voice-rejoin from ${socket.user.username} (id=${socket.user.id}) on ${code} REJECTED: not a channel member`);
       socket.emit('voice-channel-gone', { code });
       return;
     }
@@ -900,7 +900,7 @@ module.exports = function register(socket, ctx) {
     if (pendingTempDelete?.has(code)) {
       clearTimeout(pendingTempDelete.get(code));
       pendingTempDelete.delete(code);
-      console.log(`[Temporary] Grace-period deletion cancelled — user rejoined "${code}"`);
+      console.log(`[Temporary] Grace-period deletion cancelled, user rejoined "${code}"`);
     }
 
     // ── FAST PATH: pending grace-period eviction ───────────

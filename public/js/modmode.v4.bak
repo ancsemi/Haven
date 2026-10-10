@@ -124,7 +124,7 @@ class ModMode {
 
     document.addEventListener('keydown', this._bound.keydown);
     document.addEventListener('dragend', this._bound.dragEnd);
-    this._showToast('Mod Mode ON — drag headers or ⋮⋮ handles to rearrange');
+    this._showToast('Mod Mode ON: drag headers or ⋮⋮ handles to rearrange');
   }
 
   _disable() {
@@ -142,7 +142,7 @@ class ModMode {
 
     this._persistFromDom();
     this._saveState();
-    this._showToast('Mod Mode OFF — layout saved');
+    this._showToast('Mod Mode OFF, layout saved');
   }
 
   _onBreakpointChange() {

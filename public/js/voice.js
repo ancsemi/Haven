@@ -524,7 +524,7 @@ class VoiceManager {
     }
     if (!code) return false; // live media but no idea which channel — leave it alone
     console.warn('[Voice] Local state said not-in-voice but media is live',
-      `(peers=${live}, micLive=${micLive}) — restoring session state for`, code);
+      `(peers=${live}, micLive=${micLive}): restoring session state for`, code);
     this.currentChannel = code;
     this.inVoice = true;
     this._voiceSessionGeneration = (this._voiceSessionGeneration || 0) + 1;
@@ -560,7 +560,7 @@ class VoiceManager {
       pending.generation === (this._voiceSessionGeneration || 0) &&
       pending.code === this.currentChannel;
     if (!recoveredCode && sameSession && this.inVoice) {
-      console.warn('[Voice] Server confirmed voice channel is gone — leaving locally:', pending.code);
+      console.warn('[Voice] Server confirmed voice channel is gone, leaving locally:', pending.code);
       try { this.leave(); } catch (e) { console.warn('[Voice] leave() during deferred voice-channel-gone failed:', e); }
     }
   }
@@ -669,7 +669,7 @@ class VoiceManager {
         }, remaining);
         return;
       }
-      console.warn('[Voice] Server says voice channel is gone — leaving locally:', data && data.code);
+      console.warn('[Voice] Server says voice channel is gone, leaving locally:', data && data.code);
       try { this.leave(); } catch (e) { console.warn('[Voice] leave() during voice-channel-gone failed:', e); }
     });
 
@@ -706,7 +706,7 @@ class VoiceManager {
       // peers — that would tear down working audio for no reason. See
       // [VoiceDiag] fast-path in src/socketHandlers/voice.js.
       if (data.skipRenegotiate) {
-        console.log('[Voice] voice-existing-users with skipRenegotiate — keeping existing peers');
+        console.log('[Voice] voice-existing-users with skipRenegotiate, keeping existing peers');
         // Still re-arm screen recovery. A blip that kept the peer
         // connection "connected" can still drop the screen video track
         // (transceiver goes muted / track ends) without tearing voice
@@ -722,7 +722,7 @@ class VoiceManager {
       // a half-closed path). Only build peers we don't already have.
       if (this.inVoice && this.peers.size > 0) {
         const missing = directUsers.filter(u => !this.peers.has(u.id));
-        console.warn('[Voice] voice-existing-users during live session — keeping peers, adding missing only', {
+        console.warn('[Voice] voice-existing-users during live session: keeping peers, adding missing only', {
           existing: this.peers.size,
           missing: missing.length
         });
@@ -826,7 +826,7 @@ class VoiceManager {
           // Impolite peer: ignore the incoming offer. The polite side will roll
           // its own offer back and answer ours, so we still converge — with one
           // negotiation instead of two conflicting ones.
-          console.warn('[Voice] offer glare with', from.id, '— ignoring their offer (we are impolite)');
+          console.warn('[Voice] offer glare with', from.id, 'so ignoring their offer (we are impolite)');
           return;
         }
 
@@ -1447,10 +1447,10 @@ class VoiceManager {
       const tileTrackId = this._screenTileTrackId(sharerId);
       if (this._deliverScreenFromReceivers(sharerId, { skipTrackId: tileTrackId })) {
         console.warn('[Voice] Adopted screen stream from existing receiver for', sharerId,
-          '— no track event fired for this share');
+          '(no track event fired for this share)');
         return;
       }
-      console.warn('[Voice] No video from screen sharer', sharerId, '— requesting renegotiate',
+      console.warn('[Voice] No video from screen sharer', sharerId, 'so requesting renegotiate',
         `(attempts left after this: ${Math.max(0, attemptsLeft - 1)})`);
       this.requestScreenStream(sharerId);
       if (attemptsLeft > 1) this._watchForScreenStream(sharerId, attemptsLeft - 1);
@@ -1544,7 +1544,7 @@ class VoiceManager {
       // handler in app-socket.js auto-rejoins voice via the persisted
       // localStorage channel once the socket comes back. (#voice-spam-click)
       if (this.socket && this.socket.connected === false) {
-        console.warn('[Voice] join() ignored — socket disconnected');
+        console.warn('[Voice] join() ignored: socket disconnected');
         return false;
       }
 
@@ -3016,7 +3016,7 @@ class VoiceManager {
     peer._recoveringTimedOutOffer = true;
 
     console.warn('[Voice] Offer answer timed out for peer', userId,
-      '— rolling back and retrying negotiation');
+      '(rolling back and retrying negotiation)');
     if (connection.signalingState === 'have-local-offer') {
       try {
         await connection.setLocalDescription({ type: 'rollback' });
@@ -3042,7 +3042,7 @@ class VoiceManager {
       } else {
         peer._offerRecoveryExhausted = true;
         console.warn('[Voice] Automatic offer recovery exhausted for peer', userId,
-          '— waiting for a new media or connection event');
+          '(waiting for a new media or connection event)');
       }
       return true;
     }
@@ -3082,7 +3082,7 @@ class VoiceManager {
       if (connection.signalingState !== 'stable') {
         const ok = await this._waitForSignalingStable(connection, 5000);
         if (!ok) {
-          console.warn('[Voice] _renegotiate: signaling stayed', connection.signalingState, 'for peer', userId, '— queueing retry');
+          console.warn('[Voice] _renegotiate: signaling stayed', connection.signalingState, 'for peer', userId, '(queueing retry)');
           peer._renegotiateQueued = true;
           peer._queuedIceRestart = peer._queuedIceRestart || iceRestart;
           return false;
@@ -3595,11 +3595,11 @@ class VoiceManager {
       if (!broken) return;
       if (attempt >= 2) {
         console.warn('[Voice] ICE restart exhausted for', userId,
-          `(conn=${cs}, ice=${ics}) — leaving peer for the next reconnect/heal sweep`);
+          `(conn=${cs}, ice=${ics}): leaving peer for the next reconnect/heal sweep`);
         return;
       }
       console.warn('[Voice] ICE restart did not recover peer', userId,
-        `(conn=${cs}, ice=${ics}) — re-attempting (retry ${attempt + 1})`);
+        `(conn=${cs}, ice=${ics}): re-attempting (retry ${attempt + 1})`);
       this._restartIce(userId, connection, attempt + 1);
     }, 5000);
   }
@@ -4166,7 +4166,7 @@ class VoiceManager {
       // but frequency mapping is wrong and quality drops (#5458).
       if (this.audioCtx && this.audioCtx.sampleRate !== 48000) {
         console.warn(
-          `[Voice] RNNoise expects 48 kHz but AudioContext is ${this.audioCtx.sampleRate} Hz — ` +
+          `[Voice] RNNoise expects 48 kHz but AudioContext is ${this.audioCtx.sampleRate} Hz; ` +
           'suppression quality will be reduced. Prefer an output device at 48 kHz.'
         );
       }

@@ -177,7 +177,7 @@ _openChannelCtxMenu(code, btnEl) {
 /* ── Hidden channels (admin declutter, local-only — #5409) ─────────────
    Admins can't leave channels because they need access to every one, so
    instead they can hide a channel from their own sidebar. This is purely a
-   per-device view preference (localStorage), like mute — it never changes
+   per-device view preference (localStorage), like mute. It never changes
    membership or affects anyone else, and the channel stays fully accessible
    via the "N hidden channels" restore bar. */
 _getHiddenChannels() {

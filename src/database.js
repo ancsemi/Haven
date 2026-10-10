@@ -1606,7 +1606,7 @@ function initDatabase() {
       const stored = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
       if (envName && stored && stored.value === 'HAVEN') {
         db.prepare("UPDATE server_settings SET value = '' WHERE key = 'server_name'").run();
-        console.log(`Server name now comes from SERVER_NAME ("${envName}") — set a name in Settings to override it.`);
+        console.log(`Server name now comes from SERVER_NAME ("${envName}"). Set a name in Settings to override it.`);
       }
       db.prepare(
         "INSERT OR IGNORE INTO server_settings (key, value) VALUES ('server_name_env_reclaim', '1')"

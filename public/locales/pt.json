@@ -6,7 +6,7 @@
     "direction": "ltr"
   },
   "auth": {
-    "page_title": "Haven — Entrar",
+    "page_title": "Haven | Entrar",
     "tagline": "Conversa privada, suas regras",
     "tabs": {
       "login": "Entrar",
@@ -942,8 +942,8 @@
   },
   "users": {
     "no_one_here": "Ninguém aqui",
-    "online_count": "Online — {{count}}",
-    "offline_count": "Offline — {{count}}",
+    "online_count": "Online ({{count}})",
+    "offline_count": "Offline ({{count}})",
     "opening_dm": "Abrindo DM com {{name}}…",
     "direct_message": "Mensagem direta",
     "more_actions": "Mais ações",
@@ -3925,11 +3925,11 @@
     }
   },
   "games": {
-    "page_title": "{{title}} — Haven",
+    "page_title": "{{title}} | Haven",
     "back_to_haven": "Voltar ao Haven",
     "loading": "Carregando…",
     "flash": {
-      "page_title": "Jogo em Flash — Haven",
+      "page_title": "Jogo em Flash | Haven",
       "default_title": "Jogo em Flash",
       "loading": "Carregando…",
       "volume": "Volume",
@@ -3944,7 +3944,7 @@
       "not_installed": "Talvez falte isso no servidor. Quem roda o servidor resolve rodando npm install na pasta do Haven."
     },
     "io": {
-      "page_title": "Jogos .io — Haven",
+      "page_title": "Jogos .io | Haven",
       "title": "Jogos .io",
       "search": "Pesquisar jogos…",
       "no_matches": "Nenhum jogo corresponde à pesquisa",
@@ -3988,7 +3988,7 @@
       }
     },
     "flappy": {
-      "page_title": "Shippy Container — Haven",
+      "page_title": "Shippy Container | Haven",
       "leaderboard": "Classificação",
       "score": "Pontuação:",
       "best": "Recorde:",

@@ -53,7 +53,7 @@ function parseZip(filePath) {
   const AdmZip = require('adm-zip');
   let zip;
   try { zip = new AdmZip(filePath); }
-  catch { throw new Error('Could not open ZIP file — it may be corrupt.'); }
+  catch { throw new Error('Could not open ZIP file. It may be corrupt.'); }
 
   const entries = zip.getEntries();
 

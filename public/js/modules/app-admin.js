@@ -541,7 +541,7 @@ _applyServerSettings() {
   const serverCodeEl = document.getElementById('server-code-value');
   if (serverCodeEl) {
     const code = this.serverSettings.server_code;
-    serverCodeEl.textContent = code || '—';
+    serverCodeEl.textContent = code || '-';
     serverCodeEl.style.opacity = code ? '1' : '0.4';
   }
 
@@ -549,7 +549,7 @@ _applyServerSettings() {
   const tokenEl = document.getElementById('registration-token-value');
   if (tokenEl) {
     const tok = this.serverSettings.registration_token;
-    tokenEl.textContent = tok || '—';
+    tokenEl.textContent = tok || '-';
     tokenEl.style.opacity = tok ? '1' : '0.4';
   }
   const tokenToggle = document.getElementById('registration-token-enabled');

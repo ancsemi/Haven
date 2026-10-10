@@ -7,7 +7,7 @@
  */
 
 /*
-  Braid — light. Palette is 1:1 with Haven-Mobile's BRAID_LIGHT preset
+  Braid (light). Palette is 1:1 with Haven-Mobile's BRAID_LIGHT preset
   (deep green #00875a on white, radius scale 1.6). File themes load on
   the stable "haven" layout base, so tokens live on :root and win over
   style.css by cascade order. Sizes are rem so the interface Zoom

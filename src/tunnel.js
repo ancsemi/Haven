@@ -201,10 +201,10 @@ async function startTunnel(port, provider = 'localtunnel', ssl = false) {
       // Increased timeout to 90s — cloudflared can be slow on first launch or slow connections
       const timer = setTimeout(() => {
         const hint = stderrLog.includes('failed to connect')
-          ? ' (cloudflared could not reach your local server — is it running?)'
+          ? ' (cloudflared could not reach your local server. Is it running?)'
           : stderrLog.includes('ERR')
             ? ` (cloudflared error: ${stderrLog.split('ERR').pop().trim().slice(0, 100)})`
-            : ' (cloudflared took too long — check your internet connection)';
+            : ' (cloudflared took too long, check your internet connection)';
         finalize(null, new Error('Timed out waiting for cloudflared URL' + hint));
       }, 90000);
       proc.stdout.on('data', parseLine);

@@ -311,14 +311,14 @@
 
 /* Inline code sets its own color and background, so `color: transparent`
    can't hide it and it would show through an unrevealed spoiler. It's a
-   single line, so the spoiler's own bar covers it — just hide the element
+   single line, so the spoiler's own bar covers it; just hide the element
    (keeping its layout box) until revealed. */
 .spoiler:not(.revealed) .inline-code {
   visibility: hidden;
 }
 
 /* Fenced code blocks are tall block-level boxes, but .spoiler is an inline
-   span whose background only paints the first and last line — the middle of
+   span whose background only paints the first and last line: the middle of
    the block would be hidden-but-uncovered (transparent) instead of showing a
    spoiler bar. So rather than hide the block, repaint it as the bar itself:
    the muted background, transparent text, no border, and no language tag,
@@ -389,7 +389,7 @@
 /* A link wrapped in a || spoiler || carries the spoiler onto its embed card:
    blur the card behind the shared spoiler tag until it's clicked to reveal.
    Only the children are blurred and made click-through, so the card itself
-   catches the reveal click — same mechanic as .spoiler-media above. */
+   catches the reveal click, same mechanic as .spoiler-media above. */
 .link-preview.lp-spoiler {
   position: relative;
   cursor: pointer;

@@ -299,7 +299,7 @@ module.exports = function registerBackup(deps) {
       cleanupTmp();
       res.json({
         ok: true,
-        message: 'Backup staged. Server will restart in ~2 seconds to apply. If the server does not come back up, your hosting setup may not auto-restart — start Haven manually.',
+        message: 'Backup staged. Server will restart in ~2 seconds to apply. If the server does not come back up, your hosting setup may not auto-restart; start Haven manually.',
         scheduled: true,
       });
 

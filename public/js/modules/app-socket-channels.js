@@ -663,7 +663,7 @@ _listenPresenceAndVoice() {
     // own entry from local state so the panel never shows us as absent
     // while the voice bar says "Voice Connected". (#self-absent-voice-panel)
     if (isInVoice && myId && !users.some(u => u.id === myId)) {
-      console.warn('[VoiceSelfHeal] Server roster missing self — injecting + emitting voice-rejoin', {
+      console.warn('[VoiceSelfHeal] Server roster missing self, injecting + emitting voice-rejoin', {
         channel: data.channelCode,
         rosterIds: users.map(u => u && u.id),
         myId,
@@ -692,7 +692,7 @@ _listenPresenceAndVoice() {
       const now = Date.now();
       if ((now - (this._lastVoiceSelfHealAt || 0)) > 3000 && this.socket?.connected) {
         this._lastVoiceSelfHealAt = now;
-        console.warn('[Voice] Self missing from roster — emitting voice-rejoin');
+        console.warn('[Voice] Self missing from roster, emitting voice-rejoin');
         this.socket.emit('voice-rejoin', { code: data.channelCode, ...this.voice.getRelayClientInfo() });
       }
     }

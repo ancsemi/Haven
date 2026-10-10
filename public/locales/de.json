@@ -175,7 +175,7 @@
       "show_password": "Passwort anzeigen",
       "hide_password": "Passwort ausblenden"
     },
-    "page_title": "Haven — Anmeldung"
+    "page_title": "Haven | Anmeldung"
   },
   "app": {
     "brand": "HAVEN",
@@ -871,8 +871,8 @@
   },
   "users": {
     "no_one_here": "Niemand hier",
-    "online_count": "Online — {{count}}",
-    "offline_count": "Offline — {{count}}",
+    "online_count": "Online ({{count}})",
+    "offline_count": "Offline ({{count}})",
     "opening_dm": "DM mit {{name}} wird geöffnet…",
     "direct_message": "Direktnachricht",
     "more_actions": "Weitere Aktionen",
@@ -3725,11 +3725,11 @@
     }
   },
   "games": {
-    "page_title": "{{title}} — Haven",
+    "page_title": "{{title}} | Haven",
     "back_to_haven": "Zurück zu Haven",
     "loading": "Wird geladen …",
     "flash": {
-      "page_title": "Flash-Spiel — Haven",
+      "page_title": "Flash-Spiel | Haven",
       "default_title": "Flash-Spiel",
       "loading": "Wird geladen …",
       "volume": "Lautstärke",
@@ -3744,7 +3744,7 @@
       "not_installed": "Möglicherweise fehlt die Datei auf dem Server. Der Serverbetreiber kann sie installieren, indem er im Haven-Ordner „npm install“ ausführt."
     },
     "io": {
-      "page_title": ".io-Spiele — Haven",
+      "page_title": ".io-Spiele | Haven",
       "title": ".io-Spiele",
       "search": "Spiele suchen …",
       "no_matches": "Keine Spiele entsprechen deiner Suche",
@@ -3788,7 +3788,7 @@
       }
     },
     "flappy": {
-      "page_title": "Shippy Container — Haven",
+      "page_title": "Shippy Container | Haven",
       "leaderboard": "Bestenliste",
       "score": "Punktzahl:",
       "best": "Rekord:",

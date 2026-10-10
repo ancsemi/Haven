@@ -1141,11 +1141,11 @@ module.exports = function register(socket, ctx) {
     touchVoiceActivity(socket.user.id);
 
     if (floodCheck('message')) {
-      return socket.emit('error-msg', 'Slow down — you\'re sending messages too fast');
+      return socket.emit('error-msg', 'Slow down, you\'re sending messages too fast');
     }
 
     const channel = db.prepare('SELECT id, name, slow_mode_interval, text_enabled, voice_enabled, media_enabled, read_only, is_dm, is_group, is_self_dm, is_forum, forum_tags, role_gate FROM channels WHERE code = ?').get(code);
-    if (!channel) return socket.emit('error-msg', 'Channel not found — try switching channels and back');
+    if (!channel) return socket.emit('error-msg', 'Channel not found. Try switching channels and back');
     if (channel.is_group && !isGroupEnvelope(content)) return socket.emit('error-msg', 'Group messages must be end-to-end encrypted. Update Haven to send here.');
     if (content.length > contentCap(_maxChars, channel, content)) {
       return socket.emit('error-msg', `Message too long (max ${_maxChars} characters)`);
@@ -1242,7 +1242,7 @@ module.exports = function register(socket, ctx) {
       const waitMs = channel.slow_mode_interval * 1000;
       if (now - lastSent < waitMs) {
         const remaining = Math.ceil((waitMs - (now - lastSent)) / 1000);
-        return socket.emit('error-msg', `Slow mode — wait ${remaining}s before sending another message`);
+        return socket.emit('error-msg', `Slow mode: wait ${remaining}s before sending another message`);
       }
       slowModeTracker.set(slowKey, now);
     }
@@ -1544,7 +1544,7 @@ module.exports = function register(socket, ctx) {
       } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
     } catch (err) {
       console.error('send-message error:', err.message);
-      socket.emit('error-msg', 'Failed to send message — please try again');
+      socket.emit('error-msg', 'Failed to send message. Please try again');
     }
   });
 
@@ -2482,7 +2482,7 @@ module.exports = function register(socket, ctx) {
       const columns = hasImages ? Math.min(5, Math.max(0, parseInt(data.columns, 10) || 0)) : 0;
 
       if (floodCheck('message')) {
-        return socket.emit('error-msg', 'Slow down — you\'re sending messages too fast');
+        return socket.emit('error-msg', 'Slow down, you\'re sending messages too fast');
       }
 
       const activeMute = db.prepare(

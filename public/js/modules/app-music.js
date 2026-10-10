@@ -79,7 +79,7 @@ _previewMusicLink(url) {
   const embedUrl = this._getMusicEmbed(url);
   if (platform && embedUrl) {
     preview.classList.add('active');
-    preview.innerHTML = `${platform.icon} <strong>${platform.name}</strong> — ${t('voice.music_ready')}`;
+    preview.innerHTML = `${platform.icon} <strong>${platform.name}</strong>: ${t('voice.music_ready')}`;
   } else {
     preview.classList.remove('active');
     preview.innerHTML = '';

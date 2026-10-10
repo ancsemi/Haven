@@ -256,7 +256,7 @@
 
 /* nowrap, not wrap: a wrapping flex line pushes whole items to a second row
    rather than shrinking them, so as soon as a user picked up a badge (LIVE,
-   📹, 👁) the status icons dropped onto a row of their own — and because they
+   📹, 👁) the status icons dropped onto a row of their own, and because they
    carry margin-left:auto they sat at the far right of it, reading as an empty
    second row. The name already ellipsises (flex:1 + min-width:0 in
    style.css), so keeping one line just truncates the name instead. */

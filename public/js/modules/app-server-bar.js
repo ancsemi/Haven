@@ -741,7 +741,7 @@ _renderServerBar() {
         : `<span class="server-icon-text">${this._escapeHtml(initial)}</span>`);
     return `
       <div class="server-icon remote" data-url="${this._escapeHtml(s.url)}" draggable="true"
-           title="${this._escapeHtml(s.name)} — ${statusText}">
+           title="${this._escapeHtml(s.name)}&#10;${statusText}">
         ${iconContent}
         <span class="server-status-dot ${statusClass}"></span>
         ${window.havenDesktop ? '<span class="server-unread-dot"></span>' : ''}
@@ -769,7 +769,7 @@ _renderServerBar() {
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('server-remove')) {
         e.stopPropagation();
-        const serverName = el.getAttribute('title')?.split(' — ')[0] || el.dataset.url;
+        const serverName = el.getAttribute('title')?.split('\n')[0] || el.dataset.url;
         this._removeServerByUser(el.dataset.url, serverName, () => {
           this._renderServerBar();
           this._showToast(t('toasts.server_removed'), 'success');

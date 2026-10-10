@@ -558,7 +558,7 @@ _bindAdminControls() {
   });
   document.getElementById('copy-server-code-btn')?.addEventListener('click', () => {
     const code = document.getElementById('server-code-value')?.textContent;
-    if (code && code !== '—') {
+    if (code && code !== '-') {
       const onCopied = () => this._showToast(t('toasts.server_code_copied'), 'success');
       navigator.clipboard.writeText(code).then(onCopied).catch(() => {
         try {
@@ -600,7 +600,7 @@ _bindAdminControls() {
   });
   document.getElementById('copy-registration-token-btn')?.addEventListener('click', async () => {
     const tok = document.getElementById('registration-token-value')?.textContent?.trim();
-    if (!tok || tok === '—') return;
+    if (!tok || tok === '-') return;
     const onCopied = () => this._showToast?.(t('settings.admin.registration.copied'), 'success');
     // The old handler toasted "copied" from the rejection path too, so in the
     // desktop app (clipboard write refused without a fresh user activation)

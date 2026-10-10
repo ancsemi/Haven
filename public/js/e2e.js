@@ -89,7 +89,7 @@ class HavenE2E {
             const localPub = await crypto.subtle.exportKey('jwk', this._keyPair.publicKey);
             if (probe.serverPublicKey && localPub && probe.serverPublicKey.x && localPub.x && probe.serverPublicKey.x !== localPub.x) {
               this._divergent = true;
-              console.warn('[E2E] Local key diverges from server backup — awaiting user action');
+              console.warn('[E2E] Local key diverges from server backup, awaiting user action');
             }
           } catch { /* best-effort divergence check */ }
         } else if (probe.status === 'none') {
@@ -99,7 +99,7 @@ class HavenE2E {
         } else {
           // probe.status === 'unknown' — flaky network. Do NOT upload; it would
           // clobber whatever the server actually has.
-          console.warn('[E2E] Could not reach server for backup probe — skipping re-upload to avoid clobber');
+          console.warn('[E2E] Could not reach server for backup probe, skipping re-upload to avoid clobber');
         }
       }
 
@@ -119,13 +119,13 @@ class HavenE2E {
       if (!this._keyPair && wrappingKey) {
         if (this._serverBackupState !== 'none') {
           this._ghostState = true;
-          console.warn('[E2E] Server state ' + this._serverBackupState + ' — refusing to generate keys (would risk clobber)');
+          console.warn('[E2E] Server state ' + this._serverBackupState + ': refusing to generate keys (would risk clobber)');
           this._ready = false;
           return false;
         }
         if (!(await this._canAttemptGenerate())) {
           this._ghostState = true;
-          console.warn('[E2E] Regenerate cooldown active — refusing to mint new keypair');
+          console.warn('[E2E] Regenerate cooldown active, refusing to mint new keypair');
           this._ready = false;
           return false;
         }
@@ -139,9 +139,9 @@ class HavenE2E {
       /* 4. Auto-login without IndexedDB — E2E unavailable until real login */
       if (!this._keyPair) {
         if (this._serverBackupExists) {
-          console.warn('[E2E] Server backup exists but could not be decrypted — password may be wrong');
+          console.warn('[E2E] Server backup exists but could not be decrypted; password may be wrong');
         } else {
-          console.warn('[E2E] No key pair available — login with password to unlock E2E');
+          console.warn('[E2E] No key pair available. Login with password to unlock E2E');
         }
         this._ready = false;
         return false;
@@ -487,7 +487,7 @@ class HavenE2E {
         } else {
           // Server has a different key — don't auto-overwrite.
           // Return conflict so the caller can decide (sync from server, prompt user, etc.)
-          console.warn('[E2E] Public key conflict — server has a different key');
+          console.warn('[E2E] Public key conflict: server has a different key');
           resolve({ ok: false, conflict: true, serverKey: data?.existing || null });
         }
       });
@@ -631,7 +631,7 @@ class HavenE2E {
       console.log('[E2E] Restored from server backup');
       return { pair, status: 'present' };
     } catch {
-      console.warn('[E2E] Server backup unwrap failed — keys NOT auto-regenerated to protect other devices');
+      console.warn('[E2E] Server backup unwrap failed; keys NOT auto-regenerated to protect other devices');
       return { pair: null, status: 'present' };
     }
   }
@@ -708,7 +708,7 @@ class HavenE2E {
         // Do NOT clear local keys: the user might still have a usable keypair
         // from a previous session. The original bug here treated this as
         // 'no backup' which prompted the user to Reset and lose all DMs.
-        console.warn('[E2E] Unwrap failed — password mismatch:', unwrapErr.message);
+        console.warn('[E2E] Unwrap failed (password mismatch):', unwrapErr.message);
         return { ok: false, reason: 'bad-password' };
       }
 

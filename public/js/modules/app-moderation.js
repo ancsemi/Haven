@@ -400,7 +400,7 @@ _renderAutomodDomains(rows) {
           ${t(r.mode === 'deny' ? 'settings.admin.automod_block_badge' : 'settings.admin.automod_allow_badge')}
         </strong>
         ${this._escapeHtml(r.domain)}${r.include_subdomains ? ` <span class="muted-text">${t('settings.admin.automod_subdomains')}</span>` : ''}
-        ${r.note ? `<span class="muted-text"> — ${this._escapeHtml(r.note)}</span>` : ''}
+        ${r.note ? `<span class="muted-text"> (${this._escapeHtml(r.note)})</span>` : ''}
       </span>
       <button class="btn-sm btn-danger-sm automod-domain-remove-btn" data-domain="${this._escapeHtml(r.domain)}">✕</button>
     </div>

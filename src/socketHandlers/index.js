@@ -1981,7 +1981,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     if (now > entry.resetTime) { entry.count = 0; entry.resetTime = now + 60000; }
     entry.count++;
     if (entry.count > MAX_CONN_PER_MIN) {
-      return next(new Error('Rate limited — too many connections'));
+      return next(new Error('Rate limited: too many connections'));
     }
     next();
   });
@@ -2167,7 +2167,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   io.on('connection', (socket) => {
     if (!socket.user || !socket.user.username) {
-      console.warn('⚠️  Connection without valid user — disconnecting');
+      console.warn('⚠️  Connection without valid user, disconnecting');
       socket.disconnect(true);
       return;
     }
@@ -2392,7 +2392,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         const now = Date.now();
         if (now - (socket._lastSlowDown || 0) > 3000) {
           socket._lastSlowDown = now;
-          socket.emit('error-msg', 'Slow down — too many requests');
+          socket.emit('error-msg', 'Slow down: too many requests');
         }
         return;
       }
@@ -2533,7 +2533,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         const ch = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
         if (!ch) return;
         const summary = `🛡️ Blocked ${verdict.rule} from **${socket.user.displayName}**` +
-          (verdict.host ? ` — \`${verdict.host}\`` : '') +
+          (verdict.host ? `: \`${verdict.host}\`` : '') +
           ` (strike ${outcome.count}${outcome.action !== 'none' && outcome.action !== 'warn' ? `, ${outcome.action}` : ''})`;
         const result = db.prepare(
           'INSERT INTO messages (channel_id, user_id, content) VALUES (?, NULL, ?)'
@@ -2746,7 +2746,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           if (stillOnline) return;
           try {
             db.prepare('DELETE FROM users WHERE id = ? AND is_guest = 1').run(guestId);
-            console.log(`👤 guest ${guestName} (id=${guestId}) cleaned up — username freed`);
+            console.log(`👤 guest ${guestName} (id=${guestId}) cleaned up, username freed`);
           } catch (err) {
             console.warn(`[guest-cleanup] failed for ${guestName}:`, err.message);
           }
@@ -2803,7 +2803,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           // existing entry — peers never see voice-user-left, and the
           // panels never blank.
           const oldSocketId = socket.id;
-          console.log(`[VoiceDiag] disconnect for ${socket.user.username} (id=${socket.user.id}) on ${code} — scheduling 4s grace eviction (oldSocket=${oldSocketId})`);
+          console.log(`[VoiceDiag] disconnect for ${socket.user.username} (id=${socket.user.id}) on ${code}: scheduling 4s grace eviction (oldSocket=${oldSocketId})`);
           schedulePendingVoiceLeave({
             pendingVoiceLeave,
             voiceUsers,
