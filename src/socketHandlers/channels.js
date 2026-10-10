@@ -42,6 +42,12 @@ module.exports = function register(socket, ctx) {
     applyRoleChannelAccess, logAudit, fireWebhookEvent, enforceAutomod,
     rotateChannelCode, rotatePrivateCodesAfterRemoval, botAudioManager
   } = ctx;
+  const { refuseYoungAccount } = require('./postingWait')(socket, ctx);
+  // New one to one conversations a member may start per hour. A new DM lands
+  // in the other person's list, so without a cap one account could message
+  // every member of a server in minutes. Existing conversations are not
+  // counted, and admins are not limited.
+  const NEW_DMS_PER_HOUR = 20;
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
@@ -1820,6 +1826,25 @@ module.exports = function register(socket, ctx) {
         dm_target: { id: target.id, username: target.username }
       });
       return;
+    }
+    if (!isSelfDm) {
+      if (refuseYoungAccount(null)) return;
+      if (!socket.user.isAdmin) {
+        let started;
+        try {
+          started = db.prepare(`
+            SELECT COUNT(*) AS n FROM channels
+            WHERE created_by = ? AND is_dm = 1 AND COALESCE(is_group, 0) = 0 AND COALESCE(is_self_dm, 0) = 0
+              AND created_at >= datetime('now', '-1 hour')
+          `).get(socket.user.id).n;
+        } catch (err) {
+          console.warn('[dm] could not count new conversations, refusing:', err.message);
+          return socket.emit('error-msg', 'Could not start the conversation. Try again in a moment.');
+        }
+        if (started >= NEW_DMS_PER_HOUR) {
+          return socket.emit('error-msg', 'You have started a lot of new conversations in the last hour. Try again later.');
+        }
+      }
     }
     const code = generateUniqueSharedCode();
     try {

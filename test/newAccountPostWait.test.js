@@ -142,13 +142,12 @@ test('new accounts wait before posting', async (t) => {
     const scheduled = await new Promise((res) => N.emit('schedule-message', { code, content: 'later', sendAt: new Date(Date.now() + 3600000).toISOString() }, res));
     assert.ok(scheduled && scheduled.error && scheduled.newAccountWait > 0, 'scheduling refused');
 
-    const opened = next(N, 'dm-opened', (d) => d && !d.is_self_dm);
+    // Starting a new DM with someone else waits too: the conversation would
+    // otherwise land in their DM list.
+    const dmWait = next(N, 'new-account-wait');
     N.emit('start-dm', { targetUserId: admin.user.id });
-    const dm = await opened;
-    assert.ok(dm && dm.code, 'DM opened');
-    const dmTry = await attempt(N, 'send-message', { code: dm.code, content: 'dm too soon' },
-      { event: 'new-message', filter: (d) => d && d.channelCode === dm.code });
-    assert.ok(dmTry.refused, 'DM to someone else refused');
+    const held = await dmWait;
+    assert.ok(held && held.minutes > 0, 'starting a DM with someone else refused');
   });
 
   await t.test('a DM with yourself is not held back', async () => {
