@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Default Theme in Appearance & Welcome and the theme in Defaults for New Members no longer disagree (#5747). They are now one setting shown in two places: sharing a theme makes it the Default Theme, changing the Default Theme changes the shared theme, and choosing None takes the theme out of the shared defaults. Before, new members saw the Default Theme on the sign-in page and then switched to the shared theme once they were in.
+
 ## [4.20.0] - 2026-10-09
 
 Defaults for new members, a posting wait for new accounts, likes on forum

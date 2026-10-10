@@ -2441,7 +2441,7 @@
       "save_notice": "Changes below require clicking <strong>Save Settings</strong> to apply.",
       "login_title_hint": "Custom title displayed on the login screen below the HAVEN logo.",
       "server_icon_hint": "Server icon (square, max 2 MB)",
-      "default_theme_hint": "New users see this theme on first visit. They can still pick their own.",
+      "default_theme_hint": "New users see this theme on first visit. They can still pick their own. A theme shared under Defaults for New Members is this same setting: changing one changes the other.",
       "default_locale": "Default Language",
       "no_locale": "Auto-detect (browser)",
       "default_locale_hint": "New users see Haven in this language on first visit. They can still pick their own.",

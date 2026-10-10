@@ -153,6 +153,81 @@ test('only admins or manage_server holders can change the defaults, and errors d
   assert.deepEqual(manager.sent.at(-1), ['member-defaults-applied', {}]);
 });
 
+// One theme choice in two places (#5747): Default Theme in Appearance &
+// Welcome and a shared theme for new members stay the same.
+const defaultTheme = (db) => db.prepare("SELECT value FROM server_settings WHERE key = 'default_theme'").get()?.value;
+
+test('a shared theme follows the Default Theme, and None takes it out', () => {
+  const db = freshDb();
+  assert.equal(md.followDefaultTheme(db, 'nord'), null, 'no shared theme: nothing is added');
+  assert.deepEqual(md.readSnapshot(db).s, {});
+
+  md.saveDefaults(db, { theme: 'matrix', density: 'compact' });
+  md.bumpDefaults(db, 4000);
+  assert.equal(md.followDefaultTheme(db, 'matrix'), null, 'already the same');
+  md.followDefaultTheme(db, 'nord');
+  assert.deepEqual(md.readSnapshot(db), { v: 4000, s: { theme: 'nord', density: 'compact' } }, 'the version stays');
+  md.followDefaultTheme(db, '');
+  assert.deepEqual(md.readSnapshot(db), { v: 4000, s: { density: 'compact' } });
+});
+
+test('sharing a theme makes it the Default Theme when it can be one', () => {
+  const admin = fakeSocket({ id: 1, isAdmin: true });
+  admin.handlers.get('set-member-defaults')({ settings: { theme: 'dracula', density: 'compact' } });
+  assert.equal(defaultTheme(admin.db), 'dracula');
+  assert.deepEqual(admin.settingChanges.map(([k]) => k), ['member_defaults', 'default_theme']);
+
+  // Sharing again without a change leaves the Default Theme alone.
+  admin.handlers.get('set-member-defaults')({ settings: { theme: 'dracula' } });
+  assert.deepEqual(admin.settingChanges.map(([k]) => k), ['member_defaults', 'default_theme', 'member_defaults']);
+
+  // Without a theme in the set, the Default Theme stays.
+  admin.handlers.get('set-member-defaults')({ settings: { density: 'cozy' } });
+  assert.equal(defaultTheme(admin.db), 'dracula');
+
+  // A custom theme that is not published cannot be the Default Theme.
+  admin.handlers.get('set-member-defaults')({ settings: { theme: 'file:braid.theme.css' } });
+  assert.equal(defaultTheme(admin.db), 'dracula');
+  admin.db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('published_themes', '["braid.theme.css"]');
+  admin.handlers.get('set-member-defaults')({ settings: { theme: 'file:braid.theme.css' } });
+  assert.equal(defaultTheme(admin.db), 'file:braid.theme.css');
+});
+
+test('changing the Default Theme changes the shared theme too', () => {
+  const registerAdmin = require('../src/socketHandlers/admin');
+  const db = freshDb();
+  const handlers = new Map();
+  const changes = [];
+  registerAdmin({ user: { id: 1, isAdmin: true }, on: (ev, fn) => handlers.set(ev, fn), emit() {} }, {
+    db, io: { except: () => ({ emit() {} }) }, state: { channelUsers: new Map() },
+    userHasPermission: () => true, logAudit() {}, automod: { invalidate() {}, settings: () => ({}) },
+    settingEffects: {
+      emitSettingChanged: (k, v) => changes.push([k, v]),
+      auditSettingChange() {}, afterSettingSaved() {}, broadcastLinkPolicy() {},
+    },
+  });
+  const update = handlers.get('update-server-setting');
+
+  update({ key: 'default_theme', value: 'nord' });
+  assert.deepEqual(md.readSnapshot(db).s, {}, 'nothing shared, nothing added');
+
+  md.saveDefaults(db, { theme: 'matrix', zoom: 110 });
+  update({ key: 'default_theme', value: 'tron' });
+  assert.deepEqual(md.readSnapshot(db).s, { theme: 'tron', zoom: 110 });
+  assert.deepEqual(changes.slice(-2).map(([k]) => k), ['default_theme', 'member_defaults']);
+
+  update({ key: 'default_theme', value: '' });
+  assert.deepEqual(md.readSnapshot(db).s, { zoom: 110 }, 'None (user\'s choice) is no shared theme either');
+
+  // Unpublishing the custom theme that was the default drops it from both.
+  update({ key: 'published_themes', value: '["braid.theme.css"]' });
+  md.saveDefaults(db, { theme: 'file:braid.theme.css', zoom: 110 });
+  update({ key: 'default_theme', value: 'file:braid.theme.css' });
+  update({ key: 'published_themes', value: '[]' });
+  assert.equal(defaultTheme(db), '');
+  assert.deepEqual(md.readSnapshot(db).s, { zoom: 110 });
+});
+
 test('the client applies through the pickers and keeps a per-account device record', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'public/js/modules/app-member-defaults.js'), 'utf8');
   assert.match(src, /const RECORD_PREFIX = 'haven_member_defaults_';/);

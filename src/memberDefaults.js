@@ -124,6 +124,19 @@ function bumpDefaults(db, now = Date.now()) {
   return writeSnapshot(db, { v: Math.max(now, cur.v + 1), s: cur.s });
 }
 
+// The server's Default Theme and a shared theme are one choice (#5747).
+// When the admin changes the Default Theme, a shared theme follows it, and
+// "None" takes the theme out of the shared set. Returns the new stored
+// value, or null when nothing had to change.
+function followDefaultTheme(db, theme) {
+  const cur = readSnapshot(db);
+  if (!('theme' in cur.s) || cur.s.theme === theme) return null;
+  const s = { ...cur.s };
+  if (SETTINGS.theme.check(theme)) s.theme = theme;
+  else delete s.theme;
+  return writeSnapshot(db, { v: cur.v, s });
+}
+
 function parseRecord(text) {
   if (typeof text !== 'string' || !text) return null;
   try {
@@ -168,5 +181,5 @@ function applyAccountDefaults(db, userId) {
 module.exports = {
   SETTING_KEY, RECORD_PREF, SETTINGS, ACCOUNT_KEYS,
   cleanSettings, parseStored, templateValue, readSnapshot,
-  saveDefaults, clearDefaults, bumpDefaults, applyAccountDefaults,
+  saveDefaults, clearDefaults, bumpDefaults, followDefaultTheme, applyAccountDefaults,
 };

@@ -11,6 +11,7 @@ const {
   readThemeMetadataFile,
   validatedThemeDefault,
 } = require('../themeMetadata');
+const memberDefaults = require('../memberDefaults');
 
 const THEMES_DIR = path.join(__dirname, '..', '..', 'themes');
 
@@ -119,6 +120,8 @@ module.exports = function register(socket, ctx) {
     let value = typeof data.value === 'string' ? data.value.trim() : '';
     let publishedThemeFiles = null;
     let clearDefaultTheme = false;
+    let clearedDefaultTheme = '';
+    let memberDefaultsValue = null;
 
     const allowedKeys = [
       'member_visibility', 'cleanup_enabled', 'cleanup_max_age_days', 'cleanup_max_size_mb', 'cleanup_max_uploads_mb',
@@ -356,6 +359,7 @@ module.exports = function register(socket, ctx) {
         const currentDefault = defaultRow?.value || '';
         clearDefaultTheme = currentDefault.startsWith('file:')
           && !publishedThemeFiles.includes(currentDefault.slice(5));
+        if (clearDefaultTheme) clearedDefaultTheme = currentDefault;
       } catch { return; }
     }
     if (key === 'custom_tos') { if (value.length > 50000) return; }
@@ -451,8 +455,14 @@ module.exports = function register(socket, ctx) {
         if (clearDefaultTheme) {
           db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('default_theme', '');
         }
+        // A shared theme for new members follows the Default Theme (#5747).
+        if (key === 'default_theme') {
+          memberDefaultsValue = memberDefaults.followDefaultTheme(db, value);
+        } else if (clearDefaultTheme && memberDefaults.readSnapshot(db).s.theme === clearedDefaultTheme) {
+          memberDefaultsValue = memberDefaults.followDefaultTheme(db, '');
+        }
       };
-      if (clearDefaultTheme && typeof db.transaction === 'function') db.transaction(save)();
+      if ((clearDefaultTheme || key === 'default_theme') && typeof db.transaction === 'function') db.transaction(save)();
       else save();
     } catch (err) {
       console.error('Failed to save server setting:', key, err.message);
@@ -462,6 +472,10 @@ module.exports = function register(socket, ctx) {
     emitSettingChanged(key, value);
     if (clearDefaultTheme) {
       io.except('bot-sockets').emit('server-setting-changed', { key: 'default_theme', value: '' });
+    }
+    if (memberDefaultsValue !== null) {
+      emitSettingChanged(memberDefaults.SETTING_KEY, memberDefaultsValue);
+      auditSettingChange(socket.user, memberDefaults.SETTING_KEY, memberDefaultsValue);
     }
 
     afterSettingSaved(key, value);
