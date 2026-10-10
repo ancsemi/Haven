@@ -745,7 +745,7 @@ Haven also ships optional extras that are **installed but switched off by defaul
 | `plugins/CompactLayout.plugin.js` | Reversible desktop layout that pairs with Compact or any other theme |
 | `plugins/ChromeLayout.plugin.js` | Condensed sidebar with docked DMs, prominent + action, and channel voice controls |
 | `plugins/BraidLayout.plugin.js` | Braid's layout changes |
-| `plugins/ChannnelTabsLayout.plugin.js` | Adds tabs to the sidbar which switch between viewing channels or DMs |
+| `plugins/ChannelTabsLayout.plugin.js` | Channels and DMs tabs above the sidebar list, with a Join or create button |
 | `plugins/MessageTimestamps.plugin.js` | Adds timestamps to messages |
 | `plugins/HavenGlyphs.plugin.js` | Reversible contextual interface icons using the bundled local Font Awesome font |
 | `public/fonts/fa-solid-900.woff2` | Local Font Awesome Solid font used by Haven Glyphs |
