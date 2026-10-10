@@ -480,6 +480,9 @@ class ChannelTabsLayout {
 
     if (!this._tabs || !this._split) return;
 
+    // Guests cannot use DMs, so their sidebar always shows channels.
+    if (tab === 'DMs' && document.body?.classList.contains('is-guest')) tab = 'channels';
+
     this._saveActiveTab(tab);
 
     this._tabs.querySelectorAll('[data-channel-tab]').forEach(button => {
@@ -524,6 +527,14 @@ class ChannelTabsLayout {
       return;
     }
 
+    // Haven's "Create Temp Channel" row opens the create form with
+    // Temporary ticked; that form is in the modal now, so open it first
+    // and let Haven's own handler run after this capture listener.
+    if (event.target.closest('#channel-list .temp-channel-create-btn')) {
+      this._openModal();
+      return;
+    }
+
     // Selecting an item in either list selects the matching tab.
     if (event.target.closest('#channel-list .channel-item')) {
       this._setChannelTab('channels');
@@ -560,13 +571,6 @@ class ChannelTabsLayout {
       }
 
       return;
-    }
-
-    if (event.target.closest('#create-temp-channel-btn')) {
-      setTimeout(() => {
-        if (this._modal) this._closeModal();
-        this._setChannelTab('channels');
-      }, 0);
     }
   }
 
@@ -624,7 +628,13 @@ class ChannelTabsLayout {
           overflow: hidden;
       }
       
-      html[data-sidebar-tabs-layout="1"] .temp-channel-create-btn {
+      /* Haven hides the DM pane while there are no DMs; on its own tab it
+         stays up so the tab is not blank. Guests have no DMs at all. */
+      html[data-sidebar-tabs-layout="1"] body:not(.is-guest) #sidebar-split #dm-pane:not(.pane-hidden) {
+        display: flex !important;
+      }
+
+      html[data-sidebar-tabs-layout="1"] body.is-guest #channel-dm-select [data-channel-tab="DMs"] {
         display: none !important;
       }
 
