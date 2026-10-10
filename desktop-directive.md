@@ -1,4 +1,4 @@
-# Haven Desktop App — Directive
+# Haven Desktop App: Directive
 
 > **Purpose:** This document captures the full design intent, architecture, and requirements
 > for the Haven Desktop App. The desktop app is being rebuilt **from scratch** in a **separate
@@ -12,7 +12,7 @@ A native desktop client for Haven that makes the entire experience brainlessly s
 install, launch, and you're chatting. No terminal commands, no config files, no friction.
 
 The desktop app is **not** part of the Haven server. It connects **to** a Haven server the same
-way a browser does — it's just a better experience.
+way a browser does. It's just a better experience.
 
 ---
 
@@ -23,10 +23,10 @@ way a browser does — it's just a better experience.
 1. **Admin launches their Haven server** the normal way (Start Haven.bat, `npm start`, Docker, etc.)
 2. **Browser users** see a popup prompting them to install the Haven Desktop App.
 3. Clicking "Install" downloads a **one-click installer** (Windows `.exe` / Linux `.AppImage` or `.deb`).
-4. User runs the installer. **No wizard, no options, no confusion** — just install and launch.
+4. User runs the installer. **No wizard, no options, no confusion**: just install and launch.
 5. Desktop app opens to a **Welcome Screen** with two cards:
-   - **"Join a Server"** — Enter a server address (IP/domain) and connect.
-   - **"Host My Own"** — For admins who want to run a server from this machine.
+   - **"Join a Server"**: Enter a server address (IP/domain) and connect.
+   - **"Host My Own"**: For admins who want to run a server from this machine.
 6. A **"Remember my choice"** checkbox saves the preference for future launches.
 
 ### "Join a Server" Path
@@ -44,7 +44,7 @@ way a browser does — it's just a better experience.
    then connects to `https://localhost:3000`.
 3. **If server NOT found:** Informs the user. Offers two options:
    - "Place your server files in [path]" (for users who have a server but it's elsewhere)
-   - **"Start Server Setup"** — Begins a one-click server installation wizard:
+   - **"Start Server Setup"**: Begins a one-click server installation wizard:
      - Downloads/installs Node.js if needed
      - Clones or downloads the Haven server
      - Runs `npm install`
@@ -103,7 +103,7 @@ way a browser does — it's just a better experience.
 - **Windows:** WASAPI per-process loopback capture (Win10 21H2+) + SoundVolumeView for device routing
 - **Linux:** PipeWire/PulseAudio null-sink + `pactl move-sink-input`
 - **macOS:** BlackHole virtual audio driver (future)
-- Built-in audio engine — no external drivers required for basic capture
+- Built-in audio engine: no external drivers required for basic capture
 - System-wide audio capture via Electron `desktopCapturer` loopback
 - Audio panel UI (🎵 button in voice controls) showing audio-producing apps
 - Per-app volume control
@@ -118,10 +118,10 @@ way a browser does — it's just a better experience.
 ### Desktop-Specific UI Injections
 - Draggable title bar region (CSS `-webkit-app-region: drag`)
 - Renderer scripts injected after page load:
-  - `audio-panel.js` — Per-app audio routing UI
-  - `audio-settings.js` — Audio device selection dropdowns
-  - `voice-integration.js` — Patches VoiceManager to use AudioMixer for WebRTC
-  - `server-manager.js` — Server start/stop controls
+  - `audio-panel.js`: Per-app audio routing UI
+  - `audio-settings.js`: Audio device selection dropdowns
+  - `voice-integration.js`: Patches VoiceManager to use AudioMixer for WebRTC
+  - `server-manager.js`: Server start/stop controls
 
 ---
 
@@ -146,7 +146,7 @@ desktop/                            # Electron app (separate repo going forward)
 │       └── server-manager.js       # Server start/stop controls
 ├── preload/
 │   └── preload.js                  # contextBridge → window.havenDesktop API
-├── assets/                         # Icons (tray, app icon) — PNG + SVG
+├── assets/                         # Icons (tray, app icon): PNG + SVG
 ├── build/                          # electron-builder resources (icon.png, icon.ico)
 ├── installer/
 │   └── nsis-hooks.nsh              # NSIS installer hooks
@@ -264,14 +264,14 @@ window.havenDesktop = {
 The desktop app is a **client** of the Haven server. It does NOT modify the server.
 However, the server provides these endpoints that the desktop app uses:
 
-- `/api/health` — Health check (used by server manager to detect if server is running)
+- `/api/health`: Health check (used by server manager to detect if server is running)
 - Standard Haven web UI (loaded in the Electron BrowserWindow)
 
 ### Optional Server-Side Support (for the future)
 
 The server *could* optionally provide:
-- `/api/desktop/info` — Installer metadata (version, available platforms)
-- `/api/desktop/download` — Serve installer files from `public/downloads/`
+- `/api/desktop/info`: Installer metadata (version, available platforms)
+- `/api/desktop/download`: Serve installer files from `public/downloads/`
 
 These are **not required** for the desktop app to function. The app can be distributed
 via GitHub Releases independently.
@@ -293,16 +293,16 @@ via GitHub Releases independently.
 
 ## 8. Key Design Principles
 
-1. **Completely separate repo** — The desktop app has its own git repository, its own
+1. **Completely separate repo**: The desktop app has its own git repository, its own
    package.json, its own CI/CD. It connects to Haven like any browser client.
-2. **One-click everything** — Install should be one click. Server setup should be one click.
+2. **One-click everything**: Install should be one click. Server setup should be one click.
    No terminal required for end users.
-3. **Cross-platform** — Windows and Linux from day one. macOS when possible.
-4. **No external drivers** — The built-in audio engine uses WASAPI loopback and
+3. **Cross-platform**: Windows and Linux from day one. macOS when possible.
+4. **No external drivers**: The built-in audio engine uses WASAPI loopback and
    PipeWire/PulseAudio null-sinks. No VB-CABLE installation required.
-5. **Graceful degradation** — If native audio capture isn't available, system audio
+5. **Graceful degradation**: If native audio capture isn't available, system audio
    capture via Electron desktopCapturer still works.
-6. **Security first** — Sandbox, context isolation, restricted navigation, permission
+6. **Security first**: Sandbox, context isolation, restricted navigation, permission
    whitelisting.
 
 ---

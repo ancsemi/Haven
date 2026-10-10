@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════
-# Haven — One-Click Installer Bootstrap (Linux / macOS)
+# Haven: One-Click Installer Bootstrap (Linux / macOS)
 # Run: curl -fsSL https://ancsemi.github.io/Haven/install.sh | bash
 #  or: wget -qO- https://ancsemi.github.io/Haven/install.sh | bash
 # ═══════════════════════════════════════════════════════════
@@ -17,7 +17,7 @@ INSTALL_DIR="$HOME/Haven"
 
 echo ""
 echo -e "${GREEN}${BOLD}  ========================================${NC}"
-echo -e "${GREEN}${BOLD}    HAVEN — One-Click Installer${NC}"
+echo -e "${GREEN}${BOLD}    HAVEN: One-Click Installer${NC}"
 echo -e "${GREEN}${BOLD}  ========================================${NC}"
 echo ""
 echo "  This will set up Haven, your private"
@@ -33,7 +33,7 @@ if [ "$(uname -s)" = "Linux" ]; then
         echo -e "  ${CYAN}Tip:${NC} Prefer a portable, no-root AppImage instead?"
         echo "  Download one file from the Releases page and run it:"
         echo "    https://github.com/ancsemi/Haven/releases/latest"
-        echo "  (Works on any Linux distro — no Node.js needed)"
+        echo "  (Works on any Linux distro, no Node.js needed)"
         echo ""
     fi
 fi
@@ -123,9 +123,9 @@ if ! command -v node &> /dev/null; then
         brew link --overwrite node@22 2>/dev/null || true
 
     else
-        # No known package manager — try nvm (no root required, works anywhere)
+        # No known package manager: try nvm (no root required, works anywhere)
         echo -e "  ${YELLOW}No known package manager found.${NC}"
-        echo "  Trying nvm (Node Version Manager) — no root needed."
+        echo "  Trying nvm (Node Version Manager). No root needed."
         echo ""
         export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
         if [ ! -f "$NVM_DIR/nvm.sh" ]; then

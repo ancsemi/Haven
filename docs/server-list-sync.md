@@ -1,4 +1,4 @@
-# Server List Sync — Developer Integration Guide
+# Server List Sync: Developer Integration Guide
 
 ## What It Does
 
@@ -12,8 +12,8 @@ The server list was previously stored only in `localStorage` / client-side stora
 
 ### The Flow
 
-1. **On login** (password entry required — not auto-login/JWT refresh):
-   - Client derives a wrapping key from the password using `HavenE2E.deriveWrappingKey(password)` — this already happens for E2E encryption
+1. **On login** (password entry required, not auto-login/JWT refresh):
+   - Client derives a wrapping key from the password using `HavenE2E.deriveWrappingKey(password)` (this already happens for E2E encryption)
    - Client calls `GET /api/auth/user-servers` → receives an encrypted blob (or null)
    - Client decrypts the blob using AES-256-GCM with the wrapping key
    - Client merges the decrypted server list with its local list (union by URL)
@@ -40,7 +40,7 @@ Removals are **local-only**. When a user removes a server:
 - The URL is added to a local `haven_servers_removed` set (stored in localStorage / app storage)
 - The server is removed from the local list
 - The updated (shorter) list is pushed to the server
-- Remote blobs on other servers may still contain the removed URL — but the local removed-set prevents it from reappearing after merge
+- Remote blobs on other servers may still contain the removed URL, but the local removed-set prevents it from reappearing after merge
 
 ---
 
@@ -92,7 +92,7 @@ password (plaintext)
   → hex string (64 chars)
 ```
 
-This hex string is what `HavenE2E.deriveWrappingKey(password)` returns. The Android app likely already computes this for E2E — reuse it.
+This hex string is what `HavenE2E.deriveWrappingKey(password)` returns. The Android app likely already computes this for E2E; reuse it.
 
 ### Blob Encryption
 
@@ -160,7 +160,7 @@ if merged list != remote list:
     re-encrypt and push
 ```
 
-This is commutative and idempotent — order of operations doesn't matter, and running it twice produces the same result.
+This is commutative and idempotent: order of operations doesn't matter, and running it twice produces the same result.
 
 ---
 
@@ -189,7 +189,7 @@ This is commutative and idempotent — order of operations doesn't matter, and r
 
 ## Security Notes
 
-- The server admin **cannot read** the server list — it's encrypted with the user's password
-- AES-GCM is authenticated — tampered blobs fail decryption silently (client falls back to local list)
-- No server-to-server communication exists — servers are completely unaware of each other
+- The server admin **cannot read** the server list: it's encrypted with the user's password
+- AES-GCM is authenticated: tampered blobs fail decryption silently (client falls back to local list)
+- No server-to-server communication exists; servers are completely unaware of each other
 - The wrapping key never leaves the client device

@@ -1,4 +1,4 @@
-# Optional LiveKit SFU — Implementation Plan (#76)
+# Optional LiveKit SFU: Implementation Plan (#76)
 
 Status: planning. Code does not exist yet.
 
@@ -18,7 +18,7 @@ Status: planning. Code does not exist yet.
 **Non-goals**
 
 - No mid-call seamless transition between mesh and SFU. v1: the provider is decided when the first user joins the call and stays for that call. (Future work.)
-- No native GPU encoding pipeline (the issue thread brings this up — that's an unrelated Haven-Desktop project, not this one).
+- No native GPU encoding pipeline (the issue thread brings this up; that's an unrelated Haven-Desktop project, not this one).
 - No managed/hosted LiveKit. Self-hosters bring their own (or we run one alongside).
 - No mobile-app changes in v1 beyond verifying `livekit-client` works in the React Native (or whatever shipped) WebView/native bridge. If it doesn't, mobile keeps mesh.
 
@@ -34,7 +34,7 @@ Status: planning. Code does not exist yet.
 | Client SDK | Mature, browser + RN + Swift + Kotlin | Mature, browser-focused |
 | Fit for Haven's audience | Lower-friction self-host | Slightly better Node integration |
 
-LiveKit wins on operational simplicity, which is the deciding factor for Haven's "self-host on a $5 VPS" audience. Per ancsemi's comment in #76: "LiveKit ships as one binary — operationally simpler for self-hosters."
+LiveKit wins on operational simplicity, which is the deciding factor for Haven's "self-host on a $5 VPS" audience. Per ancsemi's comment in #76: "LiveKit ships as one binary, operationally simpler for self-hosters."
 
 ---
 
@@ -47,7 +47,7 @@ The current voice stack is monolithic mesh:
 
 We refactor in two passes:
 
-**Pass A — extract interface (no behavior change, ships first):**
+**Pass A: extract interface (no behavior change, ships first):**
 
 ```js
 // src/voice/provider.js
@@ -65,7 +65,7 @@ class LiveKitVoiceProvider extends VoiceProvider { /* new */ }
 
 The existing `voice-offer/answer/ice-candidate` handlers move into `P2PVoiceProvider`. The voice handler becomes a thin dispatcher that picks a provider per channel.
 
-**Pass B — add the LiveKit provider:**
+**Pass B: add the LiveKit provider:**
 
 Server side, the LiveKit provider does not relay signaling. Instead, on `voice-join` it:
 1. Mints a LiveKit access token (room = `${LIVEKIT_ROOM_PREFIX}-${channelCode}`, identity = userId, permissions derived from Haven role).
@@ -73,8 +73,8 @@ Server side, the LiveKit provider does not relay signaling. Instead, on `voice-j
 3. Client sees `voice-provider-config` and routes through `LiveKitClient` instead of building peer connections.
 
 Client side, `public/js/voice.js` becomes a router. Two adapter modules:
-- `voice-mesh.js` — current code, lifted as-is.
-- `voice-livekit.js` — uses `livekit-client` SDK, bridges the same public API the rest of the app calls (`mute`, `setOutputDevice`, `startScreenShare`, etc).
+- `voice-mesh.js`: current code, lifted as-is.
+- `voice-livekit.js`: uses `livekit-client` SDK, bridges the same public API the rest of the app calls (`mute`, `setOutputDevice`, `startScreenShare`, etc).
 
 The rest of the app (UI, modals, voice panel, PiP) only sees the bridged API and never knows which provider is active.
 
@@ -121,9 +121,9 @@ Requires the Haven container to have docker socket access. Risky. Recommend Opti
 
 When the admin opens `Settings → Admin → Voice → Enable SFU mode` for the first time:
 
-1. **Modal step 1 — explanation.** "SFU mode lets voice channels scale beyond ~6 people without crippling uploads. Trade-off: media flows through your server instead of peer-to-peer, so the server can theoretically see voice/video. Start it?" with a Read-more link to docs.
-2. **Modal step 2 — auto-config.** Server generates `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` (`crypto.randomBytes(16/32).toString('hex')`), writes them to `data/livekit.env` (NOT committed), and persists the SFU enable flag + threshold to `server_settings`.
-3. **Modal step 3 — what to do next.** Shows a copy-to-clipboard one-liner: `docker compose --profile sfu up -d`. Also shows the LiveKit WS URL setting, defaulting to `wss://${same-host}:7880` so most reverse-proxied installs Just Work.
+1. **Modal step 1: explanation.** "SFU mode lets voice channels scale beyond ~6 people without crippling uploads. Trade-off: media flows through your server instead of peer-to-peer, so the server can theoretically see voice/video. Start it?" with a Read-more link to docs.
+2. **Modal step 2: auto-config.** Server generates `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` (`crypto.randomBytes(16/32).toString('hex')`), writes them to `data/livekit.env` (NOT committed), and persists the SFU enable flag + threshold to `server_settings`.
+3. **Modal step 3: what to do next.** Shows a copy-to-clipboard one-liner: `docker compose --profile sfu up -d`. Also shows the LiveKit WS URL setting, defaulting to `wss://${same-host}:7880` so most reverse-proxied installs Just Work.
 4. **Health check.** After the admin clicks "I've done that", Haven probes `LIVEKIT_WS_URL` and shows a green dot if reachable, red dot + diagnostic hint if not. The toggle stays off until the probe is green at least once. (Prevents enabling SFU before the container is up, which would just break voice for everyone.)
 
 The admin who *doesn't* opt in never sees any of this. Default install is unchanged.
@@ -181,22 +181,22 @@ We track room provider state in memory in `voiceProviders: Map<channelCode, 'p2p
 | `public/js/modules/app-socket.js` | handle `voice-provider-config`, route to the right adapter |
 | `public/css/style.css` | small style for the SFU status pill in the voice panel |
 | `public/locales/en.json` | strings for the wizard, status indicator, and an "in SFU mode" footnote in the voice panel |
-| `package.json` (web side, none — `livekit-client` loaded from CDN OR vendored under `public/vendor/livekit-client.min.js` to avoid CDN runtime dep) | vendor the build to keep Haven offline-installable |
+| `package.json` (web side, none: `livekit-client` loaded from CDN OR vendored under `public/vendor/livekit-client.min.js` to avoid CDN runtime dep) | vendor the build to keep Haven offline-installable |
 
 ---
 
 ## 9. Network requirements & TLS (the real deployment headache)
 
 LiveKit needs:
-- **TCP 7880** — signaling/WS (must be HTTPS to be usable from a browser)
-- **TCP 7881** — TURN/TCP fallback
-- **UDP 7882 + range** — RTC media (LiveKit defaults to a single port via `RTCPort` mode, which is what we'll use; avoids the Mediasoup-style port range problem)
+- **TCP 7880**: signaling/WS (must be HTTPS to be usable from a browser)
+- **TCP 7881**: TURN/TCP fallback
+- **UDP 7882 + range**: RTC media (LiveKit defaults to a single port via `RTCPort` mode, which is what we'll use; avoids the Mediasoup-style port range problem)
 
 Most Haven self-hosters are already running behind a reverse proxy (Caddy / Traefik / nginx) for HTTPS on the main 3000 port. We document two patterns in `docs/examples/`:
-- **Caddy**: snippet that reverse-proxies `livekit.example.com` to `localhost:7880` (already shown by @metheos in the issue thread — credit them).
+- **Caddy**: snippet that reverse-proxies `livekit.example.com` to `localhost:7880` (already shown by @metheos in the issue thread; credit them).
 - **Traefik**: same idea (we already ship `docs/examples/haven-traefik-coturn/` so it slots in).
 
-Users without HTTPS infrastructure can't use SFU. The wizard tells them this honestly and links to the Caddy quick-start. **This is the one place where "intuitive" loses to "physically cannot work without TLS" — accept and document.**
+Users without HTTPS infrastructure can't use SFU. The wizard tells them this honestly and links to the Caddy quick-start. **This is the one place where "intuitive" loses to "physically cannot work without TLS". Accept and document.**
 
 The setup wizard's WS URL field defaults to `wss://${window.location.hostname}:7880` and clearly says "This must be HTTPS-terminated. Use a reverse proxy if you don't have one."
 
@@ -204,16 +204,16 @@ The setup wizard's WS URL field defaults to `wss://${window.location.hostname}:7
 
 ## 10. Migration / rollout phases
 
-**Phase 0 — interface refactor (no user-visible change).**
+**Phase 0: interface refactor (no user-visible change).**
 Ship Pass A from §3. Mesh continues to work exactly as today. Smoke-test voice/screen-share/music-share. Tag a release. *This is the safe foundation.*
 
-**Phase 1 — LiveKit provider, opt-in only, no auto-upgrade.**
-Add the LiveKit provider, the wizard, the docker-compose profile. Threshold is effectively `1` when enabled — i.e. SFU is used for *every* voice call once the admin turns it on. Lets us validate the path without the threshold logic getting in the way.
+**Phase 1: LiveKit provider, opt-in only, no auto-upgrade.**
+Add the LiveKit provider, the wizard, the docker-compose profile. Threshold is effectively `1` when enabled, i.e. SFU is used for *every* voice call once the admin turns it on. Lets us validate the path without the threshold logic getting in the way.
 
-**Phase 2 — auto-upgrade threshold.**
+**Phase 2: auto-upgrade threshold.**
 Add the per-room provider decision from §6. Mesh stays for small rooms even on SFU-enabled servers, which is what most admins actually want.
 
-**Phase 3 — quality of life.**
+**Phase 3: quality of life.**
 Health-check probe, SFU status pill in the voice panel, admin metrics ("X voice calls today: Y SFU, Z mesh"), per-channel override (force SFU, force mesh).
 
 **Phase 4 (future, not in this scope).**
@@ -230,9 +230,9 @@ Each phase ships independently. Don't bundle.
 1. **Mobile.** Is the Haven mobile client able to load `livekit-client`? If it's a thin WebView wrapper, yes. If it's React Native, the LiveKit RN SDK works but is a bigger lift. **Action: confirm before Phase 1.**
 2. **Desktop (Electron).** `livekit-client` works in Electron, but `desktopCapturer` source IDs vs LiveKit's screen-share API need a thin shim. We already had a desktopCapturer churn moment recently (commit `fix(#184)`); pull that knowledge in.
 3. **TURN coexistence.** Haven already supports `TURN_URL` for the mesh path. LiveKit can share that TURN server (it accepts external TURN config). Plumb the existing `TURN_URL` env into the LiveKit config so admins don't configure it twice.
-4. **Port conflict.** If the user runs `--profile sfu` but already has something on 7880, the container fails silently. Health check from §5 catches this — surface the error in the admin UI.
+4. **Port conflict.** If the user runs `--profile sfu` but already has something on 7880, the container fails silently. Health check from §5 catches this. Surface the error in the admin UI.
 5. **Database migration.** None needed. SFU state is in `server_settings` (already a generic key/value table) and per-room provider state is in-memory.
-6. **Existing TURN codepath.** The mesh path uses `RTCPeerConnection` with an iceServers list. Make sure the LiveKit adapter doesn't accidentally inherit / override that — they live in separate adapters specifically to avoid this.
+6. **Existing TURN codepath.** The mesh path uses `RTCPeerConnection` with an iceServers list. Make sure the LiveKit adapter doesn't accidentally inherit / override that: they live in separate adapters specifically to avoid this.
 7. **Recording.** LiveKit can record. We do *not* enable that feature. Make it explicit in code (`recording: false` in token grants) so a future careless commit can't accidentally start storing voice.
 
 ---

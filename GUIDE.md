@@ -1,4 +1,4 @@
-# ⬡ Haven — User Guide
+# ⬡ Haven: User Guide
 
 Welcome to **Haven**, your private chat server. This guide covers everything you need to get Haven running and invite your friends.
 
@@ -9,7 +9,7 @@ Welcome to **Haven**, your private chat server. This guide covers everything you
 - **Windows 10 or 11** (macOS / Linux can run it manually)
 - **Node.js** version 18 or newer → [Download here](https://nodejs.org/)
 - About **50 MB** of disk space
-- **OR** just [Docker](https://docs.docker.com/get-docker/) — no Node.js needed
+- **OR** just [Docker](https://docs.docker.com/get-docker/), no Node.js needed
 
 ---
 
@@ -19,13 +19,13 @@ If you'd rather run Haven in a container (great for NAS boxes, servers, or if yo
 
 ### Quick Start
 
-**Option A — Pre-built image** (fastest):
+**Option A: Pre-built image** (fastest):
 ```bash
 docker pull ghcr.io/ancsemi/haven:latest
 docker run -d -p 3000:3000 -v haven_data:/data ghcr.io/ancsemi/haven:latest
 ```
 
-**Option B — Build from source**:
+**Option B: Build from source**:
 ```bash
 git clone https://github.com/ancsemi/Haven.git
 cd Haven
@@ -43,7 +43,7 @@ That's it. Haven will be running at `https://localhost:3000`.
 
 ### Customizing
 
-Edit `docker-compose.yml` to change the port, server name, or other settings. The environment variables are commented out with examples — just uncomment what you need.
+Edit `docker-compose.yml` to change the port, server name, or other settings. The environment variables are commented out with examples. Just uncomment what you need.
 
 ### Using a Local Folder Instead of a Volume
 
@@ -80,20 +80,20 @@ Haven runs under Podman as well. A few things differ from Docker:
 
 ### Updating
 
-**Option A — Pre-built image** (default, recommended):
+**Option A: Pre-built image** (default, recommended):
 ```bash
 docker compose pull
 docker compose up -d --force-recreate
 ```
 
-**Option B — Built from source** (only if you uncommented `build: .`):
+**Option B: Built from source** (only if you uncommented `build: .`):
 ```bash
 git pull
 docker compose build --no-cache
 docker compose up -d
 ```
 
-Your data is safe — it lives in the volume, not the container.
+Your data is safe: it lives in the volume, not the container.
 
 ### Checking Your Version
 
@@ -109,7 +109,7 @@ docker compose exec haven cat /app/package.json | grep '"version"'
 
 ### Linux Prerequisites
 
-If you're on Linux (Ubuntu, Mint, Debian, etc.), make sure you have Docker's official packages installed — the default `docker.io` package from some distros may be missing Compose V2.
+If you're on Linux (Ubuntu, Mint, Debian, etc.), make sure you have Docker's official packages installed. The default `docker.io` package from some distros may be missing Compose V2.
 
 **1. Install Docker Engine + Compose plugin:**
 
@@ -142,7 +142,7 @@ After that, `docker compose up -d` should work without errors.
 
 ## 🚀 Getting Started
 
-### Step 1 — First Launch
+### Step 1: First Launch
 
 Double-click **`Start Haven.bat`**
 
@@ -153,20 +153,20 @@ That's it. The batch file will:
 4. Start the server
 5. Open your browser to the login page
 
-### Step 2 — Create Your Admin Account
+### Step 2: Create Your Admin Account
 
 1. On the login page, click **Register**
-2. Create an account with the admin username (default: `admin` — check your data directory's `.env` file)
+2. Create an account with the admin username (default: `admin`; check your data directory's `.env` file)
 3. This account can create and delete channels
 
-### Step 3 — Create a Channel
+### Step 3: Create a Channel
 
 1. In the sidebar, use the **Create Channel** box (admin only)
 2. Give it a name like "General" or "Gaming"
 3. Haven generates a unique **channel code** (8 characters)
-4. Share this code with your friends — it's the only way in
+4. Share this code with your friends: it's the only way in
 
-### Step 4 — Invite Friends
+### Step 4: Invite Friends
 
 Send your friends:
 1. Your server address: `https://YOUR_IP:3000`
@@ -180,7 +180,7 @@ They'll register their own account, then enter the code to join your channel.
 
 ### How Channels Work
 
-Every conversation in Haven happens inside a **channel**. Channels are like rooms — each has a unique 8-character code (e.g. `a3f8b2c1`). To get into a channel, you either create it or enter its code.
+Every conversation in Haven happens inside a **channel**. Channels are like rooms: each has a unique 8-character code (e.g. `a3f8b2c1`). To get into a channel, you either create it or enter its code.
 
 ### Forum Channels 🗂️
 
@@ -333,7 +333,7 @@ Effects are stackable visual layers on top of any theme. Choose from the effect 
 
 ### Cyberpunk Text Scramble ⚡
 
-When the Glitch effect is active, text around the UI randomly "scrambles" — cycling through random characters before resolving back to the original text. This affects:
+When the Glitch effect is active, text around the UI randomly "scrambles", cycling through random characters before resolving back to the original text. This affects:
 - The **HAVEN** logo
 - Channel names in the sidebar
 - Section labels
@@ -341,7 +341,7 @@ When the Glitch effect is active, text around the UI randomly "scrambles" — cy
 - The channel header
 - User names in the member list
 
-A **Glitch Frequency** slider appears in the theme popup when this effect is active. Slide left for rare, subtle glitches — or right for constant chaos.
+A **Glitch Frequency** slider appears in the theme popup when this effect is active. Slide left for rare, subtle glitches, or right for constant chaos.
 
 ---
 
@@ -383,13 +383,13 @@ If that is acceptable to you, carry on. If not, use Tailscale or a tunnel instea
 
 ### Find Your Public IP
 
-Visit [whatismyip.com](https://whatismyip.com) — the number shown (like `203.0.113.50`) is what your friends will use.
+Visit [whatismyip.com](https://whatismyip.com). The number shown (like `203.0.113.50`) is what your friends will use.
 
 ### Port Forwarding on Your Router
 
 Every router is different, but the general steps are:
 
-1. **Log into your router** — usually `http://192.168.1.1` or `http://10.0.0.1` in your browser
+1. **Log into your router**: usually `http://192.168.1.1` or `http://10.0.0.1` in your browser
 2. Find **Port Forwarding** (sometimes called NAT, Virtual Servers, or Applications)
 3. Create a new rule:
 
@@ -521,9 +521,9 @@ Click [here](https://console.tailscale.com/admin/machines) to access the admin p
 
 ## ☁️ Cloudflare Tunnel (No Port Forwarding)
 
-If you don't want to mess with port forwarding or expose your home IP, you can use a **Cloudflare Tunnel** to securely share your Haven server over the internet. Cloudflare gives your server a public URL and handles all the networking — no router config needed.
+If you don't want to mess with port forwarding or expose your home IP, you can use a **Cloudflare Tunnel** to securely share your Haven server over the internet. Cloudflare gives your server a public URL and handles all the networking: no router config needed.
 
-### Step 1 — Install Cloudflared
+### Step 1: Install Cloudflared
 
 **Windows (via winget):**
 ```powershell
@@ -546,7 +546,7 @@ Verify it installed:
 cloudflared --version
 ```
 
-### Step 2 — Enable the Tunnel in Haven
+### Step 2: Enable the Tunnel in Haven
 
 1. Start Haven normally (`Start Haven.bat`)
 2. Log in as admin
@@ -555,15 +555,15 @@ cloudflared --version
 5. Flip the toggle **on**
 6. Haven will start cloudflared and display your public URL (e.g. `https://abc-def-123.trycloudflare.com`)
 
-### Step 3 — Share the URL
+### Step 3: Share the URL
 
-Copy the tunnel URL and send it to your friends. That's it — no port forwarding, no firewall rules, no IP address sharing. The URL changes each time you restart the tunnel, so you'll need to re-share it.
+Copy the tunnel URL and send it to your friends. That's it: no port forwarding, no firewall rules, no IP address sharing. The URL changes each time you restart the tunnel, so you'll need to re-share it.
 
 ### How It Works
 
 - Haven runs **cloudflared** as a child process that creates an encrypted tunnel to Cloudflare's network
 - Cloudflare assigns a random public URL and proxies traffic through the tunnel to your local server
-- Your home IP is **never exposed** to visitors — they only see Cloudflare's IP
+- Your home IP is **never exposed** to visitors; they only see Cloudflare's IP
 - Since Haven runs HTTPS with a self-signed cert, the tunnel connects to `https://localhost:3000` with TLS verification disabled (the Cloudflare→You leg is already encrypted by the tunnel itself)
 
 ### Tunnel vs. Port Forwarding
@@ -690,7 +690,7 @@ Link previews, the media proxy, bot callbacks, push notifications and Haven's ot
 2. Go to **WiFi** → scroll down → **Advanced settings** → **Port forwarding**
 3. Select your PC from the device list
 4. Add port `3000` (TCP/UDP) and apply
-5. **Important:** Go to **Home** → disable **xFi Advanced Security** — it silently blocks all inbound connections
+5. **Important:** Go to **Home** → disable **xFi Advanced Security** (it silently blocks all inbound connections)
 6. Verify the **reserved IP** in port forwarding matches your PC's actual IP (`ipconfig` to check)
 
 ### Common Issues
@@ -699,10 +699,10 @@ Link previews, the media proxy, bot callbacks, push notifications and Haven's ot
 |---------|----------|
 | **"SSL_ERROR_RX_RECORD_TOO_LONG"** | Browser is using `https://` but server is running HTTP. Change URL to `http://localhost:3000`, or unset `FORCE_HTTP` and restart (see Troubleshooting below) |
 | Friends get "took too long to respond" | Port forwarding not set up, or firewall blocking |
-| Friends get "connection refused" | Server isn't running — launch `Start Haven.bat` |
+| Friends get "connection refused" | Server isn't running: launch `Start Haven.bat` |
 | Can't connect with `https://` | Make sure you're using port 3000, not 443 |
-| Voice chat doesn't work | Must use `https://` — voice requires a secure connection |
-| "Certificate error" in browser | Normal — click Advanced → Proceed |
+| Voice chat doesn't work | Must use `https://`. Voice requires a secure connection |
+| "Certificate error" in browser | Normal. Click Advanced → Proceed |
 
 ---
 
@@ -830,7 +830,7 @@ Two things worth knowing before you plan around this:
 4. Click **🔇 Mute** to toggle your mic
 5. Click **📞 Leave** to disconnect from voice
 
-Voice chat is **peer-to-peer** — audio goes directly between you and other users, not through the server.
+Voice chat is **peer-to-peer**: audio goes directly between you and other users, not through the server.
 
 > Voice requires HTTPS. If you're running locally, use `https://localhost:3000`. For remote connections, use `https://YOUR_IP:3000`.
 
@@ -871,7 +871,7 @@ Restart Haven, and voice/screen sharing will work across any network.
 
 > **Docker users:** Add `TURN_URL` and `TURN_SECRET` as environment variables in your `docker-compose.yml`. See the commented example in the default compose file.
 
-> **Oracle Cloud / cloud VMs:** Make sure ports 3478 (UDP+TCP) and 49152–65535 (UDP) are open in your security group / firewall rules. These are needed for TURN relay traffic.
+> **Oracle Cloud / cloud VMs:** Make sure ports 3478 (UDP+TCP) and 49152 to 65535 (UDP) are open in your security group / firewall rules. These are needed for TURN relay traffic.
 
 > **Home server behind a router:** this is where TURN most often looks configured but silently does nothing, because coturn has no idea it is behind NAT and hands out its LAN address as the relay. Three things to get right:
 >
@@ -917,9 +917,9 @@ to Last.fm, that single connection covers whatever you actually listen with.
 
 ### Controlling what people see
 
-- **Master switch** — turn presence off entirely
-- **Per-category** — show games but not music, or the other way round
-- **Invisible** — while your status is Invisible, nothing is shared, regardless
+- **Master switch**: turn presence off entirely
+- **Per-category**: show games but not music, or the other way round
+- **Invisible**: while your status is Invisible, nothing is shared, regardless
   of the settings above
 
 None of it is written to the database. Presence lives in memory and disappears
@@ -956,7 +956,7 @@ Push notifications let you receive alerts when someone messages a channel you're
 1. Open Haven in your browser via `https://` (e.g., `https://localhost:3000` or `https://your-domain:3000`)
 2. Click the **⚙️ Settings** button (bottom of the right sidebar)
 3. Scroll to **Push Notifications** and flip the toggle **on**
-4. Your browser will ask for notification permission — click **Allow**
+4. Your browser will ask for notification permission. Click **Allow**
 5. The status should change to **Enabled**
 
 ### Setting Up on Your Devices
@@ -975,7 +975,7 @@ Push notifications let you receive alerts when someone messages a channel you're
 - Requires **Safari 16.4+** (iOS 16.4 or later)
 - First, **Add to Home Screen**: tap Share → "Add to Home Screen"
 - Open Haven from the home screen icon (it runs as a web app)
-- Enable push in Settings — Safari will ask for permission
+- Enable push in Settings. Safari will ask for permission
 
 ### Troubleshooting Push
 
@@ -985,7 +985,7 @@ Push notifications let you receive alerts when someone messages a channel you're
 | "Requires HTTPS" | Access Haven via `https://` instead of `http://` |
 | "Permission denied" | You blocked notifications. Reset in browser settings: Settings → Site Settings → Notifications → find Haven → Allow |
 | Toggle is grayed out | Your browser doesn't support push, or you're in incognito/private mode |
-| Notifications not appearing | Check your OS notification settings — Haven notifications may be muted at the system level |
+| Notifications not appearing | Check your OS notification settings. Haven notifications may be muted at the system level |
 | Only works on localhost | For LAN/remote access, you need valid SSL. Haven generates self-signed certs itself on first start |
 
 ---
@@ -1053,11 +1053,11 @@ conflict.
 
 ## 💡 Tips
 
-- **Bookmark the URL** — so you don't have to type the IP every time
-- **Keep the bat window open** — closing it stops the server
-- **Your data is stored separately** — all messages, config, and uploads are in your data directory (`%APPDATA%\Haven` on Windows, `~/.haven` on Linux/macOS), not in the Haven code folder
-- **Back up your data directory** — copy it somewhere safe to preserve your chat history
-- **Channel codes are secrets** — treat them like passwords. Anyone with the code can join.
+- **Bookmark the URL**, so you don't have to type the IP every time
+- **Keep the bat window open**: closing it stops the server
+- **Your data is stored separately**: all messages, config, and uploads are in your data directory (`%APPDATA%\Haven` on Windows, `~/.haven` on Linux/macOS), not in the Haven code folder
+- **Back up your data directory**: copy it somewhere safe to preserve your chat history
+- **Channel codes are secrets**: treat them like passwords. Anyone with the code can join.
 
 ---
 
@@ -1069,28 +1069,28 @@ All direct messages in Haven are **end-to-end encrypted**. The server never has 
 
 - When you first log in, your browser generates an **ECDH P-256 key pair**.
 - The private key is encrypted (wrapped) with a key **derived from your password** using PBKDF2, and the encrypted blob is stored on the server for cross-device sync.
-- The server **never sees** your password-derived wrapping key — it's computed in your browser and never transmitted.
+- The server **never sees** your password-derived wrapping key. It's computed in your browser and never transmitted.
 - When you message someone, both users' public keys are combined via ECDH + HKDF to produce a shared AES-256-GCM encryption key. Messages are encrypted before leaving your browser.
 
 ### When Keys Are Preserved (Old Messages Readable)
 
 | Scenario | Why it works |
 |---|---|
-| Close the tab and reopen it | IndexedDB still has your keys — no password needed |
-| Refresh the page | Same — IndexedDB survives refreshes |
+| Close the tab and reopen it | IndexedDB still has your keys; no password needed |
+| Refresh the page | Same: IndexedDB survives refreshes |
 | JWT auto-login (return visit) | IndexedDB has the keys cached |
 | Log in on a new device/browser | You type your password → wrapping key is derived → server backup is downloaded and unwrapped |
-| Clear cookies (but NOT site data) | IndexedDB is site data, not cookies — keys survive |
-| Change your password | Private key is re-wrapped with the new password and re-uploaded — the ECDH key pair itself doesn't change |
+| Clear cookies (but NOT site data) | IndexedDB is site data, not cookies, so keys survive |
+| Change your password | Private key is re-wrapped with the new password and re-uploaded (the ECDH key pair itself doesn't change) |
 
 ### When Keys Are Lost (Old Messages Permanently Unreadable)
 
 | Scenario | Why keys are lost |
 |---|---|
-| Clear all browser/site data when that's your only device | IndexedDB is wiped — on re-login the server backup may still unwrap if password hasn't changed |
-| Clear browser data **after** changing your password | Server backup was wrapped with the old password — new password can't unwrap it → new keys generated |
-| Manually reset encryption keys (🔄 button in DM header) | Intentional wipe — new key pair, old messages unreadable |
-| Admin deletes your account or resets the database | Server backup gone — if IndexedDB is also empty, fresh keys are generated |
+| Clear all browser/site data when that's your only device | IndexedDB is wiped. On re-login the server backup may still unwrap if password hasn't changed |
+| Clear browser data **after** changing your password | Server backup was wrapped with the old password; new password can't unwrap it → new keys generated |
+| Manually reset encryption keys (🔄 button in DM header) | Intentional wipe: new key pair, old messages unreadable |
+| Admin deletes your account or resets the database | Server backup gone. If IndexedDB is also empty, fresh keys are generated |
 
 **Short version:** Same password + at least one of (IndexedDB **or** server backup) = keys survive. Lost both = old messages gone forever.
 
@@ -1098,12 +1098,12 @@ All direct messages in Haven are **end-to-end encrypted**. The server never has 
 
 | Attack vector | Can they read messages? | Why |
 |---|---|---|
-| Server admin reading the database | **No** | Encrypted private key is wrapped with a key derived from YOUR password — admin has the blob but not the key |
-| Someone with physical server access | **No** | Same reason — the blob is useless without your password |
+| Server admin reading the database | **No** | Encrypted private key is wrapped with a key derived from YOUR password; admin has the blob but not the key |
+| Someone with physical server access | **No** | Same reason: the blob is useless without your password |
 | Man-in-the-middle on the network | **No** | Messages are encrypted client-side before transmission |
-| Stolen JWT token | **No** | JWT authenticates you, but E2E keys live in your browser's IndexedDB — attacker can't unwrap the server backup without your password |
-| Someone who knows your password + has your JWT | **Yes** | Equivalent to using your login — they can derive the wrapping key and decrypt everything |
-| Modified server JavaScript | **Yes** | If the admin pushes tampered JS that exfiltrates keys, all bets are off — this is true of every web-based E2E system |
+| Stolen JWT token | **No** | JWT authenticates you, but E2E keys live in your browser's IndexedDB. Attacker can't unwrap the server backup without your password |
+| Someone who knows your password + has your JWT | **Yes** | Equivalent to using your login: they can derive the wrapping key and decrypt everything |
+| Modified server JavaScript | **Yes** | If the admin pushes tampered JS that exfiltrates keys, all bets are off. This is true of every web-based E2E system |
 
 ### Resetting Encryption Keys
 
@@ -1115,7 +1115,7 @@ In any DM conversation, click the **🔄** button in the channel header to reset
 
 ### Verifying Encryption
 
-Click the **🔐** button in the DM header to view your **safety number** — a 60-digit code derived from both users' public keys. Compare it with your conversation partner through a separate channel (phone, in person, etc.). If they match, no one is intercepting your conversation.
+Click the **🔐** button in the DM header to view your **safety number**, a 60-digit code derived from both users' public keys. Compare it with your conversation partner through a separate channel (phone, in person, etc.). If they match, no one is intercepting your conversation.
 
 ---
 
@@ -1453,13 +1453,13 @@ issue.
 
 Haven has a built-in bot API powered by webhooks. Bots can send messages, delete messages, play soundboard sounds, and register custom slash commands.
 
-> **Looking for ready-made bots and webhooks?** The community library at [**ancsemi/haven-community**](https://github.com/ancsemi/haven-community) collects user-contributed integrations you can deploy as-is — a GitHub releases poster, etc. PRs welcome there if you've built one of your own. See its [`CONTRIBUTING.md`](https://github.com/ancsemi/haven-community/blob/main/CONTRIBUTING.md) for how to submit.
+> **Looking for ready-made bots and webhooks?** The community library at [**ancsemi/haven-community**](https://github.com/ancsemi/haven-community) collects user-contributed integrations you can deploy as-is (a GitHub releases poster, etc.). PRs welcome there if you've built one of your own. See its [`CONTRIBUTING.md`](https://github.com/ancsemi/haven-community/blob/main/CONTRIBUTING.md) for how to submit.
 
 ### Creating a Bot
 
 1. Go to **Settings → Server Admin Settings → Bots** (or open a channel's settings and look for the webhook/bot option)
-2. Create a new webhook — give it a name, optionally set an avatar URL and a callback URL
-3. Copy the **Webhook Token** (64-character hex string) — this is your bot's API key
+2. Create a new webhook. Give it a name, optionally set an avatar URL and a callback URL
+3. Copy the **Webhook Token** (64-character hex string). This is your bot's API key
 
 ### Sending Messages
 
@@ -1474,11 +1474,11 @@ Content-Type: application/json
 }
 ```
 
-- `content` (required) — message text, max 4000 characters
-- `username` (optional) — override the bot's display name for this message
-- `avatar_url` (optional) — override the bot's avatar for this message
-- `ephemeral` (optional) — when `true`, deliver only to `recipient_id` and do not store in history
-- `recipient_id` (required when `ephemeral` is `true`) — user id that should receive the private bot message
+- `content` (required): message text, max 4000 characters
+- `username` (optional): override the bot's display name for this message
+- `avatar_url` (optional): override the bot's avatar for this message
+- `ephemeral` (optional): when `true`, deliver only to `recipient_id` and do not store in history
+- `recipient_id` (required when `ephemeral` is `true`): user id that should receive the private bot message
 - `reply_to` (optional): id of a message in the same channel to reply to
 - `thread_id` (optional): id of a top-level message in the bot's channel; the message is posted as a reply inside that thread (not combinable with `ephemeral`)
 
@@ -1609,10 +1609,10 @@ If your webhook has a `callback_url` and `callback_secret` configured, Haven wil
 **Permanent fix:**
 1. Open `.env` in your data directory (`%APPDATA%\Haven` on Windows, `~/.haven` elsewhere) and remove `FORCE_HTTP=true` unless a reverse proxy is terminating TLS for you
 2. If the startup log says the certificate could not be loaded, delete the `certs` folder in that data directory
-3. Re-launch `Start Haven.bat` — Haven regenerates the certificate and starts in HTTPS mode
+3. Re-launch `Start Haven.bat`. Haven regenerates the certificate and starts in HTTPS mode
 
 **How to tell if you're running HTTP or HTTPS:**
-Check the server's startup banner in the terminal. If it says `http://localhost:3000` — you're on HTTP. If it says `https://localhost:3000` — you're on HTTPS. The protocol in the URL you use must match.
+Check the server's startup banner in the terminal. If it says `http://localhost:3000`, you're on HTTP. If it says `https://localhost:3000`, you're on HTTPS. The protocol in the URL you use must match.
 
 **"Node.js is not installed"**
 → Download and install from [nodejs.org](https://nodejs.org/). Restart your PC after installing.
@@ -1632,5 +1632,5 @@ Check the server's startup banner in the terminal. If it says `http://localhost:
 ---
 
 <p align="center">
-  <b>⬡ Haven</b> — Your server. Your rules.
+  <b>⬡ Haven</b>: Your server. Your rules.
 </p>

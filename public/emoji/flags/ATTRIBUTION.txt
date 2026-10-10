@@ -29,6 +29,6 @@ SOFTWARE.
 The Betsy Ross and Gadsden flags (../us-betsy-ross.svg, ../us-gadsden.svg)
 are from Wikimedia Commons and are in the public domain.
 
-ru.svg and cn.svg are not from flag-icons — they were drawn for Haven from the
+ru.svg and cn.svg are not from flag-icons; they were drawn for Haven from the
 published national specifications (plain geometry: bands for RU, GB 12982 star
 placement for CN) because the upstream set did not include them.

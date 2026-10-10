@@ -12,7 +12,7 @@
 | 443 | TCP | HTTPS (Traefik) |
 | 3478 | TCP/UDP | TURN relay |
 | 5349 | TCP/UDP | TURN over TLS |
-| 49152–65535 | UDP | TURN media relay range |
+| 49152-65535 | UDP | TURN media relay range |
 
 ## Setup
 - SSH to your server

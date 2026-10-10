@@ -10,13 +10,13 @@ Most Haven users run the **Docker build** and many use **Linux**. Three key feat
 | **Per-App Audio** | WASAPI loopback | PipeWire/PulseAudio | N/A (no audio) | Not possible |
 | **Screen Streaming** | desktopCapturer | desktopCapturer | N/A (no display) | getDisplayMedia |
 
-The Docker container is a **headless server** — it has no display, no audio stack, and no notification UI. These features are inherently **client-side**, not server-side. The Docker instance only needs to **relay** data between clients that _do_ have these capabilities.
+The Docker container is a **headless server**: it has no display, no audio stack, and no notification UI. These features are inherently **client-side**, not server-side. The Docker instance only needs to **relay** data between clients that _do_ have these capabilities.
 
 ---
 
 ## Key Insight
 
-**Docker doesn't need to run notifications, audio capture, or streaming — it just needs to broker them.**
+**Docker doesn't need to run notifications, audio capture, or streaming; it just needs to broker them.**
 
 The architecture should be:
 ```
@@ -28,10 +28,10 @@ The architecture should be:
 
 ---
 
-## 1. Notifications — Already Solved ✅
+## 1. Notifications: Already Solved ✅
 
 **Current state:** Haven already supports Web Push notifications via VAPID keys + service worker (`sw.js`). This works for:
-- **Browser clients** on any OS (Chrome, Firefox, Edge) — including Linux
+- **Browser clients** on any OS (Chrome, Firefox, Edge), including Linux
 - **Mobile browsers** (Android Chrome, iOS Safari 16.4+)
 - **Docker server** generates and delivers push payloads via `web-push` npm package
 
@@ -41,13 +41,13 @@ The architecture should be:
 - Service worker handles background push display
 - VAPID key auto-generation on first run
 
-**Remaining gap:** The Electron desktop app uses its own notification system via `new Notification()` in the renderer — this works on Windows and Linux desktops. No action needed.
+**Remaining gap:** The Electron desktop app uses its own notification system via `new Notification()` in the renderer. This works on Windows and Linux desktops. No action needed.
 
-**Docker-specific:** Push notifications work out of the box from Docker. The server sends them — the client (browser) receives and displays them. No display server needed on the Docker host.
+**Docker-specific:** Push notifications work out of the box from Docker. The server sends them; the client (browser) receives and displays them. No display server needed on the Docker host.
 
 ---
 
-## 2. Per-App Audio Capture — Needs Client-Side Fallback Strategy
+## 2. Per-App Audio Capture: Needs Client-Side Fallback Strategy
 
 ### Current Architecture
 - **Windows:** Compiles a C# WASAPI helper (`haven-capture.cs`) at runtime → per-process audio loopback
@@ -55,7 +55,7 @@ The architecture should be:
 - **Docker:** No audio stack → feature unavailable
 
 ### The Problem
-Docker containers don't have audio subsystems. But per-app audio capture is a **client-side** operation — it captures audio from apps running on the **user's machine**, not the server.
+Docker containers don't have audio subsystems. But per-app audio capture is a **client-side** operation: it captures audio from apps running on the **user's machine**, not the server.
 
 ### Solution: This Feature Only Applies to Desktop App Users
 
@@ -71,8 +71,8 @@ Per-app audio routing is fundamentally a **desktop app** feature. The audio capt
 2. **Linux Desktop improvements** (Priority: MEDIUM)
    - The PipeWire path in `audio-router.js` already has detection (`_detectLinuxAudioSystem()`)
    - Needs testing on common distros: Ubuntu 22.04+, Fedora 38+, Arch, Debian 12
-   - **PipeWire** (default on Fedora, Ubuntu 22.10+): Use `pw-loopback` — already implemented
-   - **PulseAudio** (older distros): Use `pactl` null-sink — already implemented
+   - **PipeWire** (default on Fedora, Ubuntu 22.10+): Use `pw-loopback` (already implemented)
+   - **PulseAudio** (older distros): Use `pactl` null-sink (already implemented)
    - Add a fallback to `Electron desktopCapturer` system audio when neither works
 
 3. **System audio fallback** (Priority: HIGH)
@@ -90,7 +90,7 @@ Per-app audio routing is fundamentally a **desktop app** feature. The audio capt
 
 ---
 
-## 3. Screen/Game Streaming — Needs WebRTC Browser Path
+## 3. Screen/Game Streaming: Needs WebRTC Browser Path
 
 ### Current Architecture
 - **Desktop app:** Uses `desktopCapturer` to capture screens/windows
@@ -107,13 +107,13 @@ Screen sharing requires WebRTC, which Haven already uses for voice chat. The **s
 1. **Browser screen sharing** (Priority: HIGH)
    - Use `navigator.mediaDevices.getDisplayMedia()` for browser clients
    - This works on Chrome, Firefox, Edge on Windows, Linux, and macOS
-   - The user picks a screen/window/tab to share — OS handles the capture
+   - The user picks a screen/window/tab to share; OS handles the capture
    - No Electron or server-side support needed
 
 2. **TURN server for Docker deployments** (Priority: HIGH)
    - Peer-to-peer WebRTC often fails behind NAT/Docker networks
    - Haven already supports TURN configuration (`TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` env vars)
-   - **Document this clearly** — Docker users MUST configure a TURN server for reliable voice/streaming
+   - **Document this clearly**: Docker users MUST configure a TURN server for reliable voice/streaming
    - Recommend `coturn` as a sidecar container in `docker-compose.yml`
 
 3. **Add coturn to docker-compose.yml** (Priority: HIGH)
@@ -142,7 +142,7 @@ Screen sharing requires WebRTC, which Haven already uses for voice chat. The **s
 
 4. **Linux Wayland compatibility** (Priority: MEDIUM)
    - `getDisplayMedia()` works on Wayland via PipeWire portal
-   - Electron's `desktopCapturer` has known Wayland issues — fallback to `getDisplayMedia()` even in desktop app when Wayland detected
+   - Electron's `desktopCapturer` has known Wayland issues; fallback to `getDisplayMedia()` even in desktop app when Wayland detected
    - Detection: check `process.env.XDG_SESSION_TYPE === 'wayland'`
 
 ### Implementation Checklist
@@ -164,7 +164,7 @@ Create a `.env.example` file documenting all configuration:
 PORT=3000
 DOMAIN=haven.example.com
 
-# SSL (optional — use reverse proxy instead for Docker)
+# SSL (optional; use reverse proxy instead for Docker)
 SSL_CERT_PATH=
 SSL_KEY_PATH=
 
@@ -178,7 +178,7 @@ VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_EMAIL=admin@example.com
 
-# Tunnel (optional — expose without port forwarding)
+# Tunnel (optional: expose without port forwarding)
 TUNNEL_ENABLED=false
 ```
 
@@ -202,20 +202,20 @@ healthcheck:
 
 ## 5. Priority Roadmap
 
-### Phase 1 — Immediate (Before Release)
+### Phase 1: Immediate (Before Release)
 1. ✅ Web Push notifications already work from Docker
 2. Add coturn sidecar to `docker-compose.yml`
 3. Create `.env.example` with all configuration documented
 4. Add "TURN server required" note to Docker deployment docs
 5. Hide per-app audio UI in browser clients
 
-### Phase 2 — Short Term (1-2 weeks post-release)
+### Phase 2: Short Term (1-2 weeks post-release)
 1. Browser `getDisplayMedia()` screen sharing path
 2. Test Linux Desktop audio on 5 common distros
 3. Reverse proxy documentation (nginx, Caddy, Traefik)
 4. Wayland `desktopCapturer` fallback
 
-### Phase 3 — Medium Term (1 month)
+### Phase 3: Medium Term (1 month)
 1. Optional coturn auto-configuration via Haven admin panel
 2. Audio quality/bitrate controls for bandwidth-limited Docker deployments
 3. Screen share quality selector (resolution, framerate)
@@ -227,10 +227,10 @@ healthcheck:
 
 | Feature | Docker Fix Needed? | What to Do |
 |---------|-------------------|------------|
-| **Notifications** | No — already works | Web Push via VAPID is platform-agnostic |
-| **Per-App Audio** | No — client-side feature | Hide UI in browser, ensure Linux Desktop works |
-| **System Audio** | No — client-side feature | `getDisplayMedia()` works in browsers |
-| **Screen Streaming** | Yes — needs TURN relay | Add coturn to docker-compose, document TURN config |
-| **Voice Chat** | Yes — needs TURN relay | Same TURN server fixes voice and streaming |
+| **Notifications** | No, already works | Web Push via VAPID is platform-agnostic |
+| **Per-App Audio** | No, client-side feature | Hide UI in browser, ensure Linux Desktop works |
+| **System Audio** | No, client-side feature | `getDisplayMedia()` works in browsers |
+| **Screen Streaming** | Yes, needs TURN relay | Add coturn to docker-compose, document TURN config |
+| **Voice Chat** | Yes, needs TURN relay | Same TURN server fixes voice and streaming |
 
 The core insight: **Docker is a relay, not a source**. All capture/display features happen on the client. The server's job is signaling (Socket.IO) and relay (TURN). Focus Docker improvements on making the relay layer bulletproof.

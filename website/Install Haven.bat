@@ -1,6 +1,6 @@
 @echo off
 :: ═══════════════════════════════════════════════════════════
-:: Haven — One-Click Installer Bootstrap
+:: Haven: One-Click Installer Bootstrap
 :: Download this file and double-click to install Haven.
 :: Everything is handled automatically.
 :: ═══════════════════════════════════════════════════════════
@@ -8,11 +8,11 @@ title Haven Installer
 color 0A
 echo.
 echo  ========================================
-echo       HAVEN — One-Click Installer
+echo       HAVEN: One-Click Installer
 echo  ========================================
 echo.
 echo  This will set up Haven, your private
-echo  chat server. Everything is automatic —
+echo  chat server. Everything is automatic:
 echo  just follow the prompts.
 echo.
 

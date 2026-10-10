@@ -1,25 +1,25 @@
-# Stickers Feature — Work Scope (Issue #5335)
+# Stickers Feature: Work Scope (Issue #5335)
 
 ## Overview
 
 Server-hosted stickers that can be sent as standalone messages anywhere in Haven where the emoji picker is accessible: main channel, sub-channels, DMs (fullscreen and PiP), Threads (docked and PiP).
 
-Stickers live in a second tab inside the existing emoji picker window — no new button added to the input bar.
+Stickers live in a second tab inside the existing emoji picker window. No new button added to the input bar.
 
 ---
 
 ## Design Decisions
 
 - **Format**: Stickers are sent as standalone `/uploads/stickers/<filename>` messages (same mechanism as GIFs). No new socket event or content format needed on the server side beyond the upload/management API.
-- **Rendering**: The URL prefix `/uploads/stickers/` triggers a `sticker-img` CSS class for larger display (≈200–280px) vs standard `chat-image` (max 400px wide). Stickers are centered on their own line with no caption.
+- **Rendering**: The URL prefix `/uploads/stickers/` triggers a `sticker-img` CSS class for larger display (≈200-280px) vs standard `chat-image` (max 400px wide). Stickers are centered on their own line with no caption.
 - **Sending context**: A `_emojiPickerContext` state (`'main'` | `'pip'` | `'thread'`) is set whenever the emoji picker opens, so the sticker click handler knows which send path to use.
-- **Permissions**: Upload/delete is admin-only OR `manage_emojis` permission (reusing the existing perm — can rename perm key in a follow-up if desired, but not required).
+- **Permissions**: Upload/delete is admin-only OR `manage_emojis` permission (reusing the existing perm; can rename perm key in a follow-up if desired, but not required).
 - **Packs**: Stickers have an optional `pack_name` field (defaults to `'General'`). The picker groups stickers by pack with a filter row.
 - **E2E DMs**: Stickers sent as `/uploads/stickers/…` URLs go through `send-message` the same way regular uploaded images do. They are NOT E2E encrypted because sticker files are server-hosted (same as GIFs and server-side uploads). This is acceptable and consistent with how GIFs work.
 
 ---
 
-## Part 1 — Database
+## Part 1: Database
 
 **File**: `src/database.js`
 
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS stickers (
 
 ---
 
-## Part 2 — Server API Routes
+## Part 2: Server API Routes
 
 **File**: `server.js`
 
@@ -68,7 +68,7 @@ The existing `app.use('/uploads', express.static(uploadDir))` already covers `up
 
 ---
 
-## Part 3 — Client State
+## Part 3: Client State
 
 **File**: `public/js/app.js`
 
@@ -80,7 +80,7 @@ this._emojiPickerContext = 'main'; // 'main' | 'pip' | 'thread'
 
 ---
 
-## Part 4 — Load Stickers
+## Part 4: Load Stickers
 
 **File**: `public/js/modules/app-media.js`
 
@@ -100,7 +100,7 @@ Call `this._loadStickers()` during app init (alongside `_loadCustomEmojis` call 
 
 ---
 
-## Part 5 — Send Sticker
+## Part 5: Send Sticker
 
 **File**: `public/js/modules/app-utilities.js`
 
@@ -138,7 +138,7 @@ _sendStickerMessage(sticker) {
 
 ---
 
-## Part 6 — Emoji Picker Context Tracking
+## Part 6: Emoji Picker Context Tracking
 
 **File**: `public/js/modules/app-ui.js`
 
@@ -174,7 +174,7 @@ threadEmojiBtn.addEventListener('click', (e) => {
 
 ---
 
-## Part 7 — Sticker Tab in Emoji Picker
+## Part 7: Sticker Tab in Emoji Picker
 
 **File**: `public/js/modules/app-utilities.js`, inside `_toggleEmojiPicker`
 
@@ -221,7 +221,7 @@ When the emoji tab is clicked (any category tab), `_emojiPickerSection = 'emoji'
 
 ---
 
-## Part 8 — Message Rendering
+## Part 8: Message Rendering
 
 **File**: `public/js/modules/app-utilities.js`, `_renderMessageContent` method
 
@@ -236,7 +236,7 @@ if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(str.trim())) {
 // After:
 const trimmed = str.trim();
 if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed)) {
-  // Sticker files live under uploads/stickers/ — render with sticker-img class
+  // Sticker files live under uploads/stickers/; render with sticker-img class
   const isSticker = /^\/uploads\/stickers\/[\w\-.]+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(trimmed);
   const cls = isSticker ? 'sticker-img' : 'chat-image';
   return `<img src="${this._escapeHtml(trimmed)}" class="${cls}" alt="${isSticker ? 'sticker' : 'image'}">`;
@@ -247,12 +247,12 @@ The sticker path regex must match exactly `uploads/stickers/<filename>` (one lev
 
 ---
 
-## Part 9 — CSS
+## Part 9: CSS
 
 **File**: `public/css/style.css`
 
 ```css
-/* Sticker messages — larger than regular images, transparent bg, centered */
+/* Sticker messages: larger than regular images, transparent bg, centered */
 .sticker-img {
   display: block;
   max-width: 200px;
@@ -298,7 +298,7 @@ The sticker path regex must match exactly `uploads/stickers/<filename>` (one lev
 
 ---
 
-## Part 10 — Admin Panel UI
+## Part 10: Admin Panel UI
 
 **File**: `public/app.html`
 
@@ -307,29 +307,29 @@ Add a "Sticker Manager" section to the admin settings, modeled after the emoji m
 Recommend: separate section in the Emojis settings panel (same sidebar tab, new card below).
 
 Elements needed:
-- `open-sticker-manager-btn` — button to open the sticker modal
-- `sticker-modal` — modal overlay  
-- `sticker-name-input` — name text field
-- `sticker-pack-input` — pack name text field (default "General")
-- `sticker-file-input` — file picker
-- `sticker-upload-btn` — upload button
-- `stickers-list` — container for the rendered sticker list
+- `open-sticker-manager-btn`: button to open the sticker modal
+- `sticker-modal`: modal overlay  
+- `sticker-name-input`: name text field
+- `sticker-pack-input`: pack name text field (default "General")
+- `sticker-file-input`: file picker
+- `sticker-upload-btn`: upload button
+- `stickers-list`: container for the rendered sticker list
 
 **File**: `public/js/modules/app-media.js`
 
 New method `_setupStickerManagement()` (parallel to `_setupEmojiManagement`):
 - Opens/closes the sticker modal
-- Handles file selection (no cropper — stickers are allowed at their natural aspect ratio)
+- Handles file selection (no cropper: stickers are allowed at their natural aspect ratio)
 - Max size check (use `max_emoji_kb` setting or a separate TBD setting)
 - POSTs to `/api/upload-sticker`
 - Calls `_loadStickers()` after upload/delete
-- `_renderStickerList(stickers)` — renders a list with thumbnail, name/pack, delete button
+- `_renderStickerList(stickers)`: renders a list with thumbnail, name/pack, delete button
 
 Call `_setupStickerManagement()` at the end of the emoji setup block.
 
 ---
 
-## Part 11 — i18n Keys
+## Part 11: i18n Keys
 
 **File**: `public/locales/en.json` (and mirror in other locale files)
 
@@ -350,7 +350,7 @@ Call `_setupStickerManagement()` at the end of the emoji setup block.
 
 ---
 
-## Part 12 — Service Worker Cache Bust
+## Part 12: Service Worker Cache Bust
 
 **File**: `public/sw.js`
 
@@ -366,9 +366,9 @@ The sticker picker tab and new CSS/JS are incremental changes to existing cached
 4. `_loadStickers()` + app init call (`app-media.js`)
 5. `_sendStickerMessage()` + `_emojiPickerContext` tracking (`app-utilities.js`, `app-ui.js`)
 6. Sticker tab in emoji picker (`app-utilities.js`)
-7. Message rendering (`app-utilities.js` — `_renderMessageContent`)
+7. Message rendering (`app-utilities.js`: `_renderMessageContent`)
 8. CSS (`style.css`)
-9. Admin UI (`app.html`, `app-media.js` — `_setupStickerManagement`)
+9. Admin UI (`app.html`, `app-media.js`: `_setupStickerManagement`)
 10. i18n keys (`locales/*.json`)
 11. CHANGELOG + version bump (`package.json`, `CHANGELOG.md`)
 
@@ -376,8 +376,8 @@ The sticker picker tab and new CSS/JS are incremental changes to existing cached
 
 ## Out of Scope (Follow-up candidates)
 
-- User-contributed sticker packs (packs from other users' servers — requires pack import/export)
+- User-contributed sticker packs (packs from other users' servers; requires pack import/export)
 - Per-user favorite stickers
 - Sticker search via GIPHY-style external provider
-- Animated sticker support (APNG / WEBP animated) — already works implicitly since we serve the file as-is
+- Animated sticker support (APNG / WEBP animated): already works implicitly since we serve the file as-is
 - `manage_stickers` as a separate permission key (currently piggybacks on `manage_emojis`)
