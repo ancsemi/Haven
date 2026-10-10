@@ -113,7 +113,9 @@ class ChannelTabsLayout {
 
       try {
         HavenApi.Layout.release(ChannelTabsLayout.ID);
-      } catch (_) {}
+      } catch (releaseError) {
+        console.warn('[Channel Tabs] Layout release failed:', releaseError);
+      }
 
       console.error('[Channel Tabs] Failed to engage layout:', error);
       return false;
@@ -137,6 +139,15 @@ class ChannelTabsLayout {
     if (persist) {
       HavenApi.Data.save(ChannelTabsLayout.ID, 'layoutOn', '0');
     }
+  }
+
+  // Haven's own translation for strings core already has a key for. t()
+  // returns the key itself when it has no text, so that falls back to English.
+  _t(key, fallback) {
+    const translate = typeof window !== 'undefined' ? window.t : null;
+    if (typeof translate !== 'function') return fallback;
+    const text = translate(key);
+    return typeof text === 'string' && text && text !== key ? text : fallback;
   }
 
   // ─────────────────────────────────────────────────────
@@ -275,14 +286,14 @@ class ChannelTabsLayout {
 
     tabs.innerHTML = `
       <button type="button" class="channel-tab settings-tab" data-channel-tab="channels">
-        # <span>Channels</span>
+        # <span class="channel-tab-label"></span>
         <span class="channel-tab-notify-dot settings-tab" id="channels-channel-tab-notify-dot" style="display:none">
           <span class="channel-tab-notify-dot-indicator"></span>
         </span>
       </button>
 
       <button type="button" class="channel-tab settings-tab" data-channel-tab="DMs">
-        👥 <span>DMs</span>
+        👥 <span class="channel-tab-label"></span>
         <span class="channel-tab-notify-dot settings-tab" id="DMs-channel-tab-notify-dot" style="display:none">
           <span class="channel-tab-notify-dot-indicator"></span>
         </span>
@@ -290,6 +301,10 @@ class ChannelTabsLayout {
 
       <button type="button" class="join-create-btn" id="join-create-btn" title="Join or create channels" aria-label="Join or create channels">➕</button>
     `;
+
+    const labels = tabs.querySelectorAll('.channel-tab-label');
+    labels[0].textContent = this._t('app.sidebar.channels', 'Channels');
+    labels[1].textContent = 'DMs';
 
     this._split.parentNode.insertBefore(tabs, this._split);
     this._tabs = tabs;
@@ -318,10 +333,12 @@ class ChannelTabsLayout {
         <div class="modal-actions">
           <button type="button"
                   class="btn-sm"
-                  id="close-join-create-btn">Close</button>
+                  id="close-join-create-btn"></button>
         </div>
       </div>
     `;
+
+    modal.querySelector('#close-join-create-btn').textContent = this._t('modals.common.close', 'Close');
 
     document.body.appendChild(modal);
 
@@ -464,7 +481,7 @@ class ChannelTabsLayout {
 
     const createButton = document.getElementById('create-channel-btn');
     if (createButton) {
-      const label = 'Create';
+      const label = this._t('modals.create_sub.create_btn', 'Create');
       this._createButtonText = { element: createButton, original: createButton.textContent, label };
       createButton.textContent = label;
     }
@@ -791,7 +808,10 @@ class ChannelTabsLayout {
     for (const cleanup of this._listeners.splice(0)) {
       try {
         cleanup();
-      } catch (_) {}
+      } catch (error) {
+        // Keep restoring the rest of the sidebar even if one listener fails.
+        console.warn('[Channel Tabs] Cleanup step failed:', error);
+      }
     }
 
     // Sections go home before the modal holding them is removed.
