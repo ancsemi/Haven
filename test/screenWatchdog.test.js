@@ -2,7 +2,7 @@
  * Screen watchdog recovery for the GPU black-tile shape.
  *
  * A live-but-never-decoded receiver (videoWidth === 0) must trigger a
- * renegotiate request — not a re-adoption of the same receiver, which would
+ * renegotiate request, not a re-adoption of the same receiver, which would
  * mark the share delivered and stall recovery until a rejoin.
  *
  *   node --test test/screenWatchdog.test.js
@@ -121,7 +121,7 @@ test('a reshare with a new track is adopted even though a tile exists', () => {
   assert.equal(voice.emitted.length, 0, 'no signalling needed');
 });
 
-test('rearm does not re-adopt the same black receiver — it arms recovery', () => {
+test('rearm does not re-adopt the same black receiver; it arms recovery', () => {
   const blackVideo = { srcObject: null, videoWidth: 0 };
   const { VoiceManager, fireTimer } = loadVoiceManager(tileDoc(blackVideo));
   const voice = makeViewer(VoiceManager, blackVideo);
@@ -140,7 +140,7 @@ test('rearm does not re-adopt the same black receiver — it arms recovery', () 
 test('without a tile, a live receiver is still adopted', () => {
   const { VoiceManager, fireTimer } = loadVoiceManager(tileDoc(null));
   const voice = makeViewer(VoiceManager, null);
-  voice._screenDelivered.delete(7); // never delivered — watchdog armed by screen-share-started
+  voice._screenDelivered.delete(7); // never delivered; watchdog armed by screen-share-started
   voice._watchForScreenStream(7, 1);
   fireTimer();
   assert.equal(voice.delivered.length, 1, 'receiver adopted when no tile exists');

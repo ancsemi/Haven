@@ -1,5 +1,5 @@
 /**
- * User-configurable screen share bitrate (300–10000 Kbps + unlimited).
+ * User-configurable screen share bitrate (300 to 10000 Kbps + unlimited).
  *
  *   node --test test/screenBitrate.test.js
  */
@@ -57,7 +57,7 @@ function makeSharer(VoiceManager, { bitrate, resolution = 0 } = {}) {
   return { voice, connection, sender };
 }
 
-test('bitrate normalizes to 300–10000 Kbps, 0 for unlimited, 8000 default', () => {
+test('bitrate normalizes to 300 to 10000 Kbps, 0 for unlimited, 8000 default', () => {
   const { VoiceManager } = loadVoiceManager();
   const voice = Object.create(VoiceManager.prototype);
   assert.equal(voice._normalizeScreenBitrate(null), 8000);
@@ -229,7 +229,7 @@ test('a change landing mid-republish is not dropped (latest wins)', async () => 
   voice.screenBitrate = 8500;
   await voice._republishRelayScreenBitrate();
   // The republish re-reads the cap after unpublish, so the single publish
-  // already carries the 9 Mbps latest — never the 8.5 Mbps in-between value,
+  // already carries the 9 Mbps latest, never the 8.5 Mbps in-between value,
   // and the overlapping change is not dropped.
   assert.deepEqual(publishedCaps, [9_000_000]);
   assert.equal(voice._lastRelayScreenBitrateKey, 9_000_000);
@@ -336,7 +336,7 @@ test('a stop during retry backoff aborts instead of publishing into teardown', a
     const republish = voice._republishRelayScreenBitrate();
     // Let the first attempt fail so the retry is sleeping in backoff, then
     // simulate stopScreenShare's synchronous prefix (op bumps while
-    // isScreenSharing is still true — stop awaits its unpublish first).
+    // isScreenSharing is still true; stop awaits its unpublish first).
     await new Promise(resolve => setTimeout(resolve, 10));
     voice._screenStartOperation = 1;
     await republish;

@@ -465,7 +465,7 @@ test('a theme named without the file: prefix is normalised, not passed through',
   const themesDir = path.join(ROOT, 'themes');
   const published = compatibleThemeFiles(themesDir, ['braid.theme.css']);
 
-  // A bare filename is the same intent as `file:` — it is what an admin writes by hand.
+  // A bare filename is the same intent as `file:`; it is what an admin writes by hand.
   // Passing it through unchanged makes the client apply an unknown built-in theme, so
   // the page loads no stylesheet and reports no error.
   assert.equal(validatedThemeDefault(themesDir, 'braid.theme.css', published), 'file:braid.theme.css');

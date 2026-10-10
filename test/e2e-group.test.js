@@ -1,5 +1,5 @@
 /**
- * Group DM crypto — property tests.
+ * Group DM crypto: property tests.
  *
  * Run: node --test test/e2e-group.test.js
  *
@@ -66,7 +66,7 @@ test('the server cannot read the ciphertext', async () => {
 /* ── forgery ──────────────────────────────────────── */
 
 test('a member cannot forge a message as another member', async () => {
-  // Mallory holds the epoch key — she is in the group — so she can encrypt
+  // Mallory holds the epoch key (she is in the group), so she can encrypt
   // perfectly well. Without Alice's signing key she still cannot author as her.
   const [alice, mallory] = [await makeMember(1), await makeMember(3)];
   const K = await G.generateEpochKey();
@@ -167,7 +167,7 @@ test('a member added at epoch 2 cannot read epoch 1', async () => {
     epochKey: K1, epoch: 1, channelId: CHANNEL, senderId: alice.id, prev: null,
     signingPrivateKey: alice.sign.privateKey,
   });
-  // The newcomer holds K2 only — K1 was never wrapped for them.
+  // The newcomer holds K2 only; K1 was never wrapped for them.
   const r = await G.decryptGroupMessage(old, {
     epochKey: K2, channelId: CHANNEL, senderId: alice.id, signingPublicJwk: alice.signJwk,
   });
@@ -239,7 +239,7 @@ test('a withheld message is detected as a chain break', async () => {
   const full = G.verifyChain([h1, h2], [m1, m2, m3]);
   assert.strictEqual(full.ok, true, 'an intact transcript raises nothing');
 
-  // The server withholds m2 from this member. m3 still verifies on its own —
+  // The server withholds m2 from this member. m3 still verifies on its own,
   // which is exactly why signatures alone are not enough.
   const solo = await G.decryptGroupMessage(m3, {
     epochKey: K, channelId: CHANNEL, senderId: alice.id, signingPublicJwk: alice.signJwk,
@@ -259,7 +259,7 @@ test('concurrent sends sharing a prev do not raise a false alarm', async () => {
     signingPrivateKey: alice.sign.privateKey,
   });
   const h = await G.envelopeHash(root);
-  // Both reply before seeing each other — a legitimate fork, not tampering.
+  // Both reply before seeing each other: a legitimate fork, not tampering.
   const a = await G.encryptGroupMessage('alice replies', {
     epochKey: K, epoch: 1, channelId: CHANNEL, senderId: alice.id, prev: h,
     signingPrivateKey: alice.sign.privateKey,

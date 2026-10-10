@@ -1,5 +1,5 @@
 /**
- * Group DM key distribution — server rule tests.
+ * Group DM key distribution: server rule tests.
  *
  * These cover what the crypto tests cannot: the structural rules only the
  * server can enforce, because no client can see the whole membership list or
