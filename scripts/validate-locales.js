@@ -11,7 +11,7 @@
  *   node scripts/validate-locales.js public/locales/fr.json
  *
  * Exit code 0 = pass, 1 = fail. Warnings (extra keys, missing keys) do
- * NOT fail the run — only structural problems do, so partial translations
+ * NOT fail the run; only structural problems do, so partial translations
  * are still mergeable.
  *
  * Checks performed:
@@ -22,9 +22,9 @@
  *      (string vs object) as the corresponding key in en.json. (i.e.
  *      no accidentally turning a string into an object or vice versa,
  *      which would break the i18n lookup at runtime.)
- *   4. No keys reference paths that don't exist in en.json (warn — could
+ *   4. No keys reference paths that don't exist in en.json (warn: could
  *      indicate a typo or a stale string).
- *   5. Reports missing keys (warn — fine for in-progress translations).
+ *   5. Reports missing keys (warn: fine for in-progress translations).
  *
  * IMPORTANT FOR FUTURE AGENTS:
  *   If you add new translation keys to en.json, the other locale files
@@ -43,7 +43,7 @@ const MASTER_FILE = path.join(LOCALES_DIR, 'en.json');
 
 function loadJson(file) {
   const raw = fs.readFileSync(file, 'utf8');
-  return JSON.parse(raw); // throws on parse error — caught by caller
+  return JSON.parse(raw); // throws on parse error, caught by caller
 }
 
 // Walk an object and yield "dot.path" -> typeof value pairs.

@@ -32,7 +32,7 @@ module.exports = function registerImport(deps) {
         // Clean up the uploaded raw file
         try { fs.unlinkSync(req.file.path); } catch { /* cleanupTempImports() sweeps any haven-import leftover */ }
 
-        // Return preview (channel list + counts — NOT the full messages)
+        // Return preview (channel list + counts, NOT the full messages)
         res.json({
           importId,
           format: result.format,
@@ -53,7 +53,7 @@ module.exports = function registerImport(deps) {
     });
   });
 
-  // ── Discord Direct Connect — pull messages straight from Discord's API ──
+  // ── Discord Direct Connect: pull messages straight from Discord's API ──
   const DISCORD_API = 'https://discord.com/api/v10';
 
   async function discordApiFetch(endpoint, auth, retries = 2) {
@@ -143,7 +143,7 @@ module.exports = function registerImport(deps) {
       const categories = {};
       allChannels.filter(c => c.type === 4).forEach(c => { categories[c.id] = c.name; });
 
-      // Text (0), Announcement (5), Forum (15), Media (16) — all contain readable content
+      // Text (0), Announcement (5), Forum (15), Media (16): all contain readable content
       const textTypes = new Set([0, 5, 15, 16]);
       const channelsList = allChannels
         .filter(c => textTypes.has(c.type))

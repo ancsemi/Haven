@@ -489,7 +489,7 @@ module.exports = function register(socket, ctx) {
 
     // Role hierarchy: a non-admin may only edit roles strictly below their own
     // level, and may never raise a role to or above their level. This is the
-    // real guard behind the behaviour that used to happen by accident — editing
+    // real guard behind the behaviour that used to happen by accident: editing
     // a peer or higher role would nuke its permissions and lock the caller out,
     // while the level change itself still went through. Viewing is unaffected
     // (get-roles has no such gate). Mirrors assign-role / promote-user.
@@ -559,14 +559,14 @@ module.exports = function register(socket, ctx) {
 
         // Resolve the final permission set BEFORE deleting anything. The old
         // code deleted the role's permissions first and then re-checked each
-        // requested perm with userHasPermission(caller) — inside the same
+        // requested perm with userHasPermission(caller), inside the same
         // transaction, so the delete was already visible. When a non-admin
         // edited the very role that granted their own permissions, that source
         // was gone at check time, so every perm they "no longer had" was
         // silently dropped, wiping it for every other member of the role too.
         // We now snapshot the caller's rights up front and preserve any
         // permission they don't personally control (admin-only perms, or perms
-        // they lack) exactly as the role already had them — a non-admin can
+        // they lack) exactly as the role already had them. A non-admin can
         // only add or remove perms they actually hold, and never deletes the
         // rest as a side effect.
         const currentPerms = db.prepare(
@@ -845,7 +845,7 @@ module.exports = function register(socket, ctx) {
 
       for (const [code] of channelUsers) { emitOnlineUsers(code); }
       // Every role was just torn down and rebuilt, so every connected user's
-      // permission set changed. Push each one their own recomputed state —
+      // permission set changed. Push each one their own recomputed state;
       // the payload-less broadcast below only nudges open role managers.
       const seen = new Set();
       for (const [, s] of io.sockets.sockets) {

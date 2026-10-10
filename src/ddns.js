@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Dynamic DNS auto-updater
+// Haven: Dynamic DNS auto-updater
 //
 // Keeps a DNS record pointed at this server's current public IP
 // so the host's domain (e.g. anchaven.duckdns.org) never goes
@@ -8,7 +8,7 @@
 // Supported providers:
 //   - duckdns     (DDNS_PROVIDER=duckdns)
 //   - cloudflare  (DDNS_PROVIDER=cloudflare)
-//   - generic     (DDNS_PROVIDER=generic — GET DDNS_URL)
+//   - generic     (DDNS_PROVIDER=generic: GET DDNS_URL)
 //
 // DuckDNS env:
 //   DDNS_PROVIDER=duckdns
@@ -200,7 +200,7 @@ function startDdns() {
   }
   const minutes = Math.max(1, parseInt(process.env.DDNS_INTERVAL_MINUTES || '5', 10) || 5);
   _log(`Dynamic DNS enabled (provider=${provider}, every ${minutes} min)`);
-  // Run once on boot, then on interval. Don't await — server boot continues.
+  // Run once on boot, then on interval. Don't await; server boot continues.
   _runOnce();
   if (timer) clearInterval(timer);
   timer = setInterval(_runOnce, minutes * 60 * 1000);

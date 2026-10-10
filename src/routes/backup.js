@@ -38,7 +38,7 @@ module.exports = function registerBackup(deps) {
   //
   // Everything is streamed via `archiver` rather than built in memory. The old
   // adm-zip path called `zip.toBuffer()`, holding every upload plus the whole
-  // compressed archive in RAM at once — a ~30GB backup blew past Node's Buffer
+  // compressed archive in RAM at once. A ~30GB backup blew past Node's Buffer
   // limit (RangeError) and the heap (OOM), crashing the server. Streaming to the
   // response (instead of building a temp file first) also means bytes start
   // flowing immediately, so a large manual download no longer sits silent long
@@ -79,7 +79,7 @@ module.exports = function registerBackup(deps) {
         destStream.on('error', finish);
         archive.on('error', finish);
         // ENOENT here just means a file vanished mid-walk (e.g. an attachment was
-        // deleted) — skip it rather than failing the whole backup.
+        // deleted); skip it rather than failing the whole backup.
         archive.on('warning', (w) => { if (w.code !== 'ENOENT') finish(w); });
         archive.pipe(destStream);
 
@@ -106,7 +106,7 @@ module.exports = function registerBackup(deps) {
           }
           // Filter out DM channels (and their members) when DMs aren't included.
           // DM bodies are E2E-encrypted, but the channel rows still leak who
-          // talked to whom — keep the metadata out unless the admin opted in.
+          // talked to whom; keep the metadata out unless the admin opted in.
           if (!has('dms') && data.channels) {
             const dmChannelIds = new Set(data.channels.filter(c => c.is_dm).map(c => c.id));
             data.channels = data.channels.filter(c => !c.is_dm);

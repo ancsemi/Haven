@@ -337,7 +337,7 @@ module.exports = function registerMediaLibrary(deps) {
   // (#5335) Seed a small starter pack on first run so the picker isn't empty
   // out of the box. Files in public/starter-stickers/ are copied into
   // uploads/stickers/ and registered in the `stickers` table under the
-  // "Starter" pack — but only if there are zero stickers in the DB. Once
+  // "Starter" pack, but only if there are zero stickers in the DB. Once
   // any sticker exists we leave things alone so admin uploads or deletions
   // aren't trampled on next restart.
   function seedStarterStickers() {
@@ -369,7 +369,7 @@ module.exports = function registerMediaLibrary(deps) {
       }
       if (seeded > 0) console.log(`[stickers] Seeded ${seeded} starter sticker(s) into the "Starter" pack.`);
     } catch (err) {
-      // Non-fatal — the server runs fine without the starter pack.
+      // Non-fatal: the server runs fine without the starter pack.
       console.warn('[stickers] Could not seed starter pack:', err?.message || err);
     }
   }
@@ -382,7 +382,7 @@ module.exports = function registerMediaLibrary(deps) {
   });
   function createStickerUpload() {
     const { getDb } = require('../database');
-    // Stickers are larger than emojis by design — separate setting, default 1 MB.
+    // Stickers are larger than emojis by design: separate setting, default 1 MB.
     const maxKb = parseInt(getDb().prepare('SELECT value FROM server_settings WHERE key = ?').get('max_sticker_kb')?.value) || 1024;
     return multer({
       storage: stickerStorage,

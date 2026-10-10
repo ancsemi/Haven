@@ -23,7 +23,7 @@ function isInt(v) {
 function sanitizeText(str) {
   if (typeof str !== 'string') return '';
   // Strip dangerous HTML tags/attributes as defense-in-depth.
-  // Do NOT entity-encode here — the client handles its own escaping when
+  // Do NOT entity-encode here; the client handles its own escaping when
   // rendering via _escapeHtml(). Entity-encoding on the server would cause
   // double-encoding (e.g. ' → &#39; stored → &amp;#39; after client escape).
   return str

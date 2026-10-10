@@ -31,7 +31,7 @@ module.exports = function registerLinkPreview(deps) {
   // Rate limit link preview fetches (per IP, separate from upload limiter).
   // Returns true when the request is within the window, false if the caller
   // should serve a 429.  The route handler invokes this AFTER the cache
-  // lookup, so cache hits never consume a rate-limit token — fixes a bug
+  // lookup, so cache hits never consume a rate-limit token, which fixes a bug
   // where reopening a chat with many links 429'd legitimate fresh requests
   // because each cached preview burned a slot.  (#5337)
   const previewLimitStore = new Map();
@@ -123,7 +123,7 @@ module.exports = function registerLinkPreview(deps) {
     const url = (req.query.url || '').trim();
     if (!url || url.length > 2048) return res.status(400).json({ error: 'Missing or oversized url' });
 
-    // Serve straight from disk when we already hold it — no upstream request,
+    // Serve straight from disk when we already hold it: no upstream request,
     // so a link that has since expired or gone offline still renders.
     const send = (item) => {
       res.set('Content-Type', item.type);
@@ -157,7 +157,7 @@ module.exports = function registerLinkPreview(deps) {
     const url = (req.query.url || '').trim();
     if (!url) return res.status(400).json({ error: 'Missing url param' });
 
-    // Cache check FIRST — cache hits should never consume a rate-limit slot.
+    // Cache check FIRST: cache hits should never consume a rate-limit slot.
     // Reopening a chat full of links was hitting 429 because the limiter ran
     // before the cache lookup. (#5337)
     const cached = linkPreviewCache.get(url);
@@ -165,7 +165,7 @@ module.exports = function registerLinkPreview(deps) {
       return res.json(cached.data);
     }
 
-    // Cache miss — now apply the per-IP rate limit.
+    // Cache miss: now apply the per-IP rate limit.
     if (!previewLimiterCheck(req)) {
       // Tell the client roughly when a slot frees so it can pace its retries
       // instead of hammering (or, worse, silently dropping the embed). The
@@ -204,7 +204,7 @@ module.exports = function registerLinkPreview(deps) {
       return res.status(403).json({ error: 'Link previews are not enabled for that domain' });
     }
 
-    // Use a real browser UA — many sites (Twitter/X, Instagram, etc.) serve
+    // Use a real browser UA: many sites (Twitter/X, Instagram, etc.) serve
     // JS-only pages to unknown bots, omitting the OG meta tags we need.
     const PREVIEW_UA = 'Mozilla/5.0 (compatible; HavenBot/2.1; +https://github.com/ancsemi/Haven)';
 
@@ -212,7 +212,7 @@ module.exports = function registerLinkPreview(deps) {
       let data = null;
 
       // ── Site-specific handlers ───────────────────────────
-      // Native twitter.com / x.com — their HTML requires JS rendering so the generic
+      // Native twitter.com / x.com: their HTML requires JS rendering so the generic
       // scraper gets blank OG tags. The fxtwitter public JSON API returns structured
       // post data (author, avatar, text, media, engagement counts) with no auth, so
       // the client can render a rich social card matching the mobile app's embeds.
@@ -287,10 +287,10 @@ module.exports = function registerLinkPreview(deps) {
               };
             }
           }
-        } catch { /* fxtwitter fallback failed — continue to generic scrape */ }
+        } catch { /* fxtwitter fallback failed; continue to generic scrape */ }
       }
 
-      // ── Reddit — serves no OG tags to unknown bots; use JSON API instead ──
+      // ── Reddit: serves no OG tags to unknown bots; use JSON API instead ──
       if (!data && /^https?:\/\/(?:(?:www|old|new)\.)?reddit\.com\/r\/[\w]+\/comments\/[\w]+/i.test(url)) {
         try {
           // Reddit's .json endpoint works with any User-Agent
@@ -308,7 +308,7 @@ module.exports = function registerLinkPreview(deps) {
               let redImages;
 
               if (post.is_gallery && post.media_metadata) {
-                // Gallery post — collect up to 4 preview images
+                // Gallery post: collect up to 4 preview images
                 const imgs = Object.values(post.media_metadata)
                   .filter(m => m.status === 'valid' && m.s?.u)
                   .map(m => decodeHtmlEntities(m.s.u))
@@ -331,7 +331,7 @@ module.exports = function registerLinkPreview(deps) {
               };
             }
           }
-        } catch { /* Reddit JSON fallback failed — continue to generic scrape */ }
+        } catch { /* Reddit JSON fallback failed; continue to generic scrape */ }
       }
 
       // ── YouTube: the watch page is over a megabyte and its OG tags sit far
@@ -360,7 +360,7 @@ module.exports = function registerLinkPreview(deps) {
         } catch { /* oEmbed unreachable or not JSON: fall through to the generic scrape */ }
       }
 
-      // ── Pixiv — blocks bots for HTML but provides an oEmbed API ────────
+      // ── Pixiv: blocks bots for HTML but provides an oEmbed API ────────
       if (!data && /^https?:\/\/(?:www\.)?pixiv\.net\/(?:en\/)?artworks\/\d+/i.test(url)) {
         try {
           const poEmbed = await fetch(
@@ -380,7 +380,7 @@ module.exports = function registerLinkPreview(deps) {
         } catch { /* fall through to generic scrape */ }
       }
 
-      // ── Bluesky — HTML is client-rendered (blank OG tags); the public AT Protocol
+      // ── Bluesky: HTML is client-rendered (blank OG tags); the public AT Protocol
       // app view returns structured post data with no auth. Resolve the handle to a
       // DID when needed, then hydrate the post and pull author / text / media. ──
       if (!data && /^https?:\/\/bsky\.app\/profile\/[^/]+\/post\/[A-Za-z0-9]+/i.test(url)) {
@@ -439,7 +439,7 @@ module.exports = function registerLinkPreview(deps) {
               }
             }
           }
-        } catch { /* Bluesky app view failed — continue to generic scrape */ }
+        } catch { /* Bluesky app view failed; continue to generic scrape */ }
       }
 
       // ── Generic OG scrape (manual redirect following with SSRF checks) ──
@@ -476,7 +476,7 @@ module.exports = function registerLinkPreview(deps) {
 
         const chunk = resp.body.toString('utf8');
 
-        // Regex helper — handles attributes spanning multiple lines and both
+        // Regex helper: handles attributes spanning multiple lines and both
         // orderings: property before content, and content before property.
         // Decodes HTML entities so image URLs with &amp; etc. work correctly.
         // Bounded quantifiers: a page full of unclosed tags would otherwise make
@@ -525,7 +525,7 @@ module.exports = function registerLinkPreview(deps) {
           url: getMetaContent('og:url') || url
         };
 
-        // oEmbed autodiscovery — if OG tags came back empty and the page advertises a
+        // oEmbed autodiscovery: if OG tags came back empty and the page advertises a
         // JSON oEmbed endpoint, use it. This future-proofs support for any oEmbed-compatible
         // site without needing a dedicated handler.
         if (!data.title && !data.image) {
@@ -550,11 +550,11 @@ module.exports = function registerLinkPreview(deps) {
                   data.siteName = oj.provider_name || data.siteName;
                 }
               }
-            } catch { /* autodiscovery failed — keep OG data as-is */ }
+            } catch { /* autodiscovery failed; keep OG data as-is */ }
           }
         }
       } else {
-        // Twitter oEmbed succeeded — try a quick scrape for the image only.
+        // Twitter oEmbed succeeded; try a quick scrape for the image only.
         // First try fxtwitter (bot-friendly proxy), then fall back to the original URL.
         const imageSource = /^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com)\/\w+\/status\/\d+/i.test(url)
           ? url.replace(/^https?:\/\/(?:www\.|mobile\.)?(?:twitter|x)\.com/i, 'https://fxtwitter.com')

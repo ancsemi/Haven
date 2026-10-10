@@ -214,7 +214,7 @@ module.exports = function register(socket, ctx) {
 
     if (!voiceUsers.has(code)) voiceUsers.set(code, new Map());
 
-    // Cancel any pending grace-period deletion for this temp-voice channel —
+    // Cancel any pending grace-period deletion for this temp-voice channel:
     // the user is rejoining before the 8-second window expired.
     if (pendingTempDelete && pendingTempDelete.has(code)) {
       clearTimeout(pendingTempDelete.get(code));
@@ -233,11 +233,11 @@ module.exports = function register(socket, ctx) {
         handleVoiceLeave(oldSocket, code);
         oldSocket.emit('voice-kicked', { channelCode: code, reason: 'Joined from another client' });
       } else {
-        // Stale entry — socket already disconnected. Drop the map entry AND
+        // Stale entry: socket already disconnected. Drop the map entry AND
         // broadcast voice-user-left to remaining peers so they tear down
         // their dead RTCPeerConnection. Without this, peers keep the dead
         // connection alive and apply the rejoiner's fresh offer on top of
-        // it, breaking audio for everyone. (#5347 v3.15.4 — mirrors the
+        // it, breaking audio for everyone. (#5347 v3.15.4, mirrors the
         // fix already in voice-rejoin's stale-entry path.)
         voiceUsers.get(code).delete(socket.user.id);
         clearScreenState(code, socket.user.id);
@@ -308,7 +308,7 @@ module.exports = function register(socket, ctx) {
     socket.emit('music-queue-update', getMusicQueuePayload(code));
     sendCurrentBotAudio(code);
 
-    // Send active screen share info — tell screen sharers to renegotiate
+    // Send active screen share info: tell screen sharers to renegotiate
     const sharers = activeScreenSharers.get(code);
     emitActiveScreenSnapshot(code);
     if (sharers && sharers.size > 0) {
@@ -325,7 +325,7 @@ module.exports = function register(socket, ctx) {
       }, 2000);
     }
 
-    // Send active webcam info — tell webcam users to renegotiate
+    // Send active webcam info: tell webcam users to renegotiate
     const camUsers = activeWebcamUsers.get(code);
     if (camUsers && camUsers.size > 0) {
       socket.emit('active-webcam-users', {
@@ -363,7 +363,7 @@ module.exports = function register(socket, ctx) {
   // clean application-level refusal, not a dropped call.
   const MAX_SDP_SIZE = 49152;
   const MAX_OFFER_ID_SIZE = 96;
-  const MAX_ICE_SIZE = 2048;  // 2 KB — ICE candidates are small
+  const MAX_ICE_SIZE = 2048;  // 2 KB, ICE candidates are small
 
   socket.on('voice-offer', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -710,7 +710,7 @@ module.exports = function register(socket, ctx) {
       );
 
       // ── SERVER-SIDE PROACTIVE HEAL ──────────────────────
-      // Don't just complain — reattach the user right here so the
+      // Don't just complain; reattach the user right here so the
       // infinite watchdog loop ("self ABSENT → poll → still ABSENT")
       // breaks immediately. The user has already proven (by being
       // connected with a valid socket and claiming to be in voice on
@@ -790,7 +790,7 @@ module.exports = function register(socket, ctx) {
               ? Array.from(healedRoom.values()).map(u => serializeVoiceRosterUser(u, vch.id))
               : [];
             socket.emit('voice-users-update', { channelCode: code, users: healedUsers });
-            return; // We've already sent the update — don't double-send below.
+            return; // We've already sent the update, don't double-send below.
           }
         }
       } catch (e) {
@@ -910,7 +910,7 @@ module.exports = function register(socket, ctx) {
     // the existing entry. This preserves their voiceUsers slot AND
     // means peers were never told voice-user-left, so their
     // RTCPeerConnections are still alive and audio continues
-    // uninterrupted — no panel blanking, no missing-self glitch.
+    // uninterrupted: no panel blanking, no missing-self glitch.
     const pendingKey = `${socket.user.id}:${code}`;
     const pending = pendingVoiceLeave && pendingVoiceLeave.get(pendingKey);
     if (pending) {
@@ -923,8 +923,8 @@ module.exports = function register(socket, ctx) {
         voiceLastActivity.set(socket.user.id, Date.now());
         console.log(`[VoiceDiag] voice-rejoin FAST PATH: rebound ${socket.user.username} on ${code} to socket ${socket.id} (no peer churn)`);
         // Tell the rejoining client about the current peer list so its
-        // own UI is fresh, but do NOT re-emit voice-user-joined to peers
-        // — they never saw us leave, so they don't need to renegotiate.
+        // own UI is fresh, but do NOT re-emit voice-user-joined to peers:
+        // they never saw us leave, so they don't need to renegotiate.
         const existingUsers = Array.from(voiceUsers.get(code).values())
           .filter(u => u.id !== socket.user.id);
         const vchSettings = db.prepare('SELECT voice_bitrate FROM channels WHERE code = ?').get(code);
@@ -933,7 +933,7 @@ module.exports = function register(socket, ctx) {
           users: existingUsers.map(serializeVoicePeer),
           voiceBitrate: vchSettings ? (vchSettings.voice_bitrate || 0) : 0,
           transport: callKind(code),
-          // Hint to the client: skip building new RTCPeerConnections —
+          // Hint to the client: skip building new RTCPeerConnections;
           // existing ones from before the blip are still live.
           skipRenegotiate: true,
           rejoin: true
@@ -944,7 +944,7 @@ module.exports = function register(socket, ctx) {
         sendCurrentBotAudio(code);
         return;
       }
-      // No existing entry despite a pending timer — fall through to
+      // No existing entry despite a pending timer, so fall through to
       // normal rejoin path below.
     }
     const _hadRoomEntry = !!voiceUsers.get(code)?.has(socket.user.id);
@@ -954,7 +954,7 @@ module.exports = function register(socket, ctx) {
     // Client is still bound to this room on THIS socket (common: UI
     // reconciler / watchdog / resize-triggered voice-rejoin while nothing
     // actually broke). Do NOT emit voice-user-left/joined and do NOT send
-    // voice-existing-users without skipRenegotiate — that made the client
+    // voice-existing-users without skipRenegotiate. That made the client
     // tear down live RTCPeerConnections and drop screen shares, while the
     // join-sound / roster churn looked like a disconnect. Just refresh the
     // roster snapshot and leave media alone.
@@ -975,7 +975,7 @@ module.exports = function register(socket, ctx) {
         skipRenegotiate: true,
         rejoin: true
       });
-      // Private roster refresh for the requester only — don't rebroadcast
+      // Private roster refresh for the requester only; don't rebroadcast
       // voice-user-joined (that would play join sounds for everyone).
       broadcastVoiceUsers(code);
       broadcastStreamInfo(code);
@@ -997,7 +997,7 @@ module.exports = function register(socket, ctx) {
     // room receive `voice-user-left` and tear down their stale
     // RTCPeerConnection. Without this, the rejoiner's fresh offer is applied
     // on top of a dead connection on every other client and audio never
-    // recovers — exactly the "rejoined but can't hear each other" pattern
+    // recovers, exactly the "rejoined but can't hear each other" pattern
     // reported in #5347.
     let preservedMute = false;
     let preservedDeafen = false;
@@ -1010,7 +1010,7 @@ module.exports = function register(socket, ctx) {
         if (oldSocket) {
           handleVoiceLeave(oldSocket, code);
         } else {
-          // Stale entry — old socket already gone, just drop the map entry
+          // Stale entry: old socket already gone, just drop the map entry
           // so the broadcasted voice-user-left below can fire.
           voiceUsers.get(code).delete(socket.user.id);
           clearScreenState(code, socket.user.id);

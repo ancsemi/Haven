@@ -431,7 +431,7 @@ module.exports = function registerProfile(deps) {
     }
   });
 
-  // Persona avatar upload — same validation as user avatar (2 MB, magic-byte check)
+  // Persona avatar upload: same validation as user avatar (2 MB, magic-byte check)
   app.post('/api/upload-persona-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;

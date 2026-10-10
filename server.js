@@ -19,14 +19,14 @@ const path = require('path');
 
 // ── Stale-install guard ───────────────────────────────────
 // Updating by unzipping/copying a release over an existing install leaves
-// behind files that newer versions deleted. That is normally harmless — until
+// behind files that newer versions deleted. That is normally harmless, until
 // the deleted file is a module that was split into a folder of the same name
 // (src/socketHandlers.js became src/socketHandlers/ in 2.9.8): require()
 // resolves the leftover FILE before the directory, so the server silently
 // runs months-old module code no matter how current every other file is, and
 // eventually dies somewhere unrelated. A real self-host crashed on boot with
 // "Cannot read properties of undefined (reading 'activity')" because a
-// pre-2.9.8 socketHandlers.js was still shadowing the folder — after months
+// pre-2.9.8 socketHandlers.js was still shadowing the folder, after months
 // of its socket layer being frozen at the old version while "fully updated".
 // Catch the pattern generically and say exactly which file to delete.
 {
@@ -533,8 +533,8 @@ function userHasPermission(userId, permission) {
 // Two of the eight standard policies are deliberately NOT offered: 'unsafe-url'
 // (sends the full URL to every site, always) and 'no-referrer-when-downgrade'
 // (sends the full URL to any cross-origin HTTPS site). Haven puts secrets in
-// the query string — invite links arrive as ?invite=CODE and deep links as
-// ?channel=CODE&message=ID — and they are only scrubbed by replaceState once
+// the query string (invite links arrive as ?invite=CODE and deep links as
+// ?channel=CODE&message=ID), and they are only scrubbed by replaceState once
 // the socket connects. Under either policy, an externally hosted image in the
 // channel would carry that invite code to its host in the Referer header on
 // first paint. The six kept here all stop at the origin cross-origin, which is
@@ -680,7 +680,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
   dotfiles: 'deny',       // block .env, .git, etc.
   etag: true,             // ETag for conditional requests
   lastModified: true,     // Last-Modified header
-  maxAge: 0,              // always revalidate — prevents stale JS/CSS after deploys
+  maxAge: 0,              // always revalidate (prevents stale JS/CSS after deploys)
 }));
 
 // ── Block access to internal upload folders ─────────────
@@ -719,7 +719,7 @@ app.use('/uploads', (req, res, next) => {
 // ── Serve uploads from external data directory ──────────
 app.use('/uploads', express.static(UPLOADS_DIR, {
   dotfiles: 'deny',
-  maxAge: '7d',       // 7 days — avatars & images rarely change; filenames include timestamps for uniqueness
+  maxAge: '7d',       // 7 days: avatars & images rarely change; filenames include timestamps for uniqueness
   immutable: true,    // tells browser the file at this URL will never change (cache-busting via new filename)
   etag: true,
   lastModified: true,
@@ -738,9 +738,9 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
       res.setHeader('Vary', 'Origin');
     } else if (ext === '.svg') {
       // SVG (issue #5309): renderable inline via <img> tag (browsers run SVG in
-      // "secure static mode" — no scripts, no XHR), but direct navigation still
+      // "secure static mode": no scripts, no XHR), but direct navigation still
       // gets attachment-disposition so opening the raw URL in a new tab can't
-      // execute the file. CSP doubles up on that — even if a future browser
+      // execute the file. CSP doubles up on that: even if a future browser
       // change allowed any external loads inside <img>-rendered SVG, this
       // header forbids everything except inline styles (needed for fill/stroke).
       res.setHeader('Access-Control-Allow-Origin', '*');
@@ -823,7 +823,7 @@ app.get('/api/themes', (req, res) => {
         const stored = JSON.parse(row.value);
         if (Array.isArray(stored)) published = stored;
       }
-    } catch { /* DB not ready yet or parse error — default to empty */ }
+    } catch { /* DB not ready yet or parse error, default to empty */ }
     const themes = readThemeMetadataSnapshot(THEMES_DIR)
       .map(theme => ({ ...theme, published: theme.compatible && published.includes(theme.file) }));
     res.json(themes);
@@ -876,7 +876,7 @@ const imageOnlyFilter = (req, file, cb) => {
 // Image-only upload
 const upload = cappedUpload({ storage: uploadStorage, fileFilter: imageOnlyFilter });
 
-// General file upload — no MIME restrictions; safety enforced via
+// General file upload: no MIME restrictions; safety enforced via
 // Content-Disposition: attachment on non-image downloads (see /uploads handler)
 const fileUpload = cappedUpload({ storage: uploadStorage });
 
@@ -910,7 +910,7 @@ app.use('/api/auth', authRoutes);
 // ── Rich presence: account linking (Steam / Spotify) ─────
 // Mounted here, ahead of static + SPA handling, so /connect/* is never
 // swallowed by a catch-all. The activity engine is built later inside
-// setupSocketHandlers, hence the getter — see activityRef below.
+// setupSocketHandlers, hence the getter (see activityRef below).
 const activityRef = { engine: null };
 const { createConnectRoutes, baseUrl } = require('./src/connectRoutes');
 app.use('/connect', createConnectRoutes(() => activityRef.engine));
@@ -999,7 +999,7 @@ app.delete('/api/push/subscribe', express.json(), (req, res) => {
 // ── Per-user channel notification prefs ──────────────────
 // Mirrors the localStorage `haven_muted_channels` set to the database so
 // sendPushNotifications can filter out muted recipients before they hit
-// FCM/web-push (#5399 follow-up — mobile users were getting pushes for
+// FCM/web-push (#5399 follow-up: mobile users were getting pushes for
 // every message regardless of channel mute state because the prefs only
 // ever lived client-side).
 app.get('/api/user/channel-prefs', (req, res) => {
@@ -1041,7 +1041,7 @@ app.post('/api/user/channel-prefs/mute', express.json({ limit: '4kb' }), (req, r
   }
 });
 
-// Bulk replace — used by the client on first sync to push the entire
+// Bulk replace: used by the client on first sync to push the entire
 // localStorage set up at once (or to converge after offline edits).
 app.put('/api/user/channel-prefs/muted', express.json({ limit: '16kb' }), (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -1050,7 +1050,7 @@ app.put('/api/user/channel-prefs/muted', express.json({ limit: '16kb' }), (req, 
   const codes = Array.isArray(req.body?.codes) ? req.body.codes : null;
   if (!codes || codes.length > 500)
     return res.status(400).json({ error: 'codes array required (max 500)' });
-  // Filter to plausible channel codes only — strings, 1..64 chars
+  // Filter to plausible channel codes only: strings, 1..64 chars
   const clean = codes.filter(c => typeof c === 'string' && c.length > 0 && c.length <= 64);
   try {
     const { getDb } = require('./src/database');
@@ -1163,7 +1163,7 @@ app.get('/api/ice-servers', (req, res) => {
   // on top of the four built-in STUN defaults lands on exactly five, which is
   // what dragged out reconnection after a socket flap in #5444 (peers stuck on
   // ice=checking). Cap the list at four, dropping STUN entries first so the
-  // TURN relay — the one that actually traverses strict NAT — always survives.
+  // TURN relay (the one that actually traverses strict NAT) always survives.
   const MAX_ICE_SERVERS = 4;
   if (iceServers.length > MAX_ICE_SERVERS) {
     const isTurn = (s) => /turns?:/i.test(String(s.urls));
@@ -1208,7 +1208,7 @@ require('./src/routes/profile')({ uploadDiskGuard, app, recordUploadOwnership, v
 
 // ── Connection address (any signed-in user) ──────────────
 // The status bar used to show window.location.origin, which for the person
-// running the server is "localhost:3000" — useless to share and pointless to
+// running the server is "localhost:3000", useless to share and pointless to
 // hide or copy. Resolve the address someone else could actually connect on:
 // an active tunnel wins, otherwise the same PUBLIC_URL / X-Forwarded-Host /
 // Host resolution the OAuth callbacks already rely on.
@@ -1294,7 +1294,7 @@ app.get('/invite/:vanityCode', (req, res) => {
   if (!isLegacyVanity && !managed) {
     return res.status(404).send('Invite link not found or expired');
   }
-  // Redirect to /app with the code as a query param — the frontend will auto-join
+  // Redirect to /app with the code as a query param; the frontend will auto-join
   res.redirect(`/app?invite=${encodeURIComponent(vanityCode)}`);
 });
 
@@ -1345,17 +1345,17 @@ app.get('/api/health', (req, res) => {
     name,
     icon,
     fingerprint
-    // version intentionally omitted — don't fingerprint the server for attackers
+    // version intentionally omitted: don't fingerprint the server for attackers
   });
 });
 
-// ── Version endpoint (for update checker — authenticated users only) ──
+// ── Version endpoint (for update checker, authenticated users only) ──
 app.get('/api/version', (req, res) => {
   const pkg = require('./package.json');
   res.json({ version: pkg.version });
 });
 
-// ── Public config (unauthenticated — safe, read-only aesthetics) ──
+// ── Public config (unauthenticated: safe, read-only aesthetics) ──
 // Returns the admin-configured default theme so the login page can match
 // the server's look for first-time visitors who have no localStorage preference.
 app.get('/api/public-config', (req, res) => {
@@ -1386,7 +1386,7 @@ app.get('/api/public-config', (req, res) => {
       // Surface security-relevant settings users may want to know about
       // before signing up (issue #5300). Allowing a user to *see* whether
       // an admin can reset their password is the trust-and-warning half
-      // of the feature — admins enable, users get the disclosure.
+      // of the feature: admins enable, users get the disclosure.
       admin_password_reset_enabled: adminPwResetRow?.value === 'true',
       // SSO (#12). Reports configured-and-usable, not just the toggle, so the
       // login page never offers a button that can only fail. The issuer and
@@ -1458,7 +1458,7 @@ app.get('/api/port-check', async (req, res) => {
       reachable = await new Promise((resolve) => {
         const req = proto.get(`${useSSL ? 'https' : 'http'}://${publicIp}:${port}/api/health`, {
           timeout: 5000,
-          // SECURITY NOTE: rejectUnauthorized:false is intentional here — this
+          // SECURITY NOTE: rejectUnauthorized:false is intentional here: this
           // connects to OUR OWN public IP to test reachability. Self-signed certs
           // used by Haven would fail standard verification. This never connects
           // to third-party servers.
@@ -1505,7 +1505,7 @@ setInterval(() => { const now = Date.now(); for (const [ip, t] of uploadLimitSto
 // ── Image and file uploads, and Flash ROMs: src/routes/uploads.js ──
 require('./src/routes/uploads')({ uploadDiskGuard, app, recordUploadOwnership, uploadScopeFromRequest, uploadCapMb, verifyAdminFromDb, userHasPermission, uploadDir, upload, fileUpload, uploadLimiter });
 
-// (duplicate avatar handler removed — handled above at /api/upload-avatar)
+// (duplicate avatar handler removed; handled above at /api/upload-avatar)
 
 // ── Sounds, custom emoji and stickers: src/routes/media-library.js ──
 const { BUILTIN_SOUNDS, seedStarterStickers } = require('./src/routes/media-library')({ uploadDiskGuard, app, verifyAdminFromDb, userHasPermission, uploadDir, uploadStorage, uploadLimiter });
@@ -1739,7 +1739,7 @@ app.get('/api/gif/trending', gifLimiter, (req, res) => {
 // ── Link previews and the media proxy: src/routes/link-preview.js ──
 require('./src/routes/link-preview')({ app });
 
-// ── Games list endpoint — discover available games ──
+// ── Games list endpoint: discover available games ──
 app.get('/api/games', (req, res) => {
   const gamesDir = path.join(__dirname, 'public', 'games');
   const fs2 = require('fs');
@@ -1806,7 +1806,7 @@ app.post('/api/high-scores', express.json(), (req, res) => {
 });
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// WEBHOOK / BOT INTEGRATION — incoming message endpoint
+// WEBHOOK / BOT INTEGRATION: incoming message endpoint
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const rateLimit = require('express-rate-limit');
 const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Rate limit exceeded' } });
@@ -1843,7 +1843,7 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     avatarUrl = /^https?:\/\//i.test(trimmed) ? trimmed : null;
   }
 
-  // Optional reply_to — bot replying to a message in the same channel (3.13.0)
+  // Optional reply_to: bot replying to a message in the same channel (3.13.0)
   let replyTo = null;
   if (req.body.reply_to !== undefined && req.body.reply_to !== null) {
     const rid = parseInt(req.body.reply_to, 10);
@@ -2610,7 +2610,7 @@ app.post('/api/moderation/unmute', modLimiter, express.json({ limit: '16kb' }), 
   res.json({ success: true, message: `Unmuted ${target ? target.username : 'user'}` });
 });
 
-// GET /api/moderation/bans — list all bans
+// GET /api/moderation/bans: list all bans
 app.get('/api/moderation/bans', modLimiter, (req, res) => {
   const auth = getModUser(req, 'ban_user');
   if (auth.error) return res.status(auth.status).json({ error: auth.error });
@@ -2623,7 +2623,7 @@ app.get('/api/moderation/bans', modLimiter, (req, res) => {
   res.json({ bans });
 });
 
-// GET /api/moderation/mutes — list active mutes
+// GET /api/moderation/mutes: list active mutes
 app.get('/api/moderation/mutes', modLimiter, (req, res) => {
   const auth = getModUser(req, 'mute_user');
   if (auth.error) return res.status(auth.status).json({ error: auth.error });
@@ -2697,7 +2697,7 @@ function requireWebhookVoice(req, res, next) {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// BOT MODERATION REST API (#5397) — webhook-token authenticated.
+// BOT MODERATION REST API (#5397): webhook-token authenticated.
 // Each endpoint requires the bot's `can_moderate` flag to be enabled
 // by an admin via the Bot Manager. Mirrors /api/moderation/* but uses
 // webhook tokens instead of JWT bearer tokens so bots don't need a
@@ -2780,7 +2780,7 @@ app.post('/api/webhooks/:token/moderation/unban', webhookLimiter, express.json({
   res.json({ success: true, message: `Unbanned ${target ? target.username : 'user'}` });
 });
 
-// POST /api/webhooks/:token/moderation/mute  — body: { userId, duration (minutes), reason }
+// POST /api/webhooks/:token/moderation/mute, body: { userId, duration (minutes), reason }
 app.post('/api/webhooks/:token/moderation/mute', webhookLimiter, express.json({ limit: '16kb' }), (req, res) => {
   const webhook = requireModBot(req, res); if (!webhook) return;
   const { getDb } = require('./src/database');
@@ -2820,7 +2820,7 @@ app.post('/api/webhooks/:token/moderation/unmute', webhookLimiter, express.json(
   res.json({ success: true, message: `Unmuted ${target ? target.username : 'user'}` });
 });
 
-// GET /api/webhooks/:token/commands — list registered commands
+// GET /api/webhooks/:token/commands: list registered commands
 app.get('/api/webhooks/:token/commands', webhookLimiter, (req, res) => {
   const webhook = getWebhookByToken(req.params.token);
   if (!webhook) return res.status(404).json({ error: 'Webhook not found or inactive' });
@@ -2845,7 +2845,7 @@ app.get('/api/webhooks/:token/commands', webhookLimiter, (req, res) => {
   res.json({ commands });
 });
 
-// POST /api/webhooks/:token/commands — register a command
+// POST /api/webhooks/:token/commands: register a command
 app.post('/api/webhooks/:token/commands', webhookLimiter, express.json({ limit: '16kb' }), (req, res) => {
   const webhook = getWebhookByToken(req.params.token);
   if (!webhook) return res.status(404).json({ error: 'Webhook not found or inactive' });
@@ -2894,7 +2894,7 @@ app.post('/api/webhooks/:token/commands', webhookLimiter, express.json({ limit: 
   }
 });
 
-// DELETE /api/webhooks/:token/commands/:command — unregister a command
+// DELETE /api/webhooks/:token/commands/:command: unregister a command
 app.delete('/api/webhooks/:token/commands/:command', webhookLimiter, (req, res) => {
   const webhook = getWebhookByToken(req.params.token);
   if (!webhook) return res.status(404).json({ error: 'Webhook not found or inactive' });
@@ -2908,7 +2908,7 @@ app.delete('/api/webhooks/:token/commands/:command', webhookLimiter, (req, res) 
   res.json({ success: true });
 });
 
-// GET /api/bot-commands — list all registered bot commands (for client autocomplete)
+// GET /api/bot-commands: list all registered bot commands (for client autocomplete)
 app.get('/api/bot-commands', (req, res) => {
   const { getDb } = require('./src/database');
   const rows = getDb().prepare(`
@@ -2953,7 +2953,7 @@ app.get('/api/bot-commands', (req, res) => {
 });
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// DISCORD IMPORT — upload, preview, execute
+// DISCORD IMPORT: upload, preview, execute
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const os = require('os');
 const { parseDiscordExport } = require('./src/importDiscord');
@@ -3021,7 +3021,7 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
         const code = generateUniqueChannelCode(db, generateChannelCode);
 
         // Reuse an existing Haven channel if it was created from the same Discord channel.
-        // This makes re-importing (or importing a second overlapping export) idempotent —
+        // This makes re-importing (or importing a second overlapping export) idempotent:
         // new messages are appended, duplicates are skipped, and native Haven messages are untouched.
         let channelId;
         const discordChannelId = channelData.discordId || null;
@@ -3082,7 +3082,7 @@ app.post('/api/import/discord/execute', express.json({ limit: '1mb' }), (req, re
           );
 
           if (result.changes === 0) {
-            // Duplicate Discord message — resolve ID for reply threading and skip
+            // Duplicate Discord message: resolve ID for reply threading and skip
             if (msg.discordId) {
               const existing = lookupByDiscordId.get(msg.discordId);
               if (existing) idMap[msg.discordId] = existing.id;
@@ -3170,7 +3170,7 @@ if (useSSL) {
       next();
     });
     setInterval(() => { const now = Date.now(); for (const [ip, t] of redirectHits) { const f = t.filter(x => now - x < 60000); if (!f.length) redirectHits.delete(ip); else redirectHits.set(ip, f); } }, 5 * 60 * 1000);
-    // Only redirect to our own host — prevent open redirect
+    // Only redirect to our own host (prevent open redirect)
     const safePort = parseInt(process.env.PORT || 3000);
     httpRedirect.all('*', (req, res) => {
       // Sanitize: only allow path portion, strip host manipulation
@@ -3183,7 +3183,7 @@ if (useSSL) {
     // Timeout to prevent Slowloris on redirect server
     httpRedirectServer.headersTimeout = 5000;
     httpRedirectServer.requestTimeout = 5000;
-    // The redirect listener is a nicety — if its port is taken (or
+    // The redirect listener is a nicety: if its port is taken (or
     // binding it needs elevation), warn and carry on with HTTPS alone
     // rather than letting the bind error become an uncaught exception.
     httpRedirectServer.on('error', (err) => {
@@ -3201,10 +3201,10 @@ if (useSSL) {
   console.log('âš ï¸  Running HTTP: voice chat requires HTTPS for remote connections');
 }
 
-// Socket.IO — locked down
+// Socket.IO: locked down
 const io = new Server(server, {
   cors: {
-    origin: false,         // same-origin only — no cross-site connections
+    origin: false,         // same-origin only, no cross-site connections
   },
   maxHttpBufferSize: 64 * 1024,  // 64KB max per message (was 1MB)
   pingTimeout: 60000,
@@ -3461,7 +3461,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 require('./src/routes/maintenance')({ app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted, verifyAdminFromDb, buildBackupFile, db, late });
 
 // ── Catch-all: 404 ──────────────────────────────────────
-// Must be registered AFTER every app.get/post/etc. handler — Express
+// Must be registered AFTER every app.get/post/etc. handler. Express
 // matches in registration order, so anything below this never runs.
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
@@ -3564,7 +3564,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // ── Process exit logging ─────────────────────────────────
-// Catches ALL exits — including native crashes and V8 OOM.
+// Catches ALL exits, including native crashes and V8 OOM.
 // The 'exit' event fires even for abort() / SIGSEGV on some
 // Node versions.  We also log SIGABRT (V8 OOM fires this).
 process.on('exit', (code) => {
@@ -3637,8 +3637,8 @@ server.timeout = 120000;           // 2 min socket inactivity timeout (resets on
 // A failed bind (port already taken, no permission) surfaces as an
 // async 'error' event.  Without this handler it falls through to the
 // global uncaughtException keep-alive below, which writes it to
-// crash.log and keeps a process alive that never got its socket —
-// to the user that is a silent crash on launch: no banner, no error,
+// crash.log and keeps a process alive that never got its socket.
+// To the user that is a silent crash on launch: no banner, no error,
 // no exit, and the stale port-holder makes launch scripts think the
 // server came up.  Bind failures are fatal: say why, then exit.
 server.on('error', (err) => {

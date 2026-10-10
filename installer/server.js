@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Web-based Installer Server
+// Haven: Web-based Installer Server
 // Uses ONLY Node.js built-in modules (no npm install needed)
 // ═══════════════════════════════════════════════════════════
 const http = require('http');

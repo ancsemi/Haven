@@ -25,7 +25,7 @@ module.exports = function register(socket, ctx) {
     if (newName === socket.user.displayName) return;
 
     // (#5482) A moderator-set display name holds. Otherwise the whole
-    // Manage Display Names permission is decorative — the moderated user
+    // Manage Display Names permission is decorative: the moderated user
     // renames themselves straight back and nothing has been moderated.
     // Cleared when a moderator resets them to their username. Admins are
     // never locked, so nobody can end up permanently stuck with a name.
@@ -718,7 +718,7 @@ module.exports = function register(socket, ctx) {
    *
    * The keys are secrets: they are never echoed back to any client, and the
    * response is only "is this provider configured now". Validation lives in
-   * envStore.setEnvValue, which allow-lists the writable keys — a text field
+   * envStore.setEnvValue, which allow-lists the writable keys; a text field
    * that could write arbitrary .env entries would be a server takeover.
    */
   /**
@@ -792,7 +792,7 @@ module.exports = function register(socket, ctx) {
       action: 'integration_key_set',
       target_type: 'server',
       target_name: key,
-      // Deliberately records only which key changed, never the value — the
+      // Deliberately records only which key changed, never the value. The
       // audit log is readable in Settings and is not a place to store secrets.
       details: { key },
     });
@@ -809,7 +809,7 @@ module.exports = function register(socket, ctx) {
   });
 
   /**
-   * Last.fm linking — a username, not an OAuth round-trip.
+   * Last.fm linking: a username, not an OAuth round-trip.
    *
    * getRecentTracks is a public read, so there is no redirect, no popup, no
    * token to store, and no callback URI to register. The username is verified
@@ -827,7 +827,7 @@ module.exports = function register(socket, ctx) {
     activity.saveConnection(socket.user.id, 'lastfm', {
       externalId: check.name,
       displayName: check.name,
-      accessToken: null,   // public API — nothing secret to keep
+      accessToken: null,   // public API, nothing secret to keep
       refreshToken: null,
       expiresAt: 0,
     });
@@ -840,7 +840,7 @@ module.exports = function register(socket, ctx) {
   socket.on('unlink-connection', (data) => {
     if (!activity) return;
     const provider = typeof data?.provider === 'string' ? data.provider : '';
-    // lastfm belongs here too — without it a Last.fm account could be linked
+    // lastfm belongs here too; without it a Last.fm account could be linked
     // but never removed.
     if (!['steam', 'spotify', 'lastfm'].includes(provider)) return;
     activity.removeConnection(socket.user.id, provider);
@@ -972,7 +972,7 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Nicknames (#5394) ───────────────────────────────────
-  // Nicknames are personal and private — only visible to the user who set them.
+  // Nicknames are personal and private: only visible to the user who set them.
   // set-nickname upserts (or deletes when nickname is blank/null).
   // set-nicknames-bulk accepts { nicknames: { [targetId]: nickname|null } } for
   // the one-time migration where the client pushes its localStorage contents.
@@ -995,8 +995,8 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Global display name (Manage Display Names permission) ──
-  // Lets a moderator change another member's real display name — the one
-  // everyone sees — reusing the same validation and broadcast path as a
+  // Lets a moderator change another member's real display name (the one
+  // everyone sees), reusing the same validation and broadcast path as a
   // self-rename. A blank displayName resets the target back to their username.
   socket.on('rename-user-global', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -1075,7 +1075,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Failed to update display name');
     }
 
-    // Refresh presence maps silently — no user-renamed system message, since a
+    // Refresh presence maps silently: no user-renamed system message, since a
     // moderator changing someone's name shouldn't announce itself in-channel.
     for (const [code, users] of channelUsers) {
       if (users.has(targetId)) {

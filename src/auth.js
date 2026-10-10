@@ -18,9 +18,9 @@ if (!JWT_SECRET) {
 }
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
-// Admin-configurable session duration (days). Bounded 0–365 to match the
+// Admin-configurable session duration (days). Bounded 0-365 to match the
 // validator in src/socketHandlers/admin.js (#5294, expanded for #5391).
-// A value of 0 means "never expire" — the JWT is signed without an `exp`
+// A value of 0 means "never expire": the JWT is signed without an `exp`
 // claim and lives until the user logs out or their password_version bumps.
 // Returns either a string like '7d' OR null (no expiry).
 // For new installs the seeded default is 0 (Never); existing installs that
@@ -120,7 +120,7 @@ setInterval(() => {
 // ── Global registration velocity limiter (opt-in) ───────
 // Caps how many new accounts can be created server-wide per rolling hour, to
 // blunt a bot wave even when it is spread across many IPs (the per-IP limiter
-// above can't). In-memory, so it resets on restart — same as the others here.
+// above can't). In-memory, so it resets on restart, same as the others here.
 const _regTimestamps = [];
 function _regCountLastHour() {
   const cutoff = Date.now() - 3600 * 1000;
@@ -239,7 +239,7 @@ function downloadSSOAvatar(url) {
 // ── Register ──────────────────────────────────────────────
 
 // (#5344) Public endpoint that tells the registration page which
-// gates the admin has enabled. Only booleans are exposed — the
+// gates the admin has enabled. Only booleans are exposed; the
 // actual token value never leaves the server here.
 router.get('/registration-info', (req, res) => {
   try {
@@ -274,7 +274,7 @@ router.get('/guest-info', (req, res) => {
   }
 });
 
-// (#5381) Guest login — ephemeral, no password, no E2E key. Creates
+// (#5381) Guest login: ephemeral, no password, no E2E key. Creates
 // a real users row with is_guest=1 so the existing socket auth, member
 // list, role lookup, etc. all just work; the row is deleted when the
 // guest's last socket disconnects (see socketHandlers/index.js).
@@ -328,7 +328,7 @@ router.post('/guest-login', authLimiter, async (req, res) => {
       return res.status(409).json({ error: 'That username is currently in use. Try another' });
     }
 
-    // Random unusable hash — the row needs a password_hash but guests
+    // Random unusable hash: the row needs a password_hash but guests
     // never reach the /login endpoint, so nothing should ever match.
     const hash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 4);
     const result = db.prepare(
@@ -337,8 +337,8 @@ router.post('/guest-login', authLimiter, async (req, res) => {
     const userId = result.lastInsertRowid;
 
     // Auto-join exactly the admin-whitelisted guest channels. (#5401)
-    // The admin picks each channel individually in the guest-channels picker —
-    // top-level rooms, sub-channels, and voice rooms alike — so we join only
+    // The admin picks each channel individually in the guest-channels picker
+    // (top-level rooms, sub-channels, and voice rooms alike), so we join only
     // the listed ids and never cascade implicitly. This lets guests reach
     // nested and voice channels (previously skipped) while keeping the admin in
     // full control of what's exposed. DM channels are never joined.
@@ -391,7 +391,7 @@ router.post('/guest-login', authLimiter, async (req, res) => {
  *
  * Shared by local registration and OIDC first-login (#12) so a federated user
  * lands in exactly the same state as someone who signed up with a password.
- * Every step is best-effort — none of it is worth failing a signup over.
+ * Every step is best-effort; none of it is worth failing a signup over.
  */
 function provisionNewUser(db, userId, username, io) {
   // Auto-assign roles flagged as auto_assign to new users
@@ -424,7 +424,7 @@ function provisionNewUser(db, userId, username, io) {
   // new member gets a permanent, consistent welcome that stays in history for
   // everyone (replacing the old live-only flash that vanished on reload and
   // only showed to whoever happened to be watching that channel). Gated on
-  // the admin welcome_message template — an empty template turns it off.
+  // the admin welcome_message template; an empty template turns it off.
   try {
     const wmRow = db.prepare("SELECT value FROM server_settings WHERE key = 'welcome_message'").get();
     const template = wmRow && typeof wmRow.value === 'string' ? wmRow.value.trim() : '';
@@ -491,7 +491,7 @@ router.post('/register', authLimiter, async (req, res) => {
 
     const db = getDb();
 
-    // (#5344) Registration token check — admin-controlled gate that can
+    // (#5344) Registration token check: admin-controlled gate that can
     // sit alongside (or instead of) the whitelist. When enabled, a valid
     // registration token is required unless a valid invite link is being
     // used and invite links are configured to bypass the token requirement
@@ -537,7 +537,7 @@ router.post('/register', authLimiter, async (req, res) => {
       }
     }
 
-    // Whitelist check — if enabled, only pre-approved usernames can register
+    // Whitelist check: if enabled, only pre-approved usernames can register
     const wlSetting = db.prepare("SELECT value FROM server_settings WHERE key = 'whitelist_enabled'").get();
     if (wlSetting && wlSetting.value === 'true') {
       const onList = db.prepare('SELECT 1 FROM whitelist WHERE username = ?').get(username);
@@ -601,7 +601,7 @@ router.post('/register', authLimiter, async (req, res) => {
         avatarPath = await downloadSSOAvatar(ssoProfilePicture);
       } catch (err) {
         console.warn('[SSO] Avatar download failed:', err.message);
-        // Non-fatal — proceed without avatar
+        // Non-fatal: proceed without avatar
       }
     }
 
@@ -674,7 +674,7 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     // (#12) A federated account has no password_hash at all. Say so rather
-    // than failing as "invalid credentials" — otherwise someone who signed up
+    // than failing as "invalid credentials"; otherwise someone who signed up
     // through SSO just sees their password rejected forever, with no hint that
     // they are meant to use the SSO button.
     if (user.oidc_subject && !hasLocalPassword(user)) {
@@ -738,7 +738,7 @@ router.post('/login', authLimiter, async (req, res) => {
       return res.json({ requiresTOTP: true, challengeToken });
     }
 
-    // No TOTP gate — apply the temp-reset state mutation now.
+    // No TOTP gate: apply the temp-reset state mutation now.
     if (okWithOriginal && user.temp_password_hash) {
       db.prepare('UPDATE users SET temp_password_hash = NULL, must_change_password = 0 WHERE id = ?').run(user.id);
       user.must_change_password = 0;
@@ -811,7 +811,7 @@ router.post('/ban-appeal', authLimiter, async (req, res) => {
     const ban = db.prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
     if (!ban) return res.status(400).json({ error: 'This account is not banned' });
 
-    // One active appeal per user — resubmitting replaces the previous text.
+    // One active appeal per user: resubmitting replaces the previous text.
     db.prepare(
       'INSERT INTO ban_appeals (user_id, appeal) VALUES (?, ?) ' +
       'ON CONFLICT(user_id) DO UPDATE SET appeal = excluded.appeal, created_at = CURRENT_TIMESTAMP'
@@ -1058,7 +1058,7 @@ router.post('/totp/setup', authLimiter, async (req, res) => {
       secret
     });
 
-    // Store secret (not yet enabled — user must verify first)
+    // Store secret (not yet enabled, user must verify first)
     db.prepare('UPDATE users SET totp_secret = ? WHERE id = ?').run(secret.base32, user.id);
 
     const otpauthUri = totp.toString();
@@ -1652,7 +1652,7 @@ function generateToken(payload) {
 /**
  * Short-lived token for the account-linking redirects (Steam OpenID, Spotify
  * OAuth). These travel in a URL, which means they can land in browser history,
- * proxy logs, and Referer headers — so they expire in five minutes and carry a
+ * proxy logs, and Referer headers, so they expire in five minutes and carry a
  * 'connect' scope that the session middleware will not accept. Never issue a
  * full session token for a redirect flow.
  */
@@ -1678,7 +1678,7 @@ function generateChannelCode() {
 
 // ── Encrypted Server List (cross-device sync) ───────────
 // Client encrypts/decrypts the server list with the user's password-derived key.
-// Server stores only the opaque blob — no visibility into URLs or network graph.
+// Server stores only the opaque blob: no visibility into URLs or network graph.
 
 router.get('/user-servers', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -1751,7 +1751,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// GET /api/auth/SSO?authCode=X — Consent/authorize page
+// GET /api/auth/SSO?authCode=X: Consent/authorize page
 // The user must be logged in (valid JWT in localStorage). The page is client-rendered
 // and reads the token from localStorage to make the approve call.
 router.get('/SSO', (req, res) => {
@@ -1855,7 +1855,7 @@ router.get('/SSO', (req, res) => {
       // Safety watchdog: if anything stalls, stop showing an indefinite spinner.
       const bootTimeout = setTimeout(() => {
         if (loadingEl && loadingEl.style.display !== 'none') {
-          // If we have a cached user profile, use that instead of failing — server
+          // If we have a cached user profile, use that instead of failing; server
           // may simply be slow/unreachable for the validate endpoint, but the
           // profile we'll share is already cached locally.
           try {
@@ -1994,7 +1994,7 @@ router.get('/SSO', (req, res) => {
 </html>`);
 });
 
-// POST /api/auth/SSO/approve — User clicks Approve on consent page
+// POST /api/auth/SSO/approve: User clicks Approve on consent page
 router.post('/SSO/approve', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const decoded = token ? verifyToken(token) : null;
@@ -2019,7 +2019,7 @@ router.post('/SSO/approve', (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/auth/SSO/authenticate?authCode=X — Foreign server calls this to retrieve user info
+// GET /api/auth/SSO/authenticate?authCode=X: Foreign server calls this to retrieve user info
 // This is called by the CLIENT on the foreign server, not server-to-server.
 router.get('/SSO/authenticate', ssoAuthLimiter, (req, res) => {
   const requestOrigin = req.headers.origin;
@@ -2045,7 +2045,7 @@ router.get('/SSO/authenticate', ssoAuthLimiter, (req, res) => {
   const user = db.prepare('SELECT username, avatar, display_name FROM users WHERE id = ?').get(pending.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  // Build the avatar URL — if it's a relative path, make it absolute
+  // Build the avatar URL: if it's a relative path, make it absolute
   let avatarUrl = user.avatar || null;
   if (avatarUrl && avatarUrl.startsWith('/')) {
     // The client will need to construct the full URL using the home server address
@@ -2102,7 +2102,7 @@ function _oidcRedirectUri(req) {
  */
 const OIDC_NO_PASSWORD = '!oidc-no-local-password';
 
-/** True only for a real bcrypt hash — every one starts with $2a/$2b/$2y. */
+/** True only for a real bcrypt hash: every one starts with $2a/$2b/$2y. */
 function hasLocalPassword(user) {
   return typeof user.password_hash === 'string' && user.password_hash.startsWith('$2');
 }
@@ -2120,14 +2120,14 @@ function _usernameFromClaims(db, claims) {
     const cleaned = c.trim().replace(/[^a-zA-Z0-9_]/g, '');
     if (cleaned.length >= 3) { base = cleaned.slice(0, 20); break; }
   }
-  // Nothing usable in the claims — fall back to the subject, which always exists.
+  // Nothing usable in the claims: fall back to the subject, which always exists.
   if (!base) base = `sso_${String(claims.sub).replace(/[^a-zA-Z0-9]/g, '').slice(0, 12)}`;
   if (base.length < 3) base = `${base}_sso`;
 
   const taken = (name) => !!db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?)').get(name);
   if (!taken(base)) return base;
   // A directory username can collide with a local account. Suffix rather than
-  // adopt the existing account — taking it over would be exactly the account
+  // adopt the existing account; taking it over would be exactly the account
   // takeover that linking has to ask about explicitly.
   for (let i = 2; i < 1000; i++) {
     const suffix = String(i);

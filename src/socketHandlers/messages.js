@@ -810,7 +810,7 @@ module.exports = function register(socket, ctx) {
       }
       uploadRe.lastIndex = 0;
 
-      // 3) http(s):// links — exclude /uploads/ (already counted above as
+      // 3) http(s):// links, excluding /uploads/ (already counted above as
       //    relative paths) and exclude raw image/video CDN links being
       //    used as inline media (those are covered by link-preview, but
       //    for the gallery we still treat them as 'link' to avoid noise).
@@ -1297,7 +1297,7 @@ module.exports = function register(socket, ctx) {
       const arg = (slashMatch[2] || '').trim();
       const slashResult = processSlashCommand(cmd, arg, socket.user.displayName, channel.id, code);
       if (slashResult && slashResult.botCommand) {
-        // Bot command fired — bot will respond via webhook endpoint
+        // Bot command fired; bot will respond via webhook endpoint
         return;
       }
       if (slashResult) {
@@ -1356,7 +1356,7 @@ module.exports = function register(socket, ctx) {
       if (!replyMsg || replyMsg.channel_id !== channel.id || replyMsg.destruct_at) replyTo = null;
     }
 
-    // (#5280) burn-after-read for DMs — capped at 5 minutes; only honored
+    // (#5280) burn-after-read for DMs, capped at 5 minutes; only honored
     // for is_dm channels (the issue scopes burn to direct messages only).
     let burnSeconds = 0;
     if (channel.is_dm) {
@@ -1369,7 +1369,7 @@ module.exports = function register(socket, ctx) {
     // The leading "::" is a deliberate, unambiguous trigger that does not
     // conflict with any markdown syntax. We iterate over the sender's own
     // personas (longest name first to handle prefix ambiguity) and do a
-    // case-insensitive prefix match — this correctly handles persona names
+    // case-insensitive prefix match: this correctly handles persona names
     // that contain spaces, which a single regex with [^\s] cannot do.
     let personaId = null;
     let personaUsername = null;
@@ -1447,7 +1447,7 @@ module.exports = function register(socket, ctx) {
       // an upload's URL. Global vocabulary, applied to the file this message
       // carries. Not on E2E DMs (server never sees their plaintext). Minting a
       // new tag needs manage_tags; applying an existing one is open to uploaders.
-      // Tagging is non-critical — a failure here never sinks the message.
+      // Tagging is non-critical: a failure here never sinks the message.
       let appliedTags = [];
       if (!channel.is_dm && Array.isArray(data.attachmentTags) && data.attachmentTags.length) {
         try {
@@ -1506,7 +1506,7 @@ module.exports = function register(socket, ctx) {
       }
 
       io.to(`channel:${code}`).emit('new-message', { channelCode: code, message });
-      // Burn messages must not reveal their content in push notifications —
+      // Burn messages must not reveal their content in push notifications:
       // the whole point is that the recipient has to actively reveal them.
       // A self-destructing message is kept out of push for the same reason: a
       // notification outlives the message on the phone.
@@ -1598,7 +1598,7 @@ module.exports = function register(socket, ctx) {
 
   // ── Bulk tag management from the media gallery (#tagging phase 3b) ───
   // Replace or append tags across many selected attachments in one action.
-  // Gated to manage_tags (or admin) — the curation permission — which also
+  // Gated to manage_tags (or admin), the curation permission, which also
   // lets it mint new tags. Per message: replace clears then relinks (an empty
   // list wipes all tags); append is additive and deduped. Broadcasts
   // message-tags-updated per message so any open footers repaint live, and
@@ -1679,7 +1679,7 @@ module.exports = function register(socket, ctx) {
     const msg = db.prepare('SELECT id, channel_id, burn_seconds, burning_started_at FROM messages WHERE id = ?').get(messageId);
     if (!msg || msg.channel_id !== channel.id) return;
     if (!msg.burn_seconds || msg.burn_seconds <= 0) return;
-    if (msg.burning_started_at) return; // already burning — synced countdown is already live
+    if (msg.burning_started_at) return; // already burning, synced countdown is already live
     const startedAt = new Date().toISOString();
     db.prepare('UPDATE messages SET burning_started_at = ? WHERE id = ?').run(startedAt, messageId);
     io.to(`channel:${code}`).emit('message-burning', {
@@ -2370,7 +2370,7 @@ module.exports = function register(socket, ctx) {
       // Look up the channel from the message itself, not socket.currentChannel.
       // Reactions can be triggered from the DM PiP while the user's main pane
       // (and therefore socket.currentChannel) is a completely different
-      // channel — using socket.currentChannel made the reaction silently
+      // channel. Using socket.currentChannel made the reaction silently
       // fail because the message wouldn't be found in that channel. (#bug-#4)
       const msg = db.prepare(
         'SELECT m.id, c.code, c.id as channel_id, c.is_dm, c.reactions_enabled FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
@@ -2796,7 +2796,7 @@ module.exports = function register(socket, ctx) {
     if (!parentId) return;
 
     // Look up the channel from the parent message rather than relying on
-    // socket.currentChannel — the thread panel can persist across channel
+    // socket.currentChannel: the thread panel can persist across channel
     // switches, and a stale currentChannel would silently empty the thread
     // (issue: web users seeing 28 replies but no messages, mobile fine).
     const parentRow = db.prepare(

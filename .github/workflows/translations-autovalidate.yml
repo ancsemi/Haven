@@ -6,8 +6,8 @@
 # How it works:
 #   1. Trigger on PRs that touch any `public/locales/*.json` file.
 #   2. Detect whether the PR is "translations-only" (changed files set
-#      is fully contained in public/locales/ AND doesn't touch en.json
-#      — en is the master, so changes to it still need a normal review).
+#      is fully contained in public/locales/ AND doesn't touch en.json;
+#      en is the master, so changes to it still need a normal review).
 #   3. Run `scripts/validate-locales.js` against the changed files to
 #      check JSON validity, _meta fields, and shape compatibility with
 #      en.json (no type mismatches that would break i18n lookup).
@@ -24,7 +24,7 @@
 #   considered to be the PR author's account for fork PRs). If you
 #   want fully unattended merging without branch protection approval
 #   requirements, just don't require reviews on PRs touching
-#   public/locales/** — auto-merge does the rest.
+#   public/locales/**. Auto-merge does the rest.
 #
 # Security: this workflow runs on `pull_request` (NOT pull_request_target),
 # so PRs from forks cannot read repo secrets. Validation runs in a
@@ -59,7 +59,7 @@ jobs:
       - name: List changed files
         id: changes
         run: |
-          # Compare against the PR base — works for both same-repo and fork PRs
+          # Compare against the PR base, which works for both same-repo and fork PRs
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
           changed=$(git diff --name-only "$base" "$head")
@@ -122,7 +122,7 @@ jobs:
         run: |
           gh pr edit "${{ github.event.pull_request.number }}" \
             --add-label "translations-only" || true
-          # The label may not exist yet — create it then retry
+          # The label may not exist yet, so create it then retry
           gh label create "translations-only" --color "0E8A16" --description "Auto-mergeable translation update" 2>/dev/null || true
           gh pr edit "${{ github.event.pull_request.number }}" \
             --add-label "translations-only" || true

@@ -15,7 +15,7 @@ async function resolveSpotifyToYouTube(spotifyUrl) {
     const title = oembed.title; // e.g. "Thank You - Dido"
     if (!title) return null;
 
-    // 2. Search YouTube — try refined query first, then broader
+    // 2. Search YouTube: try refined query first, then broader
     const queries = [
       title + ' official audio',
       title + ' audio',

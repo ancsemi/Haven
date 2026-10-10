@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — FCM Push Notification Module
+// Haven: FCM Push Notification Module
 // Sends mobile push notifications via Firebase Cloud Messaging.
-// Uses only jsonwebtoken (already a Haven dependency) — no firebase-admin needed.
+// Uses only jsonwebtoken (already a Haven dependency); no firebase-admin needed.
 //
 // Three modes:
 //   1. Direct mode: Service account JSON present → sends to FCM API directly
@@ -136,7 +136,7 @@ async function sendDirect(tokens, title, body, dataPayload) {
 
   const results = { success: 0, failure: 0, failedTokens: [] };
 
-  // FCM v1 API sends one message at a time — fire all in parallel
+  // FCM v1 API sends one message at a time; fire all in parallel
   const promises = tokens.map(async (token) => {
     try {
       const resp = await fetch(url, {

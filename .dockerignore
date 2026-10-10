@@ -28,5 +28,5 @@ start.sh
 website/
 docs/
 
-# Desktop app (Electron — not used in Docker)
+# Desktop app (Electron, not used in Docker)
 desktop/

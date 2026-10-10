@@ -27,7 +27,7 @@ module.exports = function register(socket, ctx) {
 
   // Settings that can also be supplied through the environment (docker
   // env vars, .env). In every one of these the stored setting wins and the
-  // environment is only the fallback — but the panel showed no sign of that,
+  // environment is only the fallback, but the panel showed no sign of that,
   // so an admin who set SERVER_NAME in their compose file opened Settings,
   // saw an empty box, and had no way to tell whether it had taken effect or
   // what would happen if they typed in it. (#5489)
@@ -37,7 +37,7 @@ module.exports = function register(socket, ctx) {
     { key: 'turn_url',      env: 'TURN_URL' },
     { key: 'turn_username', env: 'TURN_USERNAME' },
     { key: 'turn_password', env: 'TURN_PASSWORD', secret: true },
-    // No field of its own — TURN_SECRET switches env TURN to time-limited
+    // No field of its own: TURN_SECRET switches env TURN to time-limited
     // HMAC credentials, and is ignored entirely once a TURN server is set
     // here. Reported so that isn't a silent surprise.
     { key: 'turn_secret',   env: 'TURN_SECRET',   secret: true },
@@ -146,7 +146,7 @@ module.exports = function register(socket, ctx) {
       'registration_rate_limit_enabled', 'registration_rate_limit_per_hour', // opt-in global new-account velocity cap
       'max_invite_uses', // invite uses limiter for non-admin/mannage-server invite-links
       'channel_creator_role', // (#5461) role auto-granted to a non-admin who creates a channel
-      // (#12) OIDC / SSO. The client secret is NOT here on purpose — it lives
+      // (#12) OIDC / SSO. The client secret is NOT here on purpose: it lives
       // in OIDC_CLIENT_SECRET in the environment, so a database backup never
       // carries an identity-provider credential around with it.
       'oidc_enabled', 'oidc_issuer_url', 'oidc_client_id', 'oidc_scopes',
@@ -250,7 +250,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'registration_rate_limit_per_hour') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 100000) return; }
     if (key === 'max_invite_uses') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 100000) return; }
 
-    // 'unsafe-url' and 'no-referrer-when-downgrade' are intentionally absent —
+    // 'unsafe-url' and 'no-referrer-when-downgrade' are intentionally absent:
     // both leak the full URL cross-origin, and Haven's invite links live in the
     // query string. See the note on VALID_REFERRER_POLICIES in server.js, which
     // this list must match.
@@ -292,7 +292,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'allow_self_purge' && !['true', 'false'].includes(value)) return;
     if (key === 'hide_disabled_channel_badges' && !['true', 'false'].includes(value)) return;
     if (key === 'admin_password_reset_enabled' && !['true', 'false'].includes(value)) return;
-    // (#12) OIDC. The issuer must be an absolute https URL — anything else is
+    // (#12) OIDC. The issuer must be an absolute https URL; anything else is
     // either a typo or an attempt to point discovery somewhere it shouldn't go.
     if (key === 'oidc_enabled' && !['0', '1'].includes(value)) return;
     if (key === 'oidc_create_users' && !['0', '1'].includes(value)) return;
@@ -388,7 +388,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'guest_channels') {
       // (#5381) CSV of channel ids guests can see/post in. Empty string =
       // no channels (guests can log in but have nowhere to go). DMs are
-      // never auto-joined — checked again at auto-join time.
+      // never auto-joined (checked again at auto-join time).
       if (value !== '') {
         const parts = value.split(',').map(s => s.trim());
         if (!parts.every(p => /^\d+$/.test(p) && parseInt(p) > 0)) return;
@@ -494,7 +494,7 @@ module.exports = function register(socket, ctx) {
     // the database. isFcmEnabled() consults this on the next push. (FCM Privacy)
     if (key === 'fcm_enabled') require('../fcm').setFcmAdminEnabled(value !== 'false');
 
-    // Turning the feature on shouldn't make the admin wait until the next boot —
+    // Turning the feature on shouldn't make the admin wait until the next boot:
     // refresh right away. ensureEmojiData is a no-op when the on-disk copy is
     // still current, so this stays at most one request. (env override still wins)
     if (key === 'unicode_emoji_auto_update') {
@@ -659,8 +659,8 @@ module.exports = function register(socket, ctx) {
   // is already bounded: redeeming one only ever joins public, top-level
   // channels (see _resolveAutoJoinChannels), so a link can't reach a private
   // channel no matter which ids it names. What still needs bounding is other
-  // people's links — a member with invite_users has no business revoking the
-  // admin's server-wide link — so they only see and edit their own.
+  // people's links (a member with invite_users has no business revoking the
+  // admin's server-wide link), so they only see and edit their own.
   const _canManageInvites = () =>
     socket.user.isAdmin ||
     userHasPermission(socket.user.id, 'manage_server') ||
@@ -680,7 +680,7 @@ module.exports = function register(socket, ctx) {
   };
 
   // True if `code` already names a channel, the server code, the legacy vanity
-  // code, or another invite link — anything join-channel could ambiguously
+  // code, or another invite link: anything join-channel could ambiguously
   // resolve. Invite codes are checked first at join time, so a collision would
   // silently shadow a real channel; reject up front instead.
   const _inviteCodeTaken = (code, excludeId = null) => {
@@ -875,7 +875,7 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Registration token (#5344) ──────────────────────────
-  // Independent of the whitelist — admin can use either, both, or
+  // Independent of the whitelist: admin can use either, both, or
   // neither. The token is a 16-char hex string the admin shares
   // out-of-band; new registrants must enter it on the signup form.
   socket.on('generate-registration-token', () => {
@@ -1043,7 +1043,7 @@ module.exports = function register(socket, ctx) {
       // Per-channel response
       socket.emit('webhook-deleted', { webhookId });
     } else {
-      // Bot-manager response — return full list
+      // Bot-manager response: return full list
       const webhooks = visibleWebhookRows(db.prepare(`
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at, w.created_by,
                w.callback_url, w.callback_secret,
@@ -1076,7 +1076,7 @@ module.exports = function register(socket, ctx) {
       // Per-channel response
       socket.emit('webhook-toggled', { webhookId, is_active: newState });
     } else {
-      // Bot-manager response — return full list
+      // Bot-manager response: return full list
       const webhooks = visibleWebhookRows(db.prepare(`
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at, w.created_by,
                w.callback_url, w.callback_secret,
@@ -1136,7 +1136,7 @@ module.exports = function register(socket, ctx) {
       const secret = typeof data.callback_secret === 'string' ? data.callback_secret.trim().slice(0, 256) : null;
       db.prepare('UPDATE webhooks SET callback_secret = ? WHERE id = ?').run(secret || null, webhookId);
     }
-    // 3.13.0 — per-event subscriptions. Accepts CSV string or array.
+    // 3.13.0: per-event subscriptions. Accepts CSV string or array.
     // Allowed: 'message', 'reaction-added', 'member-joined'. Use '*' for all.
     if (data.subscribed_events !== undefined) {
       const allowed = new Set(['message', 'reaction-added', 'member-joined']);
@@ -1154,7 +1154,7 @@ module.exports = function register(socket, ctx) {
       }
       db.prepare('UPDATE webhooks SET subscribed_events = ? WHERE id = ?').run(value, webhookId);
     }
-    // 3.18.0 — moderation opt-in. Only admins can grant it (manage_webhooks
+    // 3.18.0: moderation opt-in. Only admins can grant it (manage_webhooks
     // alone is not enough, since it would let mods escalate their own bots).
     if (data.can_moderate !== undefined) {
       if (!socket.user.isAdmin) {
@@ -1182,7 +1182,7 @@ module.exports = function register(socket, ctx) {
     socket.emit('bot-updated', 'Bot updated');
   });
 
-  // 3.13.0 — fire a synthetic test event to a webhook's callback URL so
+  // 3.13.0: fire a synthetic test event to a webhook's callback URL so
   // admins can verify the bot is reachable from the admin UI.
   socket.on('test-webhook', (data) => {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_webhooks')) return socket.emit('error-msg', 'You don\'t have permission to manage webhooks');
@@ -1400,7 +1400,7 @@ module.exports = function register(socket, ctx) {
   // copy it and hand it to the user out of band).
   //
   // Disabled by default. Admin must explicitly opt-in via the
-  // `admin_password_reset_enabled` server setting — and that toggle is
+  // `admin_password_reset_enabled` server setting, and that toggle is
   // surfaced in `/api/public-config` so users can see whether the
   // current admin can reset their password (the trust-and-warning side
   // of the feature requested in the issue).
@@ -1427,7 +1427,7 @@ module.exports = function register(socket, ctx) {
     // MFA gate (#5300 hardening): admin reset is a powerful escalation path
     // (admin learns user's new login secret), so we require the target to
     // have TOTP 2FA enabled. This way the temp password alone is not enough
-    // to take over the account — the attacker (or rogue admin) would also
+    // to take over the account: the attacker (or rogue admin) would also
     // need the TOTP device. Without this, an admin with reset enabled could
     // silently impersonate any user.
     if (!target.totp_secret || !target.totp_enabled) {
@@ -1498,7 +1498,7 @@ module.exports = function register(socket, ctx) {
   // Surfaces accounts that have sat connected and showing green for hours
   // without posting, joining voice, or changing status. That is the signature
   // of a client parked to log the server rather than a person: a real client
-  // trips auto-away. Read-only and non-destructive — it's a light to look at,
+  // trips auto-away. Read-only and non-destructive; it's a light to look at,
   // not an action. Gated to admins and moderators (kick/ban/audit), the same
   // people who can already see the full member list.
   function _canSeeOversight() {
@@ -1580,8 +1580,8 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!_canManageAutomod()) return socket.emit('error-msg', 'Only admins can manage the link policy');
 
-    // Accept whatever the admin pastes — a bare domain, a full URL, something
-    // with a trailing slash — and reduce it to the same canonical host form
+    // Accept whatever the admin pastes (a bare domain, a full URL, something
+    // with a trailing slash) and reduce it to the same canonical host form
     // the message-path checker produces. Storing "https://YouTube.com/" as a
     // literal string would mean it never matched anything.
     const raw = typeof data.domain === 'string' ? data.domain.trim() : '';

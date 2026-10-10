@@ -113,7 +113,7 @@ switch ($method) {
 
     & $wacmeExe $args
 
-    # win-acme outputs files with different names — rename to what Haven expects
+    # win-acme outputs files with different names, so rename to what Haven expects
     $pemFiles = Get-ChildItem $CertsDir -Filter "*.pem" | Sort-Object LastWriteTime -Descending
     $chainFile = $pemFiles | Where-Object { $_.Name -match "chain|fullchain|crt" } | Select-Object -First 1
     $keyFile   = $pemFiles | Where-Object { $_.Name -match "key" } | Select-Object -First 1

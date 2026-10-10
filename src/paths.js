@@ -1,9 +1,9 @@
 /**
- * Haven — Centralised data-directory resolution
+ * Haven: Centralised data-directory resolution
  *
  * All user data (database, .env, certs, uploads) lives OUTSIDE the
  * application folder so the code directory can never accidentally
- * leak personal data — even if someone copies the whole folder,
+ * leak personal data, even if someone copies the whole folder,
  * force-adds files, or pushes to a public repo.
  *
  * Locations:

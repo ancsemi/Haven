@@ -2,7 +2,7 @@
  * Group DM key distribution.
  *
  * The server stores wrapped key blobs and never holds a key that opens any of
- * them. It is not passive, though — it enforces the structure that keeps the
+ * them. It is not passive, though: it enforces the structure that keeps the
  * scheme honest, because a client cannot check these for itself:
  *
  *   - only a current member may publish an epoch
@@ -137,7 +137,7 @@ module.exports = function register(socket, ctx) {
     if (ids.length < 3) return socket.emit('error-msg', 'A group DM needs at least three people');
     if (ids.length > 50) return socket.emit('error-msg', 'Group DMs are limited to 50 people');
 
-    // Everyone must be real, unbanned, and hold both keys — otherwise they
+    // Everyone must be real, unbanned, and hold both keys; otherwise they
     // could never read the conversation and would sit there silently broken.
     const placeholders = ids.map(() => '?').join(',');
     const users = db.prepare(`
@@ -447,7 +447,7 @@ module.exports = function register(socket, ctx) {
 
   /**
    * Ask the group to re-wrap the current epoch after a key reset. The asker
-   * cannot do it themselves — their old blobs are sealed to a key that no
+   * cannot do it themselves: their old blobs are sealed to a key that no
    * longer exists.
    */
   socket.on('request-group-rewrap', (data) => {
@@ -467,7 +467,7 @@ module.exports = function register(socket, ctx) {
   /**
    * Re-wrap one member's copy of an existing epoch. Only after that member
    * asked, and only if the wrapper attests the same public key the server
-   * already pinned — otherwise a helper could seal the epoch to a key the
+   * already pinned; otherwise a helper could seal the epoch to a key the
    * recipient never published.
    */
   socket.on('rewrap-group-key', (data) => {

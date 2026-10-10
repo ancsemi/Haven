@@ -1,15 +1,15 @@
 'use strict';
 
 /**
- * Haven — Rich presence / user activity
+ * Haven: Rich presence / user activity
  *
  * Collects "what is this person doing right now" from four sources and hands
  * it to the presence broadcast in socketHandlers/index.js:
  *
- *   haven   — Haven's own voice-channel music player (no external calls)
- *   steam   — Steam Web API GetPlayerSummaries (one batched call for everyone)
- *   lastfm  — Last.fm getRecentTracks (username + server API key, no OAuth)
- *   spotify — Spotify Web API currently-playing (full OAuth, one call per user)
+ *   haven:    Haven's own voice-channel music player (no external calls)
+ *   steam:    Steam Web API GetPlayerSummaries (one batched call for everyone)
+ *   lastfm:   Last.fm getRecentTracks (username + server API key, no OAuth)
+ *   spotify:  Spotify Web API currently-playing (full OAuth, one call per user)
  *
  * Prefer Last.fm for music. It needs no per-user OAuth, no token storage, and
  * has no per-app user cap; it also covers whatever the person actually listens
@@ -27,7 +27,7 @@
  * - Sharing is ON by default, but nothing appears until a user links an account
  *   (an explicit act, and the real consent gate) or plays music in a Haven
  *   voice channel. Users can opt out entirely, or mute games/music separately.
- *   Anyone with status 'invisible' reports nothing regardless of preferences —
+ *   Anyone with status 'invisible' reports nothing regardless of preferences:
  *   being invisible while broadcasting "playing Helldivers 2" would defeat the
  *   entire point.
  *
@@ -44,7 +44,7 @@ const crypto = require('crypto');
 
 // ── Token encryption ──────────────────────────────────────
 // Key is derived from JWT_SECRET, so rotating that secret invalidates stored
-// OAuth tokens. That's the correct failure mode — decryption returns null and
+// OAuth tokens. That's the correct failure mode: decryption returns null and
 // the user is asked to re-link, rather than the server using a stale token.
 function deriveKey() {
   const secret = process.env.JWT_SECRET;
@@ -69,7 +69,7 @@ function decryptToken(stored) {
     decipher.setAuthTag(Buffer.from(parts[1], 'base64'));
     return Buffer.concat([decipher.update(Buffer.from(parts[2], 'base64')), decipher.final()]).toString('utf8');
   } catch {
-    return null; // wrong key or tampered — treat as "not linked"
+    return null; // wrong key or tampered: treat as "not linked"
   }
 }
 
@@ -93,7 +93,7 @@ const isLastfmConfigured  = () => !!lastfmApiKey();
 
 /**
  * Last.fm usernames: 2-15 chars, letters/digits/underscore/hyphen. Anchored
- * because this value goes straight into an API URL — no path traversal, no
+ * because this value goes straight into an API URL: no path traversal, no
  * query-string smuggling.
  */
 const LASTFM_USERNAME_RE = /^[a-zA-Z0-9_-]{2,15}$/;
@@ -151,7 +151,7 @@ async function fetchJson(url, opts = {}, timeoutMs = 8000) {
 /**
  * @param {object}   db               better-sqlite3 handle
  * @param {function} getOnlineUserIds () => number[] of connected user ids
- * @param {function} onChange         (userId) => void — fired when a user's
+ * @param {function} onChange         (userId) => void, fired when a user's
  *                                    activity actually changed, so the caller
  *                                    can re-broadcast presence for them
  */
@@ -185,7 +185,7 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
     rows.forEach(r => { map[r.key] = r.value; });
     return {
       // Default ON. The meaningful consent gate for Steam/Spotify is linking
-      // the account, which is always an explicit act — so defaulting the master
+      // the account, which is always an explicit act, so defaulting the master
       // switch off just meant people linked an account and then wondered why
       // nothing happened. The one case this discloses without an explicit
       // action is Haven's own voice-channel music, which is already visible to
@@ -273,7 +273,7 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
   /**
    * Called by the music handlers when a track starts/stops in a voice channel.
    * Everyone listening in that channel gets the activity, not just whoever
-   * queued it — they are all, in fact, listening to it.
+   * queued it; they are all, in fact, listening to it.
    */
   function setHavenMusic(userIds, track) {
     const ids = Array.isArray(userIds) ? userIds : [];
@@ -709,8 +709,8 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
   // is a public read keyed by username plus the server's API key, so linking
   // is a text box rather than a redirect dance, there are no per-user tokens
   // to encrypt or refresh, and there is no per-app user cap to run into.
-  // It also covers whatever the user actually listens with — Spotify, Apple
-  // Music, YouTube Music, Navidrome, Plex — because they all scrobble here.
+  // It also covers whatever the user actually listens with (Spotify, Apple
+  // Music, YouTube Music, Navidrome, Plex), because they all scrobble here.
 
   /** Confirm a username exists before saving it, so typos fail loudly. */
   async function verifyLastfmUser(username) {
@@ -790,7 +790,7 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
     });
     if (eligible.length === 0) return;
 
-    // Same round-robin as Spotify — one request per user, no batch endpoint,
+    // Same round-robin as Spotify: one request per user, no batch endpoint,
     // and Last.fm asks for well under a few calls per second.
     const MAX_PER_TICK = 20;
     const slice = [];
@@ -806,8 +806,8 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
   function start() {
     // Both timers always run; each poller no-ops while its provider is
     // unconfigured. Registering unconditionally is what lets an admin paste
-    // keys into Settings and have presence start working without a restart —
-    // gating the intervals on boot-time config would strand them until reboot.
+    // keys into Settings and have presence start working without a restart.
+    // Gating the intervals on boot-time config would strand them until reboot.
     timers.push(setInterval(() => { pollSteam().catch((err) => console.warn('[Haven activity] Steam poll failed:', err.message)); }, STEAM_POLL_MS));
     timers.push(setInterval(() => { pollSpotify().catch((err) => console.warn('[Haven activity] Spotify poll failed:', err.message)); }, SPOTIFY_POLL_MS));
     timers.push(setInterval(() => { pollLastfm().catch((err) => console.warn('[Haven activity] Last.fm poll failed:', err.message)); }, LASTFM_POLL_MS));

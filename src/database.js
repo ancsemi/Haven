@@ -19,10 +19,10 @@ let db;
 //
 // This cache wraps db.prepare() so duplicate SQL strings reuse the same
 // Statement object.  Node.js is single-threaded, so concurrent access is
-// not a concern.  Dynamic SQL (e.g. `IN (?,?,?)`) still works — each
+// not a concern.  Dynamic SQL (e.g. `IN (?,?,?)`) still works; each
 // unique SQL string just gets its own cache entry.
 const _stmtCache = new Map();
-const MAX_STMT_CACHE = 500;   // safety cap — shouldn't be hit in practice
+const MAX_STMT_CACHE = 500;   // safety cap, shouldn't be hit in practice
 
 // The usual reason Haven cannot open its database is file ownership: the data
 // folder (or haven.db in it) belongs to another user than the one Haven runs
@@ -63,7 +63,7 @@ function initDatabase() {
   }
   db.pragma('foreign_keys = ON');
   db.pragma('synchronous = NORMAL');       // safe with WAL, 2-3x faster writes
-  db.pragma('cache_size = -8000');          // 8 MB page cache (was 64 MB — overkill for a chat app)
+  db.pragma('cache_size = -8000');          // 8 MB page cache (was 64 MB, overkill for a chat app)
   db.pragma('busy_timeout = 5000');         // wait up to 5 s on lock contention
   db.pragma('temp_store = MEMORY');         // keep temp tables in RAM
   // Deleted rows are overwritten with zeros instead of lingering in the file
@@ -73,10 +73,10 @@ function initDatabase() {
   db.pragma('mmap_size = 33554432');        // 32 MB memory-mapped I/O (was 256 MB)
 
   // Hard-cap SQLite's own heap usage so it can never run away
-  db.pragma('soft_heap_limit = 33554432');  // 32 MB soft limit — SQLite tries to stay under
+  db.pragma('soft_heap_limit = 33554432');  // 32 MB soft limit; SQLite tries to stay under
   db.pragma('hard_heap_limit = 67108864');  // 64 MB hard ceiling
 
-  // ── Statement cache — intercept db.prepare() ──────────
+  // ── Statement cache: intercept db.prepare() ──────────
   const _origPrepare = db.prepare.bind(db);
   db.prepare = function cachedPrepare(sql) {
     let stmt = _stmtCache.get(sql);
@@ -345,7 +345,7 @@ function initDatabase() {
   // ── Migration: must_change_password flag on users (#5300) ──
   // Set to 1 by admin password-reset; cleared the first time the user
   // sets a new password through the forced-change flow. Login still
-  // succeeds when the flag is set — the client routes the user to a
+  // succeeds when the flag is set; the client routes the user to a
   // mandatory change-password screen before the rest of the app loads.
   addColumn('users', 'must_change_password', "INTEGER DEFAULT 0");
 
@@ -421,7 +421,7 @@ function initDatabase() {
   `);
 
   // ── Migration: user_nicknames table (#5394) ──────────────
-  // Personal, private nicknames — only visible to the user who set them.
+  // Personal, private nicknames: only visible to the user who set them.
   // owner_id = the user who assigned the nickname; target_id = the user being renamed.
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_nicknames (
@@ -459,7 +459,7 @@ function initDatabase() {
   // back to Haven when that is unset too. (#5489)
   insertSetting.run('server_name', '');                // displayed in sidebar header + server bar
   insertSetting.run('server_icon', '');                // path to uploaded server icon image
-  insertSetting.run('permission_thresholds', '{"create_channel":50,"manage_channel_settings":50}');    // JSON: { permission: minLevel } — auto-grant perms at level
+  insertSetting.run('permission_thresholds', '{"create_channel":50,"manage_channel_settings":50}');    // JSON: { permission: minLevel }; auto-grant perms at level
   insertSetting.run('server_code', '');                // server-wide invite code (joins all channels)
   insertSetting.run('default_join_channels', '');       // (#5345) JSON array of channel IDs that server-code/vanity-code joiners get added to (empty = all public)
   insertSetting.run('registration_token_enabled', 'false'); // (#5344) require a token on the registration form
@@ -475,11 +475,11 @@ function initDatabase() {
   insertSetting.run('max_attachments', '10');           // files one message may queue, images and other files together (1-50) (#5561)
   insertSetting.run('max_tags_per_attachment', '3');    // upload tags allowed on one attachment (1-10) (#tagging phase 4)
   insertSetting.run('max_tag_len', '20');               // max characters in an upload tag name (1-50) (#tagging phase 4)
-  insertSetting.run('max_poll_options', '10');            // max poll answer options (2–25)
-  insertSetting.run('max_message_chars', '2000');         // max characters per message (200–100000)
-  insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256–10240)
-  insertSetting.run('max_emoji_kb', '256');               // max emoji file size in KB (64–1024)
-  insertSetting.run('max_sticker_kb', '1024');            // max sticker file size in KB (256–10240) — #5392
+  insertSetting.run('max_poll_options', '10');            // max poll answer options (2-25)
+  insertSetting.run('max_message_chars', '2000');         // max characters per message (200-100000)
+  insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256-10240)
+  insertSetting.run('max_emoji_kb', '256');               // max emoji file size in KB (64-1024)
+  insertSetting.run('max_sticker_kb', '1024');            // max sticker file size in KB (256-10240), #5392
   insertSetting.run('unicode_emoji_auto_update', 'false'); // monthly refresh of the built-in emoji set from unicode.org, opt-in, defaults off (UNICODE_EMOJI_AUTO_UPDATE env overrides)
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
@@ -543,7 +543,7 @@ function initDatabase() {
   // sends only, so web-push to browsers is unaffected.
   insertSetting.run('fcm_enabled', 'true');
 
-  // Unique server fingerprint — used by the multi-server sidebar to detect "self"
+  // Unique server fingerprint: used by the multi-server sidebar to detect "self"
   const crypto = require('crypto');
   insertSetting.run('server_fingerprint', crypto.randomUUID());
 
@@ -940,13 +940,13 @@ function initDatabase() {
   const webhookCallbackCols = [
     { name: 'callback_url',    sql: "ALTER TABLE webhooks ADD COLUMN callback_url TEXT DEFAULT NULL" },
     { name: 'callback_secret', sql: "ALTER TABLE webhooks ADD COLUMN callback_secret TEXT DEFAULT NULL" },
-    // 3.13.0 webhook expansion — per-event filtering, delivery health
+    // 3.13.0 webhook expansion: per-event filtering, delivery health
     { name: 'subscribed_events',    sql: "ALTER TABLE webhooks ADD COLUMN subscribed_events TEXT DEFAULT '*'" },
     { name: 'last_delivery_status', sql: "ALTER TABLE webhooks ADD COLUMN last_delivery_status INTEGER DEFAULT NULL" },
     { name: 'last_delivery_at',     sql: "ALTER TABLE webhooks ADD COLUMN last_delivery_at DATETIME DEFAULT NULL" },
     { name: 'last_delivery_error',  sql: "ALTER TABLE webhooks ADD COLUMN last_delivery_error TEXT DEFAULT NULL" },
     { name: 'failure_count',        sql: "ALTER TABLE webhooks ADD COLUMN failure_count INTEGER DEFAULT 0" },
-    // 3.18.0 — opt-in moderation actions (kick/ban/mute) for bot webhooks.
+    // 3.18.0: opt-in moderation actions (kick/ban/mute) for bot webhooks.
     // Defaults to 0 so existing bots cannot suddenly moderate. Per #5397.
     { name: 'can_moderate',         sql: "ALTER TABLE webhooks ADD COLUMN can_moderate INTEGER DEFAULT 0" },
     // Voice gateway access is also opt-in and can only be granted by admins.
@@ -961,7 +961,7 @@ function initDatabase() {
   // may appear more than once (fan out to several Discord servers) and so may a
   // Discord channel, so the uniqueness is on the pair.
   //
-  //   direction  'both' | 'to_discord' | 'to_haven'  — admin-selectable per pair
+  //   direction  'both' | 'to_discord' | 'to_haven' (admin-selectable per pair)
   //   out_mode   'all'     mirrors every message in the Haven channel
   //              'command' only relays messages the author explicitly addressed
   //
@@ -1057,7 +1057,7 @@ function initDatabase() {
 
   // ── Migration: per-user channel notification prefs ──────
   // Before 3.20.2 these lived only in localStorage, which meant the server
-  // had no way to honor them when fanning out web-push / FCM pushes — so
+  // had no way to honor them when fanning out web-push / FCM pushes, so
   // mobile users would get a notification for every message even on
   // channels they'd explicitly muted (#5399 follow-up, Amnibro report).
   // Mirroring the mute set to the server lets sendPushNotifications skip
@@ -1097,7 +1097,7 @@ function initDatabase() {
     // topics pick from, and an NSFW flag users can hide behind a preference.
     { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
     { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
-    // #5390 — extend the self-destruct timer with a "clear messages only"
+    // #5390: extend the self-destruct timer with a "clear messages only"
     // mode. `auto_delete_mode` is 'delete' (existing behaviour: drop the
     // whole channel) or 'clear' (wipe messages but keep channel, perms,
     // roles, integrations). `auto_delete_interval_hours` stores the
@@ -1193,7 +1193,7 @@ function initDatabase() {
 
   // ── Migration: OIDC / SSO federated identity (#12) ──
   // A federated account is identified by the pair (issuer, subject), never by
-  // email — an email can be reassigned inside a directory, `sub` cannot.
+  // email: an email can be reassigned inside a directory, `sub` cannot.
   // password_hash stays NULL for these accounts so the local login form can
   // never authenticate one.
   addColumn('users', 'oidc_subject', "TEXT DEFAULT NULL");
@@ -1231,7 +1231,7 @@ function initDatabase() {
 
   // ── Migration: discord_message_id for import deduplication ──────────────
   // Stores the original Discord snowflake ID so re-importing the same export
-  // (or overlapping exports) is idempotent — duplicate snowflakes are skipped.
+  // (or overlapping exports) is idempotent: duplicate snowflakes are skipped.
   addColumn('messages', 'discord_message_id', "TEXT DEFAULT NULL");
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_discord_id
@@ -1533,7 +1533,7 @@ function initDatabase() {
   // anyone who could make a channel could also reconfigure every other channel
   // on the server. The two are now separate permissions. This backfill copies
   // create_channel to manage_channel_settings everywhere it is currently
-  // granted, so no existing server loses a delegation on upgrade — admins who
+  // granted, so no existing server loses a delegation on upgrade. Admins who
   // want the narrower behaviour untick the new permission afterward.
   //
   // Guarded by a marker key: without it, every restart would re-grant the
@@ -1551,7 +1551,7 @@ function initDatabase() {
         `).run();
 
         // Per-user overrides carry their own scope (role_id / channel_id), and
-        // explicit denies matter as much as grants — copy both verbatim.
+        // explicit denies matter as much as grants; copy both verbatim.
         db.prepare(`
           INSERT INTO user_role_perms (user_id, role_id, channel_id, permission, allowed)
           SELECT user_id, role_id, channel_id, 'manage_channel_settings', allowed
@@ -1567,7 +1567,7 @@ function initDatabase() {
 
         // Level thresholds auto-grant permissions above a given role level.
         // Haven ships create_channel at 50, which is what the default
-        // "Server Mod" role sits at — mirror it so those mods keep working.
+        // "Server Mod" role sits at; mirror it so those mods keep working.
         const row = db.prepare(
           "SELECT value FROM server_settings WHERE key = 'permission_thresholds'"
         ).get();
@@ -1680,7 +1680,7 @@ function initDatabase() {
 
   // ── Rich presence: linked external accounts ─────────────
   // One row per (user, provider). access_token / refresh_token are stored
-  // AES-256-GCM encrypted (see src/activity.js) — never in plaintext, because
+  // AES-256-GCM encrypted (see src/activity.js), never in plaintext, because
   // a Spotify refresh token is a long-lived credential to someone's account
   // and the SQLite file travels with backups.
   //
@@ -1728,7 +1728,7 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_listening_tokens_token ON listening_tokens(token);
   `);
 
-  // Full-text search index (messages_fts) — created/reconciled here so it runs
+  // Full-text search index (messages_fts): created/reconciled here so it runs
   // synchronously before the server listens. (search-overhaul phase 2)
   try {
     ensureSearchIndex(db);

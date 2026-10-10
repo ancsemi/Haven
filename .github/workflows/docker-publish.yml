@@ -1,13 +1,13 @@
 # ─────────────────────────────────────────────────────────────
-# Haven — Automatic Docker Image Build & Publish
+# Haven: Automatic Docker Image Build & Publish
 # Triggers on every GitHub Release (tag push).
-# Pushes to GitHub Container Registry (ghcr.io) — free, unlimited
+# Pushes to GitHub Container Registry (ghcr.io): free, unlimited
 # for public repos, no account caps, no manual steps needed.
 #
 # Builds amd64 and arm64 on separate NATIVE runners (no QEMU),
 # pushes each as its OWN tag, then merges into a multi-arch manifest.
 # Native builds are required because better-sqlite3 compiles a
-# native C++ addon — QEMU emulation is too resource-constrained
+# native C++ addon, and QEMU emulation is too resource-constrained
 # and causes intermittent SIGILL/OOM failures during npm ci.
 #
 # Each arch is published under a persistent tag (…:<version>-amd64 /

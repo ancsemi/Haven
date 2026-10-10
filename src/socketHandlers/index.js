@@ -75,7 +75,7 @@ function throttledWarn(tag, err) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// setupSocketHandlers — called once from server.js
+// setupSocketHandlers: called once from server.js
 // ══════════════════════════════════════════════════════════════
 function setupSocketHandlers(io, db, opts = {}) {
   const botAudioManager = opts.botAudioManager || null;
@@ -136,7 +136,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   const presenceTimers      = new Map();
 
   // Advance a user's activity clock. Called for the deliberate actions that
-  // mark a real, engaged human — not passive traffic like typing or
+  // mark a real, engaged human, not passive traffic like typing or
   // visibility pings, and not the client's automatic away transition (that
   // one is exactly what we're using to tell people from bots).
   function touchPresenceActivity(userId) {
@@ -145,7 +145,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   // The oversight query behind the flag. Returns accounts that are online,
-  // showing as 'online' (green — an auto-away client is excluded), and have
+  // showing as 'online' (green; an auto-away client is excluded), and have
   // had no deliberate activity for at least thresholdMs.
   function getIdleOnlineUsers(thresholdMs) {
     // Build one entry per online user from the presence clock plus their live
@@ -253,7 +253,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       } catch { /* presence is best-effort; the next presence update carries the change */ }
     },
     // Linked accounts changed. Push to EVERY socket this user has open, not
-    // just the one that started the flow — the OAuth callback frequently
+    // just the one that started the flow. The OAuth callback frequently
     // completes somewhere else entirely (Steam's QR sign-in hands off to
     // whatever browser is default), so the app that's actually open has no
     // other way to learn the link succeeded.
@@ -267,7 +267,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             // Omitting a provider here reads client-side as "not configured",
             // so this list must stay in step with the ones in users.js. Missing
             // lastfm made a successful link immediately revert the row to
-            // "Set up" — the success toast and the regression arrived in the
+            // "Set up": the success toast and the regression arrived in the
             // same push.
             lastfm: activity.isLastfmConfigured(),
           },
@@ -383,7 +383,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   /**
    * Push Haven's own player into rich presence for everyone currently in the
-   * voice room — not just whoever queued the track, since they're all actually
+   * voice room, not just whoever queued the track, since they're all actually
    * listening to it. Called whenever the track changes or the room membership
    * changes; the activity engine ignores no-op updates, so calling it often is
    * cheap and calling it too rarely is what causes stale "listening to" lines.
@@ -462,7 +462,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   function getEnrichedChannels(userId, isAdmin, joinRooms, shared = null) {
     // Holders of 'view_all_channels' (e.g. a server-wide Mod role) get the
     // same visibility treatment as the admin: every non-DM channel, with
-    // membership filled in on the fly — so channels created after the role
+    // membership filled in on the fly, so channels created after the role
     // was granted show up for them automatically instead of someone having
     // to add every mod to every new channel by hand.
     const seesAll = isAdmin || userHasPermission(userId, 'view_all_channels');
@@ -592,7 +592,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           const countRow = db.prepare(
             // Exclude thread replies (thread_id IS NOT NULL): they live in their
             // own thread panel, never appear in the channel scroll, and so can
-            // never be marked-read by scrolling — counting them here pins a
+            // never be marked-read by scrolling. Counting them here pins a
             // phantom unread on the channel forever.
             // Counting stops at 1000: badges show 99+ past 99 anyway, and an
             // uncapped count walked every unread message of a long-idle member
@@ -675,7 +675,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     channels.forEach(ch => {
       // DM channels route by code internally but the code is a pure implementation
-      // detail. Never expose it as a copyable value — strip all code-related fields
+      // detail. Never expose it as a copyable value: strip all code-related fields
       // so no client surface can accidentally reveal or share it.
       if (ch.is_dm) {
         ch.display_code = null;
@@ -760,11 +760,11 @@ function setupSocketHandlers(io, db, opts = {}) {
     }
   }
 
-  // ── logAudit — record an admin/moderator action ─────────
+  // ── logAudit: record an admin/moderator action ─────────
   // entry: { actor, action, target_type?, target_id?, target_name?, details? }
   // actor can be a user object ({ id, username }) or null for system actions.
   // details is anything JSON-serializable; stored as a JSON string.
-  // Failures never throw — auditing must not break the calling action.
+  // Failures never throw: auditing must not break the calling action.
   const _auditInsert = db.prepare(
     'INSERT INTO audit_log (actor_id, actor_username, action, target_type, target_id, target_name, details) VALUES (?, ?, ?, ?, ?, ?, ?)'
   );
@@ -803,7 +803,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // expected within a few seconds and will rebind the entry. Pruning here
       // races that rebind: it fires a spurious voice-user-left (leave sound),
       // the rejoin then fires a join sound, and the user briefly vanishes from
-      // the roster — exactly the "kicked from voice on a brief blip / double
+      // the roster, exactly the "kicked from voice on a brief blip / double
       // join-leave notifications" report. The 4s grace timer (see the
       // disconnect handler) already evicts them if they never actually return.
       if (pendingVoiceLeave.has(`${userId}:${code}`)) continue;
@@ -869,7 +869,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   function broadcastVoiceUsers(code) {
     pruneStaleVoiceUsers(code);
     // Room membership just changed, so who is "listening to" the active track
-    // changed with it — someone who joined mid-song should pick it up.
+    // changed with it: someone who joined mid-song should pick it up.
     syncMusicActivity(code);
     const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     const channelId = channel ? channel.id : null;
@@ -1239,7 +1239,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     if (state.activity) state.activity.clearHavenMusic([socket.user.id]);
 
     // If the stored entry belongs to a different socket (e.g. the user joined
-    // from a second client which kicked this one), don't touch the map — just
+    // from a second client which kicked this one), don't touch the map; just
     // remove this stale socket from the room and return.
     if (entry.socketId !== socket.id) {
       socket.leave(`voice:${code}`);
@@ -1301,7 +1301,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           pendingTempDelete.set(code, timer);
           console.log(`[Temporary] Temp voice channel "${code}" grace period started (socket disconnect)`);
         } else {
-          // Intentional leave — cancel any pending grace-period timer and delete immediately.
+          // Intentional leave: cancel any pending grace-period timer and delete immediately.
           if (pendingTempDelete.has(code)) {
             clearTimeout(pendingTempDelete.get(code));
             pendingTempDelete.delete(code);
@@ -1417,7 +1417,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // 3.20.2 (#5399 follow-up): pull the per-user mute set for this
       // channel up front so we can skip both web-push AND FCM for anyone
       // who's muted it. Was previously localStorage-only, which the mobile
-      // app had no visibility into — so muted users still got pushed.
+      // app had no visibility into, so muted users still got pushed.
       let mutedUserIds = new Set();
       try {
         const mutedRows = db.prepare(
@@ -1430,7 +1430,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         throttledWarn('push mute lookup failed', err);
       }
 
-      // Detect E2E encrypted envelope — don't leak ciphertext in notifications
+      // Detect E2E encrypted envelope; don't leak ciphertext in notifications
       let displayContent = messageContent;
       try {
         const parsed = JSON.parse(messageContent);
@@ -1504,7 +1504,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   // ── Webhook event delivery (3.13.0 expansion) ───────────
-  // Generalized event dispatch — filters by per-webhook subscribed_events,
+  // Generalized event dispatch: filters by per-webhook subscribed_events,
   // signs with HMAC when callback_secret is set, performs one delayed retry
   // on transient failures, and records last delivery health for the admin UI.
   // `subscribed_events`: '*' means all events; otherwise CSV (e.g. 'message,reaction-added').
@@ -1802,7 +1802,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       ).all();
       for (const ch of expired) {
         if (ch.auto_delete_mode === 'clear') {
-          // #5390 — clear-messages mode: wipe message-related rows but keep
+          // (#5390) clear-messages mode: wipe message-related rows but keep
           // the channel, its members, permissions, roles, and integrations
           // intact. Then rearm the timer using the original interval so the
           // sweep repeats (e.g. daily flood-channel reset) until an admin
@@ -1986,7 +1986,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     next();
   });
 
-  // IP ban gate — block banned addresses before token verification so they
+  // IP ban gate: block banned addresses before token verification so they
   // never see the auth handshake response. Mirrors the HTTP middleware in
   // server.js. (v3.20.0)
   io.use((socket, next) => {
@@ -2105,7 +2105,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     } catch { socket.user.roles = []; socket.user.effectiveLevel = socket.user.isAdmin ? 100 : 0; }
 
     // Record IP for future "ban IP" lookups. Kept to the 5 most-recent
-    // distinct IPs per user — older entries are pruned to bound storage.
+    // distinct IPs per user; older entries are pruned to bound storage.
     try {
       // Normalised, proxy-aware address. Storing the raw handshake address
       // here was actively dangerous: behind a reverse proxy it recorded the
@@ -2266,7 +2266,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     // Prune stale entries first so the new client doesn't seed its sidebar
     // with ghost users left behind by abrupt disconnects (#5347 follow-up).
     // pruneStaleVoiceUsers itself broadcasts voice-user-left for ghosts it
-    // removes, which is enough — we don't also call broadcastVoiceUsers
+    // removes, which is enough. We don't also call broadcastVoiceUsers
     // here because that races the upcoming voice-rejoin broadcast and can
     // re-seed every other client's sidebar with this socket's pre-rejoin
     // view of the room. (#5347 v3.15.4.)
@@ -2704,7 +2704,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     // Socket.IO hands us why the socket went away, and throwing that away made
     // reconnect loops impossible to diagnose from a server log: every drop
     // looked identical. The reason separates the causes that need completely
-    // different fixes -- "ping timeout" means the client stopped answering
+    // different fixes: "ping timeout" means the client stopped answering
     // heartbeats (a backgrounded tab whose timers the browser throttled),
     // "transport close" means something in between cut the connection (a proxy
     // or tunnel idle timeout), and "client namespace disconnect" means the
@@ -2730,7 +2730,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         }, 5000);
       }
 
-      // (#5381) Guest cleanup — if this was the last live socket for an
+      // (#5381) Guest cleanup: if this was the last live socket for an
       // ephemeral guest account, delete the users row so the username is
       // freed for the next person. Cascade FKs purge their (mostly empty)
       // chat history. We schedule this slightly after the disconnect so
@@ -2792,7 +2792,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           // hundred ms on transient network blips (Electron renderer
           // suspends, mobile screen sleep, NAT rebind, etc.). Eagerly
           // removing the user here causes the recurring "I vanished from
-          // my own voice panel even though I can still talk" bug — the
+          // my own voice panel even though I can still talk" bug: the
           // peers' RTCPeerConnections survive (so audio works) but every
           // client wipes the user from their roster and the user is
           // missing until they manually leave and rejoin.
@@ -2800,7 +2800,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           // Instead, schedule eviction in 4 s. If voice-rejoin or
           // voice-join arrives from the user before the timer fires, we
           // cancel the eviction and just rebind the socketId on the
-          // existing entry — peers never see voice-user-left, and the
+          // existing entry. Peers never see voice-user-left, and the
           // panels never blank.
           const oldSocketId = socket.id;
           console.log(`[VoiceDiag] disconnect for ${socket.user.username} (id=${socket.user.id}) on ${code}: scheduling 4s grace eviction (oldSocket=${oldSocketId})`);

@@ -11,7 +11,7 @@ try {
     exit 1
 }
 
-# Pin to Node 22.x — better-sqlite3 ships prebuilt binaries for v22 but not
+# Pin to Node 22.x: better-sqlite3 ships prebuilt binaries for v22 but not
 # newer majors yet, and compiling from source requires Python + C++ tools
 # that most Windows users don't have.
 $lts = $index | Where-Object { $_.lts -and $_.version -match '^v22\.' } | Select-Object -First 1

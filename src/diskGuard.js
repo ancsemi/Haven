@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Disk headroom guard (#5505)
+// Haven: Disk headroom guard (#5505)
 // Keeps a slice of the data volume free so the database can
 // always be written to, including the writes that free space.
 // ═══════════════════════════════════════════════════════════

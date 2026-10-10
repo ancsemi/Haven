@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haven — Tunnel Manager (localtunnel / cloudflared)
+// Haven: Tunnel Manager (localtunnel / cloudflared)
 // Exposes the Haven server over a public URL for remote access
 // ═══════════════════════════════════════════════════════════
 
@@ -165,7 +165,7 @@ async function startTunnel(port, provider = 'localtunnel', ssl = false) {
       return getTunnelStatus();
     }
 
-    // Cloudflared quick-tunnel — use HTTPS origin + skip cert verify for self-signed
+    // Cloudflared quick-tunnel: use HTTPS origin + skip cert verify for self-signed
     const origin = ssl ? `https://127.0.0.1:${port}` : `http://127.0.0.1:${port}`;
     const args = ['tunnel', '--url', origin, '--no-autoupdate'];
     if (ssl) args.push('--no-tls-verify');
@@ -187,10 +187,10 @@ async function startTunnel(port, provider = 'localtunnel', ssl = false) {
       };
       const parseLine = (data) => {
         const line = data.toString();
-        // Match cloudflared tunnel URLs — both trycloudflare.com and cfargotunnel.com
+        // Match cloudflared tunnel URLs: both trycloudflare.com and cfargotunnel.com
         const match = line.match(/https?:\/\/[a-zA-Z0-9._-]+\.(?:trycloudflare|cfargotunnel)\.com\b/);
         if (match) return finalize(match[0]);
-        // Broader fallback — but exclude known non-tunnel URLs (cloudflare.com, github.com, etc.)
+        // Broader fallback, but exclude known non-tunnel URLs (cloudflare.com, github.com, etc.)
         const broader = line.match(/https:\/\/[a-zA-Z0-9]+-[a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
         if (broader && !broader[0].includes('127.0.0.1') && !broader[0].includes('localhost')
             && !broader[0].includes('www.cloudflare.com') && !broader[0].includes('github.com')
@@ -198,7 +198,7 @@ async function startTunnel(port, provider = 'localtunnel', ssl = false) {
           finalize(broader[0]);
         }
       };
-      // Increased timeout to 90s — cloudflared can be slow on first launch or slow connections
+      // Increased timeout to 90s, since cloudflared can be slow on first launch or slow connections
       const timer = setTimeout(() => {
         const hint = stderrLog.includes('failed to connect')
           ? ' (cloudflared could not reach your local server. Is it running?)'

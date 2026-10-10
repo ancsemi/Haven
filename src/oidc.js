@@ -1,5 +1,5 @@
 /**
- * Haven — OIDC (OpenID Connect) client
+ * Haven: OIDC (OpenID Connect) client
  *
  * Authorization Code flow with PKCE, against any standards-compliant provider
  * (Authentik, Keycloak, Authelia, Auth0, Zitadel...). Issue #12.
@@ -61,7 +61,7 @@ function _canonicalIssuer(value) {
  *
  * The client secret comes from the environment only, never the database. A
  * Haven backup is a copy of the database, and backups get moved around and
- * shared far more casually than an .env file — an IdP credential should not
+ * shared far more casually than an .env file; an IdP credential should not
  * ride along inside one. (Same reasoning as JWT_SECRET.)
  */
 function getOidcConfig() {
@@ -83,7 +83,7 @@ function getOidcConfig() {
 }
 
 /**
- * Enabled *and* configured. `oidc_enabled` alone is not enough — an admin can
+ * Enabled *and* configured. `oidc_enabled` alone is not enough: an admin can
  * flip the toggle before setting OIDC_CLIENT_SECRET, and a login button that
  * always errors is worse than no button.
  */
@@ -193,9 +193,9 @@ function _b64url(buf) {
  * Build the redirect to the provider, plus the secrets we must remember to
  * validate what comes back.
  *
- * state    — ties the callback to the browser that started the login (CSRF)
- * nonce    — ties the ID token to this specific request (replay)
- * verifier — PKCE; proves the code is redeemed by whoever requested it
+ * state:     ties the callback to the browser that started the login (CSRF)
+ * nonce:     ties the ID token to this specific request (replay)
+ * verifier:  PKCE; proves the code is redeemed by whoever requested it
  */
 async function buildAuthorizationUrl(redirectUri) {
   const cfg = getOidcConfig();
@@ -234,7 +234,7 @@ async function exchangeCode(code, verifier, redirectUri) {
     code_verifier: verifier,
   });
 
-  // client_secret_basic first — it is what most providers register by default
+  // client_secret_basic first: it is what most providers register by default
   // and what the spec recommends. Providers configured for client_secret_post
   // reject the header form, so fall back rather than making the admin care.
   const basic = Buffer.from(`${encodeURIComponent(cfg.clientId)}:${encodeURIComponent(cfg.clientSecret)}`).toString('base64');

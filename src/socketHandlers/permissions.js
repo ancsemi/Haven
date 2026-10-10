@@ -1,4 +1,4 @@
-// ── Permission system helpers (factory — closes over db) ──
+// ── Permission system helpers (factory, closes over db) ──
 
 // A failed read of the per-user overrides (user_role_perms) means an explicit
 // deny cannot be ruled out, so callers fail closed. The read runs on every
@@ -169,7 +169,7 @@ module.exports = function createPermissions(db) {
   // active (e.g. the sidebar "Create Channel" section, which always creates
   // a top-level channel). getUserPermissions() flattens server-wide AND
   // channel-scoped grants together for per-channel UI (context menus opened
-  // for a specific channel), which is correct there — but that same flat
+  // for a specific channel), which is correct there, but that same flat
   // list also made the always-visible sidebar button appear for users who
   // only held create_channel in one sub-channel, a dead control since every
   // click would be denied server-side. This variant excludes any
@@ -206,7 +206,7 @@ module.exports = function createPermissions(db) {
 
     // getUserEffectiveLevel(userId) with no channelId arg already only
     // considers server-scoped roles, so threshold-derived perms are
-    // inherently global here — no extra filtering needed.
+    // inherently global here, so no extra filtering needed.
     const thresholds = getPermissionThresholds();
     const level = getUserEffectiveLevel(userId);
     for (const [perm, minLevel] of Object.entries(thresholds)) {
@@ -237,14 +237,14 @@ module.exports = function createPermissions(db) {
   // { id, name, level, color, icon, scope, channel_id }. Used for multi-role
   // display so the member tooltip / chat hover can list all roles a user holds.
   function getUserAllRoles(userId, channelId = null) {
-    // Dedupe by role.id for display purposes — if a user holds the same
+    // Dedupe by role.id for display purposes: if a user holds the same
     // role in multiple channels (or both server-wide and a channel), we
     // surface it once with the highest effective level. Channel scope is
     // not meaningful in chat/tooltip/profile-card surfaces; permission
     // checks use getUserEffectiveLevel/getUserPermissions, which correctly
     // walk every assignment row independently. (Without this dedupe,
     // hover cards rendered "Channel Mod Channel Mod" for users who held
-    // the same role in two channels — issue raised on experimental/multi-role.)
+    // the same role in two channels; issue raised on experimental/multi-role.)
     const byId = new Map();
     const consider = (r) => {
       const existing = byId.get(r.id);

@@ -1,5 +1,5 @@
 ﻿# ═══════════════════════════════════════════════════════════
-# Haven — Graphical Installer (PowerShell WPF)
+# Haven: Graphical Installer (PowerShell WPF)
 # Usage: powershell -ExecutionPolicy Bypass -File "Install Haven.ps1"
 # ═══════════════════════════════════════════════════════════
 param([switch]$Silent)
@@ -24,7 +24,7 @@ $HAVEN_DIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $DATA_DIR  = "$env:APPDATA\Haven"
 
 # ═══════════════════════════════════════════════════════════
-# XAML — 6-page wizard
+# XAML: 6-page wizard
 # ═══════════════════════════════════════════════════════════
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"

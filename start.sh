@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════
-# Haven — Cross-Platform Launcher (Linux / macOS)
+# Haven: Cross-Platform Launcher (Linux / macOS)
 # Usage: chmod +x start.sh && ./start.sh
 # ═══════════════════════════════════════════════════════════
 set -e
@@ -141,14 +141,14 @@ node server.js &
 SERVER_PID=$!
 
 # ── Wait for readiness ─────────────────────────────────────
-# The probe runs on node itself — it is guaranteed present (it runs the
+# The probe runs on node itself: it is guaranteed present (it runs the
 # server), unlike curl/wget which minimal server images often lack. The
 # old curl-only probe silently failed on such systems every second for
 # 15s and then KILLED a perfectly healthy server (the frontend was
 # already serving) with a misleading "failed to start".
 #
 # Two rules now:
-#   1. A dead server process is the only real startup failure — detected
+#   1. A dead server process is the only real startup failure, detected
 #      immediately, with a pointer at the real log.
 #   2. A probe failure alone NEVER kills a live server. If readiness
 #      can't be confirmed after the window, we say so and leave it up.
@@ -205,6 +205,6 @@ fi
 echo "  Press Ctrl+C to stop the server."
 echo ""
 
-# Keep alive — clean shutdown on Ctrl+C
+# Keep alive: clean shutdown on Ctrl+C
 trap "echo ''; echo '  Shutting down Haven...'; kill $SERVER_PID 2>/dev/null; exit 0" INT TERM
 wait $SERVER_PID

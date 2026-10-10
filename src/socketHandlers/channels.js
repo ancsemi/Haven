@@ -47,7 +47,7 @@ module.exports = function register(socket, ctx) {
 
   // (#5389) Auto-grant a channel's default_role_id to a user when they join
   // or are added to that channel. No-op if the channel has no default role.
-  // Safe to call repeatedly — INSERT OR IGNORE avoids duplicates.
+  // Safe to call repeatedly: INSERT OR IGNORE avoids duplicates.
   const _applyChannelDefaultRole = (channelId, userId, grantedBy = null) => {
     try {
       const row = db.prepare('SELECT default_role_id FROM channels WHERE id = ?').get(channelId);
@@ -72,17 +72,17 @@ module.exports = function register(socket, ctx) {
   // create_channel. parentId === null means top-level / server structure,
   // which still requires a server-wide create_channel (or admin).
   // (#5467) That create_channel check is now scoped to the parent being
-  // reorganized. A server-wide grant still passes everywhere — server-scoped
-  // roles are checked regardless of channelId — but a grant made on one
+  // reorganized. A server-wide grant still passes everywhere (server-scoped
+  // roles are checked regardless of channelId), but a grant made on one
   // specific channel no longer reaches every other channel's structure.
   const _canManageSubsOf = (parentId) =>
     socket.user.isAdmin ||
     (!!parentId && userHasPermission(socket.user.id, 'manage_sub_channels', parentId)) ||
     userHasPermission(socket.user.id, 'create_channel', parentId || null);
 
-  // (#5467) Editing an existing channel's configuration — feature toggles,
+  // (#5467) Editing an existing channel's configuration (feature toggles,
   // slow mode, voice limits, notification type, AFK, self-destruct, code
-  // settings — is channel management, not server administration. It used to
+  // settings) is channel management, not server administration. It used to
   // gate on the server-wide create_channel permission, so anyone trusted to
   // create a channel could also silence voice, arm a self-destruct timer, or
   // flip a channel read-only anywhere on the server. manage_channel_settings
@@ -98,7 +98,7 @@ module.exports = function register(socket, ctx) {
   // adds a child to that parent's structure, so it needs authority over that
   // specific parent: admin, or a channel-scoped manage_sub_channels grant.
   // Unlike _canManageSubsOf, the server-wide create_channel permission is
-  // deliberately NOT enough — otherwise anyone who can create a channel could
+  // deliberately NOT enough; otherwise anyone who can create a channel could
   // make a top-level channel and move it under a parent they don't moderate,
   // sidestepping manage_sub_channels entirely.
   //
@@ -268,8 +268,8 @@ module.exports = function register(socket, ctx) {
 
       // channel-created carries a hand-built stub, not an enriched row, so the
       // per-channel permission answers (canManageSettings / canManageSubs) are
-      // missing from it. Follow up with the real list — sub-channel creation
-      // already does — otherwise the creator's own context menu hides the
+      // missing from it. Follow up with the real list (sub-channel creation
+      // already does); otherwise the creator's own context menu hides the
       // options they just earned until something else refreshes it. (#5467)
       broadcastChannelLists();
 
@@ -367,7 +367,7 @@ module.exports = function register(socket, ctx) {
     // so admins can curate which public channels new arrivals land in.
     // When `explicitChannelIds` is passed (a managed invite link's own channel
     // grant), it overrides the global default_join_channels setting. An empty
-    // array means "all public" — same as leaving the global default unset.
+    // array means "all public", same as leaving the global default unset.
     const _resolveAutoJoinChannels = (explicitChannelIds) => {
       const allParents = db.prepare(
         "SELECT id, code, parent_channel_id FROM channels WHERE parent_channel_id IS NULL AND is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private')"
@@ -506,7 +506,7 @@ module.exports = function register(socket, ctx) {
     }
 
     // (#5348) DMs are private one-to-one channels. Their codes must never be
-    // usable by a third party — even a read-only presence leaks metadata
+    // usable by a third party; even a read-only presence leaks metadata
     // (who is talking to whom, timing, frequency). Reject silently with the
     // same generic error so callers can't distinguish "no channel" from "is DM".
     if (channel.is_dm) {
@@ -523,7 +523,7 @@ module.exports = function register(socket, ctx) {
     // or crafting its code. Without this, a non-member could paste a
     // sub-channel's code (or open a ?channel=<sub> deep link) and the plain
     // join below would hand them membership, unlocking its history and the
-    // ability to post. Only gate NEW joins — existing members re-emit
+    // ability to post. Only gate NEW joins; existing members re-emit
     // join-channel to refresh (e.g. after a message move) and must still pass.
     if (!membership && !socket.user.isAdmin && channel.parent_channel_id) {
       const isPrivateSub = channel.is_private || channel.code_visibility === 'private';
@@ -740,7 +740,7 @@ module.exports = function register(socket, ctx) {
 
     // Collect the attachments these channels' messages point at, before the
     // rows go away. Deleting a channel dropped the messages but left every
-    // uploaded file sitting in uploads/ forever — deleting a single message
+    // uploaded file sitting in uploads/ forever, while deleting a single message
     // has always cleaned up after itself, and deleting a whole channel is
     // the same thing in bulk. (#5487)
     const doomedUploads = new Set();
@@ -1167,7 +1167,7 @@ module.exports = function register(socket, ctx) {
 
   // (#5389) Per-channel default role. Setting it auto-grants the role
   // (channel-scoped) to every existing member and every future joiner.
-  // Clearing it (roleId = null/0) leaves existing grants alone — admins can
+  // Clearing it (roleId = null/0) leaves existing grants alone; admins can
   // revoke from the Roles UI if they want to strip them.
   socket.on('set-channel-default-role', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -1316,7 +1316,7 @@ module.exports = function register(socket, ctx) {
     if (!_canManageSettingsOf(channel.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to set self-destruct timers');
     }
-    // #5390 — second mode: 'clear' wipes messages periodically instead of
+    // (#5390) second mode: 'clear' wipes messages periodically instead of
     // deleting the whole channel. Anything other than 'clear' is treated
     // as the legacy 'delete' behaviour so unknown values fail closed
     // toward the original semantics.
@@ -1803,7 +1803,7 @@ module.exports = function register(socket, ctx) {
     ).get(targetId);
     if (!target) return socket.emit('error-msg', 'User not found');
     // For self-DM, the channel has only one channel_members row, so both EXISTS
-    // clauses below collapse to the same check — which still matches correctly.
+    // clauses below collapse to the same check, which still matches correctly.
     // A group DM that shrank to two (or one) members is still a group, not
     // this pair's 1:1 conversation.
     const existingDm = db.prepare(`

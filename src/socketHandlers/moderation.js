@@ -518,7 +518,7 @@ module.exports = function register(socket, ctx) {
       if (requested.length === 0) return cb({ ok: true, removed: 0, total: 0 });
       const reason = (typeof data.reason === 'string' && data.reason.trim()) ? data.reason.trim().slice(0, 200) : 'Bulk cleanup';
 
-      // Re-apply the hard exclusions server-side — never trust the client to
+      // Re-apply the hard exclusions server-side; never trust the client to
       // have kept staff or the acting admin out of the list. "Staff" means a
       // deliberately-granted (non-auto-assign) role; the default role every
       // account gets on registration is auto_assign and must NOT protect a bot.

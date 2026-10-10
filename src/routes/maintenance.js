@@ -40,7 +40,7 @@ module.exports = function registerMaintenance(deps) {
       let totalDeleted = 0;
 
       // Pull every /uploads/ attachment path out of a message body. Reuses the
-      // shared UPLOAD_PATH_RE (global regex — reset lastIndex before each use).
+      // shared UPLOAD_PATH_RE (global regex, so reset lastIndex before each use).
       const extractUploadRelPaths = (content) => {
         const out = [];
         if (typeof content !== 'string' || !content) return out;
@@ -151,7 +151,7 @@ module.exports = function registerMaintenance(deps) {
       // posted media, and an allow-list approach kept eating whichever type
       // nobody remembered to list (#5423).
 
-      // 3. (#5282) Orphan-DM sweep — delete any DM channel that has dropped
+      // 3. (#5282) Orphan-DM sweep: delete any DM channel that has dropped
       // below 2 members (one or both participants deleted their account or
       // were force-removed). channel_members.user_id has ON DELETE CASCADE
       // so the row vanishes when the user does, but the DM channel itself
@@ -184,7 +184,7 @@ module.exports = function registerMaintenance(deps) {
                 moveUploadToDeleted(fn, UPLOADS_DIR);
               }
             }
-            // Delete the channel — cascades to messages + read_positions +
+            // Delete the channel: cascades to messages + read_positions +
             // channel_members + reactions etc. via the existing FKs.
             db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
             for (const table of ['dm_group_keys', 'dm_group_epochs', 'dm_group_invites', 'dm_group_rewrap_requests']) {
@@ -370,7 +370,7 @@ module.exports = function registerMaintenance(deps) {
 
   // ── Admin: dynamic DNS status + force-refresh ─────────────
   // Returns the last DDNS update result (provider, IP, ok/error, timestamp).
-  // POST forces an immediate update — useful if the user just changed their
+  // POST forces an immediate update, useful if the user just changed their
   // .env or believes the cached IP is stale (ISP rotation, VPN toggle, etc.).
   app.get('/api/admin/ddns/status', (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
@@ -395,7 +395,7 @@ module.exports = function registerMaintenance(deps) {
 
   // ── Admin: in-app update check + run ─────────────────────
   // Detects how Haven was installed and returns the right command (or runs it).
-  // Docker is intentionally NOT auto-runnable from inside the container — we just
+  // Docker is intentionally NOT auto-runnable from inside the container; we just
   // surface the right command for the operator to run on the host.
   function detectInstallMethod() {
     const cwd = process.cwd();

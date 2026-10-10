@@ -3,16 +3,16 @@
 // ── Upload tagging (attachment tags) ────────────────────────────────────────
 // A GLOBAL, server-wide tag vocabulary that users attach to file/image uploads
 // at send time. Distinct from the per-channel forum-topic tags (channels.
-// forum_tags + messages.tags JSON) — those are a different feature that happens
+// forum_tags + messages.tags JSON). Those are a different feature that happens
 // to share the word "tag".
 //
-//   upload_tags       — the vocabulary (one row per distinct tag name)
-//   attachment_tags   — the association (message + file → tag)
+//   upload_tags:     the vocabulary (one row per distinct tag name)
+//   attachment_tags: the association (message + file → tag)
 //
 // Applying an existing tag is open to any uploader; minting a NEW tag is gated
 // by the manage_tags permission (enforced by the caller via `canCreate`). New
 // tags are committed here on message send (get-or-create by normalized name),
-// never speculatively from the composer — an abandoned draft leaves no orphans.
+// never speculatively from the composer, so an abandoned draft leaves no orphans.
 
 // Defaults, plus the hard technical ceilings the admin setting is clamped to.
 // The live values come from server_settings (max_tags_per_attachment,
@@ -40,8 +40,8 @@ function effectiveLimits(db) {
   return { maxTags, maxLen };
 }
 
-// Letters (any script), digits, space, hyphen, underscore. Everything else —
-// control chars, punctuation, emoji — is rejected so tags stay clean, terse and
+// Letters (any script), digits, space, hyphen, underscore. Everything else
+// (control chars, punctuation, emoji) is rejected so tags stay clean, terse and
 // reusable. Display keeps the user's casing; matching/dedupe is case-folded.
 const TAG_CHARS = /^[\p{L}\p{N} _-]+$/u;
 
@@ -57,8 +57,8 @@ function normalizeTagName(raw, maxLen = MAX_TAG_LEN) {
 }
 
 // Pull the first /uploads/<file> path out of a message body. Attachment
-// messages carry exactly one — either a bare image URL or a [file:name](url|
-// size) wrapper — so the first match identifies the file being tagged.
+// messages carry exactly one: either a bare image URL or a [file:name](url|
+// size) wrapper, so the first match identifies the file being tagged.
 function extractUploadPath(content) {
   const m = String(content || '').match(/\/uploads\/[^\s)|"'<>]+/);
   return m ? m[0] : null;
@@ -92,7 +92,7 @@ function searchTags(db, query, limit = 50) {
 // for the given message. Existing tags are reused; unknown names are minted only
 // when `canCreate` is true (manage_tags) and otherwise silently dropped. Invalid
 // names are skipped; the list is deduped and capped. One transaction; tolerant
-// by design — the caller treats tagging as non-critical and never fails a send
+// by design: the caller treats tagging as non-critical and never fails a send
 // over it. Returns the applied tag names.
 // Normalize, dedupe (by case-folded key, first-seen order) and cap a raw tag
 // name list into [{ name, norm }]. Shared by the send-time and edit-time paths.
@@ -160,7 +160,7 @@ function setMessageTags(db, { messageId, content, tagNames, userId, canCreate, m
 // ── Admin tag management (Phase 4) ──────────────────────────────────────────
 // The admin Tags panel manages the vocabulary directly: add a tag, rename it, or
 // delete it. Rename and delete are HARD and destructive by decision (no soft
-// delete) — they propagate to every attachment through the tag_id the
+// delete): they propagate to every attachment through the tag_id the
 // association carries. messageTargetsForTag is the shared iteration both use to
 // tell the caller which messages changed, so it can rebroadcast live footers.
 
@@ -175,7 +175,7 @@ function listAllTags(db) {
   ).all();
 }
 
-// Every message that carries a given tag, with its channel code — the shared
+// Every message that carries a given tag, with its channel code: the shared
 // "iterate the attachments list" step behind rename and delete. Collected
 // BEFORE the mutation so the caller can recompute and rebroadcast those
 // messages' footers afterwards.

@@ -1,21 +1,21 @@
 'use strict';
 
 /**
- * Haven — Account linking routes for rich presence
+ * Haven: Account linking routes for rich presence
  *
  * Two redirect flows live here:
  *
- *   Steam   — OpenID 2.0. No app secret; you register a Web API key and Steam
+ *   Steam:    OpenID 2.0. No app secret; you register a Web API key and Steam
  *             hands back a SteamID64 that we verify by echoing the response
  *             back to Steam for confirmation.
- *   Spotify — OAuth 2.0 authorization code. Needs a client ID + secret from
+ *   Spotify:  OAuth 2.0 authorization code. Needs a client ID + secret from
  *             the Spotify developer dashboard.
  *
  * Both are top-level browser navigations, so neither can carry the normal
  * Authorization header. The client first asks over the socket for a 5-minute
  * 'connect'-scoped token (auth.js: generateConnectToken) and puts that in the
  * URL. Every route below re-verifies that token and refuses anything without
- * the right scope — a full session token is not accepted, and a connect token
+ * the right scope: a full session token is not accepted, and a connect token
  * is useless for anything except linking.
  *
  * Server admin setup (.env):
@@ -40,7 +40,7 @@ const SPOTIFY_SCOPES = 'user-read-currently-playing user-read-playback-state';
 
 function baseUrl(req) {
   // PUBLIC_URL is the canonical answer when the server can't guess its own
-  // external address — e.g. Docker port mapping (8080→3000), reverse proxy
+  // external address, e.g. Docker port mapping (8080→3000), reverse proxy
   // that strips the port from the Host header, or Cloudflare Tunnels.
   // Set it in .env and both Steam and Spotify callbacks will use exactly that.
   // Example: PUBLIC_URL=https://haven.example.com:8443
@@ -67,7 +67,7 @@ function baseUrl(req) {
 
   // ── Direct exposure or proxy didn't set X-Forwarded-Host ────────
   // Fall back to req.hostname (trusts X-Forwarded-Host if available,
-  // otherwise reads raw Host header — but always strips port).
+  // otherwise reads raw Host header, but always strips port).
   // Only append a non-standard port from the raw Host header when it
   // is NOT a common reverse-proxy internal port, so we don't leak
   // the backend's private port into the public callback URL.
@@ -98,15 +98,15 @@ function connectUserId(token, provider) {
  * End the linking flow.
  *
  * This deliberately does NOT redirect to /app.html. The OAuth round-trip can
- * finish anywhere — a popup, a different browser than the one that started it
+ * finish anywhere: a popup, a different browser than the one that started it
  * (Steam's QR sign-in does exactly this), or the desktop app's child window.
  * Landing on /app.html in any of those places boots a whole second Haven
  * client, which for a browser that isn't logged in means the user is dumped on
  * a login screen with no idea why.
  *
  * Instead we serve a small self-contained page that reports the result and
- * closes itself. The real app finds out over its socket — saveConnection
- * pushes a fresh connections payload to every socket the user has open — so it
+ * closes itself. The real app finds out over its socket (saveConnection
+ * pushes a fresh connections payload to every socket the user has open), so it
  * updates live no matter where this page ended up.
  *
  * Nothing from the provider is interpolated here; `provider` is validated
@@ -168,7 +168,7 @@ function createConnectRoutes(getActivity) {
   });
 
   // ══════════════════════════════════════════════════════
-  // Steam — OpenID 2.0
+  // Steam: OpenID 2.0
   // ══════════════════════════════════════════════════════
   router.get('/steam', (req, res) => {
     if (!req.activity.isSteamConfigured()) return res.status(503).send('Steam integration not configured on this server');
@@ -203,7 +203,7 @@ function createConnectRoutes(getActivity) {
 
     try {
       // Echo every openid.* param back to Steam with mode=check_authentication.
-      // This is the whole security model of OpenID 2.0 — without it, anyone
+      // This is the whole security model of OpenID 2.0: without it, anyone
       // could hand us a hand-written callback URL claiming any SteamID.
       const check = {};
       for (const [k, v] of Object.entries(req.query)) {
@@ -264,7 +264,7 @@ function createConnectRoutes(getActivity) {
   });
 
   // ══════════════════════════════════════════════════════
-  // Spotify — OAuth 2.0 authorization code
+  // Spotify: OAuth 2.0 authorization code
   // ══════════════════════════════════════════════════════
   router.get('/spotify', (req, res) => {
     if (!req.activity.isSpotifyConfigured()) return res.status(503).send('Spotify integration not configured on this server');
