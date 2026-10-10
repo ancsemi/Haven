@@ -4,11 +4,6 @@ All notable changes to Haven are documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Semantic Versioning](https://semver.org/).
 
-> **Deploy checklist**: after committing changes:
-> 1. `git push origin main` pushes code **and** GitHub Pages site (`docs/`)
-> 2. `website/index.html` is auto-synced from `docs/index.html`; keep them identical
-> 3. Restart the Haven server to pick up `server.js` / `socketHandlers.js` changes
-
 ---
 
 ## [Unreleased]

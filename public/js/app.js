@@ -372,7 +372,6 @@ class HavenApp {
     this._setupStatusPicker();
     this._setupFileUpload();
     this._setupIdleDetection();
-    // this._setupAvatarUpload(); // Moved to top of _init
     this._setupSoundManagement();
     this._setupEmojiManagement();
     this._setupStickerManagement();
