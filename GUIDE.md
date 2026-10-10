@@ -4,7 +4,7 @@ Welcome to **Haven**, your private chat server. This guide covers everything you
 
 ---
 
-## 📋 What You Need
+## What You Need
 
 - **Windows 10 or 11** (macOS / Linux can run it manually)
 - **Node.js** version 22 to 26 → [Download here](https://nodejs.org/)
@@ -13,7 +13,7 @@ Welcome to **Haven**, your private chat server. This guide covers everything you
 
 ---
 
-## 🐳 Docker Setup (Alternative)
+## Docker Setup (Alternative)
 
 If you'd rather run Haven in a container (great for NAS boxes, servers, or if you just like Docker):
 
@@ -140,7 +140,7 @@ After that, `docker compose up -d` should work without errors.
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Step 1: First Launch
 
@@ -176,7 +176,7 @@ They'll register their own account, then enter the code to join your channel.
 
 ---
 
-## 📂 Channels & Sub-Channels
+## Channels & Sub-Channels
 
 ### How Channels Work
 
@@ -214,13 +214,13 @@ Any channel can be switched between private and public later from **Channel Func
 
 ---
 
-## 📥 Importing from Discord
+## Importing from Discord
 
 Haven can copy a Discord server's message history into Haven channels. The easiest way uses your Ferry bot: nothing to download, nothing to paste.
 
 ### Method 1: Your Ferry bot (recommended)
 
-1. Set up Ferry if you haven't yet. The [Ferry section](#-ferry-discord-bridge) walks you through it and takes about two minutes. For importing you only need its first two parts: create the bot, then connect it to Haven and add it to your Discord server. You don't have to turn Ferry on or pair any channels.
+1. Set up Ferry if you haven't yet. The [Ferry section](#ferry-discord-bridge) walks you through it and takes about two minutes. For importing you only need its first two parts: create the bot, then connect it to Haven and add it to your Discord server. You don't have to turn Ferry on or pair any channels.
 2. In Haven, open **Settings** (⚙️ in the sidebar) → **Import Discord History**, then click the **🔗 Connect to Discord** tab
 3. Click **Use my Ferry bot**
 4. Pick your Discord server, then tick the channels and threads you want
@@ -248,11 +248,11 @@ Export files from DiscordChatExporter (JSON) work here too.
 
 - Imported messages appear as the original Discord usernames, but they're all stored under the admin account. They're clearly marked as imported from Discord.
 - The import is **history only**: Discord roles, permissions, bots, and webhooks are not imported.
-- To keep chatting with people who stay on Discord, use [Ferry](#-ferry-discord-bridge) to bridge channels between the two.
+- To keep chatting with people who stay on Discord, use [Ferry](#ferry-discord-bridge) to bridge channels between the two.
 
 ---
 
-## 🔑 Join Code Settings (Admin)
+## Join Code Settings (Admin)
 
 Each channel's invite code can be configured by admins. Click the **⚙️ gear icon** next to the channel code in the header.
 
@@ -280,7 +280,7 @@ You can also click **Rotate Now** to manually change the code immediately.
 
 ---
 
-## 🖼️ Avatars
+## Avatars
 
 ### Uploading a Profile Picture
 
@@ -298,11 +298,26 @@ Click **Clear** to remove your avatar and revert to the default initial-letter a
 
 ---
 
-## 🎨 Themes & Effects
+## Themes & Effects
 
 ### Themes
 
 Haven includes 20+ visual themes. Click the **🎨** button at the bottom of the sidebar to open the theme picker. Themes change colors, fonts, and overall aesthetic. Your choice is saved per browser.
+
+| Button | Theme | Style |
+|--------|-------|-------|
+| ⬡ | **Haven** | Deep blue/purple (default) |
+| 🎮 | **Discord** | Dark gray with blue accents |
+| Ⅿ | **Matrix** | Black and green, scanline overlay |
+| ◈ | **Tron** | Black with neon cyan glow |
+| ⌁ | **HALO** | Military green with Mjolnir vibes |
+| ⚜ | **LoTR** | Parchment gold and deep brown |
+| 🌆 | **Cyberpunk** | Neon pink and electric yellow |
+| ❄ | **Nord** | Arctic blue and frost |
+| 🧛 | **Dracula** | Deep purple and blood red |
+| ⚔ | **Bloodborne** | Gothic crimson and ash |
+| ⬚ | **Ice** | Pale blue and white |
+| 🌊 | **Abyss** | Deep ocean darkness |
 
 Servers also include the optional **Compact** Theme API v1 file theme. An admin
 can publish it from **Settings → Admin → Branding → Custom Themes**. Compact
@@ -342,390 +357,6 @@ When the Glitch effect is active, text around the UI randomly "scrambles", cycli
 - User names in the member list
 
 A **Glitch Frequency** slider appears in the theme popup when this effect is active. Slide left for rare, subtle glitches, or right for constant chaos.
-
----
-
-## 🌐 Setting Up Remote Access (Friends Over the Internet)
-
-If your friends are **not** on your local WiFi, you need a way for them to reach
-your machine. There are three routes here, least safe first:
-
-1. **Port forwarding** (this section): simplest, but it puts your Haven login page
-   in front of the whole internet.
-2. **[Tailscale / WireGuard](#-tailscale--wireguard-no-port-forwarding-no-exposed-ip)**:
-   the safest. Nothing is exposed publicly and you never touch your router.
-3. **[Cloudflare Tunnel](#-cloudflare-tunnel-no-port-forwarding)**: a public URL
-   without opening a port or revealing your home IP.
-
-Haven can also run LocalTunnel or Cloudflared for you from **Settings, Server Admin
-Settings, Tunnel** if you would rather not install anything by hand.
-
-### Before you port forward, know what it costs
-
-Opening a port means anybody on the internet can reach your Haven login page. Some
-of that is not obvious up front:
-
-- **Bot networks.** Automated scanners sweep the whole internet looking for
-  misconfigured services. Within minutes of forwarding a port, your address starts
-  getting probed. Almost all of it bounces off Haven and your firewall, but the risk
-  is not zero, and it uses a little of your bandwidth around the clock.
-- **DHCP drift.** Most home routers hand out addresses dynamically, so the machine
-  running Haven can land on a different local IP after a reboot. Your port forward
-  then points at whatever device took the old address, which means your friends
-  cannot reach Haven and something else on your network is exposed instead. Assign
-  the Haven machine a static IP to prevent this, see the DHCP reservation step below.
-- **Password guessing.** Haven rate-limits sign-in attempts (20 per 15 minutes per
-  IP address) and supports two-factor authentication, so it is not defenceless. But
-  a login page on the open internet will be tried, so use a password you have not
-  used anywhere else and turn on MFA.
-
-If that is acceptable to you, carry on. If not, use Tailscale or a tunnel instead.
-
-### Find Your Public IP
-
-Visit [whatismyip.com](https://whatismyip.com). The number shown (like `203.0.113.50`) is what your friends will use.
-
-### Port Forwarding on Your Router
-
-Every router is different, but the general steps are:
-
-1. **Log into your router**: usually `http://192.168.1.1` or `http://10.0.0.1` in your browser
-2. Find **Port Forwarding** (sometimes called NAT, Virtual Servers, or Applications)
-3. Create a new rule:
-
-   | Field | Value |
-   |-------|-------|
-   | Port | `3000` |
-   | Protocol | TCP |
-   | Internal IP | Your PC's local IP (e.g. `10.0.0.60`) |
-
-4. Save and apply
-
-> **How to find your local IP:** Open Command Prompt and type `ipconfig`. Look for the "IPv4 Address" under your Ethernet or WiFi adapter.
-
-### Windows Firewall
-
-The server needs permission to accept incoming connections:
-
-1. Open **Start Menu** → search **"Windows Defender Firewall"**
-2. Click **"Advanced settings"** on the left
-3. Click **"Inbound Rules"** → **"New Rule..."**
-4. Select **Port** → **TCP** → enter `3000`
-5. Allow the connection → apply to all profiles
-6. Name it something like "Haven Chat"
-
-Or run this in PowerShell (as Administrator):
-```powershell
-New-NetFirewallRule -DisplayName "Haven_Chat" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow
-```
-
-### Tell Your Friends
-
-Send them this URL:
-```
-https://YOUR_PUBLIC_IP:3000
-```
-
-> ⚠️ **Certificate Warning:** Your friends' browsers will show a security warning because Haven uses a self-signed certificate. This is normal and expected. Tell them to click **"Advanced"** → **"Proceed to site"**. The connection is still encrypted.
-
-> **No OpenSSL? No problem.** If there is no certificate when Haven starts, it makes one itself, so HTTPS works on a clean Windows install. To run plain HTTP on purpose (behind a reverse proxy that handles TLS, or LAN only), set `FORCE_HTTP=true` in your `.env`. Voice, camera and the mobile app need HTTPS on any address other than localhost.
-
----
-
-## 🔐 Tailscale / WireGuard (No Port Forwarding, No Exposed IP)
-
-Port forwarding above opens your Haven login page to the entire internet.
-Tailscale does not: it builds an encrypted tunnel straight between your
-machine and your friend's, so nothing is exposed publicly and you never touch
-your router or firewall. It is the safest of the three methods here.
-
-> #### Voice chat over a *shared device*
-> Text chat, uploads, and everything that flows **through** the Haven server work
-> perfectly with the shared-device setup below. **Voice is the exception.** Haven
-> voice is peer-to-peer: everyone in a call opens a direct connection to every
-> *other* person in the call, not just to the host. Sharing a single device only
-> puts the **host** machine on the shared path, so your friends can reach the host
-> but not each other, and the return path from the host back to a friend isn't
-> guaranteed either. The classic symptom is **one-directional audio**: everyone
-> hears the host, but the host can't hear anyone. This isn't a bug in the
-> shared-device config, it's that a single shared machine can't provide the full
-> mesh of paths a peer-to-peer call needs.
->
-> Two ways to get voice working, most recommended first:
-> 1. **Add a TURN server** under **Settings, Admin, Voice & Connectivity
->    (STUN/TURN)**. TURN relays all voice media through one reachable point, so the
->    peer-to-peer paths are no longer required and the secure single-device sharing
->    below keeps working exactly as written. You can run your own
->    [coturn](https://github.com/coturn/coturn) or use a hosted TURN provider.
-> 2. **Put everyone on the same tailnet** instead of sharing one device. Tailnet
->    members get direct connectivity to one another, so the mesh forms and voice
->    works both ways. This works, but it gives your friends **broader access than
->    device-sharing does**, so read **Step 4** below and only do this if you accept
->    that tradeoff.
-
-- Unlike port forwarding, Tailscale does not require you to touch your router or your computer's firewall. Tailscale uses [Wireguard](https://en.wikipedia.org/wiki/WireGuard) under the hood, which is the same protocol many reputable VPN companies use. Wireguard creates an encrypted, end-to-end tunnel from your computer to your friend's computer. Most firewalls, like the one your router and computer use, allow outbound connections by default. Tailscale establishes a persistent, outbound connection to the Tailscale coordination server, which then allows your friends to connect. This is why configuring your firewall is not a requirement for this method. 
-  
-- Anyone who wants access to your Haven server will first need a **Share link** generated by you, the administrator, via your Tailscale admin dashboard. If you follow this guide correctly, your friend will **only** have access to Haven and strictly nothing else on your device.
-- The obvious tradeoff with this approach is setup. Both you and your friends will need to connect to Tailscale anytime you want to access Haven. But the bright side of this approach is once setup is complete, and you're logged in, connecting to Tailscale is as simple as flipping a switch. Tailscale works on pretty much all devices you can think of, and it's seamless.
-- To be clear, Tailscale does change your device's DNS settings. But unlike a traditional VPN, Tailscale **does not** route your internet traffic through some remote server. Tailscale is **purely** a connection between your computer, and your friend's computer. Your IP does not change and your internet speed doesn't slow down in any meaningful way.
-
-### Step 1 - Make an account
-- Visit https://tailscale.com and make an account. Tailscale will walk you through downloading Tailscale onto your device, you may proceed with that.
-
-- Once Tailscale is running on your machine, it may ask you to add another device, click the "Skip" button at the bottom of the page.
-
- 
-### Step 2: Navigate to Tailscale admin page
-Click [here](https://console.tailscale.com/admin/machines) to access the admin page. Here, you will see a list of all the devices on your Tailnet. 
-
-### Step 3: Lock down access
-- Currently, if you share access to your Tailscale device, any other ports that are open on your machine will be reachable by your friends. We solve this issue by setting up ACL rules. ACL Rules will ensure only Haven is accessible by your friends, and strictly nothing else.
-- On your Tailscale admin page, click "Access Controls".
-- Click "JSON Editor" and replace everything in that section with the following, secure config:
-   - Please ensure you copy everything, including the trailing comma at the end of the code block 
-  ```
-  {
-  "grants": [
-    // autogroup:member are members of your tailnet. We are sharing a device with your friends, NOT adding them to our tailnet. So you are the only person on your tailnet who should have this permission. And therefore, we are giving members of this tailnet unrestricted access to everything.
-    {
-      "src": ["autogroup:member"],
-      "dst": ["*"],
-      "ip":  ["*"],
-    },
-
-    // autogroup:shared are your friends who are connecting to your shared machine. This control restricts the port your friends may use to connect to your machine. If you changed your Haven port, make sure to change the ports to whatever port you set. Otherwise, leave everything below as default. 
-    {
-      "src": ["autogroup:shared"],
-      "dst": ["*"],
-      "ip":  ["3000", "3001"],
-    },
-  ],
-   }
-  ```
-
-### Step 4: Share, not invite
-- This step is critical. There is a fundamental difference between inviting someone to your tailnet, and simply sharing one machine. The settings above DO NOT apply if you invite someone to your tailnet, and they will get access to your **whole tailnet**. If your Haven computer is running any other web server, or if you add more Tailscale devices down the road, your friends will have access to them. You do not want this. 
-- To **SHARE** a device, go to your Tailscale admin page, click the 3 dot menu next to your device, and click **Share**. If you are sharing a link, make sure **Reusable link** is turned off. This way, each link you use only works once, and you maintain complete control over who can access your shared device.
-
-### Step 5: Sharing the link
-- Once you provide a share link to your friend, he will need to make an account on Tailscale, download the client and connect on his machine. Please note, your friend **does not** need to share anything from his end. Only the person hosting Haven will have to share.
-- Once your friend accepts the link, his device will now be able to reach your shared device.
-- Sharing is one way. Your friend's device will not appear in your admin page, and it does not need to. If he can see your machine on his end, the share worked.
-
-### Step 6: Usage
-- Once everything is wired up, go to your Tailscale admin page, find your device, and notice the **IP Address** listed next to your device. This is your Tailnet IP address. It is not your actual IP address.
-- Accessing Haven is as simple as going to https://TailscaleIPAddress:3000 (or whatever port you configured in ACL settings)
-- Please note: If you are the one hosting Haven, you may also access Haven from your LAN IP that Haven is running on (typically 192.168.X.X), but your friends **need** to use your Tailscale IP.
-
----
-
-## ☁️ Cloudflare Tunnel (No Port Forwarding)
-
-If you don't want to mess with port forwarding or expose your home IP, you can use a **Cloudflare Tunnel** to securely share your Haven server over the internet. Cloudflare gives your server a public URL and handles all the networking: no router config needed.
-
-### Step 1: Install Cloudflared
-
-**Windows (via winget):**
-```powershell
-winget install cloudflare.cloudflared
-```
-
-**macOS (via Homebrew):**
-```bash
-brew install cloudflared
-```
-
-**Linux:**
-```bash
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
-chmod +x /usr/local/bin/cloudflared
-```
-
-Verify it installed:
-```bash
-cloudflared --version
-```
-
-### Step 2: Enable the Tunnel in Haven
-
-1. Start Haven normally (`Start Haven.bat`)
-2. Log in as admin
-3. Open **⚙️ Settings** → scroll to the **Tunnel** section
-4. Select **Cloudflare** as the tunnel provider
-5. Flip the toggle **on**
-6. Haven will start cloudflared and display your public URL (e.g. `https://abc-def-123.trycloudflare.com`)
-
-### Step 3: Share the URL
-
-Copy the tunnel URL and send it to your friends. That's it: no port forwarding, no firewall rules, no IP address sharing. The URL changes each time you restart the tunnel, so you'll need to re-share it.
-
-### How It Works
-
-- Haven runs **cloudflared** as a child process that creates an encrypted tunnel to Cloudflare's network
-- Cloudflare assigns a random public URL and proxies traffic through the tunnel to your local server
-- Your home IP is **never exposed** to visitors; they only see Cloudflare's IP
-- Since Haven runs HTTPS with a self-signed cert, the tunnel connects to `https://localhost:3000` with TLS verification disabled (the Cloudflare→You leg is already encrypted by the tunnel itself)
-
-### Tunnel vs. Port Forwarding
-
-| | Port Forwarding | Cloudflare Tunnel |
-|---|---|---|
-| **Router config** | Required | None |
-| **Exposes home IP** | Yes | No |
-| **Firewall rules** | Required | None |
-| **Stable URL** | Your IP (may change) | Random URL (changes on restart) |
-| **Push notifications** | ✅ (if HTTPS) | ✅ |
-| **Voice chat** | ✅ | ✅ |
-
-> 💡 **Tip:** For a permanent URL, you can set up a free Cloudflare account and use a named tunnel with your own domain. See [Cloudflare's tunnel docs](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) for details.
-
-### Troubleshooting Tunnels
-
-| Problem | Solution |
-|---------|----------|
-| "cloudflared not found" | Restart your terminal after installing, or add it to your PATH manually |
-| Tunnel shows "502 Bad Gateway" | Make sure Haven is running before enabling the tunnel |
-| URL changes every restart | Normal for quick tunnels. Use a named tunnel + custom domain for permanence |
-| "Connection refused" in tunnel logs | Haven isn't running on port 3000, or it's running HTTP instead of HTTPS |
-
----
-
-## 🔁 Reverse Proxy (Caddy, nginx, Traefik)
-
-If you already have a domain and want Haven to live behind a proper reverse proxy (so you get a real Let's Encrypt cert, no browser warnings, and the same `https://chat.example.com` URL every time), set `FORCE_HTTP=true` and let the proxy terminate TLS for you.
-
-### Quick Recipe (Caddy)
-
-1. **Stop Haven** if it's running.
-2. Add the following line to your `.env` file (create one next to `package.json` if it doesn't exist):
-
-   ```env
-   FORCE_HTTP=true
-   ```
-
-   This tells Haven to skip its built-in self-signed cert generation and listen on plain HTTP on port 3000. Caddy will handle the HTTPS leg.
-
-3. **Install Caddy** ([caddyserver.com/download](https://caddyserver.com/download)) and create a `Caddyfile`:
-
-   ```caddy
-   chat.example.com {
-       reverse_proxy localhost:3000
-   }
-   ```
-
-   Replace `chat.example.com` with your real domain. Caddy will auto-fetch a Let's Encrypt cert on first run. Make sure ports **80 and 443** are open / forwarded to the Caddy host.
-
-4. **Start Caddy**, then **start Haven** (`Start Haven.bat` or `npm start`).
-5. Open `https://chat.example.com` in a browser. You should see Haven with a clean padlock and no cert warnings.
-
-### Using a Tunnel + Caddy
-
-If you don't want to port-forward 80/443, point a tunnel (Cloudflare Tunnel, Tailscale Funnel, ngrok, etc.) at the Caddy host. The flow becomes:
-
-```
-Browser → Tunnel (HTTPS) → Caddy (HTTPS) → Haven (HTTP, FORCE_HTTP=true)
-```
-
-Caddy still terminates TLS for the LAN leg, and the tunnel terminates a second TLS layer for the public leg. That's the setup minecraft_bread used successfully (see the support thread for the full step-by-step).
-
-### nginx Snippet
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name chat.example.com;
-
-    ssl_certificate     /etc/letsencrypt/live/chat.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/chat.example.com/privkey.pem;
-
-    location / {
-        proxy_pass         http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header   Upgrade $http_upgrade;
-        proxy_set_header   Connection "upgrade";
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_read_timeout 86400;
-    }
-}
-```
-
-The `Upgrade` / `Connection` headers are required for Socket.io WebSocket traffic; without them voice chat and live messages will silently break.
-
-### Common Gotchas
-
-| Problem | Fix |
-|---------|-----|
-| Browser shows Haven's self-signed cert warning instead of the Let's Encrypt one | You forgot `FORCE_HTTP=true`. Haven is still serving its own HTTPS on 3000 and Caddy is just proxying that. Add the line, restart Haven. |
-| Voice chat / live updates don't work behind nginx | Add the `Upgrade` and `Connection "upgrade"` headers shown above. Caddy handles WebSockets automatically. |
-| Mixed-content errors in browser console | Make sure the proxy forwards `X-Forwarded-Proto $scheme` so Haven knows it's serving over HTTPS. |
-| "502 Bad Gateway" from Caddy | Haven isn't running, or it's still bound to HTTPS on 3000. Double-check `FORCE_HTTP=true` is in `.env` and you restarted Haven after adding it. |
-
-> 💡 A full Docker Compose example with Traefik + coturn lives in [`docs/examples/haven-traefik-coturn/`](docs/examples/haven-traefik-coturn/) if you'd rather run the whole stack containerised.
-
----
-
-## 📤 Outgoing Proxy
-
-If the server can only reach the internet through a proxy (for example a Docker container with no route out and a filtering proxy beside it), set the standard proxy variables in `.env`:
-
-```env
-https_proxy=http://proxy.example:3128
-http_proxy=http://proxy.example:3128
-no_proxy=localhost,127.0.0.1
-```
-
-Link previews, the media proxy, bot callbacks, push notifications and Haven's other outgoing requests then go through the proxy. Hosts listed in `no_proxy` (names, subdomains, IP addresses or CIDR ranges) connect directly. Only `http://` proxy addresses are supported. Voice traffic is UDP and does not use the proxy.
-
-> ⚠️ **Your proxy becomes part of Haven's security.** For a request through the proxy, Haven can't pin the connection to the address it checked, and names it can't resolve itself are passed to the proxy. Haven still refuses private, loopback and cloud metadata addresses it can see, but a proxy that can reach your internal network could let members use link previews to reach hosts behind it. Restrict the proxy to the destinations Haven needs, ideally with whole-hostname allowlist rules.
-
----
-
-## 🔧 Router-Specific Tips
-
-### Xfinity / Comcast (XB7 Gateway)
-
-1. Open the **Xfinity app** on your phone
-2. Go to **WiFi** → scroll down → **Advanced settings** → **Port forwarding**
-3. Select your PC from the device list
-4. Add port `3000` (TCP/UDP) and apply
-5. **Important:** Go to **Home** → disable **xFi Advanced Security** (it silently blocks all inbound connections)
-6. Verify the **reserved IP** in port forwarding matches your PC's actual IP (`ipconfig` to check)
-
-### Common Issues
-
-| Problem | Solution |
-|---------|----------|
-| **"SSL_ERROR_RX_RECORD_TOO_LONG"** | Browser is using `https://` but server is running HTTP. Change URL to `http://localhost:3000`, or unset `FORCE_HTTP` and restart (see Troubleshooting below) |
-| Friends get "took too long to respond" | Port forwarding not set up, or firewall blocking |
-| Friends get "connection refused" | Server isn't running: launch `Start Haven.bat` |
-| Can't connect with `https://` | Make sure you're using port 3000, not 443 |
-| Voice chat doesn't work | Must use `https://`. Voice requires a secure connection |
-| "Certificate error" in browser | Normal. Click Advanced → Proceed |
-
----
-
-## 🎨 Themes
-
-Haven comes with 6 themes. Switch between them using the theme buttons at the bottom of the left sidebar:
-
-| Button | Theme | Style |
-|--------|-------|-------|
-| ⬡ | **Haven** | Deep blue/purple (default) |
-| 🎮 | **Discord** | Dark gray with blue accents |
-| Ⅿ | **Matrix** | Black and green, scanline overlay |
-| ◈ | **Tron** | Black with neon cyan glow |
-| ⌁ | **HALO** | Military green with Mjolnir vibes |
-| ⚜ | **LoTR** | Parchment gold and deep brown |
-| 🌆 | **Cyberpunk** | Neon pink and electric yellow |
-| ❄ | **Nord** | Arctic blue and frost |
-| 🧛 | **Dracula** | Deep purple and blood red |
-| ⚔ | **Bloodborne** | Gothic crimson and ash |
-| ⬚ | **Ice** | Pale blue and white |
-| 🌊 | **Abyss** | Deep ocean darkness |
-
-Your theme choice is saved per browser.
 
 ### Bundled optional themes and plugins
 
@@ -822,7 +453,368 @@ Two things worth knowing before you plan around this:
 
 ---
 
-## 🎤 Voice Chat
+## Setting Up Remote Access (Friends Over the Internet)
+
+If your friends are **not** on your local WiFi, you need a way for them to reach
+your machine. There are three routes here, least safe first:
+
+1. **Port forwarding** (this section): simplest, but it puts your Haven login page
+   in front of the whole internet.
+2. **[Tailscale / WireGuard](#tailscale--wireguard-no-port-forwarding-no-exposed-ip)**:
+   the safest. Nothing is exposed publicly and you never touch your router.
+3. **[Cloudflare Tunnel](#cloudflare-tunnel-no-port-forwarding)**: a public URL
+   without opening a port or revealing your home IP.
+
+Haven can also run LocalTunnel or Cloudflared for you from **Settings, Server Admin
+Settings, Tunnel** if you would rather not install anything by hand.
+
+### Before you port forward, know what it costs
+
+Opening a port means anybody on the internet can reach your Haven login page. Some
+of that is not obvious up front:
+
+- **Bot networks.** Automated scanners sweep the whole internet looking for
+  misconfigured services. Within minutes of forwarding a port, your address starts
+  getting probed. Almost all of it bounces off Haven and your firewall, but the risk
+  is not zero, and it uses a little of your bandwidth around the clock.
+- **DHCP drift.** Most home routers hand out addresses dynamically, so the machine
+  running Haven can land on a different local IP after a reboot. Your port forward
+  then points at whatever device took the old address, which means your friends
+  cannot reach Haven and something else on your network is exposed instead. Assign
+  the Haven machine a static IP to prevent this, see the DHCP reservation step below.
+- **Password guessing.** Haven rate-limits sign-in attempts (20 per 15 minutes per
+  IP address) and supports two-factor authentication, so it is not defenceless. But
+  a login page on the open internet will be tried, so use a password you have not
+  used anywhere else and turn on MFA.
+
+If that is acceptable to you, carry on. If not, use Tailscale or a tunnel instead.
+
+### Find Your Public IP
+
+Visit [whatismyip.com](https://whatismyip.com). The number shown (like `203.0.113.50`) is what your friends will use.
+
+### Port Forwarding on Your Router
+
+Every router is different, but the general steps are:
+
+1. **Log into your router**: usually `http://192.168.1.1` or `http://10.0.0.1` in your browser
+2. Find **Port Forwarding** (sometimes called NAT, Virtual Servers, or Applications)
+3. Create a new rule:
+
+   | Field | Value |
+   |-------|-------|
+   | Port | `3000` |
+   | Protocol | TCP |
+   | Internal IP | Your PC's local IP (e.g. `10.0.0.60`) |
+
+4. Save and apply
+
+> **How to find your local IP:** Open Command Prompt and type `ipconfig`. Look for the "IPv4 Address" under your Ethernet or WiFi adapter.
+
+### Windows Firewall
+
+The server needs permission to accept incoming connections:
+
+1. Open **Start Menu** → search **"Windows Defender Firewall"**
+2. Click **"Advanced settings"** on the left
+3. Click **"Inbound Rules"** → **"New Rule..."**
+4. Select **Port** → **TCP** → enter `3000`
+5. Allow the connection → apply to all profiles
+6. Name it something like "Haven Chat"
+
+Or run this in PowerShell (as Administrator):
+```powershell
+New-NetFirewallRule -DisplayName "Haven_Chat" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow
+```
+
+### Tell Your Friends
+
+Send them this URL:
+```
+https://YOUR_PUBLIC_IP:3000
+```
+
+> ⚠️ **Certificate Warning:** Your friends' browsers will show a security warning because Haven uses a self-signed certificate. This is normal and expected. Tell them to click **"Advanced"** → **"Proceed to site"**. The connection is still encrypted.
+
+> **No OpenSSL? No problem.** If there is no certificate when Haven starts, it makes one itself, so HTTPS works on a clean Windows install. To run plain HTTP on purpose (behind a reverse proxy that handles TLS, or LAN only), set `FORCE_HTTP=true` in your `.env`. Voice, camera and the mobile app need HTTPS on any address other than localhost.
+
+---
+
+## Tailscale / WireGuard (No Port Forwarding, No Exposed IP)
+
+Port forwarding above opens your Haven login page to the entire internet.
+Tailscale does not: it builds an encrypted tunnel straight between your
+machine and your friend's, so nothing is exposed publicly and you never touch
+your router or firewall. It is the safest of the three methods here.
+
+> #### Voice chat over a *shared device*
+> Text chat, uploads, and everything that flows **through** the Haven server work
+> perfectly with the shared-device setup below. **Voice is the exception.** Haven
+> voice is peer-to-peer: everyone in a call opens a direct connection to every
+> *other* person in the call, not just to the host. Sharing a single device only
+> puts the **host** machine on the shared path, so your friends can reach the host
+> but not each other, and the return path from the host back to a friend isn't
+> guaranteed either. The classic symptom is **one-directional audio**: everyone
+> hears the host, but the host can't hear anyone. This isn't a bug in the
+> shared-device config, it's that a single shared machine can't provide the full
+> mesh of paths a peer-to-peer call needs.
+>
+> Two ways to get voice working, most recommended first:
+> 1. **Add a TURN server** under **Settings, Admin, Voice & Connectivity
+>    (STUN/TURN)**. TURN relays all voice media through one reachable point, so the
+>    peer-to-peer paths are no longer required and the secure single-device sharing
+>    below keeps working exactly as written. You can run your own
+>    [coturn](https://github.com/coturn/coturn) or use a hosted TURN provider.
+> 2. **Put everyone on the same tailnet** instead of sharing one device. Tailnet
+>    members get direct connectivity to one another, so the mesh forms and voice
+>    works both ways. This works, but it gives your friends **broader access than
+>    device-sharing does**, so read **Step 4** below and only do this if you accept
+>    that tradeoff.
+
+- Unlike port forwarding, Tailscale does not require you to touch your router or your computer's firewall. Tailscale uses [Wireguard](https://en.wikipedia.org/wiki/WireGuard) under the hood, which is the same protocol many reputable VPN companies use. Wireguard creates an encrypted, end-to-end tunnel from your computer to your friend's computer. Most firewalls, like the one your router and computer use, allow outbound connections by default. Tailscale establishes a persistent, outbound connection to the Tailscale coordination server, which then allows your friends to connect. This is why configuring your firewall is not a requirement for this method. 
+  
+- Anyone who wants access to your Haven server will first need a **Share link** generated by you, the administrator, via your Tailscale admin dashboard. If you follow this guide correctly, your friend will **only** have access to Haven and strictly nothing else on your device.
+- The obvious tradeoff with this approach is setup. Both you and your friends will need to connect to Tailscale anytime you want to access Haven. But the bright side of this approach is once setup is complete, and you're logged in, connecting to Tailscale is as simple as flipping a switch. Tailscale works on pretty much all devices you can think of, and it's seamless.
+- To be clear, Tailscale does change your device's DNS settings. But unlike a traditional VPN, Tailscale **does not** route your internet traffic through some remote server. Tailscale is **purely** a connection between your computer, and your friend's computer. Your IP does not change and your internet speed doesn't slow down in any meaningful way.
+
+### Step 1 - Make an account
+- Visit https://tailscale.com and make an account. Tailscale will walk you through downloading Tailscale onto your device, you may proceed with that.
+
+- Once Tailscale is running on your machine, it may ask you to add another device, click the "Skip" button at the bottom of the page.
+
+ 
+### Step 2: Navigate to Tailscale admin page
+Click [here](https://console.tailscale.com/admin/machines) to access the admin page. Here, you will see a list of all the devices on your Tailnet. 
+
+### Step 3: Lock down access
+- Currently, if you share access to your Tailscale device, any other ports that are open on your machine will be reachable by your friends. We solve this issue by setting up ACL rules. ACL Rules will ensure only Haven is accessible by your friends, and strictly nothing else.
+- On your Tailscale admin page, click "Access Controls".
+- Click "JSON Editor" and replace everything in that section with the following, secure config:
+   - Please ensure you copy everything, including the trailing comma at the end of the code block 
+  ```
+  {
+  "grants": [
+    // autogroup:member are members of your tailnet. We are sharing a device with your friends, NOT adding them to our tailnet. So you are the only person on your tailnet who should have this permission. And therefore, we are giving members of this tailnet unrestricted access to everything.
+    {
+      "src": ["autogroup:member"],
+      "dst": ["*"],
+      "ip":  ["*"],
+    },
+
+    // autogroup:shared are your friends who are connecting to your shared machine. This control restricts the port your friends may use to connect to your machine. If you changed your Haven port, make sure to change the ports to whatever port you set. Otherwise, leave everything below as default. 
+    {
+      "src": ["autogroup:shared"],
+      "dst": ["*"],
+      "ip":  ["3000", "3001"],
+    },
+  ],
+   }
+  ```
+
+### Step 4: Share, not invite
+- This step is critical. There is a fundamental difference between inviting someone to your tailnet, and simply sharing one machine. The settings above DO NOT apply if you invite someone to your tailnet, and they will get access to your **whole tailnet**. If your Haven computer is running any other web server, or if you add more Tailscale devices down the road, your friends will have access to them. You do not want this. 
+- To **SHARE** a device, go to your Tailscale admin page, click the 3 dot menu next to your device, and click **Share**. If you are sharing a link, make sure **Reusable link** is turned off. This way, each link you use only works once, and you maintain complete control over who can access your shared device.
+
+### Step 5: Sharing the link
+- Once you provide a share link to your friend, he will need to make an account on Tailscale, download the client and connect on his machine. Please note, your friend **does not** need to share anything from his end. Only the person hosting Haven will have to share.
+- Once your friend accepts the link, his device will now be able to reach your shared device.
+- Sharing is one way. Your friend's device will not appear in your admin page, and it does not need to. If he can see your machine on his end, the share worked.
+
+### Step 6: Usage
+- Once everything is wired up, go to your Tailscale admin page, find your device, and notice the **IP Address** listed next to your device. This is your Tailnet IP address. It is not your actual IP address.
+- Accessing Haven is as simple as going to https://TailscaleIPAddress:3000 (or whatever port you configured in ACL settings)
+- Please note: If you are the one hosting Haven, you may also access Haven from your LAN IP that Haven is running on (typically 192.168.X.X), but your friends **need** to use your Tailscale IP.
+
+---
+
+## Cloudflare Tunnel (No Port Forwarding)
+
+If you don't want to mess with port forwarding or expose your home IP, you can use a **Cloudflare Tunnel** to securely share your Haven server over the internet. Cloudflare gives your server a public URL and handles all the networking: no router config needed.
+
+### Step 1: Install Cloudflared
+
+**Windows (via winget):**
+```powershell
+winget install cloudflare.cloudflared
+```
+
+**macOS (via Homebrew):**
+```bash
+brew install cloudflared
+```
+
+**Linux:**
+```bash
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
+chmod +x /usr/local/bin/cloudflared
+```
+
+Verify it installed:
+```bash
+cloudflared --version
+```
+
+### Step 2: Enable the Tunnel in Haven
+
+1. Start Haven normally (`Start Haven.bat`)
+2. Log in as admin
+3. Open **⚙️ Settings** → scroll to the **Tunnel** section
+4. Select **Cloudflare** as the tunnel provider
+5. Flip the toggle **on**
+6. Haven will start cloudflared and display your public URL (e.g. `https://abc-def-123.trycloudflare.com`)
+
+### Step 3: Share the URL
+
+Copy the tunnel URL and send it to your friends. That's it: no port forwarding, no firewall rules, no IP address sharing. The URL changes each time you restart the tunnel, so you'll need to re-share it.
+
+### How It Works
+
+- Haven runs **cloudflared** as a child process that creates an encrypted tunnel to Cloudflare's network
+- Cloudflare assigns a random public URL and proxies traffic through the tunnel to your local server
+- Your home IP is **never exposed** to visitors; they only see Cloudflare's IP
+- Since Haven runs HTTPS with a self-signed cert, the tunnel connects to `https://localhost:3000` with TLS verification disabled (the Cloudflare→You leg is already encrypted by the tunnel itself)
+
+### Tunnel vs. Port Forwarding
+
+| | Port Forwarding | Cloudflare Tunnel |
+|---|---|---|
+| **Router config** | Required | None |
+| **Exposes home IP** | Yes | No |
+| **Firewall rules** | Required | None |
+| **Stable URL** | Your IP (may change) | Random URL (changes on restart) |
+| **Push notifications** | ✅ (if HTTPS) | ✅ |
+| **Voice chat** | ✅ | ✅ |
+
+> 💡 **Tip:** For a permanent URL, you can set up a free Cloudflare account and use a named tunnel with your own domain. See [Cloudflare's tunnel docs](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) for details.
+
+### Troubleshooting Tunnels
+
+| Problem | Solution |
+|---------|----------|
+| "cloudflared not found" | Restart your terminal after installing, or add it to your PATH manually |
+| Tunnel shows "502 Bad Gateway" | Make sure Haven is running before enabling the tunnel |
+| URL changes every restart | Normal for quick tunnels. Use a named tunnel + custom domain for permanence |
+| "Connection refused" in tunnel logs | Haven isn't running on port 3000, or it's running HTTP instead of HTTPS |
+
+---
+
+## Reverse Proxy (Caddy, nginx, Traefik)
+
+If you already have a domain and want Haven to live behind a proper reverse proxy (so you get a real Let's Encrypt cert, no browser warnings, and the same `https://chat.example.com` URL every time), set `FORCE_HTTP=true` and let the proxy terminate TLS for you.
+
+### Quick Recipe (Caddy)
+
+1. **Stop Haven** if it's running.
+2. Add the following line to your `.env` file (create one next to `package.json` if it doesn't exist):
+
+   ```env
+   FORCE_HTTP=true
+   ```
+
+   This tells Haven to skip its built-in self-signed cert generation and listen on plain HTTP on port 3000. Caddy will handle the HTTPS leg.
+
+3. **Install Caddy** ([caddyserver.com/download](https://caddyserver.com/download)) and create a `Caddyfile`:
+
+   ```caddy
+   chat.example.com {
+       reverse_proxy localhost:3000
+   }
+   ```
+
+   Replace `chat.example.com` with your real domain. Caddy will auto-fetch a Let's Encrypt cert on first run. Make sure ports **80 and 443** are open / forwarded to the Caddy host.
+
+4. **Start Caddy**, then **start Haven** (`Start Haven.bat` or `npm start`).
+5. Open `https://chat.example.com` in a browser. You should see Haven with a clean padlock and no cert warnings.
+
+### Using a Tunnel + Caddy
+
+If you don't want to port-forward 80/443, point a tunnel (Cloudflare Tunnel, Tailscale Funnel, ngrok, etc.) at the Caddy host. The flow becomes:
+
+```
+Browser → Tunnel (HTTPS) → Caddy (HTTPS) → Haven (HTTP, FORCE_HTTP=true)
+```
+
+Caddy still terminates TLS for the LAN leg, and the tunnel terminates a second TLS layer for the public leg. That's the setup minecraft_bread used successfully (see the support thread for the full step-by-step).
+
+### nginx Snippet
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name chat.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/chat.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/chat.example.com/privkey.pem;
+
+    location / {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+    }
+}
+```
+
+The `Upgrade` / `Connection` headers are required for Socket.io WebSocket traffic; without them voice chat and live messages will silently break.
+
+### Common Gotchas
+
+| Problem | Fix |
+|---------|-----|
+| Browser shows Haven's self-signed cert warning instead of the Let's Encrypt one | You forgot `FORCE_HTTP=true`. Haven is still serving its own HTTPS on 3000 and Caddy is just proxying that. Add the line, restart Haven. |
+| Voice chat / live updates don't work behind nginx | Add the `Upgrade` and `Connection "upgrade"` headers shown above. Caddy handles WebSockets automatically. |
+| Mixed-content errors in browser console | Make sure the proxy forwards `X-Forwarded-Proto $scheme` so Haven knows it's serving over HTTPS. |
+| "502 Bad Gateway" from Caddy | Haven isn't running, or it's still bound to HTTPS on 3000. Double-check `FORCE_HTTP=true` is in `.env` and you restarted Haven after adding it. |
+
+> 💡 A full Docker Compose example with Traefik + coturn lives in [`docs/examples/haven-traefik-coturn/`](docs/examples/haven-traefik-coturn/) if you'd rather run the whole stack containerised.
+
+---
+
+## Outgoing Proxy
+
+If the server can only reach the internet through a proxy (for example a Docker container with no route out and a filtering proxy beside it), set the standard proxy variables in `.env`:
+
+```env
+https_proxy=http://proxy.example:3128
+http_proxy=http://proxy.example:3128
+no_proxy=localhost,127.0.0.1
+```
+
+Link previews, the media proxy, bot callbacks, push notifications and Haven's other outgoing requests then go through the proxy. Hosts listed in `no_proxy` (names, subdomains, IP addresses or CIDR ranges) connect directly. Only `http://` proxy addresses are supported. Voice traffic is UDP and does not use the proxy.
+
+> ⚠️ **Your proxy becomes part of Haven's security.** For a request through the proxy, Haven can't pin the connection to the address it checked, and names it can't resolve itself are passed to the proxy. Haven still refuses private, loopback and cloud metadata addresses it can see, but a proxy that can reach your internal network could let members use link previews to reach hosts behind it. Restrict the proxy to the destinations Haven needs, ideally with whole-hostname allowlist rules.
+
+---
+
+## Router-Specific Tips
+
+### Xfinity / Comcast (XB7 Gateway)
+
+1. Open the **Xfinity app** on your phone
+2. Go to **WiFi** → scroll down → **Advanced settings** → **Port forwarding**
+3. Select your PC from the device list
+4. Add port `3000` (TCP/UDP) and apply
+5. **Important:** Go to **Home** → disable **xFi Advanced Security** (it silently blocks all inbound connections)
+6. Verify the **reserved IP** in port forwarding matches your PC's actual IP (`ipconfig` to check)
+
+### Common Issues
+
+| Problem | Solution |
+|---------|----------|
+| **"SSL_ERROR_RX_RECORD_TOO_LONG"** | Browser is using `https://` but server is running HTTP. Change URL to `http://localhost:3000`, or unset `FORCE_HTTP` and restart (see Troubleshooting below) |
+| Friends get "took too long to respond" | Port forwarding not set up, or firewall blocking |
+| Friends get "connection refused" | Server isn't running: launch `Start Haven.bat` |
+| Can't connect with `https://` | Make sure you're using port 3000, not 443 |
+| Voice chat doesn't work | Must use `https://`. Voice requires a secure connection |
+| "Certificate error" in browser | Normal. Click Advanced → Proceed |
+
+---
+
+## Voice Chat
 
 1. Join a text channel first
 2. Click **🎤 Join Voice** in the channel header
@@ -887,7 +879,7 @@ Restart Haven, and voice/screen sharing will work across any network.
 
 ---
 
-## 🎮 Rich Presence (What You're Playing & Listening To)
+## Rich Presence (What You're Playing & Listening To)
 
 Haven can show your current game or track next to your name in the member list,
 and on your profile card. Games take priority in the member list so the sidebar
@@ -941,7 +933,7 @@ use **Change key** on that row.
 
 ---
 
-## 🔔 Push Notifications
+## Push Notifications
 
 Push notifications let you receive alerts when someone messages a channel you're in, even when the Haven tab is in the background or closed.
 
@@ -990,7 +982,7 @@ Push notifications let you receive alerts when someone messages a channel you're
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 Haven creates a `.env` config file automatically on first launch. You do not need
 to create or rename anything. It lives in your **data directory**:
@@ -1051,7 +1043,7 @@ conflict.
 
 ---
 
-## 💡 Tips
+## Tips
 
 - **Bookmark the URL**, so you don't have to type the IP every time
 - **Keep the bat window open**: closing it stops the server
@@ -1061,7 +1053,7 @@ conflict.
 
 ---
 
-## 🔐 End-to-End Encryption (E2E)
+## End-to-End Encryption (E2E)
 
 All direct messages in Haven are **end-to-end encrypted**. The server never has access to the plaintext of your DMs or the keys needed to decrypt them.
 
@@ -1119,12 +1111,12 @@ Click the **🔐** button in the DM header to view your **safety number**, a 60-
 
 ---
 
-## 🛶 Ferry (Discord Bridge)
+## Ferry (Discord Bridge)
 
 Ferry relays messages between your Haven channels and Discord channels. Haven users
 appear on Discord under their own names, and Discord messages show up in Haven.
 
-The same bot can also copy your Discord server's history into Haven: see [Importing from Discord](#-importing-from-discord).
+The same bot can also copy your Discord server's history into Haven: see [Importing from Discord](#importing-from-discord).
 
 **Every Haven server needs its own Discord bot.** Haven cannot ship a shared one:
 Discord caps unverified applications at 100 servers and verification requires a company
@@ -1248,7 +1240,7 @@ The Ferry panel shows the connection state and the last error on each pairing.
 
 ---
 
-## ⌨️ Slash Commands & Shortcuts
+## Slash Commands & Shortcuts
 
 Type `/` in the message box to see the full list with descriptions. A selection:
 
@@ -1333,7 +1325,7 @@ off under Settings, Sounds.
 
 ---
 
-## 🛡️ Admin & Moderation
+## Admin & Moderation
 
 Admin controls live in **Settings** (the gear icon in the sidebar). If you
 registered with the admin username you have all of them; everything below can also
@@ -1364,7 +1356,7 @@ be handed to others through the role system, one permission at a time.
 
 ---
 
-## 💾 Backing Up Your Data
+## Backing Up Your Data
 
 All your data lives in a dedicated directory **outside** the Haven code folder:
 
@@ -1398,7 +1390,7 @@ uploads folder will not run the server out of RAM.
 
 ---
 
-## 🎞️ GIF Search Setup
+## GIF Search Setup
 
 Haven's GIF picker is powered by **GIPHY** and needs a free API key.
 
@@ -1422,7 +1414,7 @@ picker uses; without it the server tries GIPHY first, then KLIPY, then Tenor.
 
 ---
 
-## 🌐 Translations
+## Translations
 
 Haven ships in 8 languages: English, French, German, Spanish, Polish, Russian,
 Chinese and Brazilian Portuguese. Users pick one in **Settings → Language** or on
@@ -1449,7 +1441,7 @@ issue.
 
 ---
 
-## 🤖 Bot & Webhook Developer Guide
+## Bot & Webhook Developer Guide
 
 Haven has a built-in bot API powered by webhooks. Bots can send messages, delete messages, play soundboard sounds, and register custom slash commands.
 
@@ -1601,7 +1593,7 @@ If your webhook has a `callback_url` and `callback_secret` configured, Haven wil
 
 ---
 
-## 🆘 Troubleshooting
+## Troubleshooting
 
 **"SSL_ERROR_RX_RECORD_TOO_LONG" or "ERR_SSL_PROTOCOL_ERROR" in browser**
 → Your browser is trying to connect via `https://` but the server is actually running in HTTP mode. Haven makes its own self-signed certificate on first start (no OpenSSL needed), so this now only happens when `FORCE_HTTP=true` is set in your `.env`, or when the certificate files in your data directory are unreadable.
