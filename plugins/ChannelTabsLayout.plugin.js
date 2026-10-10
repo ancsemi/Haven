@@ -197,8 +197,39 @@ class ChannelTabsLayout {
     this._moveJoinCreateSections();
     this._bindEvents();
 
-    const savedTab = localStorage.getItem('activeChannelTab');
-    this._setChannelTab(savedTab === 'DMs' ? 'DMs' : 'channels');
+    this._setChannelTab(this._loadActiveTab() === 'DMs' ? 'DMs' : 'channels');
+  }
+
+  // The open tab lives with the plugin's own data, not in a loose
+  // localStorage key of its own. The first version used 'activeChannelTab';
+  // pick that up once and drop it.
+  _loadActiveTab() {
+    let legacy = null;
+    try {
+      legacy = localStorage.getItem('activeChannelTab');
+      if (legacy !== null) localStorage.removeItem('activeChannelTab');
+    } catch (error) {
+      console.warn('[Channel Tabs] Could not read the old tab choice:', error);
+    }
+    if (legacy === 'DMs' || legacy === 'channels') {
+      this._saveActiveTab(legacy);
+      return legacy;
+    }
+    try {
+      return HavenApi.Data.load(ChannelTabsLayout.ID, 'activeTab', 'channels');
+    } catch (error) {
+      console.warn('[Channel Tabs] Could not read the tab choice:', error);
+      return 'channels';
+    }
+  }
+
+  _saveActiveTab(tab) {
+    try {
+      HavenApi.Data.save(ChannelTabsLayout.ID, 'activeTab', tab);
+    } catch (error) {
+      // The tab still switches; it just is not remembered after a reload.
+      console.warn('[Channel Tabs] Could not save the tab choice:', error);
+    }
   }
 
   _ensureSplit() {
@@ -414,7 +445,7 @@ class ChannelTabsLayout {
 
     if (!this._tabs || !this._split) return;
 
-    localStorage.setItem('activeChannelTab', tab);
+    this._saveActiveTab(tab);
 
     this._tabs.querySelectorAll('[data-channel-tab]').forEach(button => {
       const active = button.dataset.channelTab === tab;
