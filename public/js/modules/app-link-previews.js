@@ -205,11 +205,8 @@ _fetchLinkPreviews(containerEl) {
   //
   // - this._linkPreviewCache: url -> { data, ts }   (10-minute TTL)
   // - this._linkPreviewInflight: url -> Promise<data>  (dedupe concurrent fetches)
-  if (!this._linkPreviewCache) this._linkPreviewCache = new Map();
-  if (!this._linkPreviewInflight) this._linkPreviewInflight = new Map();
   if (!this._collapsedEmbeds) this._collapsedEmbeds = new Set();
   if (!/\bembed-size-/.test(document.body.className)) this._applyEmbedSize(this._embedSize());
-  const PREVIEW_CLIENT_TTL = 10 * 60 * 1000;
 
   // Thread replies keep their body in .thread-msg-content, and until now no
   // preview card was ever drawn there (#5620).
@@ -261,37 +258,7 @@ _fetchLinkPreviews(containerEl) {
       return; // skip generic link preview for YouTube
     }
 
-    // Resolve preview data via cache → inflight → network, in that order.
-    const fromCache = this._linkPreviewCache.get(url);
-    let dataPromise;
-    if (fromCache && Date.now() - fromCache.ts < PREVIEW_CLIENT_TTL) {
-      dataPromise = Promise.resolve(fromCache.data);
-    } else if (this._linkPreviewInflight.has(url)) {
-      dataPromise = this._linkPreviewInflight.get(url);
-    } else {
-      // Route through the scheduler instead of firing a raw fetch. A channel
-      // full of links (e.g. freshly loaded imported history) used to emit one
-      // request per link all at once, blow past the server's 60/min limit, and
-      // 429 the rest — which returned null and rendered no card, so embeds
-      // "sometimes showed, sometimes didn't". The scheduler caps concurrency
-      // and retries 429s with backoff so every preview eventually resolves.
-      const p = this._scheduleLinkPreview(url)
-        .then(data => {
-          if (data) this._linkPreviewCache.set(url, { data, ts: Date.now() });
-          // Light cap so the cache can't grow unbounded over a long session.
-          if (this._linkPreviewCache.size > 500) {
-            const firstKey = this._linkPreviewCache.keys().next().value;
-            this._linkPreviewCache.delete(firstKey);
-          }
-          return data;
-        })
-        .catch(() => null)
-        .finally(() => { this._linkPreviewInflight.delete(url); });
-      this._linkPreviewInflight.set(url, p);
-      dataPromise = p;
-    }
-
-    dataPromise
+    this._linkPreviewData(url)
       .then(data => {
         if (!data || (!data.title && !data.description && !data.text)) return;
         const msgContent = link.closest('.message-content, .thread-msg-content');
@@ -382,6 +349,38 @@ _fetchLinkPreviews(containerEl) {
       })
       .catch((err) => { console.warn('[Links] could not render the preview card', err); });
   });
+},
+
+// The preview data for one link, from the cache, a fetch already on its way,
+// or the network, in that order. Shared by the chat cards and the forum topic
+// cards (#5745). Resolves to null when there is nothing to show.
+_linkPreviewData(url) {
+  if (!this._linkPreviewCache) this._linkPreviewCache = new Map();
+  if (!this._linkPreviewInflight) this._linkPreviewInflight = new Map();
+  const PREVIEW_CLIENT_TTL = 10 * 60 * 1000;
+  const fromCache = this._linkPreviewCache.get(url);
+  if (fromCache && Date.now() - fromCache.ts < PREVIEW_CLIENT_TTL) return Promise.resolve(fromCache.data);
+  if (this._linkPreviewInflight.has(url)) return this._linkPreviewInflight.get(url);
+  // Route through the scheduler instead of firing a raw fetch. A channel
+  // full of links (e.g. freshly loaded imported history) used to emit one
+  // request per link all at once, blow past the server's 60/min limit, and
+  // 429 the rest, which returned null and rendered no card, so embeds
+  // "sometimes showed, sometimes didn't". The scheduler caps concurrency
+  // and retries 429s with backoff so every preview eventually resolves.
+  const p = this._scheduleLinkPreview(url)
+    .then(data => {
+      if (data) this._linkPreviewCache.set(url, { data, ts: Date.now() });
+      // Light cap so the cache can't grow unbounded over a long session.
+      if (this._linkPreviewCache.size > 500) {
+        const firstKey = this._linkPreviewCache.keys().next().value;
+        this._linkPreviewCache.delete(firstKey);
+      }
+      return data;
+    })
+    .catch((err) => { console.warn('[Links] preview lookup failed', err); return null; })
+    .finally(() => { this._linkPreviewInflight.delete(url); });
+  this._linkPreviewInflight.set(url, p);
+  return p;
 },
 
 // ── Link-preview fetch scheduler ──────────────────────────────────────

@@ -2,6 +2,7 @@
 // remote images for clients so their own addresses never reach other sites.
 
 const { verifyToken } = require('../auth');
+const { youTubeVideoId } = require('../youtubeLink');
 
 module.exports = function registerLinkPreview(deps) {
   const { app } = deps;
@@ -331,6 +332,32 @@ module.exports = function registerLinkPreview(deps) {
             }
           }
         } catch { /* Reddit JSON fallback failed — continue to generic scrape */ }
+      }
+
+      // ── YouTube: the watch page is over a megabyte and its OG tags sit far
+      // past the part the generic scrape reads, so a video came back with no
+      // title and no picture. YouTube's oEmbed endpoint answers with both
+      // (#5745). The thumbnail reaches viewers through the media proxy. ──
+      const ytId = !data ? youTubeVideoId(url) : null;
+      if (ytId) {
+        try {
+          const watch = `https://www.youtube.com/watch?v=${ytId}`;
+          const yResp = await fetch(
+            `https://www.youtube.com/oembed?url=${encodeURIComponent(watch)}&format=json`,
+            { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': PREVIEW_UA, 'Accept': 'application/json' } }
+          );
+          if (yResp.ok) {
+            const oj = await yResp.json();
+            data = {
+              title: oj.title || null,
+              description: oj.author_name || null,
+              image: (typeof oj.thumbnail_url === 'string' && /^https:\/\//i.test(oj.thumbnail_url)) ? oj.thumbnail_url : `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`,
+              siteName: 'YouTube',
+              accentColor: '#ff0000',
+              url
+            };
+          }
+        } catch { /* oEmbed unreachable or not JSON: fall through to the generic scrape */ }
       }
 
       // ── Pixiv — blocks bots for HTML but provides an oEmbed API ────────

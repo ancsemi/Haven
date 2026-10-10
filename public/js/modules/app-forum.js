@@ -125,6 +125,11 @@ _forumActivityOf(msg) {
 
 _forumTitleOf(msg) {
   if (msg.title) return msg.title;
+  // A post that opens with a bare link is titled after what it links to,
+  // once the preview is in (#5745).
+  const lead = this._forumLeadLinkOf(msg);
+  const lp = lead ? this._forumLinkPreviewOf(lead) : null;
+  if (lp && typeof lp.title === 'string' && lp.title.trim()) return lp.title.trim().slice(0, 120);
   const lines = String(msg.content || '').split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^\[file:/.test(l));
   const first = lines[0] || (this._isImageUrl(String(msg.content || '').trim()) ? t('forum.image_topic') : String(msg.content || ''));
   return first.replace(/^#+\s*/, '').replace(/^\*\*(.+)\*\*$/, '$1').slice(0, 120);
@@ -143,7 +148,47 @@ _forumThumbOf(msg) {
     if (!l || l.startsWith('e2e-img:') || l.startsWith('spoiler-img:')) continue;
     if (this._isImageUrl(l)) return l;
   }
-  return null;
+  // No picture in the post: a post that opens with a link shows the link's
+  // own picture, such as a video's thumbnail (#5745).
+  const lead = this._forumLeadLinkOf(msg);
+  const lp = lead ? this._forumLinkPreviewOf(lead) : null;
+  return lp && typeof lp.image === 'string' && /^https?:\/\//i.test(lp.image) ? lp.image : null;
+},
+
+// The link a post opens with, when its first line is nothing but a link.
+_forumLeadLinkOf(msg) {
+  const first = String(msg.content || '').split('\n').map(l => l.trim())
+    .find(l => l && !this._isImageUrl(l) && !/^\[file:/.test(l));
+  return first && /^https?:\/\/\S+$/i.test(first) ? first : null;
+},
+
+_forumLinkPreviewOf(url) {
+  return (this._forumLinkMeta && this._forumLinkMeta.get(url)) || null;
+},
+
+// Asks for the preview of a topic's opening link once, then redraws every
+// card that opens with that link, and the open topic's header, so they show
+// its title and picture (#5745).
+_forumLoadLinkPreview(msg) {
+  const lead = this._forumLeadLinkOf(msg);
+  if (!lead || !this._linkPreviewData) return;
+  if (!this._forumLinkMeta) this._forumLinkMeta = new Map();
+  if (!this._forumLinkAsked) this._forumLinkAsked = new Set();
+  if (this._forumLinkMeta.has(lead) || this._forumLinkAsked.has(lead)) return;
+  this._forumLinkAsked.add(lead);
+  this._linkPreviewData(lead).then(data => {
+    if (!data || (!data.title && !data.image)) return;
+    this._forumLinkMeta.set(lead, { title: data.title || null, image: data.image || null });
+    if (this._forumLinkMeta.size > 500) this._forumLinkMeta.delete(this._forumLinkMeta.keys().next().value);
+    if (!this._forumTopics) return;
+    for (const topic of this._forumTopics.values()) {
+      if (this._forumLeadLinkOf(topic) !== lead) continue;
+      const el = document.querySelector(`.forum-topic[data-msg-id="${topic.id}"]`);
+      if (el) el.replaceWith(this._createForumTopicEl(topic));
+      if (this._activeThreadParent === topic.id) this._forumApplyThreadChrome?.(topic.id);
+    }
+    this._lazyMedia && this._lazyPump && this._lazyPump();
+  }).catch((err) => { console.warn('[Forum] could not show the link preview on a topic', err); });
 },
 
 _forumSortTopics(list) {
@@ -317,7 +362,7 @@ _createForumTopicEl(msg) {
   const cover = blurred ? ` data-nsfw-label="${this._escapeHtml(t('forum.nsfw_reveal'))}"` : '';
   el.innerHTML = `
     ${this._forumAvatarHtml(msg)}
-    ${thumb ? `<div class="forum-topic-thumb"${cover}><img ${this._lazySrcAttr ? this._lazySrcAttr(`src="${this._escapeHtml(thumb)}"`) : `src="${this._escapeHtml(thumb)}"`} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty"${cover}><span>⬡</span></div>`}
+    ${thumb ? `<div class="forum-topic-thumb"${cover}><img ${this._lazySrcAttr ? this._lazySrcAttr(this._imgSrcAttr(thumb)) : this._imgSrcAttr(thumb)} class="chat-image forum-thumb-img" alt=""></div>` : `<div class="forum-topic-thumb forum-topic-thumb-empty"${cover}><span>⬡</span></div>`}
     <div class="forum-topic-body">
       <div class="forum-topic-tags">${msg.nsfw ? `<span class="forum-tag forum-tag-nsfw" title="${this._escapeHtml(t('forum.nsfw'))}">🔞</span>` : ''}${msg.is_archived ? `<span class="forum-tag forum-tag-protected archived-tag" title="${this._escapeHtml(t('app.messages.protected'))}">🛡️</span>` : ''}${msg.closed ? `<span class="forum-tag forum-tag-closed">✔ ${t('forum.closed')}</span>` : ''}${msg.pinned ? `<span class="forum-tag forum-tag-pinned">📌 ${t('forum.pinned')}</span>` : ''}${tags.map(name => { const tg = tagsOf.find(x => x.name === name); return `<span class="forum-tag">${tg && tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(name)}</span>`; }).join('')}</div>
       <div class="forum-topic-title">${unread ? `<span class="forum-unread-dot" title="${t('forum.unread')}"></span>` : ''}${this._escapeHtml(this._forumTitleOf(msg))}</div>
@@ -331,6 +376,7 @@ _createForumTopicEl(msg) {
       </div>
     </div>`;
   this._forumBindVotes?.(el, msg);
+  this._forumLoadLinkPreview(msg);
   el.addEventListener('click', (e) => {
     if (e.target.closest('.forum-topic-edit')) { e.stopPropagation(); this._forumEditTopicMeta(msg.id); return; }
     // The first click on a blurred picture or preview shows it; the title and
@@ -822,7 +868,7 @@ _forumApplyThreadChrome(parentId) {
   ].join('');
   const when = new Date(topic.created_at);
   bar.innerHTML = `
-    ${thumb ? `<div class="thread-forum-thumb"><img src="${this._escapeHtml(thumb)}" alt=""></div>` : ''}
+    ${thumb ? `<div class="thread-forum-thumb"><img ${this._imgSrcAttr(thumb)} alt=""></div>` : ''}
     <div class="thread-forum-text">
       <div class="thread-forum-title">${this._escapeHtml(this._forumTitleOf(topic))}</div>
       ${flags ? `<div class="forum-topic-tags thread-forum-tags">${flags}</div>` : ''}
@@ -859,6 +905,8 @@ _forumThreadRenderTopic() {
   body.className = 'thread-topic-body message-content';
   body.innerHTML = this._formatContent(topic.content || '') + (this._renderAttachmentTags ? this._renderAttachmentTags(topic.attachmentTags) : '');
   container.prepend(body);
+  // The same video player or link card the post gets in chat (#5745).
+  this._fetchLinkPreviews?.(body);
   this._lazyMedia && this._lazyPump && this._lazyPump();
 },
 
