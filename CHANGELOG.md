@@ -6,10 +6,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [Unreleased]
+## [4.21.0] - 2026-10-10
+
+Blog mode for forums, a Channel Tabs layout, safer defaults for public
+servers, a security update for audio uploads, and a round of cleanup.
+
+### Added
+- Forums: Blog mode in Channel Functions (#5742). Only a post's author adds to the post; everyone else replies as comments, shown as a count under each post.
+- Channel Tabs layout (#5749, thanks birdcrazy): tabs for channels and DMs, and one button for joining or creating channels. Pick it under Layout in the theme menu.
+- Forum posts that are just a link (a YouTube video or an article) show its title and picture, and the open post shows the player or link card (#5745).
+
+### Changed
+- One account can start up to 20 new DM conversations an hour (admins are not limited, and existing conversations do not count), and the new-account posting wait now also covers starting a DM. This stops a single new account from messaging everyone on a server.
+- Auto-Mod no longer bans on its own by default: blocked attempts still warn and then mute, and bans are left to moderators. Servers that never changed the Escalation settings move to the new default; anyone who changed them keeps their values.
+- Default Theme and the theme shared in Defaults for New Members are one setting now: changing either changes the other (#5747, thanks Amnibro).
+- Chrome layout: the mic on a channel row sits after the channel options button, so it no longer moves when you hover the row.
+- Docs: Node.js 22 to 26 is required (the docs said 18), and voice is peer to peer by default, with the optional voice relay for large servers.
+- Removed internal planning notes and old installer scripts from the repository.
 
 ### Fixed
-- Default Theme in Appearance & Welcome and the theme in Defaults for New Members no longer disagree (#5747). They are now one setting shown in two places: sharing a theme makes it the Default Theme, changing the Default Theme changes the shared theme, and choosing None takes the theme out of the shared defaults. Before, new members saw the Default Theme on the sign-in page and then switched to the shared theme once they were in.
+- Security: updated music-metadata, which reads uploaded audio files. A crafted file could hang or crash the server.
+- Channel Tabs: Join and Create return to their place when you switch layouts, unread dots stay in step, and Create Temp Channel is back.
 
 ## [4.20.0] - 2026-10-09
 
