@@ -5,6 +5,7 @@ const { ensureSearchIndex } = require('./searchIndex');
 const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('./roleDefaults');
 const { migrateGroupDmTrust } = require('./groupDmSchema');
 const { migrateSelfDms } = require('./selfDmSchema');
+const { applyDefaultUpdates } = require('./settingDefaults');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
 
@@ -526,7 +527,7 @@ function initDatabase() {
   insertSetting.run('automod_block_punycode', 'true');        // homoglyph lookalike domains
   insertSetting.run('automod_block_obfuscated', 'true');      // hxxp:// and evil[.]com defanging
   insertSetting.run('automod_preview_allowlist_only', 'true'); // closes the passive IP leak via og:image
-  insertSetting.run('automod_escalation', '{"windowHours":24,"warnAt":1,"muteAt":3,"muteMinutes":60,"banAt":5}');
+  insertSetting.run('automod_escalation', '{"windowHours":24,"warnAt":1,"muteAt":3,"muteMinutes":60,"banAt":0}'); // bans are left to people
   insertSetting.run('automod_ban_ip', 'false');               // escalated bans also ban recent IPs
   insertSetting.run('automod_log_channel', '');               // channel code to mirror automod actions into
   insertSetting.run('automod_seeded', 'false');               // starter allowlist planted once, see below
@@ -1677,6 +1678,7 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor_id);
     CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
   `);
+  applyDefaultUpdates(db);
 
   // ── Rich presence: linked external accounts ─────────────
   // One row per (user, provider). access_token / refresh_token are stored

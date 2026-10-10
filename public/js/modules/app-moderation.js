@@ -208,7 +208,7 @@ _initAutomodPanel() {
       warnAt: num('automod-warn-at', 1),
       muteAt: num('automod-mute-at', 3),
       muteMinutes: num('automod-mute-minutes', 60),
-      banAt: num('automod-ban-at', 5)
+      banAt: num('automod-ban-at', 0)
     }));
   };
   ['automod-window-hours', 'automod-warn-at', 'automod-mute-at', 'automod-mute-minutes', 'automod-ban-at']
@@ -380,7 +380,7 @@ _applyAutomodSettings() {
     put('automod-warn-at', c.warnAt ?? 1);
     put('automod-mute-at', c.muteAt ?? 3);
     put('automod-mute-minutes', c.muteMinutes ?? 60);
-    put('automod-ban-at', c.banAt ?? 5);
+    put('automod-ban-at', c.banAt ?? 0);
   } catch { /* malformed JSON: leave the fields alone */ }
 
   this._syncAutomodVisibility();

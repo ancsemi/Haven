@@ -45,7 +45,7 @@ const DEFAULTS = {
   automod_block_obfuscated: 'true',         // hxxp:// and evil[.]com defanging
   automod_preview_allowlist_only: 'true',   // only unfurl/inline-render allowlisted hosts
   automod_escalation: JSON.stringify({
-    windowHours: 24, warnAt: 1, muteAt: 3, muteMinutes: 60, banAt: 5
+    windowHours: 24, warnAt: 1, muteAt: 3, muteMinutes: 60, banAt: 0
   }),
   automod_ban_ip: 'false',                  // escalated bans also ban the offender's recent IPs
   automod_log_channel: '',                  // channel code to mirror automod actions into
@@ -278,7 +278,7 @@ function escalationConfig() {
       banAt: Number(cfg.banAt) > 0 ? Number(cfg.banAt) : 0
     };
   } catch {
-    return { windowHours: 24, warnAt: 1, muteAt: 3, muteMinutes: 60, banAt: 5 };
+    return { windowHours: 24, warnAt: 1, muteAt: 3, muteMinutes: 60, banAt: 0 };
   }
 }
 
