@@ -1,6 +1,6 @@
 # Optional LiveKit SFU — Implementation Plan (#76)
 
-Status: planning. Code does not exist yet. Hand this whole doc to the implementer agent (Opus or Sonnet).
+Status: planning. Code does not exist yet.
 
 ---
 
