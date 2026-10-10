@@ -19,6 +19,7 @@ class ChannelTabsLayout {
     this._modalContent = null;
 
     this._moved = [];
+    this._createButtonText = null;
     this._listeners = [];
     this._generatedSplit = false;
     this._split = null;
@@ -140,15 +141,17 @@ class ChannelTabsLayout {
   // Reversible DOM manipulation
   // ─────────────────────────────────────────────────────
 
+  // Only the position is remembered. Haven keeps changing these sections
+  // while the layout is on (the Create section is shown or hidden as
+  // permissions arrive), so putting back an old class or style would undo
+  // Haven's own update.
   _moveElement(element, destination, before = null) {
     if (!element || !element.parentNode) return;
 
     this._moved.push({
       element,
       parent: element.parentNode,
-      nextSibling: element.nextSibling,
-      className: element.getAttribute('class'),
-      style: element.getAttribute('style')
+      nextSibling: element.nextSibling
     });
 
     destination.insertBefore(element, before);
@@ -158,33 +161,22 @@ class ChannelTabsLayout {
     // Restore in reverse order so sibling anchors that were moved
     // elsewhere are restored before their dependants.
     for (let i = this._moved.length - 1; i >= 0; i--) {
-      const record = this._moved[i];
-      const { element, parent, nextSibling } = record;
+      const { element, parent, nextSibling } = this._moved[i];
 
       if (!parent) continue;
       const anchor = nextSibling && nextSibling.parentNode === parent ? nextSibling : null;
 
       parent.insertBefore(element, anchor);
-
-      if (record.className === null) {
-        element.removeAttribute('class');
-      } else {
-        element.setAttribute('class', record.className);
-      }
-
-      if (record.style === null) {
-        element.removeAttribute('style');
-      } else {
-        element.setAttribute('style', record.style);
-      }
-
-      // Restore text only for elements whose text was changed.
-      if (record.textContent !== undefined) {
-        element.textContent = record.textContent;
-      }
     }
 
     this._moved = [];
+
+    // Put back the create button's own label, unless Haven changed it since.
+    const text = this._createButtonText;
+    if (text && text.element.textContent === text.label) {
+      text.element.textContent = text.original;
+    }
+    this._createButtonText = null;
   }
 
   _applyLayout() {
@@ -397,26 +389,18 @@ class ChannelTabsLayout {
     const createSection = document.getElementById('admin-controls');
 
     if (joinSection) {
-      joinSection.classList.add('join-channel-section');
       this._moveElement(joinSection, this._modalContent);
     }
 
     if (createSection) {
-      createSection.classList.add('create-channel-section');
       this._moveElement(createSection, this._modalContent);
     }
 
     const createButton = document.getElementById('create-channel-btn');
     if (createButton) {
-      this._moved.push({
-        element: createButton,
-        parent: createButton.parentNode,
-        nextSibling: createButton.nextSibling,
-        className: createButton.getAttribute('class'),
-        style: createButton.getAttribute('style'),
-        textContent: createButton.textContent
-      });
-      createButton.textContent = 'Create';
+      const label = 'Create';
+      this._createButtonText = { element: createButton, original: createButton.textContent, label };
+      createButton.textContent = label;
     }
   }
 
@@ -543,16 +527,8 @@ class ChannelTabsLayout {
   _openModal() {
     if (!this._modal) return;
 
+    // Haven shows or hides the Create section by permission; leave it be.
     this._modal.style.display = 'flex';
-
-    // The existing app controls this section's visibility according
-    // to the current user's permissions.
-    const createSection = document.getElementById('admin-controls');
-
-    if (createSection) {
-      createSection.style.display = createSection.style.display === 'none' ? 'none' : '';
-    }
-
     document.getElementById('channel-code-input')?.focus();
   }
 
@@ -712,9 +688,7 @@ class ChannelTabsLayout {
       }
 
       html[data-sidebar-tabs-layout="1"] #join-create-modal
-      .join-channel-section,
-      html[data-sidebar-tabs-layout="1"] #join-create-modal
-      .create-channel-section {
+      .channel-tabs-modal-content > .sidebar-section {
         margin-bottom: 8px;
         padding: 0.75rem 1rem;
         border-bottom: 1px solid var(--border);
@@ -744,6 +718,9 @@ class ChannelTabsLayout {
       } catch (_) {}
     }
 
+    // Sections go home before the modal holding them is removed.
+    this._restoreMovedElements();
+
     if (this._modal) {
       this._modal.remove();
       this._modal = null;
@@ -755,7 +732,10 @@ class ChannelTabsLayout {
       this._tabs = null;
     }
 
-    this._restoreMovedElements();
+    for (const id of ['channels-pane', 'dm-pane']) {
+      document.getElementById(id)?.classList.remove('pane-hidden');
+    }
+
     this._removeNotificationHook();
 
     if (this._generatedSplit && this._split) {
