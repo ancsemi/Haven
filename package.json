@@ -40,7 +40,6 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
-    "innosetup-compiler": "^6.3.1",
     "mediasoup-client": "^3.24.1",
     "socket.io-client": "^4.8.1"
   }
