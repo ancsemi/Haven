@@ -7,7 +7,7 @@ Welcome to **Haven**, your private chat server. This guide covers everything you
 ## 📋 What You Need
 
 - **Windows 10 or 11** (macOS / Linux can run it manually)
-- **Node.js** version 18 or newer → [Download here](https://nodejs.org/)
+- **Node.js** version 22 to 26 → [Download here](https://nodejs.org/)
 - About **50 MB** of disk space
 - **OR** just [Docker](https://docs.docker.com/get-docker/), no Node.js needed
 
@@ -830,7 +830,7 @@ Two things worth knowing before you plan around this:
 4. Click **🔇 Mute** to toggle your mic
 5. Click **📞 Leave** to disconnect from voice
 
-Voice chat is **peer-to-peer**: audio goes directly between you and other users, not through the server.
+Voice chat is **peer-to-peer** by default: audio goes directly between you and other users, not through the server. Big servers can turn on the optional voice relay instead (Settings, Large Server Setup).
 
 > Voice requires HTTPS. If you're running locally, use `https://localhost:3000`. For remote connections, use `https://YOUR_IP:3000`.
 

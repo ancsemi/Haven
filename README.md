@@ -5,7 +5,7 @@ account, no telemetry, no paid tier. Free forever.
 
 ![Version](https://img.shields.io/github/v/release/ancsemi/Haven?label=version&color=blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-green)
-![Node](https://img.shields.io/badge/node-18%20to%2026-brightgreen)
+![Node](https://img.shields.io/badge/node-22%20to%2026-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 
 One person runs the server. Everyone else joins with a code. Messages, files and
@@ -78,7 +78,8 @@ is open, no code needed, just sign up. Volunteer-hosted, thanks MutantRabbit.
 
 **Talking**
 
-- Voice chat, peer to peer so audio never routes through the server. Per-user
+- Voice chat, peer to peer by default so audio doesn't pass through the server
+  (an optional voice relay is there for big servers). Per-user
   volume, mute, deafen, noise suppression, talking indicators.
 - Screen sharing, several people at once in a tiled grid. Watch parties work.
 - Listen together with synced playback from Spotify, YouTube and SoundCloud, or a
