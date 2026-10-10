@@ -20,6 +20,8 @@ class ChannelTabsLayout {
 
     this._moved = [];
     this._createButtonText = null;
+    this._notificationHook = null;
+    this._hookTimer = null;
     this._listeners = [];
     this._generatedSplit = false;
     this._split = null;
@@ -193,7 +195,7 @@ class ChannelTabsLayout {
     this._ensureSplit();
     this._createTabs();
     this._createModal();
-    this._installNotificationHook();
+    if (!this._installNotificationHook()) this._retryNotificationHook();
     this._moveJoinCreateSections();
     this._bindEvents();
 
@@ -336,9 +338,20 @@ class ChannelTabsLayout {
     let hasChannelUnread = false;
     let hasDmUnread = false;
 
-    for (const ch of channels) {
-      const count = Object.prototype.hasOwnProperty.call(unreadCounts, ch.code) ? unreadCounts[ch.code] : (ch.unreadCount || 0);
-      if (count <= 0) continue;
+    // Muted channels do not count, the same as Haven's tab title and
+    // desktop badge.
+    let muted = new Set();
+    try {
+      muted = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+    } catch (error) {
+      console.warn('[Channel Tabs] Could not read muted channels:', error);
+    }
+
+    for (const ch of channels || []) {
+      if (!ch || muted.has(ch.code)) continue;
+      const counts = unreadCounts || {};
+      const count = Object.prototype.hasOwnProperty.call(counts, ch.code) ? counts[ch.code] : (ch.unreadCount || 0);
+      if (!(count > 0)) continue;
 
       if (ch.is_dm) {
         hasDmUnread = true;
@@ -374,11 +387,15 @@ class ChannelTabsLayout {
     const plugin = this;
     const hooks = [];
 
-    // Refresh the dots after channel rendering and unread-badge updates.
-    for (const method of ['_renderChannels', '_updateBadge']) {
+    // Refresh the dots after the channel list renders and whenever Haven
+    // recounts unread messages. _updateBadge always ends in _updateTabTitle,
+    // and the paths that skip _updateBadge (reading a DM in PiP, coming back
+    // to the window) call _updateTabTitle directly.
+    for (const method of ['_renderChannels', '_updateTabTitle']) {
       if (typeof app[method] !== 'function') continue;
 
       const original = app[method];
+      const own = Object.prototype.hasOwnProperty.call(app, method);
 
       const wrapped = function (...args) {
         const result = original.apply(this, args);
@@ -387,7 +404,7 @@ class ChannelTabsLayout {
       };
 
       app[method] = wrapped;
-      hooks.push({ method, original, wrapped });
+      hooks.push({ method, original, wrapped, own });
     }
 
     this._notificationHook = { app, hooks };
@@ -398,15 +415,33 @@ class ChannelTabsLayout {
     return true;
   }
 
+  // The layout can come on before Haven's app object exists (a saved
+  // choice applied at page load); keep trying for a little while.
+  _retryNotificationHook(attempt = 0) {
+    clearTimeout(this._hookTimer);
+    this._hookTimer = null;
+    if (!this._engaged || attempt >= 40) return;
+    this._hookTimer = setTimeout(() => {
+      this._hookTimer = null;
+      if (this._engaged && !this._installNotificationHook()) {
+        this._retryNotificationHook(attempt + 1);
+      }
+    }, 250);
+  }
+
   _removeNotificationHook() {
+    clearTimeout(this._hookTimer);
+    this._hookTimer = null;
     const hook = this._notificationHook;
     if (!hook) return;
 
-    for (const { method, original, wrapped } of hook.hooks) {
+    for (const { method, original, wrapped, own } of hook.hooks) {
       // Don't overwrite another component's wrapper.
-      if (hook.app[method] === wrapped) {
-        hook.app[method] = original;
-      }
+      if (hook.app[method] !== wrapped) continue;
+      // Haven's methods live on the prototype: deleting the wrapper brings
+      // it back rather than leaving a copy on the instance.
+      if (own) hook.app[method] = original;
+      else delete hook.app[method];
     }
 
     this._notificationHook = null;
