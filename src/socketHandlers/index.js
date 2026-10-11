@@ -2430,10 +2430,12 @@ function setupSocketHandlers(io, db, opts = {}) {
 
       socket.emit('error-msg', verdict.message);
 
-      let outcome = { count: 1, action: 'none' };
-      try {
-        outcome = automod.recordInfraction(socket.user.id, verdict, opts.channelId || null);
-      } catch (err) { console.error('automod infraction record failed:', err); }
+      let outcome = { count: 0, action: 'none' };
+      if (automod.countsAsStrike(verdict, opts.createdAt || socket.user.createdAt)) {
+        try {
+          outcome = automod.recordInfraction(socket.user.id, verdict, opts.channelId || null);
+        } catch (err) { console.error('automod infraction record failed:', err); }
+      }
 
       logAudit({
         actor: socket.user, action: 'automod_block',

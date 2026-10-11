@@ -2043,7 +2043,7 @@
       "automod_words_strikes": "Strikes",
       "automod_words_remove": "Remove this group",
       "automod_words_placeholder": "one word or phrase per line",
-      "automod_escalation_hint": "Counts blocked attempts within a rolling window. Set any threshold to 0 to disable that step. Note that a muted member cannot send anything at all, so they stop collecting strikes until the mute runs out. If you want a fast automatic ban, set the ban threshold close to the mute threshold, or turn muting off.",
+      "automod_escalation_hint": "Counts blocked attempts within a rolling window. A blocked link only counts for accounts less than a week old; other members are just told the site is not allowed. Set any threshold to 0 to disable that step. Note that a muted member cannot send anything at all, so they stop collecting strikes until the mute runs out. If you want a fast automatic ban, set the ban threshold close to the mute threshold, or turn muting off.",
       "automod_window": "Window (hours)",
       "automod_warn_at": "Warn after",
       "automod_mute_at": "Mute after",

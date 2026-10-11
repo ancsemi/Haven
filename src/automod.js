@@ -239,6 +239,17 @@ function accountCreatedMs(createdAt) {
   return new Date(/(Z|[+-]\d\d:?\d\d)$/.test(s) ? s : s.replace(' ', 'T') + 'Z').getTime();
 }
 
+// A blocked link is a strike only for an account younger than a week, the
+// register-and-spam pattern Auto-Mod exists for. An established member who
+// tries a site the server has not allowed is told no, not punished. Word
+// groups and anything else always count. An unknown age counts as old.
+const LINK_STRIKE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+function countsAsStrike(verdict, createdAt, now = Date.now()) {
+  if (!verdict || typeof verdict.rule !== 'string' || !verdict.rule.startsWith('link_')) return true;
+  const created = accountCreatedMs(createdAt);
+  return Number.isFinite(created) && now - created < LINK_STRIKE_MAX_AGE_MS;
+}
+
 // Whole minutes this account still has to wait before it may post anything
 // others can see, or 0 when it may post now. The link rule above only stops
 // links; this one stops everything, for servers that get spam bots which
@@ -356,6 +367,7 @@ module.exports = {
   enabled,
   checkText,
   checkHost,
+  countsAsStrike,
   newAccountWaitMinutes,
   previewAllowed,
   extractUrls,
