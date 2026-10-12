@@ -269,6 +269,9 @@ class NotificationManager {
 
   setSound(event, sound) {
     this.sounds[event] = sound;
-    this._savePref(`haven_notif_${event}_sound`, sound);
+    // The message preference predates the event-name mapping and uses `msg`
+    // in storage. Keep that key aligned with the constructor's load path.
+    const prefEvent = event === 'message' ? 'msg' : event;
+    this._savePref(`haven_notif_${prefEvent}_sound`, sound);
   }
 }
