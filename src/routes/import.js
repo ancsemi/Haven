@@ -215,6 +215,9 @@ module.exports = function registerImport(deps) {
 
   // Step C: fetch all messages from selected channels → save temp → return preview
   app.post('/api/import/discord/fetch', express.json(), async (req, res) => {
+    // A large server takes minutes to read and nothing is sent until it is done,
+    // so the 2 minute socket inactivity timeout (server.timeout) would cut it off.
+    req.setTimeout(30 * 60 * 1000);
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user || !verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
@@ -239,7 +242,15 @@ module.exports = function registerImport(deps) {
       // empty body, which would import as nothing at all.
       let peopleMessages = 0, emptyPeopleMessages = 0;
 
-      for (const ch of selected) {
+      // Discord rate-limits message reads per channel, so several channels can
+      // be fetched at once without hitting the limits.
+      const IMPORT_CONCURRENCY = 4;
+      const fetched = new Array(selected.length);
+      let nextIdx = 0;
+      const worker = async () => {
+      while (nextIdx < selected.length) {
+        const idx = nextIdx++;
+        const ch = selected[idx];
         const messages = [];
         let before = null, batch;
 
@@ -299,15 +310,18 @@ module.exports = function registerImport(deps) {
           continue;
         }
 
-        result.channels.push({
+        fetched[idx] = {
           discordId: ch.id,
           name: ch.name,
           topic: ch.topic || '',
           category: ch.category || null,
           messageCount: messages.length,
           messages
-        });
+        };
       }
+      };
+      await Promise.all(Array.from({ length: Math.min(IMPORT_CONCURRENCY, selected.length) }, worker));
+      for (const c of fetched) if (c) result.channels.push(c);
 
       if (auth.ferry && peopleMessages >= 5 && emptyPeopleMessages === peopleMessages) {
         return res.status(400).json({ error: "Discord sent the messages without their text. On the Ferry bot's Bot page in the Discord Developer Portal, turn on Message Content Intent, then try again." });
