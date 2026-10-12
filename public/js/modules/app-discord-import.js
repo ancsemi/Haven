@@ -475,7 +475,7 @@ async _importPickGuild(guild) {
               <input type="checkbox" checked>
               <span class="import-ch-name"><span class="import-channel-type-icon" aria-hidden="true">🧵</span> ${this._escapeHtml(t.name)}${tagStr}</span>
             </label>
-            <span class="import-ch-count import-type-badge">${t('settings.admin.import_thread')}</span>
+            <span class="import-ch-count import-type-badge">${window.t('settings.admin.import_thread')}</span>
           `;
           cList.appendChild(tRow);
         });
