@@ -527,7 +527,7 @@ _makeSpoilerToggle(file, isPip = false) {
   return btn;
 },
 
-async _flushImageQueue(bundled = false, personaPrefix = '') {
+async _flushImageQueue(bundled = false, personaPrefix = '', replyTo = null) {
   if (!this._imageQueue || this._imageQueue.length === 0) return;
   // A DM that can't be encrypted asks first; backing out keeps the queue.
   if (!(await this._dmSendGate(this.currentChannel))) return;
@@ -535,7 +535,12 @@ async _flushImageQueue(bundled = false, personaPrefix = '') {
   this._clearImageQueue();
   this._uploadsCancelled = false;
   for (const file of files) {
-    await this._uploadImage(file, undefined, bundled, personaPrefix);
+    // When text and images are sent together, the text message carries the
+    // reply relation. The bundled image is a separate message and must not
+    // repeat the same reply banner.
+    await this._uploadImage(file, undefined, bundled, personaPrefix, false, {
+      replyTo: bundled ? null : replyTo
+    });
     if (this._uploadsCancelled) break;   // × on the progress bar stops the batch
   }
 },

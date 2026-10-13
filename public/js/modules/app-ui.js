@@ -661,6 +661,11 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
   // Capture the target channel NOW (before any await) so a mid-upload channel
   // switch doesn't send the image to the wrong channel.
   const targetChannel = targetCode || this.currentChannel;
+  // Queued images may be uploaded after _sendMessage has cleared the composer
+  // and reply state. In that case use the reply id captured by the queue flush.
+  const replyTo = Object.prototype.hasOwnProperty.call(opts, 'replyTo')
+    ? opts.replyTo
+    : ((targetChannel === this.currentChannel && this.replyingTo) ? this.replyingTo.id : null);
   const _maxMb = this._uploadCapMb();
   if (file.size > _maxMb * 1024 * 1024) {
     return this._showToast(t('toasts.image_too_large', { max: _maxMb }), 'error');
@@ -693,6 +698,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
         encrypted: true,
         // So deleting the message removes the file too (#5699).
         files: [data.url],
+        replyTo,
         ...(bundled && { bundled: true })
       });
       this.notifications.play('sent');
@@ -731,6 +737,7 @@ async _uploadImage(file, targetCode, bundled = false, personaPrefix = '', spoile
       code: targetChannel,
       content: line,
       isImage: true,
+      replyTo,
       ...(bundled && { bundled: true }),
       ...this._destructField(file && file._destructAt),
       ...(file && file._tags && file._tags.length ? { attachmentTags: file._tags } : {})

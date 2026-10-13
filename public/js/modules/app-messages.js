@@ -15,6 +15,9 @@ async _sendMessage() {
   if (content) this._lastSendDraft = { text: input.value, code: this.currentChannel, at: Date.now() };
   const hasImages = this._imageQueue && this._imageQueue.length > 0;
   const hasFiles  = this._fileQueue  && this._fileQueue.length  > 0; // (#5425)
+  // Image uploads run after the composer is cleared below, so keep the reply
+  // target for the asynchronous upload/send step.
+  const imageReplyTo = this.replyingTo ? this.replyingTo.id : null;
   if (!content && !hasImages && !hasFiles) return;
   if (!this.currentChannel) return;
   if (!this.socket.connected) {
@@ -369,7 +372,7 @@ async _sendMessage() {
     // (#5425) These were both inside `if (hasImages)`, so a non-image file
     // queued on its own (no image) never flushed and the attachment was stuck
     // in the queue forever. Flush each queue based on its own contents.
-    if (hasImages) this._flushImageQueue(!!content, personaPrefix);
+    if (hasImages) this._flushImageQueue(!!content, personaPrefix, imageReplyTo);
     if (hasFiles) this._flushFileQueue?.();
   }
 },
