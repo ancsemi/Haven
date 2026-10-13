@@ -174,6 +174,21 @@ _bindMessageClicks() {
 },
 
 _bindMessageActions() {
+  // Double-clicking a message row is a shortcut for the reply toolbar action.
+  // Keep the delegated handler on the list so it also covers compact rows and
+  // messages rendered after history updates.
+  document.getElementById('messages').addEventListener('dblclick', (e) => {
+    const msgEl = e.target.closest('.message, .message-compact');
+    if (!msgEl || !msgEl.dataset.msgId) return;
+    // These targets have their own click/keyboard behavior and should not
+    // unexpectedly start a reply when activated twice.
+    if (e.target.closest('button, a, input, textarea, select, [contenteditable="true"], .msg-toolbar, .msg-dots-btn, .reply-banner, .thread-preview, .reaction-badge, .chat-image, .spoiler')) return;
+    const msgId = parseInt(msgEl.dataset.msgId, 10);
+    if (!msgId) return;
+    e.preventDefault();
+    this._setReply(msgEl, msgId);
+  });
+
   // Messages container: move-selection mode intercept (supports Shift+click range)
   document.getElementById('messages').addEventListener('click', (e) => {
     if (!this._moveSelectionActive) return;
