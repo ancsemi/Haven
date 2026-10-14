@@ -217,6 +217,21 @@ _bindMessageClicks() {
     this._showMessageContextMenu(e, msgEl);
   });
 
+  // A link to a channel or message on this server opens right here, the way
+  // the apps open them, instead of loading the app again in a new tab.
+  // Modified and middle clicks keep their usual meaning. Capture phase, so it
+  // runs before the masked-link warning below: it never leaves the server.
+  document.addEventListener('click', (e) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.defaultPrevented) return;
+    const a = e.target.closest?.('a[href]');
+    if (!a || a.hasAttribute('download') || !a.closest('.message-content, .thread-msg-content, .thread-topic-body')) return;
+    const link = window.HavenMessageLinks?.parse(a.href, window.location.origin);
+    if (!link) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this._openMessageLink(link.channel, link.message);
+  }, true);
+
   // Risky file download and masked link warnings. Delegated on document so
   // threads, the DM PiP, pins, search and forum views get them too; one
   // listener each, so a click never prompts twice.

@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.29.77';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.101';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.31.3';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.71';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.83';
 import ComposerMethods from './modules/app-composer.js?v=4.29.72';
@@ -16,7 +16,7 @@ import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.29.66';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.29.99';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.27.52';
-import MessageActionMethods from './modules/app-message-actions.js?v=4.29.40';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.31.3';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.31.1';
 import PeopleMethods from './modules/app-people.js?v=4.29.76';
 import SettingsMethods from './modules/app-settings.js?v=4.29.95';
@@ -48,7 +48,7 @@ import ChannelMergeMethods from './modules/app-channel-merge.js?v=4.29.60';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.31.2';
 import DmPinMethods from './modules/app-dm-pins.js?v=4.29.30';
 import DmSortMethods from './modules/app-dm-sort.js?v=4.29.65';
-import MessageMethods  from './modules/app-messages.js?v=4.29.95';
+import MessageMethods  from './modules/app-messages.js?v=4.31.3';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.29.57';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.29.61';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.29.40';
@@ -67,7 +67,7 @@ import UtilityMethods  from './modules/app-utilities.js?v=4.29.91';
 import MessageContentMethods from './modules/app-message-content.js?v=4.29.87';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.94';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
-import ThreadMethods from './modules/app-threads.js?v=4.29.95';
+import ThreadMethods from './modules/app-threads.js?v=4.31.3';
 import AdminMethods    from './modules/app-admin.js?v=4.29.107';
 import BrandingMethods from './modules/app-branding.js?v=4.29.19';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.52';
@@ -245,6 +245,12 @@ class HavenApp {
       // Preserve invite param so it survives the redirect to the auth page
       const _inv = new URLSearchParams(window.location.search).get('invite');
       if (_inv) sessionStorage.setItem('haven_pending_invite', _inv);
+      // ...and a channel/message link, so signing in still lands on it.
+      const _link = window.HavenMessageLinks?.fromSearch(window.location.search) || window.HavenMessageLinks?.fromHash(window.location.hash);
+      if (_link) {
+        sessionStorage.setItem('haven_pending_channel', _link.channel);
+        if (_link.message) sessionStorage.setItem('haven_pending_message', String(_link.message));
+      }
       window.location.href = '/';
       return;
     }
