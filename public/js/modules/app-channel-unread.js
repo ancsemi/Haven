@@ -611,6 +611,9 @@ _fireNativeNotification(message, channelCode, opts) {
   try { const p = JSON.parse(rawContent); if (p && p.v && p.ct) rawContent = ''; } catch { /* not JSON */ }
   // Burn-after-read: never reveal the message content in a notification
   if (message.burn_seconds && message.burn_seconds > 0) rawContent = t('notifications_runtime.burn_message');
+  // Plain text: a table reads "a · b" a row, markdown markers go, spoilers
+  // stay hidden; the same text the server pushes (notify-preview.js).
+  else if (window.HavenNotifyPreview) rawContent = HavenNotifyPreview.preview(rawContent, { more: n => t('notifications_runtime.more_rows', { count: n }) });
   const body = rawContent.length > 120
     ? rawContent.slice(0, 117) + '...'
     : (rawContent || t('notifications_runtime.sent_message'));

@@ -16,6 +16,7 @@ const HAVEN_VERSION = require('../../package.json').version;
 const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme, VALID_ROLE_PERMS, filterIdleOnline, maskSpoilers, toReplyContext } = require('./helpers');
 const { socketClientIp } = require('../clientIp');
 const automod = require('../automod');
+const { pushBody } = require('../pushBody');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
 const createPermissions = require('./permissions');
 const createChannelLists = require('./channelList');
@@ -1400,7 +1401,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       } catch { /* not JSON, use as-is */ }
 
       displayContent = maskSpoilers(displayContent);
-      const body = displayContent.length > 120 ? displayContent.slice(0, 117) + '...' : displayContent;
+      const body = pushBody(displayContent);
       const title = `${senderUsername} in #${channelName}`;
       const payload = JSON.stringify({
         title, body, channelCode,

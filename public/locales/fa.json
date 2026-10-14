@@ -1305,7 +1305,8 @@
   "notifications_runtime": {
     "title": "{{sender}} در {{channel}}",
     "burn_message": "🔥 یک پیام نابودشونده فرستاد",
-    "sent_message": "یک پیام فرستاد"
+    "sent_message": "یک پیام فرستاد",
+    "more_rows": "+{{count}} ردیف دیگر"
   },
   "activities_registry": {
     "flappy": "از کانتینرها جاخالی بده و رکورد بزن!",
