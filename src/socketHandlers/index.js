@@ -2536,7 +2536,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         if (floodCheck('screenLifecycle')) return acknowledgeFlood('rate_limited');
         return next();
       }
-      if (eventName === 'request-screen-renegotiate') {
+      if (eventName === 'request-screen-renegotiate' || eventName === 'request-video-keyframe') {
         if (floodCheck('screenRecovery')) return;
         return next();
       }
