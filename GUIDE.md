@@ -138,6 +138,12 @@ newgrp docker
 
 After that, `docker compose up -d` should work without errors.
 
+### Proxmox VE (LXC)
+
+If you run Proxmox VE in your homelab, an automated unprivileged LXC helper script is available. It supports automatic Caddy reverse proxy with Let's Encrypt SSL, Tailscale mesh VPN, or direct LAN modes.
+
+See the [Proxmox VE LXC Deployment Guide](docs/examples/proxmox-lxc/README.md) for quick-start instructions and configuration flags.
+
 ---
 
 ## Getting Started
