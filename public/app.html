@@ -3095,6 +3095,11 @@
           </label>
           <small class="settings-hint" data-i18n="settings.admin.update_banner_hint">When enabled, the "update available" banner is only shown to admins</small>
           <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.update_early_label">Early access updates</span>
+            <input type="checkbox" id="update-channel-early">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.update_early_hint">Offers new versions as soon as they are made, before they become a stable release (about once a week). You get fixes and features sooner, and sometimes a bug the stable release won't have. Docker: use the :beta image instead of :latest.</small>
+          <label class="toggle-row" style="margin-top:8px">
             <span data-i18n="settings.admin.allow_self_purge_label">Members can delete all their own messages</span>
             <input type="checkbox" id="allow-self-purge">
           </label>
@@ -5366,7 +5371,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.26.2"></script>
-  <script type="module" src="/js/app.js?v=4.26.2"></script>
+  <script type="module" src="/js/app.js?v=4.26.3.1"></script>
   <script src="/js/plugin-loader.js?v=4.24.18"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

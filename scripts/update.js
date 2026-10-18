@@ -2,7 +2,7 @@
 // Updates this Haven install in place. Started by Update Now in Settings, Admin
 // (src/routes/maintenance.js), which then exits so the files are free to replace.
 //
-//   node scripts/update.js git|release [--wait-pid N] [--port N] [--no-restart]
+//   node scripts/update.js git|release [--wait-pid N] [--port N] [--no-restart] [--early]
 //
 // git      git pull, for installs cloned from GitHub
 // release  download the latest release from GitHub and copy it over this folder,
@@ -20,7 +20,7 @@ const { spawn, spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const IS_WIN = process.platform === 'win32';
-const RELEASE_API = 'https://api.github.com/repos/ancsemi/Haven/releases/latest';
+const releaseChannel = require('../src/releaseChannel');
 
 const args = process.argv.slice(2);
 const mode = args[0];
@@ -28,6 +28,8 @@ const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1
 const waitPid = parseInt(opt('--wait-pid'), 10) || 0;
 const port = parseInt(opt('--port'), 10) || 0;
 const restart = !args.includes('--no-restart');
+// Early access (Settings > Admin) also takes pre-releases (src/releaseChannel.js).
+const early = args.includes('--early');
 
 const log = (msg) => console.log(`[update ${new Date().toISOString()}] ${msg}`);
 
@@ -37,9 +39,7 @@ const KEEP = ['node_modules/', '.git/'];
 
 async function downloadRelease() {
   const headers = { 'User-Agent': 'haven-updater', Accept: 'application/vnd.github+json' };
-  const rel = await fetch(RELEASE_API, { headers });
-  if (!rel.ok) throw new Error(`GitHub answered ${rel.status} for the latest release`);
-  const { tag_name: tag, zipball_url: url } = await rel.json();
+  const { tag_name: tag, zipball_url: url } = await releaseChannel.latestRelease({ early, headers });
   if (!url) throw new Error('the latest release has no source archive');
   log(`Downloading ${tag}`);
   const zip = await fetch(url, { headers: { 'User-Agent': 'haven-updater' } });

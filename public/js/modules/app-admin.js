@@ -513,6 +513,8 @@ _applyServerSettings() {
     if (updateBannerAdminOnly) {
       updateBannerAdminOnly.checked = this.serverSettings.update_banner_admin_only === 'true';
     }
+    const updateEarly = document.getElementById('update-channel-early');
+    if (updateEarly) updateEarly.checked = this.serverSettings.update_channel_early === 'true';
     const allowSelfPurge = document.getElementById('allow-self-purge');
     if (allowSelfPurge) allowSelfPurge.checked = this.serverSettings.allow_self_purge === 'true';
     // The member-facing button follows the switch (#5686).
@@ -922,6 +924,7 @@ _snapshotAdminSettings() {
     auto_away_hidden_minutes: this.serverSettings.auto_away_hidden_minutes || '2',
     auto_away_enabled: this.serverSettings.auto_away_enabled || 'true',
     update_banner_admin_only: this.serverSettings.update_banner_admin_only || 'false',
+    update_channel_early: this.serverSettings.update_channel_early || 'false',
     allow_self_purge: this.serverSettings.allow_self_purge || 'false',
     hide_disabled_channel_badges: this.serverSettings.hide_disabled_channel_badges || 'false',
     category_layout: this.serverSettings.category_layout || 'list',
@@ -1157,6 +1160,11 @@ _saveAdminSettings() {
     this.socket.emit('update-server-setting', { key: 'update_banner_admin_only', value: updateBannerAdminOnly });
     changed = true;
   }
+  const updateEarly = document.getElementById('update-channel-early')?.checked ? 'true' : 'false';
+  if (updateEarly !== (snap.update_channel_early || 'false')) {
+    this.socket.emit('update-server-setting', { key: 'update_channel_early', value: updateEarly });
+    changed = true;
+  }
   const allowSelfPurge = document.getElementById('allow-self-purge')?.checked ? 'true' : 'false';
   if (allowSelfPurge !== (snap.allow_self_purge || 'false')) {
     this.socket.emit('update-server-setting', { key: 'allow_self_purge', value: allowSelfPurge });
@@ -1361,6 +1369,8 @@ _cancelAdminSettings() {
     if (mmc) mmc.value = snap.max_message_chars || '2000';
     const uba = document.getElementById('update-banner-admin-only');
     if (uba) uba.checked = snap.update_banner_admin_only === 'true';
+    const uce = document.getElementById('update-channel-early');
+    if (uce) uce.checked = snap.update_channel_early === 'true';
     const asp = document.getElementById('allow-self-purge');
     if (asp) asp.checked = snap.allow_self_purge === 'true';
     const hdb = document.getElementById('hide-disabled-badges');

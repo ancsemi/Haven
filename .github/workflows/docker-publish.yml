@@ -117,10 +117,14 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # :latest is the stable channel, so a pre-release never moves it.
+          # :beta is early access: every release, pre-release or stable.
+          # (A pre-release only gets {{version}} from the semver patterns.)
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+            type=raw,value=beta
 
       # Combine the two per-arch tags into the public multi-arch tags
       # (<version>, <major>.<minor>, latest).

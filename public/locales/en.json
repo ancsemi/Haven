@@ -2436,6 +2436,8 @@
       "bulk_cleanup_btn": "Cleanup",
       "view_all_members_btn": "View All Members",
       "update_banner_label": "Update banner (admins only)",
+      "update_early_label": "Early access updates",
+      "update_early_hint": "Offers new versions as soon as they are made, before they become a stable release (about once a week). You get fixes and features sooner, and sometimes a bug the stable release won't have. Docker: use the :beta image instead of :latest.",
       "whitelist_title": "Who can sign up",
       "whitelist_enabled": "📋 Whitelist",
       "whitelist_username_placeholder": "Username...",

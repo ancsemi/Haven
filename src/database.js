@@ -494,6 +494,7 @@ function initDatabase() {
   insertSetting.run('unicode_emoji_auto_update', 'false'); // monthly refresh of the built-in emoji set from unicode.org, opt-in, defaults off (UNICODE_EMOJI_AUTO_UPDATE env overrides)
   insertSetting.run('setup_wizard_complete', 'false');   // first-time admin setup wizard
   insertSetting.run('update_banner_admin_only', 'false'); // hide update banner from non-admins
+  insertSetting.run('update_channel_early', 'false'); // early access: offer pre-releases too (src/releaseChannel.js)
   insertSetting.run('media_group_layout', 'grid');        // (#5799) pictures sent together: 'grid' or 'stacked' (full size, one under another)
   insertSetting.run('allow_self_purge', 'false');         // (#5686) members may delete every message they wrote, in one go
   insertSetting.run('session_duration_days', '0');       // login token lifetime in days; 0 = never expire (default for new installs, #5391). Existing installs that were seeded with '7' keep that value until the admin changes it.

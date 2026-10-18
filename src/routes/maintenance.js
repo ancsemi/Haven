@@ -3,6 +3,7 @@
 // `late` holds values server.js creates after this file is loaded (the
 // socket server, bot audio); they are read from it when a request needs them.
 
+const releaseChannel = require('../releaseChannel');
 const fs = require('fs');
 const path = require('path');
 const { DATA_DIR, DB_PATH, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
@@ -456,17 +457,18 @@ module.exports = function registerMaintenance(deps) {
     const currentVersion = require('../../package.json').version;
     const method = detectInstallMethod();
     const instructions = getUpdateInstructions(method);
+    const early = releaseChannel.earlyAccessOn(db);
     try {
-      const r = await fetch('https://api.github.com/repos/ancsemi/Haven/releases/latest', {
-        headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'haven-update-check' },
+      const data = await releaseChannel.latestRelease({
+        early, headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'haven-update-check' },
       });
-      if (!r.ok) throw new Error(`GitHub HTTP ${r.status}`);
-      const data = await r.json();
       const latestVersion = String(data.tag_name || '').replace(/^v/, '');
-      const cmp = compareVersions(currentVersion, latestVersion);
+      const cmp = releaseChannel.compareVersions(currentVersion, latestVersion);
       res.json({
         currentVersion,
         latestVersion,
+        prerelease: !!data.prerelease,
+        channel: early ? 'early' : 'stable',
         updateAvailable: cmp < 0,
         releaseUrl: data.html_url,
         releaseNotes: data.body || '',
@@ -477,16 +479,6 @@ module.exports = function registerMaintenance(deps) {
       res.status(502).json({ error: 'Could not reach GitHub: ' + err.message, currentVersion, method, ...instructions });
     }
   });
-
-  function compareVersions(a, b) {
-    const pa = String(a).split('.').map(n => parseInt(n) || 0);
-    const pb = String(b).split('.').map(n => parseInt(n) || 0);
-    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-      if ((pa[i] || 0) < (pb[i] || 0)) return -1;
-      if ((pa[i] || 0) > (pb[i] || 0)) return 1;
-    }
-    return 0;
-  }
 
   app.post('/api/admin/update/run', (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
@@ -515,6 +507,7 @@ module.exports = function registerMaintenance(deps) {
     const supervised = !!(process.env.INVOCATION_ID || process.env.pm_id || process.env.HAVEN_SUPERVISED === 'true');
     const updArgs = [path.join(CODE_DIR, 'scripts', 'update.js'), instructions.mode, '--port', String(process.env.PORT || 3000)];
     if (supervised) updArgs.push('--no-restart');
+    if (releaseChannel.earlyAccessOn(db)) updArgs.push('--early');
     else updArgs.push('--wait-pid', String(process.pid));
     const shutdown = () => {
       console.log('🔄 [Update] Exiting so the updated Haven can start…');

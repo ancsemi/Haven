@@ -35,12 +35,9 @@ async _checkForUpdates() {
     if (!localRes.ok) return;
     const { version: localVersion } = await localRes.json();
 
-    // Check GitHub for latest release
-    const ghRes = await fetch('https://api.github.com/repos/ancsemi/Haven/releases/latest', {
-      headers: { Accept: 'application/vnd.github.v3+json' }
-    });
-    if (!ghRes.ok) return;
-    const release = await ghRes.json();
+    // Check GitHub for the latest release on this server's update channel
+    const release = await this._latestHavenRelease();
+    if (!release) return;
 
     const remoteVersion = (release.tag_name || '').replace(/^v/, '');
     if (!remoteVersion || !localVersion) return;
@@ -100,15 +97,43 @@ _applyUpdateBanner() {
  * Compare semver strings. Returns true if remote > local.
  */
 _isNewerVersion(remote, local) {
-  const r = remote.split('.').map(Number);
-  const l = local.split('.').map(Number);
-  for (let i = 0; i < Math.max(r.length, l.length); i++) {
-    const rv = r[i] || 0;
-    const lv = l[i] || 0;
-    if (rv > lv) return true;
-    if (rv < lv) return false;
+  // Pre-releases (4.27.0-beta.1) count: one comes before the release it leads
+  // to, the same order as src/releaseChannel.js.
+  const parse = (v) => {
+    const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(String(v || '').trim());
+    return m ? { nums: [+m[1], +m[2], +m[3]], pre: m[4] ? m[4].split('.') : [] } : null;
+  };
+  const r = parse(remote);
+  const l = parse(local);
+  if (!r || !l) return false;
+  for (let i = 0; i < 3; i++) if (r.nums[i] !== l.nums[i]) return r.nums[i] > l.nums[i];
+  if (!r.pre.length || !l.pre.length) return !r.pre.length && l.pre.length > 0;
+  for (let i = 0; i < Math.max(r.pre.length, l.pre.length); i++) {
+    const a = r.pre[i];
+    const b = l.pre[i];
+    if (a === undefined) return false;
+    if (b === undefined) return true;
+    const an = /^\d+$/.test(a);
+    const bn = /^\d+$/.test(b);
+    if (an && bn && +a !== +b) return +a > +b;
+    if (an !== bn) return bn;
+    if (!an && a !== b) return a > b;
   }
   return false;
+},
+
+// The release the banner offers: GitHub's latest (never a pre-release), or
+// with early access on the newest of all of them (Settings > Admin).
+async _latestHavenRelease() {
+  const headers = { Accept: 'application/vnd.github.v3+json' };
+  if (this.serverSettings?.update_channel_early !== 'true') {
+    const res = await fetch('https://api.github.com/repos/ancsemi/Haven/releases/latest', { headers });
+    return res.ok ? res.json() : null;
+  }
+  const res = await fetch('https://api.github.com/repos/ancsemi/Haven/releases?per_page=20', { headers });
+  if (!res.ok) return null;
+  const list = (await res.json()).filter(rel => rel && !rel.draft && rel.tag_name);
+  return list.reduce((best, rel) => (!best || this._isNewerVersion(rel.tag_name.replace(/^v/, ''), best.tag_name.replace(/^v/, '')) ? rel : best), null);
 },
 
 // ── Desktop App Banner (top bar only) ──────────────────
