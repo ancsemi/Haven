@@ -1,4 +1,4 @@
-﻿// ── Resolve data directory BEFORE loading .env ────────────
+// ── Resolve data directory BEFORE loading .env ────────────
 const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR, GAMES_ROMS_DIR } = require('./src/paths');
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('./src/deletedAttachments');
 const { trimUploadsToLimit } = require('./src/uploadsTrim');
@@ -687,90 +687,11 @@ app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: 0,              // always revalidate (prevents stale JS/CSS after deploys)
 }));
 
-// ── Block access to internal upload folders ─────────────
-// Files moved into deleted-attachments are no longer part of any message and
-// must stop being reachable, which is the entire point of moving them.
-//
-// A 404 mounted at the prefix does not achieve that. Express matches the mount
-// against the raw path while express.static decodes before it resolves, so
-// three shapes walked straight past the guard and served the file:
-// /uploads/deleted%2Dattachments/x, /uploads//deleted-attachments/x, and
-// /uploads/deleted-attachments%2Fx. Anyone who saw an attachment before it was
-// deleted knows its filename, so deletion was not actually revoking access.
-//
-// Decode the path, resolve it against the uploads root, and check containment,
-// so it is the real target on disk being judged rather than the spelling of
-// the URL. Compared case-insensitively because NTFS is.
-const UPLOAD_MEDIA_EXTS = new Set([
-  '.mp3', '.ogg', '.oga', '.wav', '.m4a', '.aac', '.flac', '.opus', '.weba',
-  '.mp4', '.webm', '.mov', '.m4v', '.ogv',
-]);
-const BLOCKED_UPLOAD_DIRS = ['deleted-attachments', 'bot-audio'].map(
-  dir => path.resolve(UPLOADS_DIR, dir).toLowerCase()
-);
-app.use('/uploads', (req, res, next) => {
-  let decoded;
-  try { decoded = decodeURIComponent(req.path); } catch { return res.status(400).end(); }
-  // Windows also answers to a folder's 8.3 short name (DELETE~1 for
-  // deleted-attachments), and ignores a trailing dot or space and anything
-  // after a colon (alternate streams). None of those appear in a real upload
-  // name, so a path with any of them is refused before it can slip past.
-  if (decoded.split(/[\\/]/).some(seg => seg.includes('~') || seg.includes(':') || /[. ]$/.test(seg))) {
-    return res.status(404).end();
-  }
-  // path.resolve treats a backslash as a separator on Windows and as an
-  // ordinary filename character on Linux, which is exactly right in both
-  // cases, so the raw decoded path goes in as-is.
-  const target = path.resolve(UPLOADS_DIR, '.' + decoded).toLowerCase();
-  for (const blocked of BLOCKED_UPLOAD_DIRS) {
-    if (target === blocked || target.startsWith(blocked + path.sep)) return res.status(404).end();
-  }
-  return next();
-});
-// ── Serve uploads from external data directory ──────────
-app.use('/uploads', express.static(UPLOADS_DIR, {
-  dotfiles: 'deny',
-  maxAge: '7d',       // 7 days: avatars & images rarely change; filenames include timestamps for uniqueness
-  immutable: true,    // tells browser the file at this URL will never change (cache-busting via new filename)
-  etag: true,
-  lastModified: true,
-  setHeaders: (res, filePath) => {
-    // Force download for non-image files (prevents HTML/SVG execution in browser)
-    const ext = path.extname(filePath).toLowerCase();
-    if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
-      // Allow cross-origin access for images (needed for server icon pulling).
-      // CORP override is required because helmet defaults to 'same-origin', which
-      // would otherwise block cross-origin <img> loads even with ACAO set.
-      // Vary: Origin prevents a non-CORS cached response from being reused for a
-      // CORS request (which is what causes the "No 'Access-Control-Allow-Origin'
-      // header is present" error on a cached image).
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      res.setHeader('Vary', 'Origin');
-    } else if (ext === '.svg') {
-      // SVG (issue #5309): renderable inline via <img> tag (browsers run SVG in
-      // "secure static mode": no scripts, no XHR), but direct navigation still
-      // gets attachment-disposition so opening the raw URL in a new tab can't
-      // execute the file. CSP doubles up on that: even if a future browser
-      // change allowed any external loads inside <img>-rendered SVG, this
-      // header forbids everything except inline styles (needed for fill/stroke).
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      res.setHeader('Vary', 'Origin');
-      res.setHeader('Content-Disposition', 'attachment');
-      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
-    } else {
-      res.setHeader('Content-Disposition', 'attachment');
-      // Anyone can upload a file, and one served as JavaScript (or HTML, CSS,
-      // XML) from Haven's own origin counts as 'self' in the CSP: a <script
-      // src="/uploads/x.js"> anywhere would run it, whatever the disposition
-      // says. Only audio and video keep their real type, for the inline
-      // players; everything else is opaque bytes, which nosniff refuses to
-      // run as script.
-      if (!UPLOAD_MEDIA_EXTS.has(ext)) res.setHeader('Content-Type', 'application/octet-stream');
-    }
-  }
-}));
+// ── Serve uploads from storage ──────────────────────────
+// The internal folders are refused first; see src/storage/serve.js.
+const { blockInternalUploads, serveUploads } = require('./src/storage/serve');
+app.use('/uploads', blockInternalUploads);
+app.use('/uploads', serveUploads(storage));
 
 // ── Plugin & Theme file serving ─────────────────────────
 const PLUGINS_DIR = path.join(__dirname, 'plugins');
