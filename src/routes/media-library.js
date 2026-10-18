@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const multer = require('multer');
 const privacyPass = require('../privacyPass');
 const storage = require('../storage');
-const { DATA_DIR } = require('../paths');
+const { DATA_DIR, STAGING_DIR } = require('../paths');
 const { verifyToken } = require('../auth');
 const { sanitizeSoundName } = require('../socketHandlers');
 const ROOT = path.join(__dirname, '..', '..');
@@ -52,13 +52,14 @@ module.exports = function registerMediaLibrary(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_soundboard')) return res.status(403).json({ error: 'Requires admin or Manage Soundboard permission' });
 
-    createSoundUpload().single('sound')(req, res, (err) => {
+    createSoundUpload().single('sound')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
       let name = sanitizeSoundName(req.body.name || '');
       if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
 
+      try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const { getDb } = require('../database');
       try {
         getDb().prepare(
@@ -210,7 +211,7 @@ module.exports = function registerMediaLibrary(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
 
-    createEmojiUpload().single('emoji')(req, res, (err) => {
+    createEmojiUpload().single('emoji')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -218,6 +219,7 @@ module.exports = function registerMediaLibrary(deps) {
       if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
       if (name.length > 30) name = name.slice(0, 30);
 
+      try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const { getDb } = require('../database');
       try {
         getDb().prepare(
@@ -236,7 +238,7 @@ module.exports = function registerMediaLibrary(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
 
-    createEmojiUpload().array('emojis', 50)(req, res, (err) => {
+    createEmojiUpload().array('emojis', 50)(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
 
@@ -251,6 +253,7 @@ module.exports = function registerMediaLibrary(deps) {
           .replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
         if (!name) name = path.basename(file.filename, path.extname(file.filename));
         if (name.length > 30) name = name.slice(0, 30);
+        try { await storage.admitUpload(file); } catch (e) { errors.push({ name, error: 'Failed to store the upload' }); continue; }
         try {
           insert.run(name, file.filename, user.id);
           results.push({ name, url: `/uploads/${file.filename}` });
@@ -407,9 +410,6 @@ module.exports = function registerMediaLibrary(deps) {
   // Stored under uploads/stickers/<file> so message rendering can detect
   // them by URL prefix and render at sticker dimensions.
   const STICKERS_DIR = path.join(uploadDir, 'stickers');
-  try { fs.mkdirSync(STICKERS_DIR, { recursive: true }); } catch (err) {
-    console.error('[stickers] Could not create the stickers folder; sticker uploads will fail:', err.message);
-  }
 
   // (#5335) Seed a small starter pack on first run so the picker isn't empty
   // out of the box. Files in public/starter-stickers/ are copied into
@@ -417,7 +417,7 @@ module.exports = function registerMediaLibrary(deps) {
   // "Starter" pack, but only if there are zero stickers in the DB. Once
   // any sticker exists we leave things alone so admin uploads or deletions
   // aren't trampled on next restart.
-  function seedStarterStickers() {
+  async function seedStarterStickers() {
     try {
       const { getDb } = require('../database');
       const db = getDb();
@@ -436,8 +436,12 @@ module.exports = function registerMediaLibrary(deps) {
           const baseName = path.basename(file, ext).toLowerCase().replace(/[^a-z0-9_-]/g, '');
           if (!baseName) continue;
           const destName = `starter-${baseName}${ext}`;
-          const destPath = path.join(STICKERS_DIR, destName);
-          if (!fs.existsSync(destPath)) fs.copyFileSync(path.join(seedDir, file), destPath);
+          const rel = `stickers/${destName}`;
+          if (!(await storage.head(rel))) {
+            const staged = path.join(STAGING_DIR, destName);
+            fs.copyFileSync(path.join(seedDir, file), staged);
+            await storage.admit(rel, staged);
+          }
           insert.run(baseName, 'Starter', destName);
           seeded++;
         } catch (err) {
@@ -477,7 +481,7 @@ module.exports = function registerMediaLibrary(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_stickers') && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Stickers permission' });
 
-    createStickerUpload().single('sticker')(req, res, (err) => {
+    createStickerUpload().single('sticker')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -488,6 +492,7 @@ module.exports = function registerMediaLibrary(deps) {
       let pack = (req.body.pack_name || '').trim().slice(0, 40);
       if (!pack) pack = 'General';
 
+      try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const { getDb } = require('../database');
       try {
         getDb().prepare(
@@ -505,7 +510,7 @@ module.exports = function registerMediaLibrary(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_stickers') && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Stickers permission' });
 
-    createStickerUpload().array('stickers', 50)(req, res, (err) => {
+    createStickerUpload().array('stickers', 50)(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
 
@@ -523,6 +528,7 @@ module.exports = function registerMediaLibrary(deps) {
           .replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
         if (!name) name = path.basename(file.filename, path.extname(file.filename));
         if (name.length > 40) name = name.slice(0, 40);
+        try { await storage.admitUpload(file); } catch (e) { errors.push({ name, error: 'Failed to store the upload' }); continue; }
         try {
           insert.run(name, pack, file.filename, user.id);
           results.push({ name, pack_name: pack, url: `/uploads/stickers/${file.filename}` });

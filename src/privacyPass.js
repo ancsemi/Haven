@@ -44,7 +44,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const tools = require('./mediaTools');
-const { UPLOADS_DIR, UNPROCESSED_DIR } = require('./paths');
+const { UPLOADS_DIR, UNPROCESSED_DIR, STAGING_DIR } = require('./paths');
 const { stripImageMetadata } = require('./imageMetadata');
 
 const HELD_DIR = path.join(UNPROCESSED_DIR, 'held');
@@ -260,11 +260,16 @@ function utf8(s) { return Buffer.from(s, 'latin1').toString('utf8'); }
 
 /**
  * A drop-in for multer.diskStorage({ destination, filename }) with a string
- * destination. The upload is written into unprocessed/, cleaned there, and
- * only then moved to `destination`. A photo or video whose name lies about
- * its type gets its real extension, on disk and in the name shown in chat.
+ * destination under uploads/. The upload is written into unprocessed/,
+ * cleaned there, and then waits in unprocessed/staging/ (req.file.path) until
+ * its route admits it to storage under req.file.relDir (src/storage). A photo
+ * or video whose name lies about its type gets its real extension, on disk
+ * and in the name shown in chat.
  */
 function diskStorage({ destination, filename }) {
+  const relDir = path.relative(UPLOADS_DIR, destination).split(path.sep).join('/');
+  if (relDir.startsWith('..') || path.isAbsolute(relDir)) throw new Error(`upload destination is not under uploads/: ${destination}`);
+  const stageDir = path.join(STAGING_DIR, relDir);
   const inner = multer.diskStorage({ destination: UNPROCESSED_DIR, filename });
   return {
     _handleFile(req, file, cb) {
@@ -288,11 +293,11 @@ function diskStorage({ destination, filename }) {
             const shown = utf8(file.originalname || 'file');
             out.originalname = latin1(shown.replace(/(\.[^./]*)?$/, '.' + result.ext));
           }
-          fs.mkdirSync(destination, { recursive: true });
-          const dest = path.join(destination, name);
+          fs.mkdirSync(stageDir, { recursive: true });
+          const dest = path.join(stageDir, name);
           moveFile(info.path, dest);
           // Cleaning changes the size; quotas and the size shown use this one.
-          cb(null, { ...info, ...out, destination, filename: name, path: dest, size: fs.statSync(dest).size });
+          cb(null, { ...info, ...out, destination: stageDir, filename: name, path: dest, relDir, size: fs.statSync(dest).size });
         } catch (e) {
           try { fs.unlinkSync(info.path); } catch { /* already gone */ }
           if (e instanceof PrivacyError) console.error(`[privacy] Upload refused (${e.code}): ${e.detail || e.message}`);
@@ -317,14 +322,14 @@ async function isVideoUpload(file) {
 
 /**
  * Clean a file Haven fetched itself (e.g. a sign-in provider's avatar) before
- * it goes into uploads/. `tmp` must be in UNPROCESSED_DIR. Throws a
+ * it goes into storage as `rel`. `tmp` must be in UNPROCESSED_DIR. Throws a
  * PrivacyError, after removing `tmp`, when it cannot be made clean.
  */
-async function admitFile(tmp, dest) {
+async function admitFile(tmp, rel) {
   activeUploads++;
   try {
     await cleanFile(tmp);
-    moveFile(tmp, dest);
+    await require('./storage').admit(rel, tmp);
   } catch (e) {
     try { fs.unlinkSync(tmp); } catch { /* already gone */ }
     throw e;
@@ -374,6 +379,10 @@ function removeLeftovers() {
     if (e.isFile()) {
       try { fs.unlinkSync(path.join(UNPROCESSED_DIR, e.name)); } catch { /* gone already */ }
     }
+  }
+  // An upload its route never admitted, from a request a restart cut short.
+  for (const rel of listFiles(STAGING_DIR)) {
+    try { fs.unlinkSync(path.join(STAGING_DIR, rel)); } catch { /* gone already */ }
   }
   for (const rel of listFiles(HELD_DIR)) {
     if (rel.includes(TMP_MARK) || rel.endsWith('_exiftool_tmp')) {

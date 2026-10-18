@@ -5,10 +5,11 @@ const fs = require('fs');
 const path = require('path');
 const { verifyToken } = require('../auth');
 const { GAMES_ROMS_DIR } = require('../paths');
+const storage = require('../storage');
 const ROOT = path.join(__dirname, '..', '..');
 
 module.exports = function registerUploads(deps) {
-  const { uploadDiskGuard, app, recordUploadOwnership, uploadScopeFromRequest, uploadCapMb, verifyAdminFromDb, userHasPermission, uploadDir, upload, fileUpload, uploadLimiter } = deps;
+  const { uploadDiskGuard, app, recordUploadOwnership, uploadScopeFromRequest, uploadCapMb, verifyAdminFromDb, userHasPermission, upload, fileUpload, uploadLimiter } = deps;
   // ── Image upload (authenticated + not banned) ────────────
   app.post('/api/upload', uploadLimiter, uploadDiskGuard, (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
@@ -25,7 +26,7 @@ module.exports = function registerUploads(deps) {
       return res.status(403).json({ error: 'You don\'t have permission to upload files' });
     }
 
-    upload.single('image')(req, res, (err) => {
+    upload.single('image')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -65,16 +66,14 @@ module.exports = function registerUploads(deps) {
       }
       // Rename file to use safe extension if it doesn't already match
       const currentExt = path.extname(req.file.filename).toLowerCase();
+      let finalName = req.file.filename;
       if (currentExt !== safeExt) {
-        const safeName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        const oldPath = req.file.path;
-        const newPath = path.join(uploadDir, safeName);
-        fs.renameSync(oldPath, newPath);
-        recordUploadOwnership(user.id, safeName, req.file.size, uploadScopeFromRequest(req));
-        return res.json({ url: `/uploads/${safeName}` });
+        finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
+        fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), finalName));
       }
-      recordUploadOwnership(user.id, req.file.filename, req.file.size, uploadScopeFromRequest(req));
-      res.json({ url: `/uploads/${req.file.filename}` });
+      try { await storage.admitUpload(req.file, finalName); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
+      recordUploadOwnership(user.id, finalName, req.file.size, uploadScopeFromRequest(req));
+      res.json({ url: `/uploads/${finalName}` });
     });
   });
 
@@ -93,7 +92,7 @@ module.exports = function registerUploads(deps) {
       return res.status(403).json({ error: 'You don\'t have permission to upload files' });
     }
 
-    fileUpload.single('file')(req, res, (err) => {
+    fileUpload.single('file')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -111,6 +110,7 @@ module.exports = function registerUploads(deps) {
       const originalName = Buffer.from(req.file.originalname || 'file', 'latin1').toString('utf8');
       const fileSize = req.file.size;
 
+      try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       recordUploadOwnership(user.id, req.file.filename, fileSize, uploadScopeFromRequest(req));
 
       res.json({

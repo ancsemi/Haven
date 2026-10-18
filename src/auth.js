@@ -254,12 +254,12 @@ async function downloadSSOAvatar(url) {
   if (!validMagic) throw new Error('File content does not match image type');
 
   const filename = Date.now() + crypto.randomBytes(8).toString('hex') + ext;
-  const { UPLOADS_DIR, UNPROCESSED_DIR } = require('./paths');
+  const { UNPROCESSED_DIR } = require('./paths');
   const path = require('path');
   // Cleaned of location data before it goes anywhere it can be seen.
   const tmp = path.join(UNPROCESSED_DIR, filename);
   require('fs').writeFileSync(tmp, buffer);
-  await require('./privacyPass').admitFile(tmp, path.join(UPLOADS_DIR, filename));
+  await require('./privacyPass').admitFile(tmp, filename);
   return `/uploads/${filename}`;
 }
 

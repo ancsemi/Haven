@@ -5,10 +5,11 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const { verifyToken } = require('../auth');
+const storage = require('../storage');
 const { sanitizeBorderTransform } = require('../socketHandlers');
 
 module.exports = function registerProfile(deps) {
-  const { uploadDiskGuard, app, recordUploadOwnership, verifyAdminFromDb, userHasPermission, uploadDir, upload, uploadLimiter } = deps;
+  const { uploadDiskGuard, app, recordUploadOwnership, verifyAdminFromDb, userHasPermission, upload, uploadLimiter } = deps;
   // Profile pictures, borders and persona avatars share one size limit the
   // admin sets (Settings, Uploads & Limits): 1 to 10 MB, 2 MB by default.
   const avatarMaxMb = () => {
@@ -26,7 +27,7 @@ module.exports = function registerProfile(deps) {
     const ban = getDb().prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
     if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
 
-    upload.single('avatar')(req, res, (err) => {
+    upload.single('avatar')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
       const maxMb = avatarMaxMb();
@@ -66,10 +67,9 @@ module.exports = function registerProfile(deps) {
       let finalName = req.file.filename;
       if (currentExt !== safeExt) {
         finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        const oldPath = req.file.path;
-        const newPath = path.join(uploadDir, finalName);
-        fs.renameSync(oldPath, newPath);
+        fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), finalName));
       }
+      try { await storage.admitUpload(req.file, finalName); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const avatarUrl = `/uploads/${finalName}`;
 
       recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
@@ -118,7 +118,7 @@ module.exports = function registerProfile(deps) {
       return res.status(403).json({ error: 'You don\'t have permission to upload files' });
     }
 
-    upload.single('border')(req, res, (err) => {
+    upload.single('border')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
       const maxMb = avatarMaxMb();
@@ -158,10 +158,9 @@ module.exports = function registerProfile(deps) {
       let finalName = req.file.filename;
       if (currentExt !== safeExt) {
         finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        const oldPath = req.file.path;
-        const newPath = path.join(uploadDir, finalName);
-        fs.renameSync(oldPath, newPath);
+        fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), finalName));
       }
+      try { await storage.admitUpload(req.file, finalName); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const borderUrl = `/uploads/${finalName}`;
 
       // Update the user's border in the database
@@ -260,7 +259,7 @@ module.exports = function registerProfile(deps) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
 
-    upload.single('avatar')(req, res, (err) => {
+    upload.single('avatar')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -294,8 +293,9 @@ module.exports = function registerProfile(deps) {
       let finalName = req.file.filename;
       if (currentExt !== safeExt) {
         finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        fs.renameSync(req.file.path, path.join(uploadDir, finalName));
+        fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), finalName));
       }
+      try { await storage.admitUpload(req.file, finalName); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const avatarUrl = `/uploads/${finalName}`;
 
       // Update the webhook's avatar in DB
@@ -453,7 +453,7 @@ module.exports = function registerProfile(deps) {
     const ban = getDb().prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
     if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
 
-    upload.single('avatar')(req, res, (err) => {
+    upload.single('avatar')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
       const maxMb = avatarMaxMb();
@@ -489,8 +489,9 @@ module.exports = function registerProfile(deps) {
       let finalName = req.file.filename;
       if (currentExt !== safeExt) {
         finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        fs.renameSync(req.file.path, path.join(uploadDir, finalName));
+        fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), finalName));
       }
+      try { await storage.admitUpload(req.file, finalName); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const avatarUrl = `/uploads/${finalName}`;
       recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
 
@@ -501,7 +502,10 @@ module.exports = function registerProfile(deps) {
           const persona = getDb().prepare(
             'SELECT id FROM user_personas WHERE id = ? AND user_id = ?'
           ).get(personaId, user.id);
-          if (!persona) return res.status(403).json({ error: 'Not your persona' });
+          if (!persona) {
+            await storage.remove(finalName);
+            return res.status(403).json({ error: 'Not your persona' });
+          }
           getDb().prepare('UPDATE user_personas SET avatar = ? WHERE id = ?').run(avatarUrl, personaId);
         } catch (dbErr) {
           console.error('Persona avatar DB error:', dbErr);

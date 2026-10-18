@@ -6,6 +6,8 @@
 //
 // All `rel` arguments are the path after "/uploads/", with forward slashes.
 
+const fs = require('fs');
+const path = require('path');
 const { UPLOADS_DIR } = require('../paths');
 const { LocalStorage } = require('./local');
 const { DELETED_PREFIX, isSafeUploadRelPath, isContainedRelPath } = require('./paths');
@@ -45,6 +47,25 @@ async function admit(rel, localPath, { contentType } = {}) {
                             created_at = CURRENT_TIMESTAMP, deleted_at = NULL`)
     .run(rel, size, contentType || null));
   return { size };
+}
+
+/**
+ * A route's checked upload (req.file from privacyPass.diskStorage) goes into
+ * storage as `name`, the route's final name for it in the same staging
+ * folder. Returns the rel path. On failure the staged copy is removed and the
+ * error thrown, so the route answers 500 and nothing is left behind.
+ */
+async function admitUpload(file, name = file.filename) {
+  const staged = path.join(path.dirname(file.path), name);
+  const rel = file.relDir ? `${file.relDir}/${name}` : name;
+  try {
+    await admit(rel, staged, { contentType: file.mimetype });
+  } catch (err) {
+    console.error(`[uploads] Could not store ${rel}:`, err.message);
+    try { fs.unlinkSync(staged); } catch { /* never written, or already gone */ }
+    throw err;
+  }
+  return rel;
 }
 
 /** Moves `rel` into deleted-attachments/, where it waits out the retention window. Never throws. */
@@ -87,7 +108,7 @@ async function restore(rel) {
 }
 
 module.exports = {
-  getStorage, setStorage, admit, softDelete, remove, purge, restore,
+  getStorage, setStorage, admit, admitUpload, softDelete, remove, purge, restore,
   head: (rel) => getStorage().head(rel),
   getStream: (rel, opts) => getStorage().getStream(rel, opts),
   readBuffer: (rel) => getStorage().readBuffer(rel),

@@ -1138,7 +1138,7 @@ app.get('/api/ice-servers', (req, res) => {
 });
 
 // ── Profile pictures, borders and personas: src/routes/profile.js ──
-require('./src/routes/profile')({ uploadDiskGuard, app, recordUploadOwnership, verifyAdminFromDb, userHasPermission, uploadDir, upload, uploadLimiter });
+require('./src/routes/profile')({ uploadDiskGuard, app, recordUploadOwnership, verifyAdminFromDb, userHasPermission, upload, uploadLimiter });
 
 // ── Serve pages ──────────────────────────────────────────
 
@@ -1434,7 +1434,7 @@ function uploadLimiter(req, res, next) {
 setInterval(() => { const now = Date.now(); for (const [ip, t] of uploadLimitStore) { const f = t.filter(x => now - x < 60000); if (!f.length) uploadLimitStore.delete(ip); else uploadLimitStore.set(ip, f); } }, 5 * 60 * 1000);
 
 // ── Image and file uploads, and Flash ROMs: src/routes/uploads.js ──
-require('./src/routes/uploads')({ uploadDiskGuard, app, recordUploadOwnership, uploadScopeFromRequest, uploadCapMb, verifyAdminFromDb, userHasPermission, uploadDir, upload, fileUpload, uploadLimiter });
+require('./src/routes/uploads')({ uploadDiskGuard, app, recordUploadOwnership, uploadScopeFromRequest, uploadCapMb, verifyAdminFromDb, userHasPermission, upload, fileUpload, uploadLimiter });
 
 // (duplicate avatar handler removed; handled above at /api/upload-avatar)
 
@@ -1525,7 +1525,7 @@ app.post('/api/upload-server-icon', uploadLimiter, uploadDiskGuard, (req, res) =
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
-  upload.single('image')(req, res, (err) => {
+  upload.single('image')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message, code: err.code });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     if (req.file.size > 2 * 1024 * 1024) {
@@ -1546,6 +1546,7 @@ app.post('/api/upload-server-icon', uploadLimiter, uploadDiskGuard, (req, res) =
       if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
     } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
+    try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
     const iconUrl = `/uploads/${req.file.filename}`;
     const { getDb } = require('./src/database');
     getDb().prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('server_icon', ?)").run(iconUrl);
@@ -1562,7 +1563,7 @@ app.post('/api/upload-role-icon', uploadLimiter, uploadDiskGuard, (req, res) => 
     return res.status(403).json({ error: 'Admin or manage_roles permission required' });
   }
 
-  upload.single('icon')(req, res, (err) => {
+  upload.single('icon')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message, code: err.code });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     if (req.file.size > 512 * 1024) {
@@ -1582,6 +1583,7 @@ app.post('/api/upload-role-icon', uploadLimiter, uploadDiskGuard, (req, res) => 
       if (!validMagic) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image' }); }
     } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
+    try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
     const iconUrl = `/uploads/${req.file.filename}`;
     res.json({ path: iconUrl });
   });
@@ -1597,7 +1599,7 @@ app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res)
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
 
-  upload.single('image')(req, res, (err) => {
+  upload.single('image')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message, code: err.code });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     if (req.file.size > 4 * 1024 * 1024) {
@@ -1616,6 +1618,7 @@ app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res)
       if (!isJpeg && !isPng && !isGif && !isWebp) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: 'Invalid image: only JPG, PNG, GIF, or WebP' }); }
     } catch { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } return res.status(400).json({ error: 'Failed to validate' }); }
 
+    try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
     const bannerUrl = `/uploads/${req.file.filename}`;
     const { getDb } = require('./src/database');
     getDb().prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('server_banner', ?)").run(bannerUrl);
