@@ -314,6 +314,21 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_upload_ownership_user
       ON upload_ownership(user_id);
 
+    -- Every file under uploads/ (bot-audio/ aside), live or waiting in
+    -- deleted-attachments/, kept by src/storage so sizes and purges never need
+    -- a walk of the folder or a listing of the bucket. rel_path is the live
+    -- key; a deleted file keeps it and its state says where it is now.
+    CREATE TABLE IF NOT EXISTS media_objects (
+      rel_path TEXT PRIMARY KEY,
+      bytes INTEGER NOT NULL,
+      content_type TEXT,
+      state TEXT NOT NULL DEFAULT 'live',   -- 'live' | 'deleted'
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      deleted_at DATETIME
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_objects_state
+      ON media_objects(state, deleted_at);
+
     -- ── Attachment tagging (upload tags) ──────────────────
     -- A GLOBAL tag vocabulary applied to file/image uploads. Separate from the
     -- per-channel forum-topic tags (channels.forum_tags / messages.tags JSON).

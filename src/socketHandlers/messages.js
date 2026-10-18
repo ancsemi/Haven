@@ -18,7 +18,8 @@ const mediaGroup = require('../mediaGroup');
 const { takeSilent } = require('../silentMessages');
 const { tagAccess } = require('../uploadTagRoles');
 const { moveToChannel } = require('../moveMessages');
-const { isSafeUploadRelPath, moveUploadToDeleted } = require('../uploadFiles');
+const storage = require('../storage');
+const { isSafeUploadRelPath } = storage;
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -133,14 +134,14 @@ module.exports = function register(socket, ctx) {
     for (const id of ids) out.push(...q.all(id));
     return out;
   }
-  function releaseReplyUploads(replies) {
+  async function releaseReplyUploads(replies) {
     for (const r of replies) {
       if (!Number.isInteger(r.user_id)) continue;
       const rels = [];
       UPLOAD_PATH_RE.lastIndex = 0;
       let m;
       while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) rels.push(m[1]);
-      for (const rel of releasableUploads(db, rels, [r.user_id])) moveUploadToDeleted(rel);
+      for (const rel of releasableUploads(db, rels, [r.user_id])) await storage.softDelete(rel);
     }
   }
 
@@ -1008,7 +1009,7 @@ module.exports = function register(socket, ctx) {
   // for each so other clients update. Shared by the Files & Media gallery
   // (delete-channel-media, #5375) and the multi-select toolbar Delete
   // (delete-messages, #5460) so both stay behaviourally identical.
-  const bulkDeleteMessagesByIds = (data, cb) => {
+  const bulkDeleteMessagesByIds = async (data, cb) => {
     if (!data || typeof data !== 'object') return cb({ error: 'Bad request' });
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return cb({ error: 'Bad channel' });
@@ -1118,9 +1119,9 @@ module.exports = function register(socket, ctx) {
           }
         }
       }
-      for (const rel of releasableUploads(db, toRelease, [r.user_id])) moveUploadToDeleted(rel);
+      for (const rel of releasableUploads(db, toRelease, [r.user_id])) await storage.softDelete(rel);
     }
-    releaseReplyUploads(bulkReplies);
+    await releaseReplyUploads(bulkReplies);
 
     // Broadcast individual deletes so all clients' message lists, pin lists,
     // and open Files & Media views stay consistent.
@@ -1179,7 +1180,7 @@ module.exports = function register(socket, ctx) {
       db.transaction(() => {
         for (const r of rows) { delPin.run(r.id); delMsg.run(r.id); }
       })();
-      releaseReplyUploads(othersReplies);
+      await releaseReplyUploads(othersReplies);
 
       const toRelease = [];
       for (const r of rows) {
@@ -1187,7 +1188,7 @@ module.exports = function register(socket, ctx) {
         let m;
         while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) toRelease.push(m[1]);
       }
-      for (const rel of releasableUploads(db, toRelease, [uid])) moveUploadToDeleted(rel);
+      for (const rel of releasableUploads(db, toRelease, [uid])) await storage.softDelete(rel);
 
       // One event per channel rather than one per message: a person with
       // years of history would otherwise send thousands of events to every
@@ -2196,7 +2197,7 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Delete message ──────────────────────────────────────
-  socket.on('delete-message', (data) => {
+  socket.on('delete-message', async (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
@@ -2267,7 +2268,7 @@ module.exports = function register(socket, ctx) {
       console.error('Delete message error:', err);
       return socket.emit('error-msg', 'Failed to delete message');
     }
-    releaseReplyUploads(replies);
+    await releaseReplyUploads(replies);
     // Deleted before its timer ran out: the self-destruct timer may have been
     // waiting for this one, so let it move on to the next, or sleep.
     if (msg.destruct_at) selfDestruct.forget(msg.destruct_at);
@@ -2290,7 +2291,7 @@ module.exports = function register(socket, ctx) {
         toRelease.push(match[1]);
       }
     }
-    for (const rel of releasableUploads(db, toRelease, [msg.user_id])) moveUploadToDeleted(rel);
+    for (const rel of releasableUploads(db, toRelease, [msg.user_id])) await storage.softDelete(rel);
 
     io.to(`channel:${code}`).emit('message-deleted', {
       channelCode: code,

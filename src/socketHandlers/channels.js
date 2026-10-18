@@ -3,7 +3,8 @@
 const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
 const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
 
-const { isSafeUploadRelPath, moveUploadToDeleted } = require('../uploadFiles');
+const storage = require('../storage');
+const { isSafeUploadRelPath } = storage;
 const { isString, isInt, releasableUploads, CHANNEL_NAME_RE, NEW_DMS_PER_HOUR } = require('./helpers');
 
 // The files the messages in these channels point at, kept per author, read
@@ -31,10 +32,10 @@ function channelUploadsByAuthor(db, channelIds) {
 // After the delete: move out the files nothing else points at anymore. The
 // same file can be linked from more than one message (a copy pasted image
 // URL), so a file still used elsewhere stays. Mirrors auto-cleanup (#5423).
-function releaseChannelUploads(db, byAuthor, label) {
+async function releaseChannelUploads(db, byAuthor, label) {
   for (const [authorId, rels] of byAuthor) {
     try {
-      for (const rel of releasableUploads(db, [...rels], [authorId])) moveUploadToDeleted(rel);
+      for (const rel of releasableUploads(db, [...rels], [authorId])) await storage.softDelete(rel);
     } catch (err) { console.warn(`${label} attachment cleanup failed:`, err.message); /* the files stay in uploads/; nothing is lost */ }
   }
 }
@@ -756,7 +757,7 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Delete channel ──────────────────────────────────────
-  socket.on('delete-channel', (data) => {
+  socket.on('delete-channel', async (data) => {
     if (!data || typeof data !== 'object') return;
     const delCode = typeof data.code === 'string' ? data.code.trim() : '';
     const delCh = delCode ? db.prepare('SELECT id, created_by, is_temp_voice FROM channels WHERE code = ?').get(delCode) : null;
@@ -816,7 +817,7 @@ module.exports = function register(socket, ctx) {
     for (const deletedCode of deletedCodes) botAudioManager?.stopChannel(deletedCode, 'channel-deleted');
     broadcastChannelLists();
 
-    releaseChannelUploads(db, doomedUploads, 'delete-channel');
+    await releaseChannelUploads(db, doomedUploads, 'delete-channel');
 
     for (const deletedCode of deletedCodes) {
       io.to(`channel:${deletedCode}`).to(`voice:${deletedCode}`).emit('channel-deleted', { code: deletedCode });
@@ -981,7 +982,7 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  socket.on('delete-sub-channel', (data) => {
+  socket.on('delete-sub-channel', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
@@ -1020,7 +1021,7 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
-      releaseChannelUploads(db, doomedUploads, 'delete-sub-channel');
+      await releaseChannelUploads(db, doomedUploads, 'delete-sub-channel');
       botAudioManager?.stopChannel(code, 'channel-deleted');
       io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
       clearChannelRuntimeState(state, code);
@@ -1955,7 +1956,7 @@ module.exports = function register(socket, ctx) {
   });
 
   // Returns false, deleting nothing, when the DM holds protected messages.
-  function purgeDmChannel(channel, attachments, extraOwners = []) {
+  async function purgeDmChannel(channel, attachments, extraOwners = []) {
     if (protectedMessages.protectedCount(db, [channel.id])) return false;
     // Collect attachment filenames before we drop the message rows. We
     // scan plaintext message content server-side, and also accept a
@@ -2001,11 +2002,11 @@ module.exports = function register(socket, ctx) {
     });
     deleteAll(channel.id);
 
-    for (const name of releasableUploads(db, filenames, participants)) moveUploadToDeleted(name);
+    for (const name of releasableUploads(db, filenames, participants)) await storage.softDelete(name);
     return true;
   }
   ctx.purgeDmChannel = purgeDmChannel;
-  socket.on('delete-dm', (data) => {
+  socket.on('delete-dm', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
@@ -2013,11 +2014,11 @@ module.exports = function register(socket, ctx) {
     if (!channel) return socket.emit('error-msg', 'DM not found');
     const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
     if (!isMember && !socket.user.isAdmin) return socket.emit('error-msg', 'Not authorized');
-    if (isMember && channel.is_group && ctx.leaveGroupDm) return void ctx.leaveGroupDm(code, socket.user.id, data.attachments);
+    if (isMember && channel.is_group && ctx.leaveGroupDm) return void (await ctx.leaveGroupDm(code, socket.user.id, data.attachments));
     // An admin outside a group deletes it for everyone, with the same checks and notices as from its menu.
-    if (channel.is_group) return void (ctx.deleteGroupDmForEveryone ? ctx.deleteGroupDmForEveryone(code, data.attachments) : socket.emit('error-msg', 'Not authorized'));
+    if (channel.is_group) return void (ctx.deleteGroupDmForEveryone ? await ctx.deleteGroupDmForEveryone(code, data.attachments) : socket.emit('error-msg', 'Not authorized'));
 
-    if (!purgeDmChannel(channel, data.attachments)) return socket.emit('error-msg', protectedMessages.CONVERSATION_REFUSAL);
+    if (!(await purgeDmChannel(channel, data.attachments))) return socket.emit('error-msg', protectedMessages.CONVERSATION_REFUSAL);
 
     io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
     clearChannelRuntimeState(state, code);

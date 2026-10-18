@@ -12,9 +12,9 @@
 //     the admin only when that role sits below them.
 //   - Every check that fails, or throws, refuses.
 
-const fs = require('fs');
 const path = require('path');
 const badges = require('../badges');
+const storage = require('../storage');
 
 module.exports = function register(socket, ctx) {
   const { db, userHasPermission, getUserEffectiveLevel, logAudit, UPLOADS_DIR } = ctx;
@@ -61,13 +61,11 @@ module.exports = function register(socket, ctx) {
     return row ? row.name : null;
   };
 
-  // An uploaded icon no badge uses any more goes from disk.
-  const dropIconFile = (icon) => {
+  // An uploaded icon no badge uses any more goes from storage.
+  const dropIconFile = async (icon) => {
     if (!icon || !badges.ICON_PATH_RE.test(icon)) return;
     if (db.prepare("SELECT 1 FROM badges WHERE icon_type = 'image' AND icon = ?").get(icon)) return;
-    fs.unlink(path.join(UPLOADS_DIR, 'badges', path.basename(icon)), (err) => {
-      if (err && err.code !== 'ENOENT') console.warn('[badges] could not remove an unused icon:', err.code || err.message);
-    });
+    await storage.remove(`badges/${path.basename(icon)}`);
   };
 
   // The icon key for a checked badge, or the reason it cannot be used: the
@@ -128,7 +126,7 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  socket.on('update-badge', (data, callback) => {
+  socket.on('update-badge', async (data, callback) => {
     const cb = answer(callback);
     if (!canManage()) return cb({ error: 'You do not have permission to manage badges' });
     try {
@@ -148,7 +146,7 @@ module.exports = function register(socket, ctx) {
           WHERE id = ?`).run(b.name, b.description, b.icon_type, b.icon, icon.key, b.kind, b.threshold, b.role_id, b.enabled, current.id);
         if (dropHolders) db.prepare('DELETE FROM user_badges WHERE badge_id = ?').run(current.id);
       })();
-      if (current.icon !== b.icon) dropIconFile(current.icon);
+      if (current.icon !== b.icon) await dropIconFile(current.icon);
       audit({ actor: socket.user, action: 'badge_update', target_type: 'badge', target_id: current.id, target_name: b.name,
         details: { kind: b.kind, threshold: b.threshold, roleId: b.role_id, enabled: !!b.enabled, renamedFrom: current.name !== b.name ? current.name : null } });
       cb(fullList());
@@ -158,7 +156,7 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  socket.on('delete-badge', (data, callback) => {
+  socket.on('delete-badge', async (data, callback) => {
     const cb = answer(callback);
     if (!canManage()) return cb({ error: 'You do not have permission to manage badges' });
     try {
@@ -167,7 +165,7 @@ module.exports = function register(socket, ctx) {
       const refusal = roleRefusal(current.role_id);
       if (refusal) return cb({ error: refusal });
       db.prepare('DELETE FROM badges WHERE id = ?').run(current.id);
-      dropIconFile(current.icon);
+      await dropIconFile(current.icon);
       audit({ actor: socket.user, action: 'badge_delete', target_type: 'badge', target_id: current.id, target_name: current.name,
         details: { kind: current.kind } });
       cb(fullList());

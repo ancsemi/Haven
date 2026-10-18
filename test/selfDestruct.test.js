@@ -48,6 +48,9 @@ const add = (content, destructAt, user = author) => db.prepare(
   'INSERT INTO messages (channel_id, user_id, content, destruct_at) VALUES (?, ?, ?, ?)'
 ).run(channel, user, content, destructAt).lastInsertRowid;
 const exists = (id) => !!db.prepare('SELECT 1 FROM messages WHERE id = ?').get(id);
+// Sweeps move files asynchronously; this lets one that a tick started finish.
+const settle = () => new Promise((r) => setImmediate(r));
+const tick = async (ms) => { test.mock.timers.tick(ms); await settle(); };
 
 test.before(() => { test.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() }); });
 test.after(() => {
@@ -59,7 +62,7 @@ test.after(() => {
   fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
-test('destructAtFromSeconds accepts 1 second to 24 hours only', () => {
+test('destructAtFromSeconds accepts 1 second to 24 hours only', async () => {
   for (const bad of [undefined, null, '', 'abc', 0, 0.4, -5, 86401, Infinity, NaN]) {
     assert.equal(selfDestruct.destructAtFromSeconds(bad), null, `rejects ${bad}`);
   }
@@ -67,7 +70,7 @@ test('destructAtFromSeconds accepts 1 second to 24 hours only', () => {
   assert.ok(selfDestruct.destructAtFromSeconds(86400));
 });
 
-test('startup removes what came due while the server was down', () => {
+test('startup removes what came due while the server was down', async () => {
   file('sd-mine.png', author);
   file('sd-solo.png', author);
   file('sd-theirs.png', other);
@@ -78,7 +81,7 @@ test('startup removes what came due while the server was down', () => {
   const pending = add('/uploads/sd-later.png', at(60 * MIN));
   db.prepare('INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)').run(expired, other, '🔥');
 
-  selfDestruct.start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload });
+  await selfDestruct.start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload });
 
   assert.equal(exists(expired), false);
   assert.equal(exists(quote), true);
@@ -93,49 +96,49 @@ test('startup removes what came due while the server was down', () => {
   assert.equal(onDisk('sd-later.png'), true, 'not due yet');
 
   // The timer is waiting for the pending one and fires on time.
-  test.mock.timers.tick(60 * MIN - 1);
+  await tick(60 * MIN - 1);
   assert.equal(exists(pending), true);
-  test.mock.timers.tick(1);
+  await tick(1);
   assert.equal(exists(pending), false);
   assert.equal(onDisk('sd-later.png'), false);
 });
 
-test('a file already shared in an older message stays', () => {
+test('a file already shared in an older message stays', async () => {
   file('sd-shared.png', author);
   const earlier = add('/uploads/sd-shared.png', null);
   const msg = add('/uploads/sd-shared.png', at(MIN));
   selfDestruct.schedule(at(MIN));
-  test.mock.timers.tick(MIN);
+  await tick(MIN);
   assert.equal(exists(msg), false);
   assert.equal(exists(earlier), true);
   assert.equal(onDisk('sd-shared.png'), true, 'the older message still shows it');
 });
 
-test("the sender's own link in another message does not keep the file either", () => {
+test("the sender's own link in another message does not keep the file either", async () => {
   file('sd-reused.png', author);
   const msg = add('/uploads/sd-reused.png', at(MIN));
   const again = add('again /uploads/sd-reused.png', null);
   selfDestruct.schedule(at(MIN));
-  test.mock.timers.tick(MIN);
+  await tick(MIN);
   assert.equal(exists(msg), false);
   assert.equal(onDisk('sd-reused.png'), false);
   assert.equal(exists(again), true, 'the other message itself stays');
 });
 
-test('asleep with nothing left, and a new message wakes it', () => {
+test('asleep with nothing left, and a new message wakes it', async () => {
   // Written without telling the timer: it is asleep, so nothing happens.
   const unseen = add('unseen', at(MIN));
-  test.mock.timers.tick(2 * MIN);
+  await tick(2 * MIN);
   assert.equal(exists(unseen), true, 'no polling while asleep');
   db.prepare('DELETE FROM messages WHERE id = ?').run(unseen);
 
   const sent = add('sent', at(MIN));
   selfDestruct.schedule(at(MIN));
-  test.mock.timers.tick(MIN);
+  await tick(MIN);
   assert.equal(exists(sent), false);
 });
 
-test('deleting the message it waits for moves it to the next one', () => {
+test('deleting the message it waits for moves it to the next one', async () => {
   const firstAt = at(MIN);
   const first = add('first', firstAt);
   const second = add('second', at(2 * MIN));
@@ -145,9 +148,9 @@ test('deleting the message it waits for moves it to the next one', () => {
   db.prepare('DELETE FROM messages WHERE id = ?').run(first);
   selfDestruct.forget(firstAt);
 
-  test.mock.timers.tick(MIN);
+  await tick(MIN);
   assert.equal(exists(second), true);
-  test.mock.timers.tick(MIN);
+  await tick(MIN);
   assert.equal(exists(second), false);
 });
 
@@ -156,12 +159,12 @@ const setKeep = (value) => db.prepare(
 ).run(value);
 const held = (name) => fs.existsSync(path.join(DELETED_ATTACHMENTS_DIR, name));
 
-test('with keep self destructed attachments off, files are removed for good', () => {
+test('with keep self destructed attachments off, files are removed for good', async () => {
   setKeep('false');
   file('sd-gone.png', author);
   const msg = add('/uploads/sd-gone.png', at(MIN));
   selfDestruct.schedule(at(MIN));
-  test.mock.timers.tick(MIN);
+  await tick(MIN);
   assert.equal(exists(msg), false);
   assert.equal(onDisk('sd-gone.png'), false);
   assert.equal(held('sd-gone.png'), false, 'not held in deleted-attachments');
@@ -170,11 +173,11 @@ test('with keep self destructed attachments off, files are removed for good', ()
   file('sd-kept.png', author);
   add('/uploads/sd-kept.png', at(MIN));
   selfDestruct.schedule(at(MIN));
-  test.mock.timers.tick(MIN);
+  await tick(MIN);
   assert.equal(held('sd-kept.png'), true, 'turned back on, files are held again');
 });
 
-test('an unreadable keep setting holds the files', () => {
+test('an unreadable keep setting holds the files', async () => {
   setKeep('false');
   selfDestruct.stop();
   const busy = new Proxy(db, {
@@ -189,7 +192,7 @@ test('an unreadable keep setting holds the files', () => {
   });
   file('sd-busy.png', author);
   const msg = add('/uploads/sd-busy.png', at(-MIN));
-  selfDestruct.start({ db: busy, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload });
+  await selfDestruct.start({ db: busy, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload });
   assert.equal(exists(msg), false, 'the message still goes');
   assert.equal(held('sd-busy.png'), true, 'but its file is held, not removed for good');
   setKeep('true');

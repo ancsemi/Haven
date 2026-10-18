@@ -23,7 +23,7 @@ const { getDdnsStatus, triggerDdnsNow } = require('../ddns');
 module.exports = function registerMaintenance(deps) {
   const { app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted, verifyAdminFromDb, buildBackupFile, db, late } = deps;
   // ── Auto-cleanup interval (runs every 15 minutes) ───────
-  function runAutoCleanup() {
+  async function runAutoCleanup() {
     try {
       const getSetting = (key) => {
         const row = db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key);
@@ -66,14 +66,14 @@ module.exports = function registerMaintenance(deps) {
       // removes files: it follows the messages it deletes. It never scans the
       // uploads/ directory directly, so avatars, persona avatars, custom emojis,
       // soundboard sounds, stickers, and the server icon are never at risk (#5423).
-      const relocateOrphanAttachments = (relPaths) => {
+      const relocateOrphanAttachments = async (relPaths) => {
         for (const rel of relPaths) {
           try {
             const like = '%/uploads/' + rel.replace(/[\\%_]/g, '\\$&') + '%';
             const still = db.prepare(
               "SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1"
             ).get(like);
-            if (!still) moveUploadToDeleted(rel);
+            if (!still) await moveUploadToDeleted(rel);
           } catch (err) {
             console.warn(`[cleanup] Could not check whether ${rel} is still referenced:`, err.message);
           }
@@ -97,7 +97,7 @@ module.exports = function registerMaintenance(deps) {
         const result = db.prepare(`DELETE FROM messages WHERE id IN (${oldSql})`).run(`-${maxAgeDays} days`);
         totalDeleted += result.changes;
 
-        relocateOrphanAttachments(doomedAttachments);
+        await relocateOrphanAttachments(doomedAttachments);
       }
 
       // 2. If total DB size exceeds maxSizeMb, trim oldest messages (skip
@@ -127,7 +127,7 @@ module.exports = function registerMaintenance(deps) {
               db.prepare(`DELETE FROM messages WHERE id IN (${placeholders})`).run(...chunk);
             }
             totalDeleted += oldestIds.length;
-            relocateOrphanAttachments(trimmedAttachments);
+            await relocateOrphanAttachments(trimmedAttachments);
           }
         }
       }
@@ -186,13 +186,7 @@ module.exports = function registerMaintenance(deps) {
                 if (isSafeUploadRelPath(mm[1])) seen.add(mm[1]);
               }
             }
-            if (seen.size) {
-              const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
-              require('fs').mkdirSync(deletedDir, { recursive: true });
-              for (const fn of seen) {
-                moveUploadToDeleted(fn);
-              }
-            }
+            for (const fn of seen) await moveUploadToDeleted(fn);
             // Delete the channel: cascades to messages + read_positions +
             // channel_members + reactions etc. via the existing FKs.
             db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
@@ -225,7 +219,7 @@ module.exports = function registerMaintenance(deps) {
   // Encrypted DM files whose message was deleted (#5699; the trigger that notes
   // them is in src/database.js). Each goes to deleted-attachments like any other
   // deleted file, unless a message still points at it.
-  function releaseDeletedE2eFiles() {
+  async function releaseDeletedE2eFiles() {
     try {
       const { getDb } = require('../database');
       const db = getDb();
@@ -240,7 +234,7 @@ module.exports = function registerMaintenance(deps) {
       for (const { rel_path: rel } of rows) {
         const like = '%/uploads/' + rel.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
         if (isSafeUploadRelPath(rel) && !inEncrypted.get(rel) && !inContent.get(like)) {
-          moveUploadToDeleted(rel);
+          await moveUploadToDeleted(rel);
           moved++;
         }
         done.run(rel);

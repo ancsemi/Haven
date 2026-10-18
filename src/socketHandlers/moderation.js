@@ -96,7 +96,7 @@ module.exports = function register(socket, ctx) {
   }
 
   // ── Kick user ───────────────────────────────────────────
-  socket.on('kick-user', (data) => {
+  socket.on('kick-user', async (data) => {
     if (!data || typeof data !== 'object') return;
     const kickCode = socket.currentChannel;
     const kickCh = kickCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(kickCode) : null;
@@ -154,7 +154,7 @@ module.exports = function register(socket, ctx) {
     if (groupKick) {
       // Told first, while their app still knows the group's name.
       for (const ts of targetSockets) ts.emit('kicked', { channelCode: code, group: true, reason: kickReason });
-      ctx.leaveGroupDm(code, data.userId, []);
+      await ctx.leaveGroupDm(code, data.userId, []);
     } else {
       if (kickCh) {
         db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(kickCh.id, data.userId);

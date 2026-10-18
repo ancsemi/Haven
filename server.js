@@ -172,7 +172,8 @@ const late = {
 const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
 const UPLOAD_URL_PATH_RE = /\/uploads\/+([-A-Za-z0-9_.~%/\\]+)/gi;
 
-const { isSafeUploadRelPath, moveUploadToDeleted, removeUpload } = require('./src/uploadFiles');
+const storage = require('./src/storage');
+const { isSafeUploadRelPath } = storage;
 
 function collectUploadRelPaths(contents) {
   const paths = new Set();
@@ -204,7 +205,7 @@ function collectUploadRelPaths(contents) {
   return paths;
 }
 
-function relocateUnreferencedUploads(db, relPaths) {
+async function relocateUnreferencedUploads(db, relPaths) {
   const candidates = new Set(
     Array.from(relPaths).filter(relPath => fs.existsSync(path.join(UPLOADS_DIR, relPath)))
   );
@@ -268,7 +269,7 @@ function relocateUnreferencedUploads(db, relPaths) {
     if (latestDmMessage && latestDmMessage >= ownership.created_at) continue;
 
     if (findProtectedFilenameReference.get(relPath, relPath, relPath)) continue;
-    moveUploadToDeleted(relPath);
+    await storage.softDelete(relPath);
   }
 }
 
@@ -2266,7 +2267,7 @@ app.delete(
 );
 
 // ── Bot: Delete a message in the webhook's channel ──────
-app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res) => {
+app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, async (req, res) => {
   const { getDb } = require('./src/database');
   const db = getDb();
   const { token, messageId } = req.params;
@@ -2309,7 +2310,7 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
   // named let a message that quoted someone's avatar or an emoji take that
   // file away from everyone.
   try {
-    relocateUnreferencedUploads(db, collectUploadRelPaths([msg.content, ...replies.map(r => r.content)]));
+    await relocateUnreferencedUploads(db, collectUploadRelPaths([msg.content, ...replies.map(r => r.content)]));
   } catch (err) {
     console.error('Bot delete attachment cleanup error:', err);
   }
@@ -2328,7 +2329,7 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, (req, res
 
 // ── Bot: Delete recent messages and their replies ─────────
 // Protected messages, and thread heads holding one, are left out.
-app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
+app.delete('/api/webhooks/:token/messages', webhookLimiter, async (req, res) => {
   const webhook = requireModBot(req, res);
   if (!webhook) return;
 
@@ -2404,7 +2405,7 @@ app.delete('/api/webhooks/:token/messages', webhookLimiter, (req, res) => {
   }
 
   try {
-    relocateUnreferencedUploads(
+    await relocateUnreferencedUploads(
       db,
       collectUploadRelPaths(deletedMessages.map(message => message.content))
     );
@@ -3270,7 +3271,7 @@ socketRuntime = setupSocketHandlers(io, db, {
   onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
 });
 activityRef.engine = socketRuntime.activity;
-require('./src/selfDestruct').start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload });
+require('./src/selfDestruct').start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted: storage.softDelete, removeUpload: storage.remove });
 
 // ── Ferry: Haven <-> Discord bridge ─────────────────────
 // Started after the socket layer so an inbound Discord message always has a
@@ -3458,7 +3459,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 }
 
 // ── Auto-cleanup, auto-backup, dynamic DNS and updates: src/routes/maintenance.js ──
-require('./src/routes/maintenance')({ app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted, verifyAdminFromDb, buildBackupFile, db, late });
+require('./src/routes/maintenance')({ app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted: storage.softDelete, verifyAdminFromDb, buildBackupFile, db, late });
 
 // ── Catch-all: 404 ──────────────────────────────────────
 // Must be registered AFTER every app.get/post/etc. handler. Express

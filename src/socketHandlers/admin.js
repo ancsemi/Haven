@@ -918,12 +918,12 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Run cleanup ─────────────────────────────────────────
-  socket.on('run-cleanup-now', () => {
+  socket.on('run-cleanup-now', async () => {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server')) {
       return socket.emit('error-msg', 'Only admins can run cleanup');
     }
     if (typeof global.runAutoCleanup === 'function') {
-      global.runAutoCleanup();
+      await global.runAutoCleanup();
       socket.emit('error-msg', 'Cleanup ran. Check server console for details');
     } else {
       socket.emit('error-msg', 'Cleanup function not available');

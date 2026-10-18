@@ -6,6 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
 const privacyPass = require('../privacyPass');
+const storage = require('../storage');
 const { DATA_DIR } = require('../paths');
 const { verifyToken } = require('../auth');
 const { sanitizeSoundName } = require('../socketHandlers');
@@ -87,7 +88,7 @@ module.exports = function registerMediaLibrary(deps) {
     } catch { res.json({ sounds: [...BUILTIN_SOUNDS] }); }
   });
 
-  app.delete('/api/sounds/:name', (req, res) => {
+  app.delete('/api/sounds/:name', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -103,9 +104,7 @@ module.exports = function registerMediaLibrary(deps) {
       }
       const row = getDb().prepare('SELECT filename FROM custom_sounds WHERE name = ?').get(name);
       if (row) {
-        try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch (err) {
-          if (err.code !== 'ENOENT') console.warn(`[sounds] Could not delete file for sound "${name}":`, err.message);
-        }
+        await storage.remove(row.filename);
         getDb().prepare('DELETE FROM custom_sounds WHERE name = ?').run(name);
         getDb().prepare('DELETE FROM sound_volumes WHERE sound_name = ?').run(name);
       }
@@ -383,7 +382,7 @@ module.exports = function registerMediaLibrary(deps) {
     res.status(404).end();
   });
 
-  app.delete('/api/emojis/:name', (req, res) => {
+  app.delete('/api/emojis/:name', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -393,9 +392,7 @@ module.exports = function registerMediaLibrary(deps) {
     try {
       const row = getDb().prepare('SELECT filename FROM custom_emojis WHERE name = ?').get(name);
       if (row) {
-        try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch (err) {
-          if (err.code !== 'ENOENT') console.warn(`[emojis] Could not delete file for emoji "${name}":`, err.message);
-        }
+        await storage.remove(row.filename);
         getDb().prepare('DELETE FROM custom_emojis WHERE name = ?').run(name);
       }
       broadcastLibraryUpdate(req, 'emojis');
@@ -550,7 +547,7 @@ module.exports = function registerMediaLibrary(deps) {
     } catch { res.json({ stickers: [] }); }
   });
 
-  app.delete('/api/stickers/:name', (req, res) => {
+  app.delete('/api/stickers/:name', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -560,9 +557,7 @@ module.exports = function registerMediaLibrary(deps) {
     try {
       const row = getDb().prepare('SELECT filename FROM stickers WHERE name = ?').get(name);
       if (row) {
-        try { fs.unlinkSync(path.join(STICKERS_DIR, row.filename)); } catch (err) {
-          if (err.code !== 'ENOENT') console.warn(`[stickers] Could not delete file for sticker "${name}":`, err.message);
-        }
+        await storage.remove(`stickers/${row.filename}`);
         getDb().prepare('DELETE FROM stickers WHERE name = ?').run(name);
       }
       broadcastLibraryUpdate(req, 'stickers');

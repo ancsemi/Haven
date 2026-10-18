@@ -110,7 +110,7 @@ async function trimUploadsToLimit({ db, uploadsDir, maxBytes, extractPaths, move
         // once nothing left points at it.
         for (const rel of contentFiles) {
           const like = '%/uploads/' + rel.replace(/[\\%_]/g, '\\$&') + '%';
-          if (!stillUsed.get(like)) move(rel);
+          if (!stillUsed.get(like)) await move(rel);
         }
         size -= freed;
       }
