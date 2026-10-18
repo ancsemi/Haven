@@ -204,6 +204,134 @@ test('the server refuses to start when the bucket cannot be used', { skip }, asy
   fs.rmSync(data, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
+test('a local install moves to the bucket while it stays up, and nothing goes missing', { skip }, async () => {
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-s3-migrate-'));
+  const port = 3613, base = `http://localhost:${port}`;
+  const env = s3Env({ HAVEN_S3_PREFIX: PREFIX + 'migrate' });
+  const run = async (extra, fn) => {
+    const { child, output } = startServer(port, data, extra);
+    try {
+      let up = false;
+      for (let i = 0; i < 60 && !up; i++) { try { up = (await fetch(`${base}/api/health`)).ok; } catch { await wait(500); } }
+      assert.ok(up, output());
+      await fn();
+    } finally {
+      child.kill();
+      await new Promise((r) => (child.exitCode !== null ? r() : child.once('exit', r)));
+    }
+  };
+  const status = async (url) => (await fetch(base + url)).status;
+  const migrate = (...flags) => new Promise((resolve) => {
+    const c = spawn(process.execPath, ['scripts/migrate-uploads-to-s3.js', ...flags], {
+      cwd: path.join(__dirname, '..'), env: { ...process.env, HAVEN_DATA_DIR: data, ...env }, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let out = ''; c.stdout.on('data', (d) => (out += d)); c.stderr.on('data', (d) => (out += d));
+    c.on('exit', (code) => resolve({ code, out }));
+  });
+  const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000'
+    + '1f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4bf0000000049454e44ae426082', 'hex');
+  let urls = [];
+  try {
+    // 1. A plain local install with uploads, one of them deleted.
+    await run({}, async () => {
+      const reg = await (await fetch(`${base}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'admin', password: 's3testpass123', eulaVersion: '2.0', ageVerified: true }) })).json();
+      for (let n = 0; n < 2; n++) {
+        const fd = new FormData();
+        fd.append('image', new Blob([png], { type: 'image/png' }), 'p.png');
+        urls.push((await (await fetch(`${base}/api/upload`, { method: 'POST', headers: { Authorization: `Bearer ${reg.token}` }, body: fd })).json()).url);
+      }
+      for (const u of urls) assert.equal(await status(u), 200);
+    });
+    fs.mkdirSync(path.join(data, 'uploads', 'deleted-attachments'), { recursive: true });
+    fs.writeFileSync(path.join(data, 'uploads', 'deleted-attachments', 'gone.png'), png);
+
+    // 2. On the bucket with the fallback: still served, from disk.
+    await run({ ...env, HAVEN_S3_LOCAL_FALLBACK: 'true' }, async () => {
+      for (const u of urls) assert.equal(await status(u), 200, `${u} served through the fallback`);
+      const m = await migrate();
+      assert.equal(m.code, 0, m.out);
+      assert.match(m.out, /everything from the folder is there/);
+      for (const u of urls) assert.equal(await status(u), 200, `${u} still served during the move`);
+    });
+
+    // 3. Fallback off: served from the bucket alone.
+    await run(env, async () => {
+      for (const u of urls) assert.equal(await status(u), 200, `${u} served from the bucket`);
+    });
+    const bucket = new S3Storage(conf({ prefix: PREFIX + 'migrate/' }));
+    assert.ok(await bucket.headObject('deleted-attachments/gone.png'), 'deleted files moved too');
+
+    // 4. --delete-local empties uploads/ except bot audio. (A starting server
+    // clears bot audio, so it is put there only now.)
+    fs.mkdirSync(path.join(data, 'uploads', 'bot-audio'), { recursive: true });
+    fs.writeFileSync(path.join(data, 'uploads', 'bot-audio', 'clip.mp3'), 'audio');
+    const d = await migrate('--delete-local');
+    assert.equal(d.code, 0, d.out);
+    assert.equal(await bucket.headObject('bot-audio/clip.mp3'), null, 'bot audio never goes to the bucket');
+    const left = [];
+    for await (const f of new LocalStorage(path.join(data, 'uploads')).list('')) left.push(f.rel);
+    assert.deepEqual(left, ['bot-audio/clip.mp3']);
+    await run(env, async () => {
+      for (const u of urls) assert.equal(await status(u), 200, `${u} served after the local copies went`);
+    });
+  } finally {
+    fs.rmSync(data, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+});
+
+test('a backup carries the bucket\'s files, and restoring it puts them back in the bucket', { skip }, async () => {
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-s3-restore-'));
+  const port = 3614, base = `http://localhost:${port}`;
+  const env = s3Env({ HAVEN_S3_PREFIX: PREFIX + 'restore' });
+  const bucket = new S3Storage(conf({ prefix: PREFIX + 'restore/' }));
+  const PW = 's3testpass123';
+  const boot = async () => {
+    const s = startServer(port, data, env);
+    let up = false;
+    for (let i = 0; i < 60 && !up; i++) { try { up = (await fetch(`${base}/api/health`)).ok; } catch { await wait(500); } }
+    assert.ok(up, s.output());
+    return s;
+  };
+  const stop = async ({ child }) => { child.kill(); await new Promise((r) => (child.exitCode !== null ? r() : child.once('exit', r))); };
+  const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000'
+    + '1f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4bf0000000049454e44ae426082', 'hex');
+  try {
+    let s = await boot();
+    const reg = await (await fetch(`${base}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: PW, eulaVersion: '2.0', ageVerified: true }) })).json();
+    const fd = new FormData();
+    fd.append('image', new Blob([png], { type: 'image/png' }), 'p.png');
+    const { url } = await (await fetch(`${base}/api/upload`, { method: 'POST', headers: { Authorization: `Bearer ${reg.token}` }, body: fd })).json();
+    const rel = url.replace('/uploads/', '');
+
+    const { ticket } = await (await fetch(`${base}/api/admin/download-ticket`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${reg.token}` },
+      body: JSON.stringify({ purpose: 'backup', include: 'channels,users,settings,messages,files', password: PW }) })).json();
+    const zip = Buffer.from(await (await fetch(`${base}/api/admin/backup?ticket=${ticket}`)).arrayBuffer());
+    const entries = new (require('adm-zip'))(zip).getEntries().map((e) => e.entryName);
+    assert.ok(entries.includes(`uploads/${rel}`), `the bucket's file is in the backup (${entries.join(', ')})`);
+    assert.ok(entries.includes('uploads/stickers/starter-heart.svg'));
+
+    await bucket.remove(rel);   // lost from the bucket
+    const restore = new FormData();
+    restore.append('backup', new Blob([zip], { type: 'application/zip' }), 'backup.zip');
+    const r = await fetch(`${base}/api/admin/restore`, { method: 'POST',
+      headers: { Authorization: `Bearer ${reg.token}`, 'x-haven-password': encodeURIComponent(PW) }, body: restore });
+    assert.equal(r.status, 200, await r.text());
+    await new Promise((res) => (s.child.exitCode !== null ? res() : s.child.once('exit', res)));   // it exits to apply the restore
+
+    s = await boot();
+    try {
+      assert.deepEqual(await bucket.readBuffer(rel), png, 'the restored file is back in the bucket');
+      assert.equal((await fetch(base + url)).status, 200);
+      assert.equal(fs.existsSync(path.join(data, 'uploads', rel)), false, 'and not left on disk');
+    } finally { await stop(s); }
+  } finally {
+    fs.rmSync(data, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+});
+
 test('a server on the bucket stores and serves an upload', { skip }, async () => {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-s3-good-'));
   const port = 3612, base = `http://localhost:${port}`;

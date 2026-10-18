@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const crypto = require('crypto');
 const path   = require('path');
@@ -7,7 +7,7 @@ const webpush = require('web-push');
 
 const { verifyToken, generateChannelCode, generateToken } = require('../auth');
 const { sendFcm, isFcmEnabled } = require('../fcm');
-const { DATA_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
+const { DATA_DIR } = require('../paths');
 const HAVEN_VERSION = require('../../package.json').version;
 
 const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline, toReplyContext } = require('./helpers');
@@ -2910,7 +2910,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       invalidateIpBanCache,
       // Constants
       HAVEN_VERSION, ADMIN_USERNAME,
-      DATA_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR,
+      DATA_DIR,
       VALID_ROLE_PERMS
     };
 

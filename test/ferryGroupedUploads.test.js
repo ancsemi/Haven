@@ -21,6 +21,7 @@ db.exec(`
   CREATE TABLE server_settings (key TEXT PRIMARY KEY, value TEXT);
   CREATE TABLE ferry_links (webhook_id TEXT);
   CREATE TABLE upload_ownership (rel_path TEXT PRIMARY KEY, user_id INTEGER, scope TEXT);
+  CREATE TABLE media_objects (rel_path TEXT PRIMARY KEY, bytes INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'live');
 `);
 ferry.initFerry({ db, sanitizeText: (s) => s });
 
@@ -28,30 +29,32 @@ const names = Array.from({ length: 12 }, (_, i) => `1760000000000-${String(i).pa
 for (const n of names) {
   fs.writeFileSync(path.join(UPLOADS_DIR, n), Buffer.from('png'));
   db.prepare('INSERT INTO upload_ownership (rel_path, user_id, scope) VALUES (?, ?, ?)').run(n, 7, 'channel');
+  db.prepare('INSERT INTO media_objects (rel_path, bytes) VALUES (?, 3)').run(n);
 }
 const sender = { id: 7, isAdmin: false };
 
 test.after(() => fs.rmSync(DATA, { recursive: true, force: true }));
 
-test('a grouped message relays its text and every picture in one go', () => {
+test('a grouped message relays its text and every picture in one go', async () => {
   const content = ['Weekend', `/uploads/${names[0]}`, `spoiler-img:/uploads/${names[1]}`, `/uploads/${names[2]}`].join('\n');
-  const { text, files } = ferry.takeUploads(content, sender);
+  const { text, files } = await ferry.takeUploads(content, sender);
   assert.equal(text, 'Weekend');
   assert.equal(files.length, 3);
   assert.ok(files[1].name.startsWith('SPOILER_'), 'a spoiler picture stays a spoiler on Discord');
+  assert.ok(files.every((f) => f.data.equals(Buffer.from('png'))), 'each file is read once, ready to send');
 });
 
-test('ten pictures fit one Discord message', () => {
+test('ten pictures fit one Discord message', async () => {
   const content = names.slice(0, 10).map((n) => `/uploads/${n}`).join('\n');
-  const { text, files } = ferry.takeUploads(content, sender);
+  const { text, files } = await ferry.takeUploads(content, sender);
   assert.equal(files.length, 10);
   assert.equal(text, '');
 });
 
-test('only the sender\'s own pictures go', () => {
+test('only the sender\'s own pictures go', async () => {
   const content = [`/uploads/${names[3]}`, `/uploads/${names[11]}`].join('\n');
   // Someone else's upload, named in this sender's message.
   db.prepare('UPDATE upload_ownership SET user_id = 8 WHERE rel_path = ?').run(names[11]);
-  const { files } = ferry.takeUploads(content, sender);
+  const { files } = await ferry.takeUploads(content, sender);
   assert.equal(files.length, 1);
 });

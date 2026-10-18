@@ -59,14 +59,21 @@ class S3Storage {
     return { size };
   }
 
-  async head(rel) {
+  /** What the bucket itself holds under ``rel``, never the local fallback. */
+  async headObject(rel) {
     try {
       const r = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this._key(rel) }));
       return { size: r.ContentLength, lastModified: r.LastModified, etag: r.ETag };
     } catch (err) {
       if (!notFound(err)) throw err;
-      return this.local ? this.local.head(rel) : null;
+      return null;
     }
+  }
+
+  async head(rel) {
+    const there = await this.headObject(rel);
+    if (there || !this.local) return there;
+    return this.local.head(rel);
   }
 
   async getStream(rel, { range } = {}) {

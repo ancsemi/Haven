@@ -814,6 +814,49 @@ OUTBOUND_PROXY_RESOLVES_NAMES=true
 
 ---
 
+## External Media Storage (S3)
+
+By default, attachments, avatars, borders, emoji, stickers, sounds, badge icons, role icons and the server icon and banner live in the `uploads` folder of Haven's data folder. You can keep them in an S3-compatible bucket instead: Garage, MinIO, RustFS, SeaweedFS or AWS S3. The database, certificates and `.env` stay in the data folder either way.
+
+```env
+HAVEN_EXTERNAL_STORAGE=true
+HAVEN_S3_ENDPOINT=http://garage:3900
+HAVEN_S3_BUCKET=haven-media
+HAVEN_S3_REGION=garage            # AWS: your region, such as us-east-1
+HAVEN_S3_ACCESS_KEY=...
+HAVEN_S3_SECRET_KEY=...
+# HAVEN_S3_PREFIX=haven/          # optional: keep Haven's files under a prefix
+# HAVEN_S3_FORCE_PATH_STYLE=true  # the default; Garage, MinIO and RustFS need it
+```
+
+- **The bucket stays private.** Haven reads each file and serves it itself, with the same safety headers as files on disk, so don't make the bucket public.
+- **Haven won't start without it.** If the bucket can't be reached or the key is wrong, Haven stops at startup and names the endpoint, the bucket and the reason. It doesn't fall back to the disk.
+- **Location data is still removed first.** Uploads are cleaned on the server before they reach the bucket, and photos already in the bucket are checked once.
+
+### Moving an existing server to a bucket
+
+1. Set the variables above, plus `HAVEN_S3_LOCAL_FALLBACK=true`, and restart. Files still on disk keep being served while you move them.
+2. Copy them over. It's safe to run again, and nothing on disk is removed yet:
+   ```bash
+   node scripts/migrate-uploads-to-s3.js
+   # Docker: docker compose exec haven node scripts/migrate-uploads-to-s3.js
+   ```
+3. Remove `HAVEN_S3_LOCAL_FALLBACK` and restart. Everything should still load.
+4. Free the disk space. This only removes local files once the bucket holds all of them:
+   ```bash
+   node scripts/migrate-uploads-to-s3.js --delete-local
+   ```
+
+If the server finds files on disk that aren't being served, it says so at startup.
+
+### Backups
+
+The bucket is the backup of the files themselves; use your storage's own replication or snapshots for it. Haven's backups still include the files when you choose **files**, copied out of the bucket one at a time, which takes a while on a large server. With scheduled backups, every run copies the whole bucket. Restoring a backup puts its files back into the bucket on the next start.
+
+If files are added to or removed from the bucket outside Haven, rebuild Haven's list of them with `node scripts/reconcile-media.js`.
+
+---
+
 ## Router-Specific Tips
 
 ### Xfinity / Comcast (XB7 Gateway)

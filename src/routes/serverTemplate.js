@@ -7,7 +7,6 @@
 const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
-const { UPLOADS_DIR } = require('../paths');
 const { verifyToken } = require('../auth');
 const serverTemplate = require('../serverTemplate');
 
@@ -21,13 +20,13 @@ module.exports = function registerServerTemplate(deps) {
   };
   const templateOptions = (body) => ({ mode: body.mode === 'replace' ? 'replace' : 'merge', posts: body.posts !== false, webhooks: body.webhooks !== false, joinMembers: body.joinMembers !== false });
   const templateUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: serverTemplate.LIMITS.bytes, files: 1, fields: 4 } }).single('template');
-  app.get('/api/admin/template/export', (req, res) => {
+  app.get('/api/admin/template/export', async (req, res) => {
     const user = templateAdmin(req, res);
     if (!user) return;
     try {
       const db = require('../database').getDb();
-      const { template, warnings } = serverTemplate.exportTemplate(db, {
-        uploadsDir: UPLOADS_DIR, themesDir: THEMES_DIR, posts: req.query.posts === 'none' ? 'none' : 'pinned', assets: req.query.assets !== '0', havenVersion: require('../../package.json').version,
+      const { template, warnings } = await serverTemplate.exportTemplate(db, {
+        themesDir: THEMES_DIR, posts: req.query.posts === 'none' ? 'none' : 'pinned', assets: req.query.assets !== '0', havenVersion: require('../../package.json').version,
         meta: { name: typeof req.query.name === 'string' ? req.query.name.slice(0, 60) : '', description: typeof req.query.description === 'string' ? req.query.description.slice(0, 500) : '' },
       });
       const slug = (template.meta.name || 'haven').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'haven';
@@ -61,23 +60,23 @@ module.exports = function registerServerTemplate(deps) {
     return entry && entry.userId === user.id ? entry : (res.status(404).json({ error: 'That upload has expired. Choose the file again.' }), null);
   };
   const runTemplate = (entry, user, body, dryRun) => serverTemplate.applyTemplate(require('../database').getDb(), entry.template, {
-    ...templateOptions(body), actorId: user.id, uploadsDir: UPLOADS_DIR, themesDir: THEMES_DIR, dryRun,
+    ...templateOptions(body), actorId: user.id, themesDir: THEMES_DIR, dryRun,
   });
-  app.post('/api/admin/template/plan', express.json({ limit: '4kb' }), (req, res) => {
+  app.post('/api/admin/template/plan', express.json({ limit: '4kb' }), async (req, res) => {
     const user = templateAdmin(req, res);
     const entry = user && pendingTemplate(req, res, user);
     if (!entry) return;
-    try { res.json(runTemplate(entry, user, req.body, true)); } catch (err) {
+    try { res.json(await runTemplate(entry, user, req.body, true)); } catch (err) {
       console.error('Template plan failed:', err.message);
       res.status(500).json({ error: 'Could not work out what the template would change' });
     }
   });
-  app.post('/api/admin/template/apply', express.json({ limit: '4kb' }), (req, res) => {
+  app.post('/api/admin/template/apply', express.json({ limit: '4kb' }), async (req, res) => {
     const user = templateAdmin(req, res);
     const entry = user && pendingTemplate(req, res, user);
     if (!entry) return;
     let report;
-    try { report = runTemplate(entry, user, req.body, false); } catch (err) {
+    try { report = await runTemplate(entry, user, req.body, false); } catch (err) {
       if (err.code === 'TEMPLATE_DISK_FULL') return res.status(507).json({ error: err.message });
       console.error('Template apply failed:', err.message);
       return res.status(500).json({ error: 'Applying the template failed; nothing was changed' });

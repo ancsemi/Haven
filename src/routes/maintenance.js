@@ -283,6 +283,9 @@ module.exports = function registerMaintenance(deps) {
       const retain = Math.max(1, Math.min(50, parseInt(getSetting('auto_backup_retention') || '7')));
       const sectionsRaw = getSetting('auto_backup_sections') || 'channels,users,settings,messages';
       const include = sectionsRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      if (include.includes('files') && storage.getStorage().kind === 's3') {
+        console.warn('[AutoBackup] Files are included, so every run copies the whole bucket into the backup; the bucket is usually the better backup of the files themselves');
+      }
 
       const lastRunRaw = getSetting('auto_backup_last_run');
       const lastRun = lastRunRaw ? parseInt(lastRunRaw) : 0;

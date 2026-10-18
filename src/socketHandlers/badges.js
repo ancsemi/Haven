@@ -17,7 +17,7 @@ const badges = require('../badges');
 const storage = require('../storage');
 
 module.exports = function register(socket, ctx) {
-  const { db, userHasPermission, getUserEffectiveLevel, logAudit, UPLOADS_DIR } = ctx;
+  const { db, userHasPermission, getUserEffectiveLevel, logAudit } = ctx;
   const audit = typeof logAudit === 'function' ? logAudit : () => {};
   const answer = (cb) => (typeof cb === 'function' ? cb : () => {});
 
@@ -70,11 +70,12 @@ module.exports = function register(socket, ctx) {
 
   // The icon key for a checked badge, or the reason it cannot be used: the
   // uploaded file is gone, or another badge already shows this icon.
-  const keyFor = (b, current = null) => {
+  const keyFor = async (b, current = null) => {
     const same = current && current.icon_type === b.icon_type && current.icon === b.icon && current.icon_key;
-    const key = same ? current.icon_key : badges.iconKey(b.icon_type, b.icon, UPLOADS_DIR);
+    const key = same ? current.icon_key
+      : b.icon_type === 'image' ? await badges.imageIconKey(b.icon, storage) : badges.iconKey(b.icon_type, b.icon);
     if (!key) return { error: 'That uploaded icon is missing, upload it again' };
-    badges.fillImageKeys(db, UPLOADS_DIR);
+    await badges.fillImageKeys(db, storage);
     const other = badges.iconTakenBy(db, key, current ? current.id : null);
     if (other) return { error: `Another badge already uses this icon (${other.name})` };
     return { key };
@@ -100,7 +101,7 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  socket.on('create-badge', (data, callback) => {
+  socket.on('create-badge', async (data, callback) => {
     const cb = answer(callback);
     if (!canManage()) return cb({ error: 'You do not have permission to manage badges' });
     try {
@@ -111,7 +112,7 @@ module.exports = function register(socket, ctx) {
       const b = read.badge;
       const refusal = roleRefusal(b.role_id);
       if (refusal) return cb({ error: refusal });
-      const icon = keyFor(b);
+      const icon = await keyFor(b);
       if (icon.error) return cb({ error: icon.error });
       const position = (db.prepare('SELECT MAX(position) AS p FROM badges').get().p ?? -1) + 1;
       const id = db.prepare(`INSERT INTO badges (name, description, icon_type, icon, icon_key, kind, threshold, role_id, enabled, position, created_by)
@@ -137,7 +138,7 @@ module.exports = function register(socket, ctx) {
       const b = read.badge;
       const refusal = roleRefusal(current.role_id) || roleRefusal(b.role_id);
       if (refusal) return cb({ error: refusal });
-      const icon = keyFor(b, current);
+      const icon = await keyFor(b, current);
       if (icon.error) return cb({ error: icon.error });
       // Hand-given copies only make sense on a hand-given badge.
       const dropHolders = current.kind === 'manual' && b.kind !== 'manual';

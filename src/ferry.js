@@ -35,7 +35,6 @@
  * Haven author's name in the body.
  */
 
-const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
 const { agentFor } = require('./outboundProxy');
@@ -223,7 +222,7 @@ function requestBody(payload, files = []) {
   if (!files.length) return { body: payload === undefined ? undefined : JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } };
   const form = new FormData();
   form.append('payload_json', JSON.stringify({ ...payload, attachments: files.map((f, i) => ({ id: i, filename: f.name })) }));
-  files.forEach((f, i) => form.append(`files[${i}]`, new Blob([fs.readFileSync(f.path)]), f.name));
+  files.forEach((f, i) => form.append(`files[${i}]`, new Blob([f.data]), f.name));
   return { body: form, headers: {} };
 }
 /**
@@ -1610,26 +1609,23 @@ function keepOwnUploads(content, sender) {
  * stays as a link when PUBLIC_URL is set, or becomes a short note. Files that
  * are not the sender's to relay (see mayRelayUpload) are left out altogether.
  */
-function takeUploads(content, sender) {
-  const { UPLOADS_DIR } = require('./paths');
+async function takeUploads(content, sender) {
   const own = keepOwnUploads(content, sender);
   const files = [];
   let total = 0;
+  // Sizes come from the media index, so the limits are checked before any
+  // file is read; the bytes are read once, below, for every retry.
+  const liveBytes = deps.db.prepare("SELECT bytes FROM media_objects WHERE rel_path = ? AND state = 'live'");
   // Returns null when the file goes along, or why it cannot.
   const take = (stored, shownName, spoiler = false) => {
     if (!UPLOAD_NAME_RE.test(stored)) return '(file not found)';
-    const full = path.join(UPLOADS_DIR, stored);
-    let size;
-    try {
-      const st = fs.statSync(full);
-      if (!st.isFile()) return '(file not found)';
-      size = st.size;
-    } catch { return '(file not found)'; } // deleted since it was posted
+    const size = liveBytes.get(stored)?.bytes;
+    if (size === undefined) return '(file not found)'; // deleted since it was posted
     if (files.length >= DISCORD_FILES_PER_MESSAGE || size > DISCORD_FILE_MAX || total + size > DISCORD_UPLOAD_TOTAL) {
       return '(too large to send to Discord)';
     }
     total += size;
-    files.push({ path: full, name: (spoiler ? 'SPOILER_' : '') + attachmentName(shownName || stored) });
+    files.push({ rel: stored, name: (spoiler ? 'SPOILER_' : '') + attachmentName(shownName || stored) });
     return null;
   };
   const base = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
@@ -1644,7 +1640,9 @@ function takeUploads(content, sender) {
       return !why ? pre : spoiler ? `${pre}||${base ? `${base}/uploads/${stored}` : why}||` : base ? m : `${pre}${why}`;
     });
   text = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-  return { text, files };
+  const storage = require('./storage');
+  for (const f of files) f.data = await storage.readBuffer(f.rel);
+  return { text, files: files.filter(f => f.data) };   // one deleted meanwhile is left out
 }
 
 function absolutizeUploads(content) {
@@ -1780,7 +1778,7 @@ async function ensureLinkWebhook(link) {
  */
 async function sendToDiscord(link, { username, avatar, content, sender }) {
   const guild = guilds.get(String(link.guild_id || ''));
-  const { text, files } = takeUploads(content, sender);
+  const { text, files } = await takeUploads(content, sender);
   const body = outboundBody(text, guild);
   if (!body.trim() && !files.length) return;
   if (isForumType(link.discord_channel_type)) { touchLink(link.id, KIND_MISMATCH); return; }
@@ -1884,7 +1882,7 @@ function discordForumIsNsfw(guild, link) {
  */
 async function sendTopicToDiscord(link, { username, avatar, content, sender, title, tags, topicId, nsfw = false }) {
   const guild = guilds.get(String(link.guild_id || ''));
-  const { text, files } = takeUploads(content, sender);
+  const { text, files } = await takeUploads(content, sender);
   const body = outboundBody(text, guild);
   if (!body.trim() && !files.length) return;
   if (!isForumType(link.discord_channel_type)) { touchLink(link.id, KIND_MISMATCH); return; }
@@ -1928,7 +1926,7 @@ async function sendTopicToDiscord(link, { username, avatar, content, sender, tit
  */
 async function sendReplyToDiscord(link, { username, avatar, content, sender, topicId }) {
   const guild = guilds.get(String(link.guild_id || ''));
-  const { text, files } = takeUploads(content, sender);
+  const { text, files } = await takeUploads(content, sender);
   const body = outboundBody(text, guild);
   if (!body.trim() && !files.length) return;
   if (!isForumType(link.discord_channel_type)) return;
@@ -1973,7 +1971,7 @@ async function sendDiscordDm(discordUserId, { fromName, content, sender }) {
   const cfg = getConfig();
   if (!cfg.allowDms) throw new Error('Discord DMs are turned off for this server');
 
-  const { text, files } = takeUploads(content, sender);
+  const { text, files } = await takeUploads(content, sender);
   const body = absolutizeUploads(text).trim();
   if (!body && !files.length) throw new Error('Message is empty');
 

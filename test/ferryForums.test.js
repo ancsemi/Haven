@@ -78,6 +78,12 @@ async function uploadFile(token, name, size, scope = 'channel') {
   const j = await r.json();
   return j && typeof j.url === 'string' ? j.url.replace('/uploads/', '') : null;
 }
+// Files written straight into uploads/ are news to the media index; the admin
+// rebuilds it, as anyone adding files by hand would.
+async function reindex(token) {
+  const r = await fetch(`${BASE}/api/admin/media/reconcile`, { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+  assert.strictEqual(r.status, 200, 'media index rebuilt');
+}
 const tagsOf = (m) => (Array.isArray(m.tags) ? m.tags : JSON.parse(m.tags || '[]'));
 
 async function bootServer() {
@@ -461,6 +467,7 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
     fs.writeFileSync(path.join(uploads, '1790000000000-aaaa1111.png'), Buffer.alloc(2048, 7));
     fs.writeFileSync(path.join(uploads, '1790000000001-bbbb2222.pdf'), Buffer.alloc(4096, 3));
     fs.writeFileSync(path.join(uploads, '1790000000002-cccc3333.mp4'), Buffer.alloc(11 * 1024 * 1024, 1));
+    await reindex(admin.token);
     // Mirror everything from the chat pairing, so a plain message goes out.
     const got = next(A, 'ferry:config');
     A.emit('ferry:get-config');
@@ -493,6 +500,7 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
     const uploads = path.join(DATA, 'uploads');
     fs.writeFileSync(path.join(uploads, '1790000000003-dddd4444.png'), Buffer.alloc(1024, 5));
     fs.writeFileSync(path.join(uploads, '1790000000004-eeee5555.png'), Buffer.alloc(512, 6));
+    await reindex(admin.token);
     const got = next(A, 'ferry:config');
     A.emit('ferry:get-config');
     const chatLink = (await got).links.find((l) => l.discord_channel_id === TEXT_ID);

@@ -138,6 +138,19 @@ async function prepare(db) {
   try { await s.ping(); } catch (err) {
     throw new Error(`[storage] Cannot use ${s.describe ? s.describe() : s.root}: ${err.message}`);
   }
+  // A restored backup put its files back on disk (src/routes/backup.js); on a
+  // bucket they go on to it now. The flag stays until every file made it.
+  const restored = db.prepare("SELECT 1 FROM server_settings WHERE key = 'media_restore_pending'").get();
+  if (restored) {
+    let sent = true;
+    if (s.kind === 's3') {
+      console.log('[storage] Copying the restored backup\'s files into the bucket…');
+      const r = await require('./migrate').pushLocalToBucket(s, { deleteLocal: true, log: (m) => console.log(m) });
+      sent = !r.failed;
+      console.log(`[storage] Restored files: ${r.sent} copied to the bucket, ${r.files - r.sent} already there${r.failed ? `, ${r.failed} failed and stay on disk; the next start tries again` : ''}`);
+    }
+    if (sent) db.prepare("DELETE FROM server_settings WHERE key = 'media_restore_pending'").run();
+  }
   if (s.kind === 's3') {
     console.log(`[storage] Media is kept in the ${s.describe()}`);
     if (!s.local) {

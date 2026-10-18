@@ -6,6 +6,7 @@ const { sanitizeText, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_
 const { sniffImageType, stripImageBuffer } = require('./imageMetadata');
 const { generateUniqueChannelCode } = require('./channelRotation');
 const diskGuard = require('./diskGuard');
+const { STAGING_DIR } = require('./paths');
 const { MEMBER_PERMS, getAdminRoleId } = require('./roleDefaults');
 const { normalizeHost } = require('../public/js/automod-rules.js');
 const { BUILTIN_THEMES, isThemeFilename, parseThemeMetadata } = require('./themeMetadata');
@@ -22,6 +23,21 @@ const ASSET_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}\.(png|jpe?g|gif|webp)$/;
 const ASSET_TOKEN_RE = /\{\{asset:([^{}]{1,80})\}\}/g;
 const UPLOAD_REF_RE = /\/uploads\/([A-Za-z0-9][A-Za-z0-9_.-]{0,120})(?![A-Za-z0-9_./-])/g;
 const IMAGE_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' };
+// Where template images are read from and written to: this server's storage
+// (src/storage, which also keeps the media index), or a plain uploads folder
+// given by path, as the tests do with two servers in one process.
+function mediaFor(uploadsDir) {
+  if (!uploadsDir) return require('./storage');
+  const local = new (require('./storage/local').LocalStorage)(uploadsDir);
+  return { head: (rel) => local.head(rel), readBuffer: (rel) => local.readBuffer(rel), admit: (rel, file) => local.put(rel, file), remove: (rel) => local.remove(rel) };
+}
+// Array.map, one item after another, for steps that read files: the order
+// assets are met in decides their names.
+async function mapInOrder(list, fn) {
+  const out = [];
+  for (const x of list) out.push(await fn(x));
+  return out;
+}
 const WEBHOOK_EVENTS = ['message', 'reaction-added', 'member-joined'];
 const FORUM_VIEWS = ['list', 'gallery', 'feed'];
 const FORUM_SHAPES = ['square', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16'];
@@ -90,7 +106,7 @@ function refMaker() {
     return ref;
   };
 }
-function exportTemplate(db, opts = {}) {
+async function exportTemplate(db, opts = {}) {
   const { uploadsDir = null, themesDir = null, posts = 'pinned', postAuthors = null, excludeChannels = [], assets: withAssets = true, meta = {}, havenVersion = null } = opts;
   const warnings = [], assets = {};
   // The file has to pass this server's own import, so names and values saved
@@ -119,13 +135,22 @@ function exportTemplate(db, opts = {}) {
     assets[name] = entry;
     return name;
   };
-  const addAsset = (url, kind = 'upload') => {
+  const media = mediaFor(uploadsDir);
+  const addAsset = async (url, kind = 'upload') => {
     if (!url) return null;
-    if (!withAssets || !uploadsDir) return warnings.push(`Left out ${url}: assets are off`), null;
+    if (!withAssets) return warnings.push(`Left out ${url}: assets are off`), null;
     const m = /^\/uploads\/(stickers\/)?([A-Za-z0-9][A-Za-z0-9_.-]{0,120})$/.exec(String(url).trim());
     if (!m) return warnings.push(`Left out ${url}: only files at the top of the uploads folder can go in a template`), null;
     let buf;
-    try { buf = stripImageBuffer(fs.readFileSync(path.join(uploadsDir, m[1] || '', m[2]))); } catch { return warnings.push(`Left out ${url}: file not found`), null; }
+    try {
+      const head = await media.head(`${m[1] || ''}${m[2]}`);
+      // Not read at all when it could never fit (a video, say); the 2 MB check
+      // below runs after metadata is stripped, as it always has.
+      if (head && head.size > LIMITS.bytes) return warnings.push(`Left out ${url}: not a PNG, JPEG, GIF or WebP image under 2 MB`), null;
+      buf = head && await media.readBuffer(`${m[1] || ''}${m[2]}`);
+    } catch { buf = null; }
+    if (!buf) return warnings.push(`Left out ${url}: file not found`), null;
+    buf = stripImageBuffer(buf);
     const type = sniffImageType(buf);
     if (!type || buf.length > LIMITS.asset) return warnings.push(`Left out ${url}: not a PNG, JPEG, GIF or WebP image under 2 MB`), null;
     const base = path.basename(m[2], path.extname(m[2])).replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[-_]+/, '').slice(0, 48) || 'asset';
@@ -158,14 +183,14 @@ function exportTemplate(db, opts = {}) {
   const roleNames = new Set();
   const roleMake = refMaker(), roleRef = new Map(roleRows.map((r) => [r.id, roleMake(r.name)]));
   const perms = db.prepare('SELECT role_id, permission, allowed FROM role_permissions ORDER BY permission').all();
-  const roles = roleRows.map((r) => {
+  const roles = await mapInOrder(roleRows, async (r) => {
     const allowed = perms.filter((p) => p.role_id === r.id && p.allowed && VALID_ROLE_PERMS.includes(p.permission)).map((p) => p.permission);
     const adminOnly = allowed.filter((p) => ADMIN_ONLY_PERMS.includes(p));
     if (adminOnly.length) warnings.push(`Left out ${adminOnly.join(', ')} from role ${r.name}: templates never hand out admin-only permissions`);
     return {
       ref: roleRef.get(r.id), name: uniqueIn(roleNames, tidy(r.name, 30, 'Role'), 30), level: Math.min(99, Math.max(0, Math.round(Number(r.level) || 0))),
       scope: r.scope === 'channel' ? 'channel' : 'server', color: typeof r.color === 'string' && /^#[0-9a-fA-F]{3,6}$/.test(r.color) ? r.color : null,
-      autoAssign: !!r.auto_assign, linkChannelAccess: !!r.link_channel_access, icon: r.icon ? addAsset(r.icon) : null,
+      autoAssign: !!r.auto_assign, linkChannelAccess: !!r.link_channel_access, icon: r.icon ? await addAsset(r.icon) : null,
       maxUploadMb: Number.isInteger(r.max_upload_mb) && r.max_upload_mb >= 1 && r.max_upload_mb <= 102400 ? r.max_upload_mb : null,
       permissions: allowed.filter((p) => !ADMIN_ONLY_PERMS.includes(p)),
       denied: perms.filter((p) => p.role_id === r.id && !p.allowed && VALID_ROLE_PERMS.includes(p.permission)).map((p) => p.permission),
@@ -218,32 +243,34 @@ function exportTemplate(db, opts = {}) {
     const list = String(v || '*').split(',').map((e) => e.trim()).filter((e) => WEBHOOK_EVENTS.includes(e));
     return String(v || '*').trim() === '*' || !list.length ? '*' : [...new Set(list)].join(',');
   };
-  const webhooks = cap(db.prepare('SELECT channel_id, name, avatar_url, subscribed_events, can_moderate, can_use_voice FROM webhooks ORDER BY id').all().filter((w) => chRef.has(w.channel_id)), LIMITS.webhooks, 'webhooks')
-    .map((w) => ({ channel: chRef.get(w.channel_id), name: tidy(w.name, 32, 'Webhook'), avatar: w.avatar_url ? addAsset(w.avatar_url) : null, events: hookEvents(w.subscribed_events), canModerate: !!w.can_moderate, canUseVoice: !!w.can_use_voice }));
+  const webhooks = await mapInOrder(cap(db.prepare('SELECT channel_id, name, avatar_url, subscribed_events, can_moderate, can_use_voice FROM webhooks ORDER BY id').all().filter((w) => chRef.has(w.channel_id)), LIMITS.webhooks, 'webhooks'),
+    async (w) => ({ channel: chRef.get(w.channel_id), name: tidy(w.name, 32, 'Webhook'), avatar: w.avatar_url ? await addAsset(w.avatar_url) : null, events: hookEvents(w.subscribed_events), canModerate: !!w.can_moderate, canUseVoice: !!w.can_use_voice }));
   const authors = Array.isArray(postAuthors) && postAuthors.length ? new Set(postAuthors) : null;
   const postRows = posts === 'none' ? [] : db.prepare('SELECT m.channel_id, m.content, m.webhook_username, m.webhook_avatar FROM pinned_messages p JOIN messages m ON m.id = p.message_id WHERE m.is_webhook = 1 AND m.thread_id IS NULL ORDER BY m.id').all()
     .filter((m) => chRef.has(m.channel_id) && (!authors || authors.has(m.webhook_username)));
-  const postText = (m) => {
+  const postText = async (m) => {
     // Text that only looks like an asset reference is dropped, so the import
     // does not go looking for a file that is not there.
     const text = sanitizeText(m.content || '').trim().replace(ASSET_TOKEN_RE, '');
-    return text.replace(UPLOAD_REF_RE, (whole, file) => { const a = addAsset(`/uploads/${file}`); return a ? `{{asset:${a}}}` : whole; }).trim();
+    const found = new Map();
+    for (const [, file] of text.matchAll(UPLOAD_REF_RE)) found.set(file, await addAsset(`/uploads/${file}`));
+    return text.replace(UPLOAD_REF_RE, (whole, file) => { const a = found.get(file); return a ? `{{asset:${a}}}` : whole; }).trim();
   };
-  const postList = cap(postRows, LIMITS.posts, 'posts')
-    .map((m) => ({ channel: chRef.get(m.channel_id), author: tidy(m.webhook_username, 32, 'Server'), avatar: m.webhook_avatar ? addAsset(m.webhook_avatar) : null, pinned: true, content: postText(m) }))
+  const postList = (await mapInOrder(cap(postRows, LIMITS.posts, 'posts'),
+    async (m) => ({ channel: chRef.get(m.channel_id), author: tidy(m.webhook_username, 32, 'Server'), avatar: m.webhook_avatar ? await addAsset(m.webhook_avatar) : null, pinned: true, content: await postText(m) })))
     .filter((p) => (p.content && p.content.length <= LIMITS.post) || (warnings.push(`Left out a post in #${chRows.find((c) => chRef.get(c.id) === p.channel).name}: ${p.content ? `longer than ${LIMITS.post} characters` : 'nothing left once cleaned up'}`), false));
   const automodDomains = cap(db.prepare('SELECT domain, mode, include_subdomains, note FROM automod_domains ORDER BY domain').all(), LIMITS.domains, 'link rules')
     .map((d) => ({ domain: typeof d.domain === 'string' && d.domain.length <= 253 ? normalizeHost(d.domain.trim()) : '', mode: d.mode === 'deny' ? 'deny' : 'allow', includeSubdomains: d.include_subdomains !== 0, note: fit(d.note, 200) }))
     .filter((d) => (d.domain.includes('.') && /^[a-z0-9.-]+$/.test(d.domain)) || (warnings.push(`Left out the link rule for ${d.domain || 'an empty domain'}: it is not a plain domain name`), false));
   const libraryName = (v, max) => String(v || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '').slice(0, max);
-  const emojis = cap(db.prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all().filter((e) => libraryName(e.name, 30)), LIMITS.emojis, 'custom emojis')
-    .map((e) => ({ name: libraryName(e.name, 30), asset: addAsset(`/uploads/${e.filename}`) })).filter((e) => e.asset);
-  const stickers = cap(db.prepare("SELECT name, pack_name, filename FROM stickers WHERE NOT (uploaded_by IS NULL AND filename LIKE 'starter-%') ORDER BY pack_name, name").all().filter((s) => libraryName(s.name, 40)), LIMITS.stickers, 'stickers')
-    .map((s) => ({ name: libraryName(s.name, 40), pack: tidy(s.pack_name, 40, 'General'), asset: addAsset(`/uploads/stickers/${s.filename}`, 'sticker') })).filter((s) => s.asset);
+  const emojis = (await mapInOrder(cap(db.prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all().filter((e) => libraryName(e.name, 30)), LIMITS.emojis, 'custom emojis'),
+    async (e) => ({ name: libraryName(e.name, 30), asset: await addAsset(`/uploads/${e.filename}`) }))).filter((e) => e.asset);
+  const stickers = (await mapInOrder(cap(db.prepare("SELECT name, pack_name, filename FROM stickers WHERE NOT (uploaded_by IS NULL AND filename LIKE 'starter-%') ORDER BY pack_name, name").all().filter((s) => libraryName(s.name, 40)), LIMITS.stickers, 'stickers'),
+    async (s) => ({ name: libraryName(s.name, 40), pack: tidy(s.pack_name, 40, 'General'), asset: await addAsset(`/uploads/stickers/${s.filename}`, 'sticker') }))).filter((s) => s.asset);
   const ids = (list) => (Array.isArray(list) ? list.map((id) => chRef.get(Number(id))).filter(Boolean) : null);
   const creator = rows.get('channel_creator_role');
   const server = {
-    settings, icon: rows.get('server_icon') ? addAsset(rows.get('server_icon')) : null, banner: rows.get('server_banner') ? addAsset(rows.get('server_banner')) : null,
+    settings, icon: rows.get('server_icon') ? await addAsset(rows.get('server_icon')) : null, banner: rows.get('server_banner') ? await addAsset(rows.get('server_banner')) : null,
     defaultJoinChannels: rows.get('default_join_channels') ? ids(parse(rows.get('default_join_channels'))) : null,
     guestChannels: rows.has('guest_channels') ? ids(String(rows.get('guest_channels')).split(',').filter(Boolean)) : null,
     automodLogChannel: rows.get('automod_log_channel') && byCode.has(rows.get('automod_log_channel')) ? chRef.get(byCode.get(rows.get('automod_log_channel')).id) : null,
@@ -449,7 +476,7 @@ function thresholdsToTicks(tpl) {
   }
 }
 
-function applyTemplate(db, tpl, opts = {}) {
+async function applyTemplate(db, tpl, opts = {}) {
   thresholdsToTicks(tpl);
   const { mode = 'merge', actorId = null, uploadsDir = null, themesDir = null, dryRun = false, posts: withPosts = true, webhooks: withWebhooks = true, joinMembers = true, installThemes = false, hasRoom = diskGuard.hasHeadroom } = opts;
   const replace = mode === 'replace';
@@ -469,21 +496,23 @@ function applyTemplate(db, tpl, opts = {}) {
     tpl.server.icon, tpl.server.banner, ...tpl.roles.map((x) => x.icon), ...tpl.webhooks.map((x) => x.avatar), ...tpl.posts.map((x) => x.avatar),
     ...tpl.posts.flatMap((x) => [...x.content.matchAll(ASSET_TOKEN_RE)].map((m) => m[1])), ...emojis.map((x) => x.asset), ...stickers.map((x) => x.asset),
   ].filter(Boolean));
+  // Themes are files in themesDir; images go to storage, under a name that
+  // carries their hash, so one already there is the same picture.
+  const media = mediaFor(uploadsDir);
   const files = [], urls = {}, themes = new Set();
   for (const [name, a] of Object.entries(tpl.assets)) {
     if (a.kind !== 'theme' && !used.has(name)) continue;
-    const dir = a.kind === 'theme' ? themesDir : a.kind === 'sticker' ? uploadsDir && path.join(uploadsDir, 'stickers') : uploadsDir;
     const file = a.kind === 'theme' ? name : `${path.basename(name, path.extname(name))}-${a.sha256.slice(0, 10)}${path.extname(name).toLowerCase()}`;
-    urls[name] = { file, url: `/uploads/${a.kind === 'sticker' ? 'stickers/' : ''}${file}` };
-    const dest = dir && path.join(dir, file);
-    const current = dest && fs.existsSync(dest) ? fs.readFileSync(dest) : null;
+    const rel = `${a.kind === 'sticker' ? 'stickers/' : ''}${file}`;
+    urls[name] = { file, url: `/uploads/${rel}` };
     if (a.kind === 'theme') {
+      const dest = themesDir && path.join(themesDir, file);
+      const current = dest && fs.existsSync(dest) ? fs.readFileSync(dest) : null;
       if (current && sha256(current) === a.sha256) themes.add(name);
       else if (current) warn(`Theme ${name} is already installed with different contents; it was left as it is`), themes.add(name);
-      else if (installThemes && dir) files.push({ dest, buf: a.buf, name }), themes.add(name);
+      else if (installThemes && dest) files.push({ dest, buf: a.buf, name }), themes.add(name);
       else warn(`Theme ${name} is not installed on this server, so it was not made the default. Copy it into Haven's themes folder, or import with tools/template.js --install-themes`);
-    } else if (!dir) warn('No uploads folder was given, so images were not copied');
-    else if (!current) files.push({ dest, buf: a.buf, name: file });
+    } else if (!(await media.head(rel))) files.push({ rel, buf: a.buf, name: file });
   }
   const url = (name) => (name && urls[name] ? urls[name].url : null);
   // The same disk headroom uploads keep, so an import never eats the space
@@ -668,12 +697,32 @@ function applyTemplate(db, tpl, opts = {}) {
     const stk = db.prepare(`INSERT OR ${replace ? 'REPLACE' : 'IGNORE'} INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, ?)`);
     for (const st of stickers) if (stk.run(st.name, st.pack, urls[st.asset].file, actorId).changes) r.created.stickers.push(st.name);
   };
+  // Files go in before the database changes, and come out again if those
+  // fail: an unused image costs a little space, a row pointing at a missing
+  // one shows broken. Images are admitted to storage, so they are indexed.
   const written = [];
   try {
-    if (!dryRun) for (const f of files) { fs.mkdirSync(path.dirname(f.dest), { recursive: true }); fs.writeFileSync(f.dest, f.buf, { flag: 'wx' }); written.push(f.dest); }
+    if (!dryRun) {
+      for (const f of files) {
+        if (f.dest) {
+          fs.mkdirSync(path.dirname(f.dest), { recursive: true });
+          fs.writeFileSync(f.dest, f.buf, { flag: 'wx' });
+        } else {
+          const staged = path.join(STAGING_DIR, `template-${process.pid}-${crypto.randomBytes(6).toString('hex')}-${path.basename(f.rel)}`);
+          fs.writeFileSync(staged, f.buf);
+          await media.admit(f.rel, staged);
+        }
+        written.push(f);
+      }
+    }
     db.transaction(() => { run(); if (dryRun) throw ROLLBACK; })();
   } catch (err) {
-    written.forEach((f) => { try { fs.unlinkSync(f); } catch (e) { console.warn('[template] could not remove a copied file after a failed import:', e.message); } });
+    for (const f of written) {
+      try {
+        if (f.dest) fs.unlinkSync(f.dest);
+        else await media.remove(f.rel);
+      } catch (e) { console.warn('[template] could not remove a copied file after a failed import:', e.message); }
+    }
     if (err !== ROLLBACK) throw err;
   }
   r.created.files = files.filter((f) => tpl.assets[f.name]?.kind !== 'theme').map((f) => f.name);

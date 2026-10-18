@@ -12,6 +12,7 @@ const { verifyToken, authLimiter } = require('../auth');
 const express = require('express');
 const { checkAdminReauth, issueTicket, takeTicket } = require('../adminReauth');
 const { extractFullBackup } = require('../backupExtract');
+const storage = require('../storage');
 
 module.exports = function registerBackup(deps) {
   const { app, verifyAdminFromDb, late } = deps;
@@ -172,6 +173,10 @@ module.exports = function registerBackup(deps) {
           archive.file(tmpDb, { name: 'haven.db' });
         }
 
+        if (has('files') && storage.getStorage().kind === 's3') {
+          addBucketFiles(archive).then(() => archive.finalize(), finish);
+          return;
+        }
         if (has('files') && fs.existsSync(UPLOADS_DIR)) {
           const walk = (dir, rel) => {
             for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -196,6 +201,40 @@ module.exports = function registerBackup(deps) {
         finish(err);
       }
     });
+  }
+
+  // A bucket has no folder to walk: the live files the media index lists go in
+  // one after another, each read only once the one before is in the zip, so
+  // a single download is open at a time. On a large bucket this is slow, and
+  // the bucket is the better backup of the files themselves.
+  async function addBucketFiles(archive) {
+    const rows = require('../database').getDb()
+      .prepare("SELECT rel_path FROM media_objects WHERE state = 'live' ORDER BY rel_path").all();
+    for (const { rel_path: rel } of rows) {
+      try {
+        const body = await storage.getStream(rel);
+        if (!body) continue;
+        const added = new Promise((resolve) => archive.once('entry', resolve));
+        archive.append(body.stream, { name: `uploads/${rel}` });
+        await added;
+      } catch (err) {
+        console.warn(`[Backup] Skipped uploads/${rel}:`, err.message);
+      }
+    }
+  }
+
+  // A restored database's media index describes the files of the server the
+  // backup came from; the next start rebuilds it from the restored files, and
+  // on a bucket sends those files on to it first (src/storage).
+  function markRestoredMedia(dbFile) {
+    const Database = require('better-sqlite3');
+    const restored = new Database(dbFile);
+    try {
+      restored.prepare("DELETE FROM server_settings WHERE key = 'media_index_built'").run();
+      restored.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('media_restore_pending', '1')").run();
+    } finally {
+      restored.close();
+    }
   }
 
   // Build a backup zip to a file on disk (used by the auto-backup scheduler).
@@ -375,6 +414,9 @@ module.exports = function registerBackup(deps) {
             }
             try { fs.unlinkSync(DB_PATH + '-shm'); } catch (err2) {
               if (err2.code !== 'ENOENT') console.error('[Restore] Could not remove old haven.db-shm:', err2.message);
+            }
+            try { markRestoredMedia(stagedDb); } catch (err2) {
+              console.warn('[Restore] Could not mark the media index for rebuilding; run scripts/reconcile-media.js after the restart:', err2.message);
             }
             fs.renameSync(stagedDb, DB_PATH);
           }
