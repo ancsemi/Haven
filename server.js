@@ -205,7 +205,10 @@ function collectUploadRelPaths(contents) {
   return paths;
 }
 
-async function relocateUnreferencedUploads(db, relPaths) {
+// With ownerId, the files are that person's own (a picture they replaced or
+// removed), of any scope; without it, only channel uploads can be proven
+// orphaned.
+async function relocateUnreferencedUploads(db, relPaths, { ownerId = null } = {}) {
   const isLive = db.prepare("SELECT 1 FROM media_objects WHERE rel_path = ? AND state = 'live'");
   const candidates = new Set(Array.from(relPaths).filter(relPath => isLive.get(relPath)));
   if (candidates.size === 0) return;
@@ -263,7 +266,8 @@ async function relocateUnreferencedUploads(db, relPaths) {
     // Legacy/unattributed files and private/profile uploads cannot be proven
     // orphaned, so leave them in place. A channel upload is also retained if
     // its owner later sent an encrypted DM that could contain a reference.
-    if (!ownership || ownership.scope !== 'channel') continue;
+    if (!ownership) continue;
+    if (ownerId !== null ? ownership.user_id !== ownerId : ownership.scope !== 'channel') continue;
     const latestDmMessage = latestDmMessageByUser.get(ownership.user_id);
     if (latestDmMessage && latestDmMessage >= ownership.created_at) continue;
 
@@ -1133,7 +1137,11 @@ app.get('/api/ice-servers', (req, res) => {
 });
 
 // ── Profile pictures, borders and personas: src/routes/profile.js ──
-require('./src/routes/profile')({ uploadDiskGuard, app, recordUploadOwnership, verifyAdminFromDb, userHasPermission, upload, uploadLimiter });
+// A profile picture someone replaced or removed goes to deleted-attachments,
+// if it was their own upload and nothing else still shows it.
+const releaseOwnUploads = (urls, ownerId) => relocateUnreferencedUploads(
+  require('./src/database').getDb(), collectUploadRelPaths(urls), { ownerId });
+require('./src/routes/profile')({ uploadDiskGuard, app, recordUploadOwnership, releaseOwnUploads, verifyAdminFromDb, userHasPermission, upload, uploadLimiter });
 
 // ── Serve pages ──────────────────────────────────────────
 

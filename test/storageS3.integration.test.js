@@ -148,6 +148,36 @@ test('served through Haven with the same headers and ranges', { skip }, async ()
   } finally { srv.close(); }
 });
 
+test('the privacy sweep cleans photos already in the bucket', { skip }, async () => {
+  const storage = require('../src/storage');
+  const { initDatabase } = require('../src/database');
+  const pp = require('../src/privacyPass');
+  const exif = Buffer.concat([Buffer.from('Exif\0\0MM\0*', 'latin1'), Buffer.from([0, 0, 0, 8, 0, 0])]);
+  const app1 = Buffer.concat([Buffer.from([0xFF, 0xE1, 0, exif.length + 2]), exif]);
+  const scan = Buffer.from([0xFF, 0xDA, 0, 4, 1, 2, 9, 9, 0xFF, 0xD9]);
+  const photo = Buffer.concat([Buffer.from([0xFF, 0xD8]), app1, scan]);
+  storage.setStorage(s3);
+  const db = initDatabase();
+  try {
+    await s3.put('old-photo.jpg', staged('p7', photo));
+    await s3.put('notes.txt', staged('p8', 'Exif in plain text, not a photo'));
+    db.prepare("INSERT INTO media_objects (rel_path, bytes, state) VALUES ('old-photo.jpg', ?, 'live'), ('notes.txt', 31, 'live')").run(photo.length);
+    pp.start(db);
+    const done = () => JSON.parse(db.prepare("SELECT value FROM server_settings WHERE key = 'privacy_sweep_s3'").get()?.value || '{}').done;
+    for (let i = 0; i < 100 && !done(); i++) await wait(100);
+    assert.ok(done(), 'the bucket sweep finished');
+    const after = await s3.readBuffer('old-photo.jpg');
+    assert.ok(!after.includes(Buffer.from('Exif')), 'the EXIF block is gone from the stored photo');
+    assert.ok(after.subarray(-10).equals(scan), 'the picture itself is untouched');
+    assert.equal(db.prepare("SELECT bytes FROM media_objects WHERE rel_path = 'old-photo.jpg'").get().bytes, after.length);
+    assert.equal((await s3.readBuffer('notes.txt')).toString(), 'Exif in plain text, not a photo');
+    assert.equal(db.prepare("SELECT value FROM server_settings WHERE key = 'privacy_sweep'").get(), undefined, 'the disk sweep state is its own');
+  } finally {
+    require('../src/mediaTools').stopExiftool();
+    db.close();
+  }
+});
+
 function startServer(port, data, env) {
   const child = spawn(process.execPath, ['server.js'], {
     cwd: path.join(__dirname, '..'),

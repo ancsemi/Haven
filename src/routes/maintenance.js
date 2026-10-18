@@ -373,6 +373,24 @@ module.exports = function registerMaintenance(deps) {
     res.json({ ok: true });
   });
 
+  // ── Admin: rebuild the media index from storage ───────────
+  // For after files were added or removed outside Haven (a restore by hand,
+  // a bucket tool); scripts/reconcile-media.js does the same from a shell.
+  app.post('/api/admin/media/reconcile', async (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    const user = token ? verifyToken(token) : null;
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    if (!verifyAdminFromDb(user)) return res.status(403).json({ error: 'Admin only' });
+    try {
+      const summary = await require('../storage/reconcile').reconcile(db, storage.getStorage());
+      console.log(`[storage] Media index reconciled: ${summary.added} added, ${summary.fixed} corrected, ${summary.dropped} dropped`);
+      res.json(summary);
+    } catch (err) {
+      console.error('[storage] Reconcile failed:', err.message);
+      res.status(500).json({ error: 'Could not read storage' });
+    }
+  });
+
   // ── Admin: dynamic DNS status + force-refresh ─────────────
   // Returns the last DDNS update result (provider, IP, ok/error, timestamp).
   // POST forces an immediate update, useful if the user just changed their

@@ -358,11 +358,14 @@ let db = null;
 let sweepRunning = false;
 let toolRecheck = null;
 
+// Files in a bucket are a sweep of their own: moving to one starts it again.
+const onBucket = () => require('./storage').getStorage().kind === 's3';
+const stateKey = () => (onBucket() ? 'privacy_sweep_s3' : 'privacy_sweep');
 function getState() {
-  try { return JSON.parse(db.prepare("SELECT value FROM server_settings WHERE key = 'privacy_sweep'").get()?.value || '{}'); } catch { return {}; }
+  try { return JSON.parse(db.prepare('SELECT value FROM server_settings WHERE key = ?').get(stateKey())?.value || '{}'); } catch { return {}; }
 }
 function setState(state) {
-  db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('privacy_sweep', ?)").run(JSON.stringify(state));
+  db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run(stateKey(), JSON.stringify(state));
 }
 
 function listFiles(root, rel = '') {
@@ -406,11 +409,13 @@ async function waitForUploads() { while (activeUploads > 0) await sleep(500); }
 
 function reasonOf(e) { return e instanceof PrivacyError ? `${e.code}: ${e.detail || e.message}` : (e.message || String(e)); }
 
-function hold(rel, error) {
-  const src = path.join(UPLOADS_DIR, rel);
+// `src` is the file on disk: in uploads/, or the cleaned copy of a bucket
+// object, which then leaves the bucket.
+async function hold(rel, error, src = path.join(UPLOADS_DIR, rel)) {
   const dst = path.join(HELD_DIR, rel);
   fs.mkdirSync(path.dirname(dst), { recursive: true });
   moveFile(src, dst);
+  if (onBucket()) await require('./storage').getStorage().remove(rel);
   const key = indexed(rel);
   if (key) require('./storage').noteHeld(key.rel);
   db.prepare(`INSERT OR REPLACE INTO privacy_held (rel_path, attempts, last_error, failed, updated_at)
@@ -447,6 +452,7 @@ async function sweepUploads() {
   // installed, everything is gone through again.
   if ((state.done || state.cursor) && !!state.full !== full && full) state = {};
   if (state.done) return;
+  if (onBucket()) return sweepBucket(state, full);
   const files = listFiles(UPLOADS_DIR).filter(r => !r.includes(TMP_MARK)).sort();
   const todo = state.cursor ? files.filter(r => r > state.cursor) : files;
   if (todo.length) console.log(`[privacy] Removing location data from existing uploads (${todo.length} files to check)…`);
@@ -466,7 +472,7 @@ async function sweepUploads() {
         continue;
       }
       console.error(`[privacy] Could not clean ${rel}, holding it back: ${reasonOf(e)}`);
-      try { hold(rel, reasonOf(e)); held++; } catch (err) {
+      try { await hold(rel, reasonOf(e)); held++; } catch (err) {
         console.error(`[privacy] Could not move ${rel} to unprocessed/held:`, err.message);
       }
     }
@@ -474,6 +480,53 @@ async function sweepUploads() {
   }
   setState({ done: true, full });
   if (todo.length) console.log(`[privacy] Existing uploads checked${held ? `; ${held} could not be cleaned and are held in unprocessed/held` : ''}.`);
+}
+
+// The bucket's own sweep. There is no folder to walk, so it goes by the media
+// index, and each photo or video is cleaned in unprocessed/ and written back
+// only when cleaning changed it.
+// ponytail: picks files by extension; a photo saved under some other name is
+// missed here (the disk sweep reads every file). Clean by content if that matters.
+const SWEEP_EXT = /\.(jpe?g|jfif|png|webp|gif|heic|heif|hif|avif|tiff?|bmp|dng|mp4|m4v|mov|qt|3gp|3g2|mkv|webm|avi|mpe?g|ts|m2ts|mts|ogv|wmv|flv|asf)$/i;
+async function sweepBucket(state, full) {
+  const driver = require('./storage').getStorage();
+  const keys = db.prepare('SELECT rel_path, state FROM media_objects').all()
+    .map(r => (r.state === 'deleted' ? DELETED_PREFIX + r.rel_path : r.rel_path))
+    .filter(k => SWEEP_EXT.test(k)).sort();
+  const todo = state.cursor ? keys.filter(k => k > state.cursor) : keys;
+  if (todo.length) console.log(`[privacy] Removing location data from existing uploads in the bucket (${todo.length} files to check)…`);
+  let held = 0, lastSave = Date.now();
+  for (const rel of todo) {
+    await waitForUploads();
+    await new Promise(r => setImmediate(r));
+    const tmp = path.join(UNPROCESSED_DIR, `sweep${TMP_MARK}-${process.pid}-${Date.now()}${path.extname(rel)}`);
+    try {
+      const before = await driver.readBuffer(rel);
+      if (!before) continue;                              // deleted while we were busy
+      fs.writeFileSync(tmp, before);
+      await cleanFile(tmp);
+      if (!before.equals(fs.readFileSync(tmp))) {
+        const size = fs.statSync(tmp).size;
+        await driver.put(rel, tmp);
+        const key = indexed(rel);
+        if (key) require('./storage').noteSize(key.rel, size);
+      }
+    } catch (e) {
+      if (e.code !== 'PRIVACY_GPS_REMAINS') {
+        console.warn(`[privacy] Could not check ${rel}, left as it is: ${reasonOf(e)}`);
+      } else {
+        console.error(`[privacy] Could not clean ${rel}, holding it back: ${reasonOf(e)}`);
+        try { await hold(rel, reasonOf(e), tmp); held++; } catch (err) {
+          console.error(`[privacy] Could not move ${rel} to unprocessed/held:`, err.message);
+        }
+      }
+    } finally {
+      try { fs.unlinkSync(tmp); } catch { /* written back, held, or never written */ }
+    }
+    if (Date.now() - lastSave > 5000) { setState({ cursor: rel, full }); lastSave = Date.now(); }
+  }
+  setState({ done: true, full });
+  if (todo.length) console.log(`[privacy] Existing uploads in the bucket checked${held ? `; ${held} could not be cleaned and are held in unprocessed/held` : ''}.`);
 }
 
 async function retryHeld() {
@@ -487,11 +540,16 @@ async function retryHeld() {
       if (!fs.existsSync(abs)) { db.prepare('DELETE FROM privacy_held WHERE rel_path = ?').run(row.rel_path); continue; }
       try {
         await cleanFile(abs);
-        const back = path.join(UPLOADS_DIR, row.rel_path);
-        fs.mkdirSync(path.dirname(back), { recursive: true });
-        moveFile(abs, back);
+        const size = fs.statSync(abs).size;
+        if (onBucket()) {
+          await require('./storage').getStorage().put(row.rel_path, abs);
+        } else {
+          const back = path.join(UPLOADS_DIR, row.rel_path);
+          fs.mkdirSync(path.dirname(back), { recursive: true });
+          moveFile(abs, back);
+        }
         const key = indexed(row.rel_path);
-        if (key) require('./storage').noteBack(key.rel, fs.statSync(back).size, key.state);
+        if (key) require('./storage').noteBack(key.rel, size, key.state);
         db.prepare('DELETE FROM privacy_held WHERE rel_path = ?').run(row.rel_path);
         console.log(`[privacy] ${row.rel_path} cleaned on retry and put back.`);
       } catch (e) {

@@ -9,7 +9,11 @@ const storage = require('../storage');
 const { sanitizeBorderTransform } = require('../socketHandlers');
 
 module.exports = function registerProfile(deps) {
-  const { uploadDiskGuard, app, recordUploadOwnership, verifyAdminFromDb, userHasPermission, upload, uploadLimiter } = deps;
+  const { uploadDiskGuard, app, recordUploadOwnership, releaseOwnUploads, verifyAdminFromDb, userHasPermission, upload, uploadLimiter } = deps;
+  // A picture someone replaced or removed goes once nothing else shows it
+  // (releaseOwnUploads in server.js).
+  const releaseOld = (url, userId, what) => releaseOwnUploads([url], userId)
+    .catch(err => console.warn(`[${what}] Could not release the old picture:`, err.message));
   // Profile pictures, borders and persona avatars share one size limit the
   // admin sets (Settings, Uploads & Limits): 1 to 10 MB, 2 MB by default.
   const avatarMaxMb = () => {
@@ -75,27 +79,32 @@ module.exports = function registerProfile(deps) {
       recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
 
       // Update the user's avatar in the database
+      let oldAvatar = null;
       try {
         const db = getDb();
+        oldAvatar = db.prepare('SELECT avatar FROM users WHERE id = ?').get(user.id)?.avatar || null;
         db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(avatarUrl, user.id);
         console.log(`[Avatar] ${user.username} uploaded avatar: ${avatarUrl}`);
       } catch (dbErr) {
         console.error('Avatar DB update error:', dbErr);
         return res.status(500).json({ error: 'Failed to save avatar' });
       }
+      await releaseOld(oldAvatar, user.id, 'Avatar');
 
       res.json({ url: avatarUrl });
     });
   });
 
   // ── Avatar remove endpoint ──
-  app.post('/api/remove-avatar', express.json(), (req, res) => {
+  app.post('/api/remove-avatar', express.json(), async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     try {
       const { getDb } = require('../database');
+      const old = getDb().prepare('SELECT avatar FROM users WHERE id = ?').get(user.id)?.avatar || null;
       getDb().prepare('UPDATE users SET avatar = NULL WHERE id = ?').run(user.id);
+      await releaseOld(old, user.id, 'Avatar');
       res.json({ ok: true });
     } catch (err) {
       console.error('Avatar remove error:', err);
@@ -162,10 +171,13 @@ module.exports = function registerProfile(deps) {
       }
       try { await storage.admitUpload(req.file, finalName); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const borderUrl = `/uploads/${finalName}`;
+      recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
 
       // Update the user's border in the database
+      let oldBorder = null;
       try {
         const db = getDb();
+        oldBorder = db.prepare('SELECT border FROM users WHERE id = ?').get(user.id)?.border || null;
         // A new image invalidates the old fit; clear it so no stale transform lingers.
         db.prepare('UPDATE users SET border = ?, border_transform = NULL WHERE id = ?').run(borderUrl, user.id);
         console.log(`[Border] ${user.username} uploaded border: ${borderUrl}`);
@@ -173,19 +185,22 @@ module.exports = function registerProfile(deps) {
         console.error('Border DB update error:', dbErr);
         return res.status(500).json({ error: 'Failed to save border' });
       }
+      await releaseOld(oldBorder, user.id, 'Border');
 
       res.json({ url: borderUrl });
     });
   });
 
   // ── Border remove endpoint ──
-  app.post('/api/remove-border', express.json(), (req, res) => {
+  app.post('/api/remove-border', express.json(), async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     try {
       const { getDb } = require('../database');
+      const old = getDb().prepare('SELECT border FROM users WHERE id = ?').get(user.id)?.border || null;
       getDb().prepare('UPDATE users SET border = NULL, border_transform = NULL WHERE id = ?').run(user.id);
+      await releaseOld(old, user.id, 'Border');
       res.json({ ok: true });
     } catch (err) {
       console.error('Border remove error:', err);
@@ -378,7 +393,7 @@ module.exports = function registerProfile(deps) {
     }
   });
 
-  app.patch('/api/personas/:id', express.json(), (req, res) => {
+  app.patch('/api/personas/:id', express.json(), async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -387,7 +402,7 @@ module.exports = function registerProfile(deps) {
     try {
       const { getDb } = require('../database');
       const db = getDb();
-      const persona = db.prepare('SELECT id FROM user_personas WHERE id = ? AND user_id = ?').get(id, user.id);
+      const persona = db.prepare('SELECT id, avatar FROM user_personas WHERE id = ? AND user_id = ?').get(id, user.id);
       if (!persona) return res.status(404).json({ error: 'Persona not found' });
 
       const updates = [];
@@ -417,6 +432,7 @@ module.exports = function registerProfile(deps) {
       const row = db.prepare(
         'SELECT id, name, avatar, bio, created_at FROM user_personas WHERE id = ?'
       ).get(id);
+      if (persona.avatar && persona.avatar !== row.avatar) await releaseOld(persona.avatar, user.id, 'Persona');
       res.json({ persona: row });
     } catch (err) {
       if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -427,7 +443,7 @@ module.exports = function registerProfile(deps) {
     }
   });
 
-  app.delete('/api/personas/:id', (req, res) => {
+  app.delete('/api/personas/:id', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -435,7 +451,9 @@ module.exports = function registerProfile(deps) {
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'Bad id' });
     try {
       const { getDb } = require('../database');
+      const old = getDb().prepare('SELECT avatar FROM user_personas WHERE id = ? AND user_id = ?').get(id, user.id)?.avatar || null;
       getDb().prepare('DELETE FROM user_personas WHERE id = ? AND user_id = ?').run(id, user.id);
+      await releaseOld(old, user.id, 'Persona');
       res.json({ ok: true });
     } catch (err) {
       console.error('DELETE /api/personas/:id error:', err);
@@ -500,13 +518,14 @@ module.exports = function registerProfile(deps) {
       if (Number.isFinite(personaId)) {
         try {
           const persona = getDb().prepare(
-            'SELECT id FROM user_personas WHERE id = ? AND user_id = ?'
+            'SELECT id, avatar FROM user_personas WHERE id = ? AND user_id = ?'
           ).get(personaId, user.id);
           if (!persona) {
             await storage.remove(finalName);
             return res.status(403).json({ error: 'Not your persona' });
           }
           getDb().prepare('UPDATE user_personas SET avatar = ? WHERE id = ?').run(avatarUrl, personaId);
+          if (persona.avatar && persona.avatar !== avatarUrl) await releaseOld(persona.avatar, user.id, 'Persona');
         } catch (dbErr) {
           console.error('Persona avatar DB error:', dbErr);
           return res.status(500).json({ error: 'Failed to save avatar' });
