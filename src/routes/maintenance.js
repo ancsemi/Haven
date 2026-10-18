@@ -6,8 +6,9 @@
 const releaseChannel = require('../releaseChannel');
 const fs = require('fs');
 const path = require('path');
-const { DATA_DIR, DB_PATH, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
+const { DATA_DIR, DB_PATH, UPLOADS_DIR } = require('../paths');
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('../deletedAttachments');
+const storage = require('../storage');
 const { trimUploadsToLimit } = require('../uploadsTrim');
 const { findOrphanDms } = require('../orphanDms');
 const protectedMessages = require('../protectedMessages');
@@ -35,8 +36,8 @@ module.exports = function registerMaintenance(deps) {
       // they have been there longer than the retention window (a week unless
       // the admin changes it), whether or not auto-cleanup is switched on.
       try {
-        const removed = purgeDeletedAttachments(
-          DELETED_ATTACHMENTS_DIR, resolveDeletedRetentionDays(getSetting('deleted_retention_days')));
+        const removed = await purgeDeletedAttachments(
+          db, storage, resolveDeletedRetentionDays(getSetting('deleted_retention_days')));
         if (removed > 0) console.log(`Auto-cleanup: removed ${removed} expired file(s) from deleted-attachments`);
       } catch (e) { console.error('deleted-attachments purge error:', e.message); }
 
@@ -138,7 +139,7 @@ module.exports = function registerMaintenance(deps) {
       const maxUploadsMb = parseInt(getSetting('cleanup_max_uploads_mb') || '0');
       if (maxUploadsMb > 0) {
         trimUploadsToLimit({
-          db, uploadsDir: UPLOADS_DIR, maxBytes: maxUploadsMb * 1024 * 1024,
+          db, localDirs: [path.join(UPLOADS_DIR, 'bot-audio')], maxBytes: maxUploadsMb * 1024 * 1024,
           extractPaths: extractUploadRelPaths, move: (rel) => moveUploadToDeleted(rel),
         }).then((r) => {
           if (r.deleted > 0) console.log(`Auto-cleanup: uploads were over ${maxUploadsMb} MB, removed ${r.deleted} old message(s) with files`);

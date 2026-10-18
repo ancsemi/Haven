@@ -206,9 +206,8 @@ function collectUploadRelPaths(contents) {
 }
 
 async function relocateUnreferencedUploads(db, relPaths) {
-  const candidates = new Set(
-    Array.from(relPaths).filter(relPath => fs.existsSync(path.join(UPLOADS_DIR, relPath)))
-  );
+  const isLive = db.prepare("SELECT 1 FROM media_objects WHERE rel_path = ? AND state = 'live'");
+  const candidates = new Set(Array.from(relPaths).filter(relPath => isLive.get(relPath)));
   if (candidates.size === 0) return;
 
   const survivingMessages = db.prepare(`
@@ -304,28 +303,24 @@ function uploadScopeFromRequest(req, fallback = 'channel') {
   return ['channel', 'dm', 'profile'].includes(raw) ? raw : fallback;
 }
 
-// Walk the live uploads tree once and total it per owner. Reading sizes from
-// disk rather than trusting the stored byte count means a deleted, purged, or
-// moved-to-deleted-attachments file drops out on its own, with no delete hook to
-// keep in sync, and no drift between the report and reality.
+// Total the live uploads per owner. Sizes come from the media index that
+// src/storage keeps with every move, not from upload_ownership's stored byte
+// count, so a deleted, purged, or moved-to-deleted-attachments file drops out
+// on its own. Deleted attachments and temporary bot audio are not live member
+// storage, and neither is in the index as live.
 let _uploadUsageCache = null;
 function getUploadUsage() {
   if (_uploadUsageCache && Date.now() - _uploadUsageCache.at < 60_000) return _uploadUsageCache.data;
 
   const sizes = new Map();   // relPath → bytes
-  const walk = (dir, rel) => {
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const entry of entries) {
-      // Deleted attachments and temporary bot audio are not live member storage.
-      if (!rel && ['bot-audio', 'deleted-attachments'].includes(entry.name)) continue;
-      const sub = rel ? `${rel}/${entry.name}` : entry.name;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) { walk(full, sub); continue; }
-      try { sizes.set(sub, fs.statSync(full).size); } catch { /* vanished mid-walk */ }
+  try {
+    const { getDb } = require('./src/database');
+    for (const row of getDb().prepare("SELECT rel_path, bytes FROM media_objects WHERE state = 'live'").iterate()) {
+      sizes.set(row.rel_path, row.bytes);
     }
-  };
-  walk(UPLOADS_DIR, '');
+  } catch (err) {
+    console.warn('[uploads] Could not read the media index for the usage report:', err.message);
+  }
 
   const byUser = new Map();  // userId → { total, channel, dm, profile, files }
   let attributedBytes = 0;
@@ -3109,7 +3104,6 @@ const io = new Server(server, {
 const db = initDatabase();
 
 // (#5335) Seed starter stickers now that the DB is ready.
-seedStarterStickers();   // catches and logs its own errors
 
 // Download / refresh the Unicode emoji list (non-blocking, best-effort).
 // Opt-in: off unless the admin enables it or UNICODE_EMOJI_AUTO_UPDATE forces it.
@@ -3583,7 +3577,7 @@ server.on('error', (err) => {
   logCrash('HTTP server error (server kept alive)', err);
 });
 
-server.listen(PORT, HOST, () => {
+function onListening() {
   // Print the machine's LAN address rather than a YOUR_IP placeholder, which
   // more than one self-hoster has read as a broken config. (#5572)
   const lanIps = [];
@@ -3613,6 +3607,18 @@ ${row('Admin:', process.env.ADMIN_USERNAME || 'admin')}
   // Tunnel is now started manually via the admin panel button (no auto-start)
   // Dynamic DNS auto-updater (kicks in only if DDNS_PROVIDER is set in .env)
   try { startDdns(); } catch (err) { console.warn('[ddns] failed to start:', err && err.message); }
+}
+
+// Storage has to answer before anything is served. One that cannot be used
+// stops the server here instead of leaving it up with no media; the explicit
+// exit matters, because the rejection handler above keeps the process alive.
+storage.prepare(db).then(() => {
+  seedStarterStickers();   // catches and logs its own errors
+  server.listen(PORT, HOST, onListening);
+}, (err) => {
+  console.error(`\n❌ Haven could not start: ${err.message}`);
+  logCrash('Storage unavailable (exiting)', err);
+  process.exit(1);
 });
 
 function gracefulShutdown(signal) {

@@ -1,7 +1,5 @@
 'use strict';
 
-const path = require('path');
-const fs   = require('fs');
 const bcrypt = require('bcryptjs');
 const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
@@ -59,7 +57,7 @@ module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
           sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
           touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay, ferryRelayReply,
-          logAudit, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
+          logAudit } = ctx;
   const { slowModeTracker } = state;
   const { youngAccountWait, refuseYoungAccount } = require('./postingWait')(socket, ctx);
   // The upload tags this person may use in a channel: those not limited to a
@@ -829,23 +827,19 @@ module.exports = function register(socket, ctx) {
     // http(s):// URLs (anywhere in content)
     const httpRe     = /(https?:\/\/[^\s<>"']+)/gi;
 
-    // Resolve a /uploads/<name> path to a byte size by stat'ing the file on
-    // disk. Memoized per request so a popular file isn't stat'd hundreds of
-    // times. Returns 0 when the file is missing or path-traversal would
-    // escape UPLOADS_DIR.
+    // Resolve a /uploads/<name> path to a byte size from the media index.
+    // Memoized per request so a popular file is looked up once. Returns 0
+    // when the file is missing or the name is not a plain upload name.
     const sizeCache = new Map();
     const safeName = /^[\w\-.]+$/;
+    const liveBytes = db.prepare("SELECT bytes FROM media_objects WHERE rel_path = ? AND state = 'live'");
     const sizeOf = (url) => {
       if (!url || !url.startsWith('/uploads/')) return 0;
       if (sizeCache.has(url)) return sizeCache.get(url);
       const name = url.slice('/uploads/'.length);
       if (!safeName.test(name)) { sizeCache.set(url, 0); return 0; }
       let s = 0;
-      try {
-        const full = path.join(UPLOADS_DIR, name);
-        const st = fs.statSync(full);
-        if (st && st.isFile()) s = st.size;
-      } catch { /* missing or permission denied: counts as 0 bytes */ }
+      try { s = liveBytes.get(name)?.bytes || 0; } catch { /* index unreadable: counts as 0 bytes */ }
       sizeCache.set(url, s);
       return s;
     };

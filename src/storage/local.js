@@ -65,6 +65,14 @@ class LocalStorage {
     try { fs.unlinkSync(this._abs(rel)); } catch (err) {
       if (err.code !== 'ENOENT') throw err;
     }
+    // A purge empties the sub-folders deleted files kept their layout in;
+    // those go, the deleted-attachments folder itself stays.
+    if (rel.startsWith(DELETED_PREFIX)) {
+      const top = this._abs(DELETED_PREFIX);
+      for (let dir = path.dirname(this._abs(rel)); dir.length > top.length && dir.startsWith(top); dir = path.dirname(dir)) {
+        try { fs.rmdirSync(dir); } catch { break; }   // not empty, or in use: harmless, the next purge tries again
+      }
+    }
   }
 
   async softDelete(rel) {

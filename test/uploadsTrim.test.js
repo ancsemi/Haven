@@ -1,7 +1,8 @@
 'use strict';
 
 // Auto-Cleanup's uploads limit: the oldest messages with files go until the
-// uploads folder is back under the limit, and nothing else is touched.
+// uploads are back under the limit, and nothing else is touched. Sizes come
+// from the media index (media_objects), as src/storage keeps it.
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -26,15 +27,21 @@ const extractPaths = (content) => {
 function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-uploads-trim-'));
   const moved = [];
-  const file = (name, kb) => fs.writeFileSync(path.join(root, name), Buffer.alloc(kb * KB));
+  const file = (name, kb) => {
+    fs.writeFileSync(path.join(root, name), Buffer.alloc(kb * KB));
+    db.prepare("INSERT INTO media_objects (rel_path, bytes, state) VALUES (?, ?, 'live')").run(name, kb * KB);
+  };
   const move = (rel) => {
     const dst = path.join(root, 'deleted-attachments', rel);
     fs.mkdirSync(path.dirname(dst), { recursive: true });
     fs.renameSync(path.join(root, rel), dst);
+    db.prepare("UPDATE media_objects SET state = 'deleted' WHERE rel_path = ?").run(rel);
     moved.push(rel);
   };
   const db = new Database(':memory:');
   db.exec(`
+    CREATE TABLE media_objects (rel_path TEXT PRIMARY KEY, bytes INTEGER NOT NULL, content_type TEXT,
+      state TEXT NOT NULL DEFAULT 'live', created_at DATETIME, deleted_at DATETIME);
     CREATE TABLE channels (id INTEGER PRIMARY KEY, cleanup_exempt INTEGER DEFAULT 0);
     CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER, content TEXT, e2e_files TEXT,
       is_archived INTEGER DEFAULT 0, thread_id INTEGER, created_at TEXT);
@@ -53,12 +60,16 @@ function setup() {
   return { root, db, file, msg, move, moved, ids };
 }
 
-test('the folder size leaves out deleted-attachments', async () => {
+test('the size leaves out deleted-attachments and adds the local bot audio folder', async () => {
   const t = setup();
   t.file('a.png', 10);
-  fs.mkdirSync(path.join(t.root, 'deleted-attachments'));
-  fs.writeFileSync(path.join(t.root, 'deleted-attachments', 'old.png'), Buffer.alloc(50 * KB));
-  assert.equal(await uploadsSizeBytes(t.root), 10 * KB);
+  t.file('old.png', 50);
+  t.move('old.png');
+  assert.equal(await uploadsSizeBytes(t.db), 10 * KB);
+  const botAudio = path.join(t.root, 'bot-audio');
+  fs.mkdirSync(botAudio);
+  fs.writeFileSync(path.join(botAudio, 'clip.mp3'), Buffer.alloc(3 * KB));
+  assert.equal(await uploadsSizeBytes(t.db, [botAudio]), 13 * KB);
 });
 
 test('the oldest messages with files go, just enough to get under the limit', async () => {
@@ -73,13 +84,13 @@ test('the oldest messages with files go, just enough to get under the limit', as
   t.db.prepare('INSERT INTO reactions (message_id, emoji) VALUES (?, ?)').run(one, 'x');
 
   // 110 KB in the folder, limit 75: two 20 KB files have to go.
-  const r = await trimUploadsToLimit({ db: t.db, uploadsDir: t.root, maxBytes: 75 * KB, extractPaths: extractPaths, move: t.move });
+  const r = await trimUploadsToLimit({ db: t.db, maxBytes: 75 * KB, extractPaths: extractPaths, move: t.move });
   assert.equal(r.deleted, 2);
   assert.deepEqual(t.ids(), [text, three, four]);
   assert.deepEqual(t.moved.sort(), ['one.png', 'two.png']);
   assert.ok(fs.existsSync(path.join(t.root, 'avatar.png')), 'files no message points at stay');
   assert.equal(t.db.prepare('SELECT COUNT(*) c FROM reactions').get().c, 0);
-  assert.ok(await uploadsSizeBytes(t.root) <= 75 * KB);
+  assert.ok(await uploadsSizeBytes(t.db) <= 75 * KB);
   void two;
 });
 
@@ -93,7 +104,7 @@ test('pinned, archived and exempt messages stay, and so do messages whose files 
   const missing = t.msg('/uploads/nothere.png');
   const plain = t.msg('/uploads/x.png');
 
-  const r = await trimUploadsToLimit({ db: t.db, uploadsDir: t.root, maxBytes: 10 * KB, extractPaths, move: t.move });
+  const r = await trimUploadsToLimit({ db: t.db, maxBytes: 10 * KB, extractPaths, move: t.move });
   assert.equal(r.deleted, 1);
   assert.deepEqual(t.ids(), [pinned, archived, exempt, missing]);
   assert.deepEqual(t.moved, ['x.png']);
@@ -107,7 +118,7 @@ test('a file another message still links to is not moved', async () => {
   t.msg('/uploads/shared.png');
   const later = t.msg('same file again /uploads/shared.png');
   t.msg('/uploads/late.png');
-  await trimUploadsToLimit({ db: t.db, uploadsDir: t.root, maxBytes: 20 * KB, extractPaths, move: t.move });
+  await trimUploadsToLimit({ db: t.db, maxBytes: 20 * KB, extractPaths, move: t.move });
   assert.ok(t.ids().includes(later));
   assert.deepEqual(t.moved, []);
   assert.ok(fs.existsSync(path.join(t.root, 'shared.png')));
@@ -117,7 +128,7 @@ test('encrypted DM files count, and their message goes (the release trigger move
   const t = setup();
   t.file('dm.bin', 30);
   const dm = t.msg('ciphertext', { e2e: JSON.stringify(['dm.bin']) });
-  const r = await trimUploadsToLimit({ db: t.db, uploadsDir: t.root, maxBytes: 10 * KB, extractPaths, move: t.move });
+  const r = await trimUploadsToLimit({ db: t.db, maxBytes: 10 * KB, extractPaths, move: t.move });
   assert.equal(r.deleted, 1);
   assert.ok(!t.ids().includes(dm));
   assert.deepEqual(t.moved, [], 'the move is left to the e2e release sweep');
@@ -127,7 +138,7 @@ test('under the limit, or with the limit off, nothing happens', async () => {
   const t = setup();
   t.file('a.png', 10);
   const id = t.msg('/uploads/a.png');
-  assert.equal((await trimUploadsToLimit({ db: t.db, uploadsDir: t.root, maxBytes: 20 * KB, extractPaths, move: t.move })).deleted, 0);
-  assert.equal((await trimUploadsToLimit({ db: t.db, uploadsDir: t.root, maxBytes: 0, extractPaths, move: t.move })).deleted, 0);
+  assert.equal((await trimUploadsToLimit({ db: t.db, maxBytes: 20 * KB, extractPaths, move: t.move })).deleted, 0);
+  assert.equal((await trimUploadsToLimit({ db: t.db, maxBytes: 0, extractPaths, move: t.move })).deleted, 0);
   assert.deepEqual(t.ids(), [id]);
 });

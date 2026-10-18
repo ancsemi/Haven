@@ -107,8 +107,41 @@ async function restore(rel) {
   return back;
 }
 
+/**
+ * Before the server takes requests: storage must answer, and an install that
+ * predates the media index gets it built from what storage holds. Throws with
+ * a message fit for the console when storage cannot be used.
+ */
+async function prepare(db) {
+  const s = getStorage();
+  try { await s.ping(); } catch (err) {
+    throw new Error(`[storage] Cannot use ${s.describe ? s.describe() : s.root}: ${err.message}`);
+  }
+  if (db.prepare("SELECT 1 FROM server_settings WHERE key = 'media_index_built'").get()) return;
+  const { reconcile } = require('./reconcile');
+  const r = await reconcile(db, s);
+  db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('media_index_built', '1')").run();
+  if (r.objects) console.log(`[storage] Indexed ${r.objects} existing upload(s)`);
+}
+
+// The privacy sweep rewrites and holds back files where they lie; these keep
+// the index in step with it.
+function noteSize(rel, bytes) {
+  index(db => db.prepare('UPDATE media_objects SET bytes = ? WHERE rel_path = ?').run(bytes, rel));
+}
+function noteHeld(rel) {
+  index(db => db.prepare('DELETE FROM media_objects WHERE rel_path = ?').run(rel));
+}
+function noteBack(rel, bytes, state = 'live') {
+  index(db => db.prepare(`INSERT INTO media_objects (rel_path, bytes, state, deleted_at)
+                          VALUES (?, ?, ?, CASE WHEN ? = 'deleted' THEN CURRENT_TIMESTAMP END)
+                          ON CONFLICT(rel_path) DO UPDATE SET bytes = excluded.bytes, state = excluded.state`)
+    .run(rel, bytes, state, state));
+}
+
 module.exports = {
-  getStorage, setStorage, admit, admitUpload, softDelete, remove, purge, restore,
+  getStorage, setStorage, prepare, admit, admitUpload, softDelete, remove, purge, restore,
+  noteSize, noteHeld, noteBack,
   head: (rel) => getStorage().head(rel),
   getStream: (rel, opts) => getStorage().getStream(rel, opts),
   readBuffer: (rel) => getStorage().readBuffer(rel),

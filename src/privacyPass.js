@@ -46,6 +46,16 @@ const multer = require('multer');
 const tools = require('./mediaTools');
 const { UPLOADS_DIR, UNPROCESSED_DIR, STAGING_DIR } = require('./paths');
 const { stripImageMetadata } = require('./imageMetadata');
+const { DELETED_PREFIX } = require('./storage/paths');
+
+// The media index key for a file under uploads/, or null for bot audio,
+// which is not indexed.
+function indexed(rel) {
+  if (rel.startsWith('bot-audio/')) return null;
+  return rel.startsWith(DELETED_PREFIX)
+    ? { rel: rel.slice(DELETED_PREFIX.length), state: 'deleted' }
+    : { rel, state: 'live' };
+}
 
 const HELD_DIR = path.join(UNPROCESSED_DIR, 'held');
 const FAILED_JSON = path.join(HELD_DIR, 'failed.json');
@@ -401,6 +411,8 @@ function hold(rel, error) {
   const dst = path.join(HELD_DIR, rel);
   fs.mkdirSync(path.dirname(dst), { recursive: true });
   moveFile(src, dst);
+  const key = indexed(rel);
+  if (key) require('./storage').noteHeld(key.rel);
   db.prepare(`INSERT OR REPLACE INTO privacy_held (rel_path, attempts, last_error, failed, updated_at)
               VALUES (?, 1, ?, 0, CURRENT_TIMESTAMP)`).run(rel, error);
 }
@@ -445,6 +457,8 @@ async function sweepUploads() {
     const abs = path.join(UPLOADS_DIR, rel);
     try {
       await cleanFile(abs);
+      const key = indexed(rel);
+      if (key) require('./storage').noteSize(key.rel, fs.statSync(abs).size);
     } catch (e) {
       if (e.code === 'ENOENT') continue;                  // deleted while we were busy
       if (e.code !== 'PRIVACY_GPS_REMAINS') {
@@ -476,6 +490,8 @@ async function retryHeld() {
         const back = path.join(UPLOADS_DIR, row.rel_path);
         fs.mkdirSync(path.dirname(back), { recursive: true });
         moveFile(abs, back);
+        const key = indexed(row.rel_path);
+        if (key) require('./storage').noteBack(key.rel, fs.statSync(back).size, key.state);
         db.prepare('DELETE FROM privacy_held WHERE rel_path = ?').run(row.rel_path);
         console.log(`[privacy] ${row.rel_path} cleaned on retry and put back.`);
       } catch (e) {
