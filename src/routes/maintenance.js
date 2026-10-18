@@ -73,7 +73,7 @@ module.exports = function registerMaintenance(deps) {
             const still = db.prepare(
               "SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1"
             ).get(like);
-            if (!still) moveUploadToDeleted(rel, UPLOADS_DIR);
+            if (!still) moveUploadToDeleted(rel);
           } catch (err) {
             console.warn(`[cleanup] Could not check whether ${rel} is still referenced:`, err.message);
           }
@@ -139,7 +139,7 @@ module.exports = function registerMaintenance(deps) {
       if (maxUploadsMb > 0) {
         trimUploadsToLimit({
           db, uploadsDir: UPLOADS_DIR, maxBytes: maxUploadsMb * 1024 * 1024,
-          extractPaths: extractUploadRelPaths, move: (rel) => moveUploadToDeleted(rel, UPLOADS_DIR),
+          extractPaths: extractUploadRelPaths, move: (rel) => moveUploadToDeleted(rel),
         }).then((r) => {
           if (r.deleted > 0) console.log(`Auto-cleanup: uploads were over ${maxUploadsMb} MB, removed ${r.deleted} old message(s) with files`);
         }).catch((e) => console.error('Uploads limit error:', e.message));
@@ -190,7 +190,7 @@ module.exports = function registerMaintenance(deps) {
               const deletedDir = path.join(UPLOADS_DIR, 'deleted-attachments');
               require('fs').mkdirSync(deletedDir, { recursive: true });
               for (const fn of seen) {
-                moveUploadToDeleted(fn, UPLOADS_DIR);
+                moveUploadToDeleted(fn);
               }
             }
             // Delete the channel: cascades to messages + read_positions +

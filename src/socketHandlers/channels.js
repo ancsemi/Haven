@@ -1,36 +1,9 @@
 // ── Channel CRUD, sub-channels, settings, reordering, categories, DMs ──
-const fs = require('fs');
-const path = require('path');
-const { UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
 
 const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
 const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
 
-function isSafeUploadRelPath(relPath) {
-  if (typeof relPath !== 'string' || !relPath) return false;
-  if (!/^((?!\.\.)(?!\.\/)(?!\/)[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+$/.test(relPath)) return false;
-  const parts = relPath.split('/');
-  if (parts.some(p => !p || p === '.' || p === '..')) return false;
-  return true;
-}
-
-function moveUploadToDeleted(relPath) {
-  if (!isSafeUploadRelPath(relPath)) return;
-  const src = path.join(UPLOADS_DIR, relPath);
-  if (!fs.existsSync(src)) return;
-  let stat;
-  try {
-    stat = fs.statSync(src);
-  } catch {
-    return;
-  }
-  if (!stat.isFile()) return;
-  const dst = path.join(DELETED_ATTACHMENTS_DIR, relPath);
-  try {
-    fs.mkdirSync(path.dirname(dst), { recursive: true });
-    fs.renameSync(src, dst);
-  } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
-}
+const { isSafeUploadRelPath, moveUploadToDeleted } = require('../uploadFiles');
 const { isString, isInt, releasableUploads, CHANNEL_NAME_RE, NEW_DMS_PER_HOUR } = require('./helpers');
 
 // The files the messages in these channels point at, kept per author, read

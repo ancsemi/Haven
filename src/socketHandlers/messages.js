@@ -18,6 +18,7 @@ const mediaGroup = require('../mediaGroup');
 const { takeSilent } = require('../silentMessages');
 const { tagAccess } = require('../uploadTagRoles');
 const { moveToChannel } = require('../moveMessages');
+const { isSafeUploadRelPath, moveUploadToDeleted } = require('../uploadFiles');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -121,31 +122,6 @@ module.exports = function register(socket, ctx) {
   const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
   const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
 
-  function isSafeUploadRelPath(relPath) {
-    if (typeof relPath !== 'string' || !relPath) return false;
-    if (!/^((?!\.\.)(?!\.\/)(?!\/)[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+$/.test(relPath)) return false;
-    const parts = relPath.split('/');
-    if (parts.some(p => !p || p === '.' || p === '..')) return false;
-    return true;
-  }
-
-  function moveUploadToDeleted(relPath) {
-    if (!isSafeUploadRelPath(relPath)) return;
-    const src = path.join(UPLOADS_DIR, relPath);
-    if (!fs.existsSync(src)) return;
-    let stat;
-    try {
-      stat = fs.statSync(src);
-    } catch {
-      return;
-    }
-    if (!stat.isFile()) return;
-    const dst = path.join(DELETED_ATTACHMENTS_DIR, relPath);
-    try {
-      fs.mkdirSync(path.dirname(dst), { recursive: true });
-      fs.renameSync(src, dst);
-    } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
-  }
 
   // Thread replies go with the message they hang from (ON DELETE CASCADE), so
   // a forum topic takes its replies, and a blog gallery every picture, with
