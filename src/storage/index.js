@@ -14,8 +14,29 @@ const { DELETED_PREFIX, isSafeUploadRelPath, isContainedRelPath } = require('./p
 
 let driver = null;
 
+// HAVEN_EXTERNAL_STORAGE=true keeps media in an S3-compatible bucket;
+// anything else is the local uploads/ folder. Read once.
+function fromEnv(env = process.env) {
+  if (String(env.HAVEN_EXTERNAL_STORAGE || '').trim().toLowerCase() !== 'true') return new LocalStorage(UPLOADS_DIR);
+  const required = ['HAVEN_S3_ENDPOINT', 'HAVEN_S3_BUCKET', 'HAVEN_S3_ACCESS_KEY', 'HAVEN_S3_SECRET_KEY'];
+  const missing = required.filter(k => !String(env[k] || '').trim());
+  if (missing.length) throw new Error(`HAVEN_EXTERNAL_STORAGE is on but ${missing.join(', ')} ${missing.length > 1 ? 'are' : 'is'} not set`);
+  const on = (v, dflt) => (v === undefined || v === '' ? dflt : String(v).trim().toLowerCase() === 'true');
+  const { S3Storage } = require('./s3');
+  return new S3Storage({
+    endpoint: env.HAVEN_S3_ENDPOINT.trim(),
+    bucket: env.HAVEN_S3_BUCKET.trim(),
+    region: (env.HAVEN_S3_REGION || '').trim() || 'us-east-1',
+    accessKeyId: env.HAVEN_S3_ACCESS_KEY.trim(),
+    secretAccessKey: env.HAVEN_S3_SECRET_KEY.trim(),
+    prefix: (env.HAVEN_S3_PREFIX || '').trim().replace(/^\/+/, ''),
+    forcePathStyle: on(env.HAVEN_S3_FORCE_PATH_STYLE, true),
+    local: on(env.HAVEN_S3_LOCAL_FALLBACK, false) ? new LocalStorage(UPLOADS_DIR) : null,
+  });
+}
+
 function getStorage() {
-  if (!driver) driver = new LocalStorage(UPLOADS_DIR);
+  if (!driver) driver = fromEnv();
   return driver;
 }
 
@@ -117,6 +138,14 @@ async function prepare(db) {
   try { await s.ping(); } catch (err) {
     throw new Error(`[storage] Cannot use ${s.describe ? s.describe() : s.root}: ${err.message}`);
   }
+  if (s.kind === 's3') {
+    console.log(`[storage] Media is kept in the ${s.describe()}`);
+    if (!s.local) {
+      let stranded = 0;
+      for await (const f of new LocalStorage(UPLOADS_DIR).list('')) if (!f.rel.startsWith('bot-audio/')) stranded++;
+      if (stranded) console.warn(`[storage] ${stranded} file(s) in ${UPLOADS_DIR} are not being served; run scripts/migrate-uploads-to-s3.js, or set HAVEN_S3_LOCAL_FALLBACK=true while you do`);
+    }
+  }
   if (db.prepare("SELECT 1 FROM server_settings WHERE key = 'media_index_built'").get()) return;
   const { reconcile } = require('./reconcile');
   const r = await reconcile(db, s);
@@ -140,7 +169,7 @@ function noteBack(rel, bytes, state = 'live') {
 }
 
 module.exports = {
-  getStorage, setStorage, prepare, admit, admitUpload, softDelete, remove, purge, restore,
+  getStorage, setStorage, fromEnv, prepare, admit, admitUpload, softDelete, remove, purge, restore,
   noteSize, noteHeld, noteBack,
   head: (rel) => getStorage().head(rel),
   getStream: (rel, opts) => getStorage().getStream(rel, opts),
