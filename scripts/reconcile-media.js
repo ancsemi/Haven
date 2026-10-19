@@ -15,6 +15,8 @@ if (i !== -1) {
   process.env.HAVEN_DATA_DIR = process.argv[i + 1];
 }
 
+// The server's own settings (HAVEN_S3_* and the rest), as server.js reads them.
+require('dotenv').config({ path: require('../src/paths').ENV_PATH });
 const { initDatabase } = require('../src/database');
 const storage = require('../src/storage');
 const { reconcile } = require('../src/storage/reconcile');

@@ -19,6 +19,8 @@ if (i !== -1) {
   process.env.HAVEN_DATA_DIR = args[i + 1];
 }
 const deleteLocal = args.includes('--delete-local');
+// The server's own settings (HAVEN_S3_* and the rest), as server.js reads them.
+require('dotenv').config({ path: require('../src/paths').ENV_PATH });
 
 const { initDatabase } = require('../src/database');
 const storage = require('../src/storage');
