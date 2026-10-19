@@ -66,13 +66,14 @@
 
 .collapsible-section-body {
   overflow: hidden;
-  transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
-  max-height: 18.75rem;
+  interpolate-size: allow-keywords;
+  transition: height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
+  height: auto;
   opacity: 1;
 }
 
 .collapsible-section-body.collapsed {
-  max-height: 0;
+  height: 0;
   opacity: 0;
   margin-top: 0;
   margin-bottom: 0;
