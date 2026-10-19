@@ -1029,7 +1029,9 @@ _startEditMessage(msgEl, msgId) {
   textarea.style.height = 'auto';
   textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
 
+  const editClicks = new AbortController();
   const cancel = () => {
+    editClicks.abort();
     msgEl.classList.remove('editing');
     contentEl.innerHTML = originalHtml;
     if (this._activeEditTextarea === textarea) this._activeEditTextarea = null;
@@ -1158,10 +1160,11 @@ _startEditMessage(msgEl, msgId) {
     this._checkEmojiTrigger(textarea);
   });
 
-  // Click inside edit area should not bubble to delegation handler
+  // Click inside edit area should not bubble to delegation handler.
+  // Removed when the edit ends, or the message's pictures stop opening.
   contentEl.addEventListener('click', (e) => {
     e.stopPropagation();
-  }, { once: false });
+  }, { signal: editClicks.signal });
 },
 
 // ═══════════════════════════════════════════════════════
