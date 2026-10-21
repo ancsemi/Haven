@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.26.3] - 2026-10-21
+
+### Added
+- Early access updates: under Settings > Admin, a server can opt in to pre-releases and try new versions before everyone else. Docker users can use the `:beta` image instead. Stable releases keep coming about once a week for everyone else.
+
 ## [4.26.2] - 2026-10-17
 
 Two fixes on top of 4.26.1.
