@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.26.4] - 2026-10-22
+
+A security fix.
+
+### Security
+- Link previews no longer ask websites for Brotli compression or decode it, closing a way in through a Node.js bug (CVE-2026-111497) that a page someone linked to could use to run code on the server.
+- The Docker image is rebuilt on Node.js 22.23.4, which has the fix. If you run Haven without Docker, update Node.js to 22.23.4, 24.22.1 or 26.12.1 (or newer).
+
 ## [4.26.3] - 2026-10-21
 
 ### Added
