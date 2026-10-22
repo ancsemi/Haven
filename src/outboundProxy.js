@@ -295,17 +295,14 @@ function request(target, options, onResponse, proxy = proxyFor(target), pin = nu
 // ── fetch ───────────────────────────────────────────────
 
 function decoderFor(encoding) {
+  // No Brotli: these are pages anyone can point the server at, and Node's
+  // Brotli decoder had a remote code execution bug (CVE-2026-111497). Brotli
+  // is never asked for, and a reply that sends it anyway is not decoded.
   const enc = String(encoding || '').trim().toLowerCase();
   if (enc === 'gzip' || enc === 'x-gzip') {
     return zlib.createGunzip({ flush: zlib.constants.Z_SYNC_FLUSH, finishFlush: zlib.constants.Z_SYNC_FLUSH });
   }
   if (enc === 'deflate') return zlib.createInflate();
-  if (enc === 'br') {
-    return zlib.createBrotliDecompress({
-      flush: zlib.constants.BROTLI_OPERATION_FLUSH,
-      finishFlush: zlib.constants.BROTLI_OPERATION_FLUSH,
-    });
-  }
   return null;
 }
 
@@ -319,7 +316,7 @@ function sendOnce(url, method, headers, body, signal, proxy) {
     const outgoing = Object.fromEntries(headers);
     if (!('accept' in outgoing)) outgoing.accept = '*/*';
     if (!('user-agent' in outgoing)) outgoing['user-agent'] = 'node';
-    if (!('accept-encoding' in outgoing)) outgoing['accept-encoding'] = 'gzip, deflate, br';
+    if (!('accept-encoding' in outgoing)) outgoing['accept-encoding'] = 'gzip, deflate';
     if (body) outgoing['content-length'] = String(body.length);
 
     let req;

@@ -32,10 +32,12 @@ class UnsafeUrlError extends Error {
 }
 
 function decoderFor(encoding) {
+  // No Brotli: these are pages anyone can point the server at, and Node's
+  // Brotli decoder had a remote code execution bug (CVE-2026-111497). Brotli
+  // is never asked for, and a reply that sends it anyway is not decoded.
   const enc = String(encoding || '').trim().toLowerCase();
   if (enc === 'gzip' || enc === 'x-gzip') return zlib.createGunzip();
   if (enc === 'deflate') return zlib.createInflate();
-  if (enc === 'br') return zlib.createBrotliDecompress();
   return null;
 }
 
@@ -64,7 +66,7 @@ function requestOnce(destination, headers, deadlineAt, maxBytes, truncate) {
 
     const requestOptions = {
       method: 'GET',
-      headers: { 'Accept-Encoding': 'gzip, deflate, br', ...headers },
+      headers: { 'Accept-Encoding': 'gzip, deflate', ...headers },
     };
     const onResponse = (incoming) => {
       response = incoming;
