@@ -2,7 +2,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { getDb } = require('./database');
+const { getDb, getAsyncDb } = require('./database');
 const { grantAdminRole } = require('./roleDefaults');
 const OTPAuth = require('otpauth');
 const QRCode = require('qrcode');
@@ -268,19 +268,22 @@ async function downloadSSOAvatar(url) {
 // (#5344) Public endpoint that tells the registration page which
 // gates the admin has enabled. Only booleans are exposed; the
 // actual token value never leaves the server here.
-router.get('/registration-info', (req, res) => {
+router.get('/registration-info', async (req, res) => {
   try {
-    const db = getDb();
-    const tokenEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token_enabled'").get();
-    const inviteBypassTokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'invites_bypass_registration_token'").get();
-    const tokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token'").get();
+    const db = getAsyncDb();
+    const tokenFlags = await db.prepare(
+      "SELECT key, value FROM server_settings WHERE key IN ('registration_token_enabled', 'invites_bypass_registration_token')"
+    ).all();
+    const tokenEnabledRow = tokenFlags.find(row => row.key === 'registration_token_enabled');
+    const inviteBypassTokenRow = tokenFlags.find(row => row.key === 'invites_bypass_registration_token');
+    const tokenRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token'").get();
     const requiresToken = !!(tokenEnabledRow && tokenEnabledRow.value === 'true' && tokenRow && tokenRow.value);
     const invitesBypassToken = !!(inviteBypassTokenRow && inviteBypassTokenRow.value === 'true');
     // Opt-in Turnstile CAPTCHA. Only the public site key is exposed (safe by
     // design); the secret key never leaves the server. Gated on a site key
     // being present so the page never tries to render a keyless widget.
-    const capEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_captcha_enabled'").get();
-    const siteKeyRow = db.prepare("SELECT value FROM server_settings WHERE key = 'turnstile_site_key'").get();
+    const capEnabledRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'registration_captcha_enabled'").get();
+    const siteKeyRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'turnstile_site_key'").get();
     const turnstileSiteKey = (siteKeyRow && typeof siteKeyRow.value === 'string') ? siteKeyRow.value.trim() : '';
     const captchaEnabled = !!(capEnabledRow && capEnabledRow.value === 'true' && turnstileSiteKey);
     res.json({ requiresToken, invitesBypassToken, captchaEnabled, turnstileSiteKey: captchaEnabled ? turnstileSiteKey : '' });
@@ -291,10 +294,10 @@ router.get('/registration-info', (req, res) => {
 
 // (#5381) Public endpoint that tells the login page whether the admin
 // has enabled the Join-as-Guest button.
-router.get('/guest-info', (req, res) => {
+router.get('/guest-info', async (req, res) => {
   try {
-    const db = getDb();
-    const row = db.prepare("SELECT value FROM server_settings WHERE key = 'guests_enabled'").get();
+    const db = getAsyncDb();
+    const row = await db.prepare("SELECT value FROM server_settings WHERE key = 'guests_enabled'").get();
     res.json({ guestsEnabled: !!(row && row.value === 'true') });
   } catch {
     res.json({ guestsEnabled: false });
@@ -714,7 +717,8 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     const db = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const asyncDb = getAsyncDb();
+    const user = await asyncDb.prepare(`SELECT * FROM users WHERE ${asyncDb.sql.caseInsensitiveEqual('username')}`).get(username);
 
     if (!user) {
       // Spend the time a real check would, so how fast "invalid" comes back
@@ -760,7 +764,7 @@ router.post('/login', authLimiter, async (req, res) => {
     // only revealed to whoever actually owns the account, never on a bare
     // username guess. The client shows the reason and an appeal box; the
     // /ban-appeal endpoint re-verifies these same credentials before storing.
-    const ban = db.prepare('SELECT reason FROM bans WHERE user_id = ?').get(user.id);
+    const ban = await asyncDb.prepare('SELECT reason FROM bans WHERE user_id = ?').get(user.id);
     if (ban) {
       return res.status(403).json({
         error: 'You have been banned from this server',
@@ -969,20 +973,25 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
 });
 
 // ── Validate token (lightweight, for SSO consent page) ───
-router.get('/validate', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const decoded = token ? verifyToken(token) : null;
-  if (!decoded) return res.status(401).json({ error: 'Invalid token' });
+router.get('/validate', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    const decoded = token ? verifyToken(token) : null;
+    if (!decoded) return res.status(401).json({ error: 'Invalid token' });
 
-  const db = getDb();
-  const user = db.prepare('SELECT username, display_name, avatar FROM users WHERE id = ?').get(decoded.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
+    const db = getAsyncDb();
+    const user = await db.prepare('SELECT username, display_name, avatar FROM users WHERE id = ?').get(decoded.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-  res.json({
-    username: user.username,
-    displayName: user.display_name || user.username,
-    avatar: user.avatar || null
-  });
+    res.json({
+      username: user.username,
+      displayName: user.display_name || user.username,
+      avatar: user.avatar || null
+    });
+  } catch (err) {
+    console.error('Validate token error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // ── TOTP Validate (second step of login) ─────────────────
@@ -1258,18 +1267,18 @@ router.post('/totp/disable', authLimiter, async (req, res) => {
 });
 
 // ── TOTP Status ──────────────────────────────────────────
-router.get('/totp/status', (req, res) => {
+router.get('/totp/status', async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
     const decoded = verifyToken(token);
     if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
 
-    const db = getDb();
-    const user = db.prepare('SELECT totp_enabled FROM users WHERE id = ?').get(decoded.id);
+    const db = getAsyncDb();
+    const user = await db.prepare('SELECT totp_enabled FROM users WHERE id = ?').get(decoded.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const remaining = db.prepare(
+    const remaining = await db.prepare(
       'SELECT COUNT(*) as count FROM totp_backup_codes WHERE user_id = ? AND used = 0'
     ).get(decoded.id);
 
@@ -1463,7 +1472,7 @@ router.post('/verify-password', authLimiter, async (req, res) => {
     if (!session) return res.status(401).json({ valid: false, error: 'Unauthorized' });
     const password = typeof req.body.password === 'string' ? req.body.password : '';
     if (!password) return res.status(400).json({ valid: false, error: 'Password required' });
-    const user = getDb().prepare('SELECT id, password_hash FROM users WHERE id = ?').get(session.id);
+    const user = await getAsyncDb().prepare('SELECT id, password_hash FROM users WHERE id = ?').get(session.id);
     if (!user || !hasLocalPassword(user)) return res.status(401).json({ valid: false, error: 'Invalid credentials' });
     if (_pwBlocked(user.id, req.ip)) return res.status(429).json({ valid: false, error: PW_BLOCKED_MSG });
     const valid = await bcrypt.compare(password, user.password_hash);
@@ -1547,8 +1556,8 @@ router.get('/recovery-codes/status', async (req, res) => {
     // same key, and it once got recovery codes here without the second factor.
     const decoded = verifyToken(auth.slice(7));
     if (!decoded) return res.status(401).json({ error: 'Invalid token' });
-    const db = getDb();
-    const count = db.prepare(
+    const db = getAsyncDb();
+    const count = await db.prepare(
       'SELECT COUNT(*) as count FROM account_recovery_codes WHERE user_id = ? AND used = 0'
     ).get(decoded.id);
     res.json({ count: count?.count || 0 });
@@ -1805,8 +1814,8 @@ router.get('/user-servers', async (req, res) => {
   if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    const db = getDb();
-    const row = db.prepare('SELECT encrypted_servers FROM users WHERE id = ?').get(decoded.id);
+    const db = getAsyncDb();
+    const row = await db.prepare('SELECT encrypted_servers FROM users WHERE id = ?').get(decoded.id);
     res.json({ blob: row?.encrypted_servers || null });
   } catch (err) {
     console.error('Get user-servers error:', err);

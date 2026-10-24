@@ -73,19 +73,21 @@ module.exports = function registerMediaLibrary(deps) {
     });
   });
 
-  app.get('/api/sounds', (req, res) => {
+  app.get('/api/sounds', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    const { getDb } = require('../database');
+    const { getAsyncDb } = require('../database');
     try {
-      const disabledRows = getDb().prepare('SELECT name FROM disabled_builtin_sounds').all();
+      const db = getAsyncDb();
+      const disabledRows = await db.prepare('SELECT name FROM disabled_builtin_sounds').all();
       const disabledSet = new Set(disabledRows.map(r => r.name));
       const enabledBuiltins = BUILTIN_SOUNDS.filter(s => !disabledSet.has(s.name));
-      const custom = getDb().prepare('SELECT name, filename FROM custom_sounds ORDER BY name').all();
+      const custom = await db.prepare('SELECT name, filename FROM custom_sounds ORDER BY name').all();
       const customList = custom.map(s => ({ name: s.name, url: `/uploads/${s.filename}` }));
       // Each sound's soundboard volume (#5804), sent only where it is not 100.
-      const volumes = new Map(getDb().prepare('SELECT sound_name, volume FROM sound_volumes').all().map(r => [r.sound_name, r.volume]));
+      const volumeRows = await db.prepare('SELECT sound_name, volume FROM sound_volumes').all();
+      const volumes = new Map(volumeRows.map(r => [r.sound_name, r.volume]));
       const withVolume = (s) => (volumes.has(s.name) && volumes.get(s.name) !== 100 ? { ...s, volume: volumes.get(s.name) } : s);
       res.json({ sounds: [...enabledBuiltins, ...customList].map(withVolume) });
     } catch { res.json({ sounds: [...BUILTIN_SOUNDS] }); }
