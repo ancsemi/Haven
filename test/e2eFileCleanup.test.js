@@ -104,7 +104,13 @@ test('an encrypted DM file is noted for cleanup when the DM is deleted', async (
   const stored = readDb('SELECT e2e_files FROM messages WHERE id = ?', msg.message.id)[0];
   assert.deepStrictEqual(JSON.parse(stored.e2e_files), [myRel], 'only the sender\'s own upload is recorded');
 
+  // An app that deletes without asking first (a plain "close") is refused.
+  const refused = next(A, 'error-msg');
   A.emit('delete-dm', { code: dm.code });
+  assert.match(await refused || '', /asks before deleting/);
+  assert.strictEqual(readDb('SELECT COUNT(*) AS n FROM messages WHERE id = ?', msg.message.id)[0].n, 1, 'an unconfirmed delete keeps the DM');
+
+  A.emit('delete-dm', { code: dm.code, confirmed: true });
   let released = [];
   for (let i = 0; i < 20 && !released.length; i++) {
     await wait(200);

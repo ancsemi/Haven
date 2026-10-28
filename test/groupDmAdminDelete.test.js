@@ -139,7 +139,7 @@ test('a member who is not the server admin cannot delete a group for everyone, t
 
   // Someone outside the group cannot either, by either route.
   const refused = next(socks.erin, 'error-msg');
-  socks.erin.emit('delete-dm', { code });
+  socks.erin.emit('delete-dm', { code, confirmed: true });
   assert.ok(await refused, 'Delete DM from outside is refused');
   const refused2 = next(socks.erin, 'error-msg');
   socks.erin.emit('delete-group-dm-for-everyone', { code });
@@ -186,7 +186,7 @@ test('an admin outside the group can delete it for everyone through Delete DM', 
   const code = await makeGroup('bob', ['carol', 'dave']);
   const told = next(socks.carol, 'group-dm-deleted', (d) => d.code === code);
   const gone = next(socks.dave, 'channel-deleted', (d) => d.code === code);
-  socks.admin.emit('delete-dm', { code });
+  socks.admin.emit('delete-dm', { code, confirmed: true });
   assert.ok(await told, 'members are told');
   assert.ok(await gone, 'and lose it at once');
   assert.strictEqual(groupRows(code), null, 'the group is gone');
@@ -198,7 +198,7 @@ test('an admin demoted since connecting is refused', async () => {
   const db = new Database(path.join(DATA, 'haven.db'));
   try { db.prepare('UPDATE users SET is_admin = 0 WHERE id = ?').run(users.admin.user.id); } finally { db.close(); }
   const refused = next(socks.admin, 'error-msg', (m) => /server admin/.test(m));
-  socks.admin.emit('delete-dm', { code });
+  socks.admin.emit('delete-dm', { code, confirmed: true });
   assert.ok(await refused, 'the stale admin flag is not enough');
   assert.ok(groupRows(code), 'the group is still there');
 });

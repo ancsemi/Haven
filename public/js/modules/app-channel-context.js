@@ -538,7 +538,7 @@ _initDmContextMenu() {
     const ok = await this._showConfirmModal('⚠️ ' + t('channels.dm_delete_confirm'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') });
     if (!ok) return;
     const attachments = await this._collectDmAttachments(code);
-    this.socket.emit('delete-dm', { code, attachments });
+    this.socket.emit('delete-dm', { code, attachments, confirmed: true });
   });
 
   // Close on outside click

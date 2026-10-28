@@ -2037,6 +2037,11 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    // Deleting a DM erases it for everyone in it, so the app must have asked
+    // first. An app that sends this from a plain "close" gets refused instead.
+    if (data.confirmed !== true) {
+      return socket.emit('error-msg', 'Deleting a conversation removes it for everyone in it. Please update your app so it asks before deleting.');
+    }
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 1').get(code);
     if (!channel) return socket.emit('error-msg', 'DM not found');
     const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
