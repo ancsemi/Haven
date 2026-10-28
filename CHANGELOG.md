@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [4.27.0] - Unreleased
+## [4.27.0] - 2026-10-28
 
 ### Added
 - Optional external storage for uploads (thanks KamdenB, #5813): pictures, files, avatars, emoji, stickers and sounds can live in an S3-compatible bucket, such as MinIO or Garage on your own NAS, or a hosted one. It's off unless you turn it on, and the S3 library it needs is downloaded only on servers that do. See "External Media Storage" in GUIDE.md.
