@@ -145,12 +145,19 @@ function getYouTubeClientContext() {
 }
 
 function parseYouTubePlaylistPage(data) {
-  const listRenderer = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]
-    ?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]
-    ?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer;
-  const items = Array.isArray(listRenderer?.contents) ? listRenderer.contents : [];
-  const continuation = listRenderer?.continuations?.[0]?.nextContinuationData?.continuation || null;
-  return { items, continuation };
+  const section = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]
+    ?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer;
+  const listRenderer = section?.contents?.[0]?.playlistVideoListRenderer;
+  if (listRenderer) {
+    const items = Array.isArray(listRenderer.contents) ? listRenderer.contents : [];
+    const continuation = listRenderer.continuations?.[0]?.nextContinuationData?.continuation
+      || getContinuationTokenFromItems(items);
+    return { items, continuation };
+  }
+  // Since October 2026 the videos sit straight in the section as lockupViewModels,
+  // with the next page's token on a continuationItemViewModel at the end (#5840).
+  const items = Array.isArray(section?.contents) ? section.contents : [];
+  return { items, continuation: getContinuationTokenFromItems(items) };
 }
 
 function getContinuationItemsFromAppendAction(data) {
@@ -167,8 +174,12 @@ function getContinuationItemsFromAppendAction(data) {
 
 function getContinuationTokenFromItems(items) {
   if (!Array.isArray(items)) return null;
-  const continuationItem = items.find(item => item?.continuationItemRenderer);
-  return continuationItem?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token || null;
+  for (const item of items) {
+    const token = item?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token
+      || item?.continuationItemViewModel?.continuationCommand?.innertubeCommand?.continuationCommand?.token;
+    if (token) return token;
+  }
+  return null;
 }
 
 function getContinuationItemsFromPlaylistContents(data) {
@@ -202,8 +213,11 @@ function appendYouTubePlaylistTracks(tracks, items, maxTracks) {
   if (!Array.isArray(items)) return;
   for (const item of items) {
     const v = item?.playlistVideoRenderer;
-    if (!v?.videoId) continue;
-    tracks.push({ videoId: v.videoId, title: v.title?.runs?.[0]?.text || '' });
+    const l = item?.lockupViewModel;
+    if (v?.videoId) tracks.push({ videoId: v.videoId, title: v.title?.runs?.[0]?.text || '' });
+    else if (l?.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO' && l.contentId) {
+      tracks.push({ videoId: l.contentId, title: l.metadata?.lockupMetadataViewModel?.title?.content || '' });
+    } else continue;
     if (tracks.length >= maxTracks) break;
   }
 }
