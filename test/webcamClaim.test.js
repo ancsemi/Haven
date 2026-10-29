@@ -33,6 +33,10 @@ function loadVoiceManager() {
 function viewer(VoiceManager, peer) {
   const voice = Object.create(VoiceManager.prototype);
   voice.peers = new Map([[7, peer]]);
+  voice.screenSharers = new Set();
+  voice.webcamUsers = new Set();
+  voice.screenStreamIds = new Map();
+  voice.webcamStreamIds = new Map();
   voice.shown = [];
   voice.onWebcamStream = (userId, stream) => voice.shown.push({ userId, stream });
   return voice;

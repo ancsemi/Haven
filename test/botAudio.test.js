@@ -254,6 +254,8 @@ test('VoiceManager keeps bot audio scoped to voice, output, deafen, and disconne
     gainNodes: new Map(),
     screenGainNodes: new Map(),
     screenSharers: new Set(),
+    screenStreamIds: new Map(),
+    webcamStreamIds: new Map(),
     _screenDelivered: new Set(),
     _screenWatchdogTimers: new Map(),
     webcamUsers: new Set(),

@@ -144,8 +144,9 @@ function setupSocketHandlers(io, db, opts = {}) {
   const activeMusic         = new Map(); // code → { url, userId, username, playbackState, ... }
   const musicQueues         = new Map(); // code → [{ id, url, title, userId, username, resolvedFrom }]
   const activeScreenSharers = new Map(); // code → Set<userId>
-  const activeScreenSessions = new Map(); // code → Map<userId, { transport, sessionId }>
+  const activeScreenSessions = new Map(); // code → Map<userId, { transport, sessionId, streamId }>
   const activeWebcamUsers   = new Map(); // code → Set<userId>
+  const activeWebcamStreamIds = new Map(); // code → Map<userId, MediaStream.id>
   const userFloodBuckets    = new Map(); // `${userId}:${bucket}` → number[] (send timestamps)
   // Presence timing for the "idle but online" flag. onlineSince is set when a
   // user goes from having zero live sockets to one; lastActiveAt advances only
@@ -196,7 +197,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   const state = {
     channelUsers, voiceUsers, voiceLastActivity,
     activeMusic, musicQueues,
-    activeScreenSharers, activeScreenSessions, activeWebcamUsers,
+    activeScreenSharers, activeScreenSessions, activeWebcamUsers, activeWebcamStreamIds,
     streamViewers,
     slowModeTracker, pendingTempDelete, pendingVoiceLeave,
     botAudioManager
@@ -887,6 +888,16 @@ function setupSocketHandlers(io, db, opts = {}) {
           sessions.delete(userId);
           if (sessions.size === 0) activeScreenSessions.delete(code);
         }
+        const camUsers = activeWebcamUsers.get(code);
+        if (camUsers) {
+          camUsers.delete(userId);
+          if (camUsers.size === 0) activeWebcamUsers.delete(code);
+        }
+        const camStreamIds = activeWebcamStreamIds.get(code);
+        if (camStreamIds) {
+          camStreamIds.delete(userId);
+          if (camStreamIds.size === 0) activeWebcamStreamIds.delete(code);
+        }
         streamViewers.delete(`${code}:${userId}`);
         for (const [key, viewers] of streamViewers) {
           if (!key.startsWith(`${code}:`)) continue;
@@ -1354,6 +1365,8 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     const camUsers = activeWebcamUsers.get(code);
     if (camUsers) { camUsers.delete(socket.user.id); if (camUsers.size === 0) activeWebcamUsers.delete(code); }
+    const camStreamIds = activeWebcamStreamIds.get(code);
+    if (camStreamIds) { camStreamIds.delete(socket.user.id); if (camStreamIds.size === 0) activeWebcamStreamIds.delete(code); }
 
     const viewerKey = `${code}:${socket.user.id}`;
     streamViewers.delete(viewerKey);
