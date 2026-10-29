@@ -2553,6 +2553,7 @@ class VoiceManager {
     // Stop old tracks and update stream reference
     this.webcamStream.getTracks().forEach(t => t.stop());
     this.webcamStream = newStream;
+    if (this.onWebcamStream) this.onWebcamStream(this.localUserId, newStream);
 
     // Re-hook ended
     newTrack.onended = () => this.stopWebcam();
