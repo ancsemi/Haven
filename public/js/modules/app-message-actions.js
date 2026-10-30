@@ -4,7 +4,21 @@
 
 export default {
 
+_bindCodeBlockCopy() {
+  // Code blocks can appear in messages, threads, search results, and forum
+  // content, so handle the copy control once at the document level.
+  document.addEventListener('click', (e) => {
+    const button = e.target?.closest?.('.code-block-copy');
+    if (!button) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void this._copyCodeBlock(button);
+  });
+},
+
 _bindMessageClicks() {
+  this._bindCodeBlockCopy();
+
   // Image click: open lightbox overlay (CSP-safe, no inline handlers)
   document.getElementById('messages').addEventListener('click', (e) => {
     // A forum card handles its own clicks: the thumbnail opens the topic,

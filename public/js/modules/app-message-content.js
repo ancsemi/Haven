@@ -4,6 +4,45 @@
 
 export default {
 
+_copyCodeBlock(button) {
+  const code = button?.closest('.code-block')?.querySelector('pre code')?.textContent;
+  if (typeof code !== 'string') return false;
+
+  const label = button.dataset.copyLabel || t('common.copy');
+  const showCopied = () => {
+    const copiedLabel = t('common.copied');
+    button.textContent = `✓ ${copiedLabel}`;
+    button.setAttribute?.('aria-label', copiedLabel);
+    button.title = copiedLabel;
+    clearTimeout(button._copyResetTimer);
+    button._copyResetTimer = setTimeout(() => {
+      if (!button.isConnected) return;
+      button.textContent = label;
+      button.setAttribute?.('aria-label', label);
+      button.title = label;
+      button._copyResetTimer = null;
+    }, 1500);
+  };
+
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+    return navigator.clipboard.writeText(code).then(() => {
+      showCopied();
+      return true;
+    }).catch(() => {
+      let copied = false;
+      this._copyTextFallback?.(code, () => { copied = true; showCopied(); });
+      if (!copied) this._showToast?.(t('common.copy_failed'), 'error');
+      return copied;
+    });
+  } catch {
+    let copied = false;
+    this._copyTextFallback?.(code, () => { copied = true; showCopied(); });
+    if (!copied) this._showToast?.(t('common.copy_failed'), 'error');
+    return Promise.resolve(copied);
+  }
+},
+
 _formatContent(str) {
   if (typeof str !== 'string') str = String(str ?? '');
   // Control characters have no business in a message, and NUL in particular
@@ -671,7 +710,9 @@ _formatContent(str) {
     const escaped = this._escapeHtml(block.code).replace(/\n$/, '');
     const langAttr = block.lang ? ` data-lang="${this._escapeHtml(block.lang)}"` : '';
     const langLabel = block.lang ? `<span class="code-block-lang">${this._escapeHtml(block.lang)}</span>` : '';
-    const rendered = `<div class="code-block"${langAttr}>${langLabel}<pre><code>${escaped}</code></pre></div>`;
+    const copyLabel = this._escapeHtml(t('common.copy'));
+    const copyButton = `<button type="button" class="code-block-copy" data-copy-label="${copyLabel}" aria-label="${copyLabel}" title="${copyLabel}">${copyLabel}</button>`;
+    const rendered = `<div class="code-block"${langAttr}>${langLabel}${copyButton}<pre><code>${escaped}</code></pre></div>`;
     html = html.replace(ph('CODEBLOCK', idx), () => rendered);
   });
   inlineCode.forEach((code, idx) => {

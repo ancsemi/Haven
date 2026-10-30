@@ -1023,10 +1023,34 @@ video:-webkit-full-screen {
 
 .code-block pre {
   margin: 0;
-  padding: 0.625rem 0.75rem;
+  padding: 1.875rem 0.75rem 0.625rem;
   overflow-x: auto;
   font-size: 0.8125rem;
   line-height: 1.5;
+}
+
+.code-block-copy {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  z-index: 1;
+  padding: 0.125rem 0.375rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.625rem;
+  cursor: pointer;
+}
+
+.code-block-copy:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.code-block-copy:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .code-block code {
@@ -1039,7 +1063,7 @@ video:-webkit-full-screen {
 .code-block-lang {
   position: absolute;
   top: 4px;
-  right: 8px;
+  right: 4.25rem;
   font-size: 0.625rem;
   color: var(--text-muted);
   text-transform: uppercase;
