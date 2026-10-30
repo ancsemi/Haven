@@ -99,3 +99,87 @@ test('switchCamera updates the local preview to the replacement stream', async (
   assert.equal(voice.webcamStream, newStream, 'VoiceManager now owns the replacement stream');
   assert.deepEqual(voice.shown, [{ userId: 42, stream: newStream }], 'local preview is rebound to the replacement stream');
 });
+
+test('switchCamera keeps the newest selection when captures resolve out of order', async () => {
+  const requests = [];
+  const qualities = ['720', '1080'];
+  const oldTrack = { kind: 'video', stopped: false, stop() { this.stopped = true; } };
+  const oldStream = { getTracks: () => [oldTrack] };
+  const VoiceManager = loadVoiceManager({
+    navigator: {
+      userAgent: '', platform: '', maxTouchPoints: 0,
+      mediaDevices: {
+        getUserMedia: ({ video }) => new Promise(resolve => requests.push({ resolve, height: video.height.ideal }))
+      }
+    },
+    localStorage: {
+      getItem: key => key === 'haven_cam_quality' ? qualities.shift() : null,
+      setItem() {}, removeItem() {}
+    }
+  });
+  const voice = viewer(VoiceManager, {});
+  voice.peers = new Map();
+  voice.isWebcamActive = true;
+  voice.webcamStream = oldStream;
+  voice.localUserId = 42;
+
+  const olderRequest = voice.switchCamera('');
+  const newerRequest = voice.switchCamera('');
+  assert.deepEqual(requests.map(request => request.height), [720, 1080]);
+
+  const newerTrack = { kind: 'video', stopped: false, onended: null, stop() { this.stopped = true; } };
+  const newerStream = { getVideoTracks: () => [newerTrack], getTracks: () => [newerTrack] };
+  requests[1].resolve(newerStream);
+  await newerRequest;
+
+  const olderTrack = { kind: 'video', stopped: false, onended: null, stop() { this.stopped = true; } };
+  const olderStream = { getVideoTracks: () => [olderTrack], getTracks: () => [olderTrack] };
+  requests[0].resolve(olderStream);
+  await olderRequest;
+
+  assert.equal(voice.webcamStream, newerStream, 'late older capture does not replace the latest selection');
+  assert.equal(olderTrack.stopped, true, 'stale captured track is stopped');
+  assert.equal(newerTrack.stopped, false, 'current track remains live');
+  assert.equal(voice.shown.at(-1).stream, newerStream, 'preview remains on the latest stream');
+});
+
+test('switchCamera discards a capture when webcam stop starts before it resolves', async () => {
+  let finishCapture;
+  let finishUnpublish;
+  let relayReplacements = 0;
+  const capture = new Promise(resolve => { finishCapture = resolve; });
+  const unpublish = new Promise(resolve => { finishUnpublish = resolve; });
+  const oldTrack = { kind: 'video', stopped: false, stop() { this.stopped = true; } };
+  const oldStream = { getTracks: () => [oldTrack] };
+  const VoiceManager = loadVoiceManager({
+    navigator: {
+      userAgent: '', platform: '', maxTouchPoints: 0,
+      mediaDevices: { getUserMedia: async () => capture }
+    }
+  });
+  const voice = viewer(VoiceManager, {});
+  voice.peers = new Map();
+  voice.isWebcamActive = true;
+  voice.webcamStream = oldStream;
+  voice.localUserId = 42;
+  voice.socket = { emit() {} };
+  voice._relay = {
+    unpublish: () => unpublish,
+    replace: async () => { relayReplacements++; }
+  };
+
+  const switching = voice.switchCamera('camera-2');
+  const stopping = voice.stopWebcam();
+  const replacementTrack = { kind: 'video', stopped: false, onended: null, stop() { this.stopped = true; } };
+  const replacementStream = { getVideoTracks: () => [replacementTrack], getTracks: () => [replacementTrack] };
+  finishCapture(replacementStream);
+  await switching;
+  finishUnpublish();
+  await stopping;
+
+  assert.equal(relayReplacements, 0, 'late capture is not sent to the relay after stop starts');
+  assert.equal(replacementTrack.stopped, true, 'late captured track is stopped');
+  assert.equal(voice.webcamStream, null);
+  assert.equal(voice.isWebcamActive, false);
+  assert.equal(voice.shown.at(-1).stream, null, 'preview stays stopped');
+});
