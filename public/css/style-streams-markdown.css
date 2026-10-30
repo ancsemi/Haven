@@ -1023,7 +1023,7 @@ video:-webkit-full-screen {
 
 .code-block pre {
   margin: 0;
-  padding: 1.875rem 0.75rem 0.625rem;
+  padding: 0.625rem 4.5rem 0.625rem 0.75rem;
   overflow-x: auto;
   font-size: 0.8125rem;
   line-height: 1.5;
@@ -1041,6 +1041,16 @@ video:-webkit-full-screen {
   color: var(--text-secondary);
   font-size: 0.625rem;
   cursor: pointer;
+}
+
+.code-block.copy-button-shifted pre {
+  padding-left: 3rem;
+  padding-right: 0.75rem;
+}
+
+.code-block.copy-button-shifted .code-block-copy {
+  left: 8px;
+  right: auto;
 }
 
 .code-block-copy:hover {

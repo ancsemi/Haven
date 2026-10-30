@@ -14,6 +14,49 @@ _bindCodeBlockCopy() {
     e.stopPropagation();
     void this._copyCodeBlock(button);
   });
+
+  // The message toolbar shares the code block's top-right corner. Reposition
+  // only the copy buttons that it actually covers while the message is hovered.
+  document.addEventListener('pointerover', (e) => {
+    const msgEl = e.target?.closest?.('.message, .message-compact, .thread-message');
+    if (!msgEl || msgEl.contains(e.relatedTarget)) return;
+    requestAnimationFrame(() => {
+      if (msgEl.isConnected === false || !msgEl.matches(':hover')) return;
+      this._updateCodeBlockCopyPlacement(msgEl);
+    });
+  });
+  document.addEventListener('pointerout', (e) => {
+    const msgEl = e.target?.closest?.('.message, .message-compact, .thread-message');
+    if (!msgEl || (e.relatedTarget && msgEl.contains(e.relatedTarget))) return;
+    msgEl.querySelectorAll('.code-block').forEach(block => block.classList.remove('copy-button-shifted'));
+  });
+  window.addEventListener('resize', () => {
+    document.querySelectorAll('.message:hover, .message-compact:hover, .thread-message:hover')
+      .forEach(msgEl => this._updateCodeBlockCopyPlacement(msgEl));
+  });
+},
+
+_updateCodeBlockCopyPlacement(msgEl) {
+  const toolbar = msgEl.querySelector('.msg-toolbar, .thread-msg-toolbar');
+  const toolbarRect = toolbar?.getBoundingClientRect();
+  const toolbarVisible = toolbarRect
+    && toolbarRect.right > toolbarRect.left
+    && toolbarRect.bottom > toolbarRect.top;
+
+  msgEl.querySelectorAll('.code-block').forEach(block => {
+    block.classList.remove('copy-button-shifted');
+    const button = block.querySelector('.code-block-copy');
+    if (!button || !toolbarVisible) return;
+
+    // Read after removing the shifted class so this always tests the button's
+    // normal top-right position, including after a resize.
+    const buttonRect = button.getBoundingClientRect();
+    const overlaps = buttonRect.left < toolbarRect.right
+      && buttonRect.right > toolbarRect.left
+      && buttonRect.top < toolbarRect.bottom
+      && buttonRect.bottom > toolbarRect.top;
+    if (overlaps) block.classList.add('copy-button-shifted');
+  });
 },
 
 _bindMessageClicks() {
