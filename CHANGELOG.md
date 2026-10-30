@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.27.1] - 2026-10-29
+
+### Fixed
+- An app could delete a whole DM, for both people, from a plain "close" without asking first. The server now deletes a DM only when the app confirms the person agreed to it. The web and desktop apps already ask, so nothing changes there; other apps show an error until they are updated.
+- Every YouTube playlist shared in Listen Together failed with "Could not fetch playlist or it is empty". YouTube changed how it lists a playlist's videos; both the new and the old way are read now (thanks iJordRob, #5840).
+
 ## [4.27.0] - 2026-10-28
 
 ### Added
