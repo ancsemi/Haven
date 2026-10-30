@@ -42,6 +42,7 @@ async function releaseChannelUploads(db, byAuthor, label) {
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { reachableChannel } = require('./channelAccess');
 const protectedMessages = require('../protectedMessages');
+const channelTypes = require('../channelTypes');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -1133,6 +1134,11 @@ module.exports = function register(socket, ctx) {
 
     try {
       db.prepare(`UPDATE channels SET ${colName} = ? WHERE id = ?`).run(newVal, channel.id);
+      // Changing a function by hand takes the channel out of its type
+      // (src/channelTypes.js), so the type's icon stops showing for it.
+      if (channel.type_id && channelTypes.FUNCTIONS.includes(permission)) {
+        db.prepare('UPDATE channels SET type_id = NULL WHERE id = ?').run(channel.id);
+      }
       // Going private keeps everyone who is already in (#5563), but anyone
       // else who still has the room open on a socket is shown the door now
       // rather than on their next reconnect.

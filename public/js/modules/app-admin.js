@@ -745,6 +745,7 @@ _syncSettingsNav() {
     'section-update':       [],
     'section-extension-updates': [],
     'section-branding':     ['manage_server'],
+    'section-channel-types': ['manage_server'],
     'section-presence':     [],
     'section-members':      ['manage_server'],
     // Idle-online oversight (v3.46.0): moderators who can act on it see it too,

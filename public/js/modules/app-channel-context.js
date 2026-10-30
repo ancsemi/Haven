@@ -41,6 +41,13 @@ _openChannelCtxMenu(code, btnEl) {
   });
   const cfnCtxBtn = menu.querySelector('[data-action="channel-functions"]');
   if (cfnCtxBtn) cfnCtxBtn.style.display = canManageSettings ? '' : 'none';
+  const typeCtxBtn = menu.querySelector('[data-action="channel-type"]');
+  if (typeCtxBtn) {
+    typeCtxBtn.style.display = canManageSettings ? '' : 'none';
+    const current = this._channelTypeOf?.(ch);
+    const cur = typeCtxBtn.querySelector('.ct-ctx-current');
+    if (cur) cur.textContent = current ? `${current.icon} ${current.name}` : '';
+  }
   if (!canManageChannels && canManageSettings) {
     const adminSeps = menu.querySelectorAll('hr.channel-ctx-sep.admin-only');
     if (adminSeps[0]) adminSeps[0].style.display = '';
@@ -341,6 +348,7 @@ _applyReactionLock() {
 
 _updateChannelFunctionsPanel(ch) {
   if (!ch) return;
+  this._updateChannelTypeNote?.(ch);
   // Voice & text toggles
   const voiceOff = ch.voice_enabled === 0;
   const textOff = ch.text_enabled === 0;

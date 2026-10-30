@@ -1837,6 +1837,9 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_listening_tokens_token ON listening_tokens(token);
   `);
 
+  // Channel types (src/channelTypes.js): saved sets of Channel Functions.
+  require('./channelTypes').ensureChannelTypes(db);
+
   // Full-text search index (messages_fts): created/reconciled here so it runs
   // synchronously before the server listens. (search-overhaul phase 2)
   try {

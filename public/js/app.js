@@ -37,8 +37,9 @@ import SoundMethods from './modules/app-sounds.js?v=4.25.21';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
 import BotMethods from './modules/app-bots.js?v=4.23.9';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
-import ChannelMethods  from './modules/app-channels.js?v=4.27.25';
-import ChannelContextMethods from './modules/app-channel-context.js?v=4.27.35';
+import ChannelMethods  from './modules/app-channels.js?v=4.27.41';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.27.41';
+import ChannelTypeMethods from './modules/app-channel-types.js?v=4.27.42';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.25.11';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.27.26';
 import MessageMethods  from './modules/app-messages.js?v=4.27.7';
@@ -60,7 +61,7 @@ import MessageContentMethods from './modules/app-message-content.js?v=4.27.33';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.25.2';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
 import ThreadMethods from './modules/app-threads.js?v=4.27.20';
-import AdminMethods    from './modules/app-admin.js?v=4.27.32';
+import AdminMethods    from './modules/app-admin.js?v=4.27.41';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.3';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.26.12';
@@ -101,7 +102,7 @@ import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
-import SettingsPageMethods from './modules/app-settings-pages.js?v=4.27.29';
+import SettingsPageMethods from './modules/app-settings-pages.js?v=4.27.41';
 import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';
 
 class HavenApp {
@@ -388,6 +389,7 @@ class HavenApp {
     this._setupAvatarUpload();
 
     this._setupSocketListeners();
+    this._setupChannelTypes();
     this._initLinkPolicy?.();
     this._setupUI();
     this._setupThemes();
@@ -657,6 +659,7 @@ Object.assign(HavenApp.prototype,
   ThemePickerMethods,
   SilentMethods,
   SettingsPageMethods,
+  ChannelTypeMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

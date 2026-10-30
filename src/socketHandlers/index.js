@@ -65,6 +65,7 @@ const createRoleRefresh  = require('./roleRefresh');
 const registerFerry      = require('./ferry');
 const registerGroupE2E   = require('./groupE2E');
 const registerTags       = require('./tags');
+const registerChannelTypes = require('./channelTypes');
 const registerMemberDefaults = require('./memberDefaults');
 const registerGameActivity = require('./gameActivity');
 const registerMessageHighlights = require('./messageHighlights');
@@ -502,7 +503,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.type_id
         FROM channels c WHERE c.is_dm = 0
         UNION
         SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm, c.is_group,
@@ -510,7 +511,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.type_id
         FROM channels c
         JOIN channel_members cm ON c.id = cm.channel_id
         WHERE cm.user_id = ? AND c.is_dm = 1
@@ -527,7 +528,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.type_id
         FROM channels c
         JOIN channel_members cm ON c.id = cm.channel_id
         WHERE cm.user_id = ?
@@ -574,7 +575,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                      c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                      c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                      c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-                     c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only
+                     c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.type_id
               FROM channels c
               JOIN channel_members cm ON c.id = cm.channel_id
               WHERE cm.user_id = ?
@@ -2983,6 +2984,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerFerry(socket, ctx);
     registerGroupE2E(socket, ctx);
     registerTags(socket, ctx);
+    registerChannelTypes(socket, ctx);
     registerMemberDefaults(socket, ctx);
     registerGameActivity(socket, ctx);
     registerMessageHighlights(socket, ctx);

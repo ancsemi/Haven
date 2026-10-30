@@ -604,10 +604,14 @@ _renderChannels() {
 
     // Build small status indicators for channel features
     const _badges = [];
+    // A channel with a type shows the type's icon instead of the crossed-out
+    // function icons (app-channel-types.js).
+    const _typeBadge = this._channelTypeBadge?.(ch) || '';
+    if (_typeBadge) _badges.push(_typeBadge);
     if (!isSub) {
       // An admin can hide the crossed-out icons for everyone (#5615): on a
       // server where most channels have these off they were only clutter.
-      const showOff = !this.serverSettings || this.serverSettings.hide_disabled_channel_badges !== 'true';
+      const showOff = !_typeBadge && (!this.serverSettings || this.serverSettings.hide_disabled_channel_badges !== 'true');
       if (showOff && ch.streams_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.screen_share_not_allowed')}">🖥️</span>`);
       if (showOff && ch.music_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.music_not_allowed')}">🎵</span>`);
       if (ch.slow_mode_interval > 0) _badges.push(`<span title="${t('channels.slow_mode_title', { seconds: ch.slow_mode_interval })}" style="opacity:0.5;font-size:0.65rem">🐢</span>`);
@@ -687,11 +691,18 @@ _renderChannels() {
       // goes back to the topic list (#5688).
       if (ch.code === this.currentChannel && this._activeThreadParent && this._isForumChannel?.(ch.code)) this._closeThread();
       this.switchChannel(ch.code);
+      // A voice-only channel has nothing else to do there, so one click joins.
+      if (this._isVoiceOnlyChannel(ch.code) && this._canUseVoice() &&
+          !(this.voice?.inVoice && this.voice.currentChannel === ch.code)) {
+        setTimeout(() => this._joinVoice(), 300);
+      }
     });
-    // Double-click to join voice in the channel (blocked for text-only)
+    // Double-click to join voice in the channel (blocked for text-only;
+    // a voice-only channel already joined on the first click)
     el.addEventListener('dblclick', () => {
       const _dblCh = this.channels.find(c => c.code === ch.code);
       if (_dblCh && _dblCh.voice_enabled === 0) return;
+      if (this._isVoiceOnlyChannel(ch.code)) return;
       if (!this.user?.isAdmin && !this.user?.isGuest && !this._hasPerm('use_voice')) return;
       this.switchChannel(ch.code);
       setTimeout(() => this._joinVoice(), 300);
@@ -1219,6 +1230,18 @@ _renderChannels() {
  * Get all visible channels in visual (DOM) order.
  * Returns array of channel codes matching the sidebar ordering.
  */
+// Voice on, and text and media both off under Channel Functions.
+_isVoiceOnlyChannel(code) {
+  const ch = this.channels?.find(c => c.code === code);
+  return !!ch && !ch.is_dm && ch.voice_enabled !== 0 && ch.text_enabled === 0 && ch.media_enabled === 0;
+},
+
+// The same checks _joinVoice makes, without its error toasts.
+_canUseVoice() {
+  if (this.user?.isGuest) return this.serverSettings?.guests_allow_voice !== 'false';
+  return !!(this.user?.isAdmin || this._hasPerm('use_voice'));
+},
+
 _getVisualChannelOrder() {
   const codes = [];
   // Channels section

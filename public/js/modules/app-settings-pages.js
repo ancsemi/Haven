@@ -10,7 +10,7 @@ const SETTINGS_PAGES = {
     ['advanced', '🧩', 'settings.pages.advanced', 'Plugins & advanced', ['section-plugins', 'section-desktop-shortcuts', 'section-desktop-app', 'section-debug']]
   ],
   admin: [
-    ['server', '🏠', 'settings.pages.server', 'Server', ['section-branding', 'section-custom-tos', 'section-presence', 'section-update', 'section-extension-updates']],
+    ['server', '🏠', 'settings.pages.server', 'Server', ['section-branding', 'section-channel-types', 'section-custom-tos', 'section-presence', 'section-update', 'section-extension-updates']],
     ['people', '👥', 'settings.pages.people', 'People & roles', ['section-members', 'section-roles', 'section-badges', 'section-guests', 'section-whitelist', 'section-invite']],
     ['safety', '🛡️', 'settings.pages.safety', 'Safety', ['section-moderation', 'section-automod', 'section-security', 'section-modmode', 'section-audit-log']],
     ['content', '😎', 'settings.pages.content', 'Content', ['section-emojis', 'section-stickers', 'section-sounds-admin', 'section-tags-admin', 'section-uploads', 'section-cleanup']],
