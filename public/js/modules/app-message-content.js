@@ -195,13 +195,13 @@ _formatContent(str) {
     // if the element fires `error`, so listing a format here is safe.
     if (['mp3', 'ogg', 'oga', 'wav', 'm4a', 'aac', 'flac', 'opus', 'weba'].includes(ext)) {
       return `<div class="file-attachment">
-        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._loopHtml?.() || ''}${this._keepPlayingHtml?.() || ''}${this._musicListenHtml?.(fileUrl, fileName) || ''}</div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._mediaControlsHtml?.('audio', this._musicListenHtml?.(fileUrl, fileName) || '') || ''}</div>
         <audio controls preload="none" src="${fileUrl}" class="file-audio"></audio>
       </div>`;
     }
     if (['mp4', 'webm', 'mov', 'm4v', 'ogv'].includes(ext)) {
       return `<div class="file-attachment">
-        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._loopHtml?.() || ''}${this._keepPlayingHtml?.() || ''}</div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._mediaControlsHtml?.('video') || ''}</div>
         <div class="file-video-wrap">
           <video controls preload="none" src="${fileUrl}" class="file-video"></video>
         </div>

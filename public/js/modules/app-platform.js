@@ -1951,7 +1951,7 @@ _decryptE2EFiles(root) {
           // Loop and Keep playing, as on files outside encrypted DMs (#5825).
           // A voice message gets neither there either.
           if (!(isAudio && /^voice-message/i.test(name))) {
-            infoBar.insertAdjacentHTML('beforeend', (this._loopHtml?.() || '') + (this._keepPlayingHtml?.() || ''));
+            infoBar.insertAdjacentHTML('beforeend', this._mediaControlsHtml?.(isVideo ? 'video' : 'audio') || '');
           }
           row.appendChild(infoBar);
 

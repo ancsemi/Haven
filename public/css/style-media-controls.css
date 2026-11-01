@@ -1,0 +1,191 @@
+/* Controls on videos, sounds and link previews (app-media-playback.js): one
+   set of drawn icons, one size and one spacing, on preview cards and file rows
+   alike. Playing controls and view controls are separate groups. */
+
+.media-controls {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+.media-controls + .media-controls {
+  margin-left: 0.25rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--border-color);
+}
+.file-info .media-controls { margin-left: auto; }
+
+.media-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.media-btn:hover {
+  background: color-mix(in srgb, var(--text-primary) 12%, transparent);
+  color: var(--text-primary);
+}
+.media-btn:focus-visible,
+.lp-volume input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.media-btn[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+}
+.media-icon {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+/* Keep playing means nothing while scrolled-away media is left playing anyway. */
+body.pause-offscreen-off .media-keep { display: none; }
+
+/* Volume: the speaker mutes, the slider sets the level. */
+.lp-volume {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: 0.25rem;
+}
+.lp-volume input {
+  --fill: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 4.5rem;
+  height: 1.75rem;
+  margin: 0;
+  background: none;
+  cursor: pointer;
+}
+.lp-volume input::-webkit-slider-runnable-track {
+  height: 0.25rem;
+  border-radius: 0.125rem;
+  background: linear-gradient(to right, var(--accent) var(--fill), color-mix(in srgb, var(--text-primary) 22%, transparent) var(--fill));
+}
+.lp-volume input::-moz-range-track {
+  height: 0.25rem;
+  border-radius: 0.125rem;
+  background: linear-gradient(to right, var(--accent) var(--fill), color-mix(in srgb, var(--text-primary) 22%, transparent) var(--fill));
+}
+.lp-volume input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-top: -0.25rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text-primary);
+}
+.lp-volume input::-moz-range-thumb {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text-primary);
+}
+
+/* A Small YouTube card has just room for its controls: the name goes, and the
+   slider takes less. */
+.embed-size-small .link-preview--yt .lp-header { justify-content: flex-end; }
+.embed-size-small .link-preview--yt .lp-site { display: none; }
+.embed-size-small .lp-volume input { width: 3rem; }
+
+/* Preview size: a small menu, drawn on the page so no card can clip it. */
+.lp-size { padding: 0 0.25rem 0 0.5rem; }
+.lp-size .media-icon { width: 0.75rem; height: 0.75rem; }
+.lp-collapse .media-icon { transition: transform 0.12s ease; }
+.lp-collapsed .lp-collapse .media-icon { transform: rotate(-90deg); }
+.lp-size-menu {
+  position: fixed;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  width: 11rem;
+  padding: 0.25rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.35);
+  font-size: 0.8125rem;
+}
+.lp-size-menu-title {
+  padding: 0.25rem 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.lp-size-menu button {
+  padding: 0.375rem 0.5rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lp-size-menu button:hover { background: color-mix(in srgb, var(--text-primary) 12%, transparent); }
+.lp-size-menu button[aria-checked="true"] {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.lp-size-menu-note {
+  padding: 0.25rem 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+
+/* Theater: this one player as wide as the chat, and never taller than the
+   window. Leaves room for the bar above it and the message box below. */
+body .link-preview.media-theater,
+body .file-attachment.media-theater {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+body .link-preview--yt.media-theater .link-preview-yt {
+  width: 100%;
+  max-width: min(100%, calc((100vh - 13rem) * 16 / 9));
+  margin-inline: auto;
+}
+body .link-preview--rich.media-theater .lp-video {
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100vh - 13rem);
+}
+body .file-attachment.media-theater .file-video-wrap { display: block; }
+body .file-attachment.media-theater .file-video {
+  display: block;
+  width: 100%;
+  max-height: calc(100vh - 13rem);
+  object-fit: contain;
+}
+/* A phone's chat is already as wide as it goes. */
+@media (max-width: 600px) {
+  .media-theater-btn { display: none; }
+}
