@@ -48,13 +48,31 @@ test('PostgreSQL preview installs a real constrained schema and rolls transactio
   // Recreate the previous preview schema, with an existing account, and
   // upgrade it without resetting identities, settings or the default room.
   const fingerprint = await db.prepare("SELECT value FROM server_settings WHERE key = 'server_fingerprint'").get();
-  await db.exec('ALTER TABLE channels DROP COLUMN type_id; DELETE FROM haven_schema_migrations WHERE version = 2');
+  await db.exec('ALTER TABLE channels DROP COLUMN type_id; ALTER TABLE user_signing_keys DROP COLUMN insertion_id; DELETE FROM haven_schema_migrations WHERE version >= 2');
+  for (const fp of ['a-legacy', 'z-legacy']) {
+    await db.prepare('INSERT INTO user_signing_keys (user_id, fp, jwk, created_at) VALUES (?, ?, ?, ?)')
+      .run(user.id, fp, JSON.stringify({ x: fp }), '2026-01-01 00:00:00');
+  }
   await require('../src/db/postgres/schema').initializePostgres(db);
-  assert.deepEqual(await db.prepare('SELECT version FROM haven_schema_migrations ORDER BY version').all(), [{ version: 1 }, { version: 2 }]);
+  assert.deepEqual(await db.prepare('SELECT version FROM haven_schema_migrations ORDER BY version').all(), [{ version: 1 }, { version: 2 }, { version: 3 }]);
   assert.deepEqual(await db.prepare('SELECT type_id FROM channels').all(), [{ type_id: null }]);
   assert.deepEqual(await db.prepare("SELECT value FROM server_settings WHERE key = 'server_fingerprint'").get(), fingerprint);
   assert.equal((await db.prepare('SELECT username FROM users WHERE id = ?').get(user.id)).username, 'Alice');
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM roles').get()).n, 4);
+  assert.deepEqual((await db.prepare('SELECT fp FROM user_signing_keys WHERE user_id = ? ORDER BY insertion_id DESC').all(user.id)).map(row => row.fp), ['z-legacy', 'a-legacy']);
+  await db.prepare('INSERT INTO user_signing_keys (user_id, fp, jwk, created_at) VALUES (?, ?, ?, ?)')
+    .run(user.id, '0-latest', '{"x":"newest"}', '2000-01-01 00:00:00');
+  assert.equal((await db.prepare('SELECT fp FROM user_signing_keys WHERE user_id = ? ORDER BY insertion_id DESC LIMIT 1').get(user.id)).fp, '0-latest');
+  // A version-2 preview already has type_id; only the key sequence is added.
+  await db.exec('ALTER TABLE user_signing_keys DROP COLUMN insertion_id; DELETE FROM haven_schema_migrations WHERE version = 3');
+  await require('../src/db/postgres/schema').initializePostgres(db);
+  assert.deepEqual(await db.prepare('SELECT type_id FROM channels').all(), [{ type_id: null }]);
+  await db.prepare('INSERT INTO user_signing_keys (user_id, fp, jwk, created_at) VALUES (?, ?, ?, ?)')
+    .run(user.id, '00-current', '{"x":"after-upgrade"}', '1999-01-01 00:00:00');
+  const ordered = await db.prepare('SELECT fp FROM user_signing_keys WHERE user_id = ? ORDER BY insertion_id DESC').all(user.id);
+  assert.deepEqual(ordered.map(row => row.fp), ['00-current', 'z-legacy', 'a-legacy', '0-latest']);
+  await require('../src/db/postgres/schema').initializePostgres(db);
+  assert.deepEqual(await db.prepare('SELECT fp FROM user_signing_keys WHERE user_id = ? ORDER BY insertion_id DESC').all(user.id), ordered);
   assert.match(user.created_at, /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
   await assert.rejects(db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run('aLiCe', 'fixture'), err => err.code === '23505');
   await assert.rejects(db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(9999, user.id), err => err.code === '23503');

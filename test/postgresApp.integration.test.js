@@ -118,7 +118,7 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     assert.equal((await request('/api/public-config')).status, 200);
     assert.equal((await request('/api/auth/registration-info')).status, 200);
     assert.equal(fs.existsSync(path.join(data, 'haven.db')), false);
-    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM haven_schema_migrations').get()).n, 2);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM haven_schema_migrations').get()).n, 3);
   });
   await t.test('case-folded concurrent signups allocate one admin and one identity', async () => {
     const admins = await Promise.all([signup('admin'), signup('ADMIN')]);
@@ -188,6 +188,22 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     await emit(socket, 'publish-public-key', 'public-key-published', { jwk });
     await emit(socket, 'store-encrypted-key', 'encrypted-key-stored', { encryptedKey: 'opaque-key', salt: 'salt', separatePassphrase: false });
     assert.equal((await emit(socket, 'get-encrypted-key', 'encrypted-key-result')).encryptedKey, 'opaque-key');
+    await emit(socket, 'publish-signing-key', 'signing-key-published', { jwk });
+    assert.deepEqual(await emit(socket, 'get-signing-key', 'signing-key-result', { userId: alice.user.id }), { userId: alice.user.id, jwk, keys: [jwk] });
+    await emit(socket, 'store-signing-backup', 'signing-backup-stored', { backup: 'opaque-signing-backup' });
+    assert.equal((await emit(socket, 'get-encrypted-key', 'encrypted-key-result')).signingBackup, 'opaque-signing-backup');
+    const newer = await db.prepare("INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, 'latest top-level') RETURNING id").get(room.id, alice.user.id);
+    await db.prepare("INSERT INTO messages (channel_id, user_id, content, thread_id) VALUES (?, ?, 'thread reply', ?)").run(room.id, alice.user.id, post.id);
+    const peer = await connect(alice.token);
+    socket.emit('mark-read', { code: room.code, messageId: newer.id });
+    peer.socket.emit('mark-read', { code: room.code, messageId: post.id });
+    await Promise.all([emit(socket, 'get-preferences', 'preferences'), emit(peer.socket, 'get-preferences', 'preferences')]);
+    assert.equal((await db.prepare('SELECT last_read_message_id FROM read_positions WHERE user_id = ? AND channel_id = ?').get(alice.user.id, room.id)).last_read_message_id, newer.id);
+    peer.socket.disconnect();
+    await db.prepare('DELETE FROM read_positions WHERE user_id = ? AND channel_id = ?').run(alice.user.id, room.id);
+    socket.emit('mark-read-channel', { code: room.code });
+    await emit(socket, 'get-preferences', 'preferences');
+    assert.equal((await db.prepare('SELECT last_read_message_id FROM read_positions WHERE user_id = ? AND channel_id = ?').get(alice.user.id, room.id)).last_read_message_id, newer.id);
     const unsupported = packet(socket, 'error-msg');
     socket.emit('create-channel', { name: 'unconverted' });
     assert.match(await unsupported, /not available/);

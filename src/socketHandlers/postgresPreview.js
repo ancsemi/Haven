@@ -11,10 +11,13 @@ const { parseBorderTransform, utcStamp } = require('./helpers');
 const { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS } = require('./settingEffects');
 const { compatibleThemeFiles, validatedThemeDefault, themePreferenceAllowed } = require('../themeMetadata');
 const { cleanChannelOrder } = require('./users');
+const createEncryptionKeyReads = require('../db/encryptionKeys');
+const createReadPositions = require('../db/readPositions');
 const THEMES_DIR = path.join(__dirname, '..', '..', 'themes');
 
 function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
   const permissions = createPermissions(db);
+  const readPositions = createReadPositions(db);
   const lists = createChannelLists({
     db, userHasPermission: permissions.userHasPermission, roleGateAllows: permissions.roleGateAllows,
     getUserEffectiveLevel: permissions.getUserEffectiveLevel,
@@ -236,8 +239,11 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       const ch = await accessible(socket, data?.code);
       if (!Number.isInteger(data.messageId) || data.messageId <= 0) return;
       if (!await db.prepare('SELECT 1 FROM messages WHERE id = ? AND channel_id = ? AND thread_id IS NULL').get(data.messageId, ch.id)) return;
-      await db.prepare(`INSERT INTO read_positions (user_id, channel_id, last_read_message_id) VALUES (?, ?, ?)
-        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = GREATEST(read_positions.last_read_message_id, excluded.last_read_message_id)`).run(socket.user.id, ch.id, data.messageId);
+      await readPositions.markRead(socket.user.id, ch.code, data.messageId);
+    });
+    on('mark-read-channel', async data => {
+      const ch = await accessible(socket, data?.code);
+      await readPositions.markChannelRead(socket.user.id, ch.code);
     });
     on('get-thread-read-state', async (data, callback) => {
       if (typeof callback !== 'function') return;
@@ -390,8 +396,9 @@ function publicKey(jwk) {
   return publicJwk;
 }
 function registerKeys(socket, on, db, io) {
+  const keyReads = createEncryptionKeyReads(db);
   on('get-encrypted-key', async () => {
-    const row = await db.prepare('SELECT encrypted_private_key, e2e_key_salt, public_key, signing_key, signing_backup FROM users WHERE id = ?').get(socket.user.id);
+    const row = await keyReads.encryptedKey(socket.user.id);
     const hasBackup = !!(row && row.encrypted_private_key && row.e2e_key_salt);
     socket.emit('encrypted-key-result', {
       encryptedKey: row?.encrypted_private_key || null, salt: row?.e2e_key_salt || null,
@@ -437,13 +444,12 @@ function registerKeys(socket, on, db, io) {
   });
   on('get-public-key', async data => {
     if (!Number.isInteger(data?.userId) || data.userId <= 0) return;
-    const row = await db.prepare('SELECT public_key FROM users WHERE id = ?').get(data.userId);
+    const row = await keyReads.publicKey(data.userId);
     socket.emit('public-key-result', { userId: data.userId, jwk: row?.public_key ? JSON.parse(row.public_key) : null });
   });
   on('get-signing-key', async data => {
     if (!Number.isInteger(data?.userId) || data.userId <= 0) return;
-    const row = await db.prepare('SELECT signing_key FROM users WHERE id = ?').get(data.userId);
-    const keys = await db.prepare('SELECT jwk FROM user_signing_keys WHERE user_id = ? ORDER BY created_at DESC, fp DESC LIMIT 50').all(data.userId);
+    const { row, keys } = await keyReads.signingKeys(data.userId);
     socket.emit('signing-key-result', { userId: data.userId, jwk: row?.signing_key ? JSON.parse(row.signing_key) : null, keys: keys.map(r => JSON.parse(r.jwk)) });
   });
 }

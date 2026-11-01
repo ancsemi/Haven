@@ -10,6 +10,7 @@ const { validHighScore, isKnownGame } = require('../highScores');
 const { badgesForProfile } = require('../badges');
 const { themePreferenceAllowed } = require('../themeMetadata');
 const { MEDIA_GROUP_LAYOUTS } = require('../mediaGroup');
+const createEncryptionKeyReads = require('../db/encryptionKeys');
 
 const PUSH_SCOPES = ['all', 'mentions'];
 
@@ -49,6 +50,7 @@ module.exports = function register(socket, ctx) {
           emitOnlineUsers, emitDmPresence, broadcastVoiceUsers, generateToken,
           touchVoiceActivity, enforceAutomod, DATA_DIR, logAudit } = ctx;
   const { channelUsers, voiceUsers } = state;
+  const keyReads = createEncryptionKeyReads(db);
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
 
   // ── Rename (display name) ───────────────────────────────
@@ -640,14 +642,19 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  socket.on('get-public-key', (data) => {
+  socket.on('get-public-key', async (data) => {
     if (!data || typeof data !== 'object') return;
     const userId = typeof data.userId === 'number' ? data.userId : parseInt(data.userId);
     if (!userId || isNaN(userId)) return;
 
-    const row = db.prepare('SELECT public_key FROM users WHERE id = ?').get(userId);
-    const jwk = row && row.public_key ? JSON.parse(row.public_key) : null;
-    socket.emit('public-key-result', { userId, jwk });
+    try {
+      const row = await keyReads.publicKey(userId);
+      const jwk = row && row.public_key ? JSON.parse(row.public_key) : null;
+      socket.emit('public-key-result', { userId, jwk });
+    } catch (err) {
+      console.error('Get public key error:', err);
+      socket.emit('error-msg', 'Failed to get public key');
+    }
   });
 
   // ── E2E Encrypted Private Key Storage ───────────────────
@@ -685,10 +692,9 @@ module.exports = function register(socket, ctx) {
     db.prepare('UPDATE users SET signing_backup = ? WHERE id = ?').run(backup, socket.user.id);
     socket.emit('signing-backup-stored');
   });
-  socket.on('get-encrypted-key', () => {
+  socket.on('get-encrypted-key', async () => {
     try {
-      const row = db.prepare('SELECT encrypted_private_key, e2e_key_salt, public_key, signing_key, signing_backup FROM users WHERE id = ?')
-        .get(socket.user.id);
+      const row = await keyReads.encryptedKey(socket.user.id);
       const hasBackup = !!(row && row.encrypted_private_key && row.e2e_key_salt);
       // Forward just the pub-key JWK (x,y) so clients can detect
       // local-vs-server divergence without an extra round-trip. Additive:

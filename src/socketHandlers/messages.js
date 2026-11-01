@@ -19,6 +19,7 @@ const { moveToChannel } = require('../moveMessages');
 const storage = require('../storage');
 const { groupHistoryFloor } = require('../groupHistory');
 const { isSafeUploadRelPath } = storage;
+const createReadPositions = require('../db/readPositions');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -60,6 +61,7 @@ module.exports = function register(socket, ctx) {
           touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay, ferryRelayReply,
           logAudit } = ctx;
   const { slowModeTracker } = state;
+  const readPositions = createReadPositions(db);
   // A moderator acting on a message in a channel goes on the audit log, with
   // the channel and whose message it was. DMs are left out: what happens in
   // a conversation is its two people's business.
@@ -1471,13 +1473,8 @@ module.exports = function register(socket, ctx) {
           destructAt ? '🔥 Sent a self-destructing message' : slashResult.content, { silent: !!silent });
         fireWebhookCallbacks(channel.id, code, message);
 
-        try {
-          db.prepare(`
-            INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-            VALUES (?, ?, ?)
-            ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-          `).run(socket.user.id, channel.id, result.lastInsertRowid);
-        } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
+        readPositions.advance(socket.user.id, channel.id, result.lastInsertRowid)
+          .catch(() => { /* only the sender's own unread marker; it catches up on their next read */ });
         return;
       }
     }
@@ -1718,13 +1715,8 @@ module.exports = function register(socket, ctx) {
         });
       }
 
-      try {
-        db.prepare(`
-          INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-          VALUES (?, ?, ?)
-          ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-        `).run(socket.user.id, channel.id, result.lastInsertRowid);
-      } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
+      readPositions.advance(socket.user.id, channel.id, result.lastInsertRowid)
+        .catch(() => { /* only the sender's own unread marker; it catches up on their next read */ });
     } catch (err) {
       console.error('send-message error:', err.message);
       socket.emit('error-msg', 'Failed to send message. Please try again');
@@ -2927,52 +2919,29 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Read positions ──────────────────────────────────────
-  socket.on('mark-read', (data) => {
+  socket.on('mark-read', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     if (!isInt(data.messageId) || data.messageId <= 0) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-    if (!channel) return;
-
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!member) return;
-
     try {
-      db.prepare(`
-        INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-        VALUES (?, ?, ?)
-        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-      `).run(socket.user.id, channel.id, data.messageId);
+      await readPositions.markRead(socket.user.id, code, data.messageId);
     } catch (err) {
       console.error('Mark read error:', err);
     }
   });
 
   // Mark entire channel as read (context menu action)
-  socket.on('mark-read-channel', (data) => {
+  socket.on('mark-read-channel', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-    if (!channel) return;
-
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!member) return;
-
     try {
       // Mark up to the latest non-thread message. Thread replies have their
       // own panel and don't participate in channel-level read positions.
-      const latest = db.prepare('SELECT MAX(id) AS maxId FROM messages WHERE channel_id = ? AND thread_id IS NULL').get(channel.id);
-      if (!latest || !latest.maxId) return;
-
-      db.prepare(`
-        INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-        VALUES (?, ?, ?)
-        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-      `).run(socket.user.id, channel.id, latest.maxId);
+      await readPositions.markChannelRead(socket.user.id, code);
     } catch (err) {
       console.error('Mark read channel error:', err);
     }
