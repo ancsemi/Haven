@@ -581,6 +581,33 @@ test('the fullscreen stream label follows the selected source and restores on ex
   assert.equal(cameraLabel.textContent, originalLabel);
 });
 
+test('fullscreen local stream labels use the account username instead of You', () => {
+  const { app, document, cameraTile, shareTile } = renderBothMediaTiles({ localCamera: true });
+  app.user.username = 'niko';
+  const cameraLabel = cameraTile.querySelector('.webcam-tile-label');
+  assert.equal(cameraLabel.textContent, 'voice_runtime.you', 'the ordinary tile keeps its existing label');
+  cameraTile.requestFullscreen = () => {
+    document.fullscreenElement = cameraTile;
+    return Promise.resolve();
+  };
+  cameraTile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
+  document.dispatch('fullscreenchange');
+
+  const picker = cameraTile.querySelector('.fullscreen-stream-select');
+  assert.deepEqual(picker.children.map(option => option.textContent), [
+    'niko — voice.panel.camera',
+    'niko — voice.screen_share',
+  ]);
+  assert.equal(cameraLabel.textContent, 'niko — voice.panel.camera');
+  picker.value = shareTile.id;
+  picker.listeners.change[0]({ stopPropagation() {} });
+  assert.equal(cameraLabel.textContent, 'niko — voice.screen_share');
+
+  document.fullscreenElement = null;
+  document.dispatch('fullscreenchange');
+  assert.equal(cameraLabel.textContent, 'voice_runtime.you');
+});
+
 test('switching a fullscreen screen share to the local camera mirrors it and restores the share transform on exit', () => {
   const { document, cameraTile, shareTile, cameraStream, shareStream } = renderBothMediaTiles({ localCamera: true });
   const shareVideo = shareTile.querySelector('video');

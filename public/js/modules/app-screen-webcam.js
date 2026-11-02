@@ -301,7 +301,11 @@ _listLiveFullscreenStreams(excludeTile = null) {
     if (!track) return [];
     const labelNode = this._fullscreenStreamLabelNode(tile);
     const originalLabel = tile === this._fullscreenCallActiveTile ? this._fullscreenCallOriginalLabel : null;
-    const who = originalLabel ?? (labelNode?.textContent || this.voice?.peerName?.(tile.dataset.userId) || t('voice.someone'));
+    const tileUserId = tile._fullscreenCallUserId;
+    const isOwnStream = tileUserId == null ||
+      (this.user?.id != null && String(tileUserId) === String(this.user.id));
+    const who = (isOwnStream && this.user?.username) || originalLabel ||
+      labelNode?.textContent || this.voice?.peerName?.(tileUserId) || t('voice.someone');
     return [{ tile, video, stream, label: `${who} — ${t(isCamera ? 'voice.panel.camera' : 'voice.screen_share')}` }];
   });
 },
@@ -575,6 +579,7 @@ _handleWebcamStream(userId, stream) {
       tile = document.createElement('div');
       tile.id = tileId;
       tile.className = 'webcam-tile';
+      tile._fullscreenCallUserId = userId;
       tile._fullscreenCallMirrored = userId === this.user.id;
 
       const vid = document.createElement('video');
@@ -1020,6 +1025,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       tile = document.createElement('div');
       tile.id = tileId;
       tile.className = 'screen-share-tile';
+      tile._fullscreenCallUserId = userId;
 
       const vid = document.createElement('video');
       vid.autoplay = true;
