@@ -135,17 +135,20 @@ _bindFullscreenCallTile(tile, toolbar) {
       this._fullscreenCallActiveTile = tile;
       this._fullscreenCallOriginalStream = tile._fullscreenCallSourceStream || tile.querySelector('video')?.srcObject || null;
       this._fullscreenCallSelectedTile = tile;
+      this._fullscreenCallOriginalLabel = this._fullscreenStreamLabelNode(tile)?.textContent ?? null;
       this._setFullscreenVideoSource(tile, tile, this._fullscreenCallOriginalStream);
       this._revealFullscreenCallControls(tile);
       this._refreshFullscreenStreamPicker?.();
     } else if (this._fullscreenCallActiveTile === tile) {
       this._setFullscreenVideoSource(tile, tile, this._fullscreenCallOriginalStream);
+      this._restoreFullscreenStreamLabel(tile);
       const audioPopover = toolbar.querySelector('.fullscreen-audio-popover');
       const audioTrigger = toolbar.querySelector('.fullscreen-call-audio');
       if (audioPopover && audioTrigger) this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
       this._fullscreenCallActiveTile = null;
       this._fullscreenCallOriginalStream = null;
       this._fullscreenCallSelectedTile = null;
+      this._fullscreenCallOriginalLabel = null;
       tile.classList.remove('fullscreen-controls-idle');
     }
   };
@@ -296,10 +299,23 @@ _listLiveFullscreenStreams(excludeTile = null) {
     const stream = tile._fullscreenCallSourceStream || video?.srcObject;
     const track = stream?.getVideoTracks?.().find(item => item.readyState === 'live');
     if (!track) return [];
-    const labelNode = tile.querySelector(isCamera ? '.webcam-tile-label' : '.screen-share-tile-label');
-    const who = labelNode?.textContent || this.voice?.peerName?.(tile.dataset.userId) || t('voice.someone');
+    const labelNode = this._fullscreenStreamLabelNode(tile);
+    const originalLabel = tile === this._fullscreenCallActiveTile ? this._fullscreenCallOriginalLabel : null;
+    const who = originalLabel ?? (labelNode?.textContent || this.voice?.peerName?.(tile.dataset.userId) || t('voice.someone'));
     return [{ tile, video, stream, label: `${who} — ${t(isCamera ? 'voice.panel.camera' : 'voice.screen_share')}` }];
   });
+},
+
+_fullscreenStreamLabelNode(tile) {
+  const isCamera = (tile?.className || '').split(/\s+/).includes('webcam-tile');
+  return tile?.querySelector(isCamera ? '.webcam-tile-label' : '.screen-share-tile-label') || null;
+},
+
+_restoreFullscreenStreamLabel(tile) {
+  const label = this._fullscreenStreamLabelNode(tile);
+  if (label && this._fullscreenCallOriginalLabel !== null && this._fullscreenCallOriginalLabel !== undefined) {
+    label.textContent = this._fullscreenCallOriginalLabel;
+  }
 },
 
 _updateFullscreenTileSource(tile, stream) {
@@ -341,6 +357,9 @@ _setFullscreenVideoSource(targetTile, sourceTile, stream) {
   if (!video) return;
   video.srcObject = stream;
   video.style.transform = sourceTile?._fullscreenCallMirrored ? 'scaleX(-1)' : '';
+  const selectedSource = this._listLiveFullscreenStreams().find(item => item.tile === sourceTile);
+  const label = this._fullscreenStreamLabelNode(targetTile);
+  if (selectedSource && label) label.textContent = selectedSource.label;
 },
 
 _handleFullscreenSourceEnded(tile) {
@@ -398,6 +417,7 @@ _handleFullscreenTileRemoval(tile) {
     this._fullscreenCallActiveTile = null;
     this._fullscreenCallOriginalStream = null;
     this._fullscreenCallSelectedTile = null;
+    this._fullscreenCallOriginalLabel = null;
   } else if (activeTile && this._fullscreenCallSelectedTile === tile) {
     const fallback = this._listLiveFullscreenStreams(tile)[0];
     if (fallback) {

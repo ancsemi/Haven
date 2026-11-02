@@ -531,6 +531,34 @@ test('switching a mirrored fullscreen camera to a screen share clears the mirror
   assert.equal(cameraVideo.style.transform, 'scaleX(-1)', 'the camera mirror should be restored with the original source');
 });
 
+test('the fullscreen stream label follows the selected source and restores on exit', () => {
+  const { app, document, cameraTile, shareTile } = renderBothMediaTiles();
+  const cameraLabel = cameraTile.querySelector('.webcam-tile-label');
+  const originalLabel = cameraLabel.textContent;
+  cameraTile.requestFullscreen = () => {
+    document.fullscreenElement = cameraTile;
+    return Promise.resolve();
+  };
+  cameraTile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
+  document.dispatch('fullscreenchange');
+
+  const picker = cameraTile.querySelector('.fullscreen-stream-select');
+  const selectedOption = picker.children.find(option => option.value === shareTile.id);
+  picker.value = shareTile.id;
+  picker.listeners.change[0]({ stopPropagation() {} });
+
+  assert.equal(cameraLabel.textContent, selectedOption.textContent);
+  app._refreshFullscreenStreamPicker();
+  assert.deepEqual(picker.children.map(option => option.textContent), [
+    'Participant — voice.panel.camera',
+    'Participant — voice.screen_share',
+  ]);
+
+  document.fullscreenElement = null;
+  document.dispatch('fullscreenchange');
+  assert.equal(cameraLabel.textContent, originalLabel);
+});
+
 test('switching a fullscreen screen share to the local camera mirrors it and restores the share transform on exit', () => {
   const { document, cameraTile, shareTile, cameraStream, shareStream } = renderBothMediaTiles({ localCamera: true });
   const shareVideo = shareTile.querySelector('video');
