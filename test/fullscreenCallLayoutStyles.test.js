@@ -65,3 +65,14 @@ test('fullscreen CSS separates standard and WebKit-only pseudo-class selectors',
     );
   }
 });
+
+test('fullscreen sharing is green and leave is a red circle with a white X', () => {
+  const sharing = declarationsFor('.fullscreen-call-control.sharing');
+  assert.match(sharing, /background:\s*var\(--success\)/);
+  assert.match(sharing, /color:\s*var\(--success-text\)/);
+
+  const leave = declarationsFor('.fullscreen-call-control.fullscreen-call-leave');
+  assert.match(leave, /border-radius:\s*50%/);
+  assert.match(leave, /background:\s*var\(--danger\)/);
+  assert.match(leave, /color:\s*#fff/);
+});

@@ -108,7 +108,7 @@ _createFullscreenCallToolbar(tile) {
     this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
     audioTrigger.focus();
   });
-  addButton('fullscreen-call-leave', 'voice.disconnect', '⏏', () => {
+  addButton('fullscreen-call-leave', 'voice.disconnect', '✕', () => {
     if (!this.voice?.inVoice) return;
     this._leaveVoice?.();
     this._exitFullscreenCallControls();

@@ -414,6 +414,16 @@ test('fullscreen call controls render in the same sequence as the regular voice 
   ]);
 });
 
+test('fullscreen leave control uses the red-circle X icon', () => {
+  const { tile } = renderWebcamTile();
+  assert.equal(tile.querySelector('.fullscreen-call-leave').textContent, '✕');
+});
+
+test('fullscreen exit control keeps the square fullscreen icon', () => {
+  const { tile } = renderWebcamTile();
+  assert.equal(tile.querySelector('.fullscreen-call-exit').textContent, '⛶');
+});
+
 test('fullscreen controls auto-hide over the video and reveal on touch or toolbar hover', () => {
   const timers = [];
   const { app, document, tile } = renderWebcamTile({
