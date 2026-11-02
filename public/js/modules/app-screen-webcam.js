@@ -32,12 +32,19 @@ _createFullscreenCallToolbar(tile) {
   addButton('fullscreen-call-deafen', 'voice.deafen', '🔊', () => this._toggleDeafen?.());
   addButton('fullscreen-call-camera', 'voice.panel.camera', '📷', () => this._toggleWebcam?.());
   addButton('fullscreen-call-share', 'voice.screen_share', '🖥️', () => this._toggleScreenShare?.());
-  addButton('fullscreen-call-leave', 'voice.disconnect', '⏏', () => {
-    if (!this.voice?.inVoice) return;
-    this._leaveVoice?.();
-    this._exitFullscreenCallControls();
+
+  const picker = document.createElement('select');
+  picker.className = 'fullscreen-stream-select';
+  picker.title = t('voice_runtime.stream');
+  picker.setAttribute('aria-label', t('voice_runtime.stream'));
+  picker.addEventListener('click', event => event.stopPropagation());
+  picker.addEventListener('change', (event) => {
+    event.stopPropagation();
+    this._selectFullscreenStream(tile, picker.value);
   });
-  addButton('fullscreen-call-exit', 'media.exit_fullscreen', '⛶', () => this._exitFullscreenCallControls());
+  toolbar.appendChild(picker);
+  if (!this._fullscreenStreamPickers) this._fullscreenStreamPickers = new Map();
+  this._fullscreenStreamPickers.set(picker, tile);
 
   const audioPopover = document.createElement('div');
   audioPopover.className = 'fullscreen-audio-popover';
@@ -101,19 +108,12 @@ _createFullscreenCallToolbar(tile) {
     this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
     audioTrigger.focus();
   });
-
-  const picker = document.createElement('select');
-  picker.className = 'fullscreen-stream-select';
-  picker.title = t('voice_runtime.stream');
-  picker.setAttribute('aria-label', t('voice_runtime.stream'));
-  picker.addEventListener('click', event => event.stopPropagation());
-  picker.addEventListener('change', (event) => {
-    event.stopPropagation();
-    this._selectFullscreenStream(tile, picker.value);
+  addButton('fullscreen-call-leave', 'voice.disconnect', '⏏', () => {
+    if (!this.voice?.inVoice) return;
+    this._leaveVoice?.();
+    this._exitFullscreenCallControls();
   });
-  toolbar.appendChild(picker);
-  if (!this._fullscreenStreamPickers) this._fullscreenStreamPickers = new Map();
-  this._fullscreenStreamPickers.set(picker, tile);
+  addButton('fullscreen-call-exit', 'media.exit_fullscreen', '⛶', () => this._exitFullscreenCallControls());
 
   tile.appendChild(toolbar);
   if (!this._fullscreenCallToolbars) this._fullscreenCallToolbars = new Set();

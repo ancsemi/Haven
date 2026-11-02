@@ -392,6 +392,28 @@ test('the fullscreen toolbar follows browser fullscreen entry and exit', () => {
   assert.equal(tile.classList.contains('is-fullscreen'), false);
 });
 
+test('fullscreen call controls render in the same sequence as the regular voice toolbar', () => {
+  const { cameraTile } = renderBothMediaTiles();
+  const toolbar = cameraTile.querySelector('.fullscreen-call-toolbar');
+  const controls = Array.from(toolbar.children)
+    .filter(child => child.className === 'fullscreen-stream-select' ||
+      child.className.split(/\s+/).includes('fullscreen-call-control'))
+    .map(child => child.className === 'fullscreen-stream-select'
+      ? child.className
+      : child.className.split(/\s+/).find(name => name.startsWith('fullscreen-call-') && name !== 'fullscreen-call-control'));
+
+  assert.deepEqual(controls, [
+    'fullscreen-call-mute',
+    'fullscreen-call-deafen',
+    'fullscreen-call-camera',
+    'fullscreen-call-share',
+    'fullscreen-stream-select',
+    'fullscreen-call-audio',
+    'fullscreen-call-leave',
+    'fullscreen-call-exit',
+  ]);
+});
+
 test('fullscreen controls auto-hide over the video and reveal on touch or toolbar hover', () => {
   const timers = [];
   const { app, document, tile } = renderWebcamTile({
