@@ -50,8 +50,8 @@ _createFullscreenCallToolbar(tile) {
   audioPopover.className = 'fullscreen-audio-popover';
   audioPopover.hidden = true;
   audioPopover.setAttribute('role', 'group');
-  audioPopover.setAttribute('aria-label', t('voice.panel.settings'));
-  const audioTrigger = addButton('fullscreen-call-audio', 'voice.panel.settings', '⚙️', () => {
+  audioPopover.setAttribute('aria-label', t('voice.panel.call_settings'));
+  const audioTrigger = addButton('fullscreen-call-audio', 'voice.panel.call_settings', '⚙️', () => {
     this._toggleFullscreenAudioPopover(tile, audioPopover, audioTrigger);
   });
   audioTrigger.setAttribute('aria-expanded', 'false');

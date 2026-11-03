@@ -1119,6 +1119,17 @@ test('the stream picker is only rebuilt when its list of streams changes', () =>
   assert.equal(picker.children.length, 1);
 });
 
+test('the fullscreen settings button and popup are named Call settings', () => {
+  const { tile } = renderWebcamTile();
+  const gear = tile.querySelector('.fullscreen-call-audio');
+  assert.equal(gear.title, 'voice.panel.call_settings');
+  assert.equal(gear.attributes['aria-label'], 'voice.panel.call_settings');
+  assert.equal(tile.querySelector('.fullscreen-audio-popover').attributes['aria-label'], 'voice.panel.call_settings');
+  const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
+  assert.equal(en.voice.panel.call_settings, 'Call settings');
+  assert.equal(en.voice.panel.settings, 'Voice Settings', 'the regular sidebar button keeps its name');
+});
+
 test('the fullscreen toolbar is named as call controls, not voice settings', () => {
   const { tile } = renderWebcamTile();
   const toolbar = tile.querySelector('.fullscreen-call-toolbar');

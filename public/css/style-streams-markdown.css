@@ -1628,12 +1628,12 @@ ul.chat-list { list-style-type: disc; }
   border: 1px solid var(--danger);
   border-radius: 50%;
   background: var(--danger);
-  color: #fff;
+  color: var(--danger-text);
 }
 .fullscreen-call-control.fullscreen-call-leave:hover,
 .fullscreen-call-control.fullscreen-call-leave:focus-visible {
   background: #d93636;
-  color: #fff;
+  color: var(--danger-text);
 }
 .fullscreen-stream-select {
   max-width: min(18rem, 32vw);
