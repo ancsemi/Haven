@@ -341,6 +341,7 @@
       "spoiler_on": "Spoiler on. Click to send normally",
       "hide_image": "Hide Image",
       "image_hidden": "Image hidden",
+      "video_hidden": "Video hidden",
       "click_to_show": "click to show",
       "only_visible_to_you": "Only visible to you",
       "real_account": "real account",
@@ -1825,6 +1826,8 @@
         "full": "Full",
         "full_hint": "Full: large inline images like Discord"
       },
+      "hide_media": "Hide pictures and videos",
+      "hide_media_hint": "Pictures, GIFs and videos in chat show as a small tag you click to see them, and link cards start folded. Handy around other people. Only changes what you see, on this device.",
       "media_layout": {
         "title": "Pictures Sent Together",
         "default": "Server default",
