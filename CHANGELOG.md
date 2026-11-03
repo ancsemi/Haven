@@ -8,11 +8,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ## [4.29.0] - Unreleased
 
+### Added
+- Video players in chat have Theater (as wide as the chat) and Fullscreen buttons: YouTube cards, uploaded videos and videos in link previews.
+
 ### Changed
+- The controls on videos, sounds and link previews are rebuilt: matching drawn icons in one size, with playing controls and view controls in separate groups. The speaker button mutes, and the size button opens a menu of Small, Medium and Large. It used to look like a fullscreen button.
+- The "Full" preview size is now called Large, and a YouTube player at that size is about 750 pixels wide instead of 480. At every size the player now fills its card.
 - With a mouse, the buttons that appear when you hover a message (react, reply, quote, thread, more) now sit at the bottom of the message: beside the reaction chips when it has some, and in the bottom corner when it doesn't. They used to cover the top right of the message. Touch screens are unchanged.
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
+- A `/tts` message with a line break or a slash in it (a link, "and/or") posted as plain text with `/tts` showing and never spoke. The same went for other slash commands.
 - Clicking the ... button on a voice-only channel also joined its voice. It only opens the menu now (thanks dlmorgan999, #5846).
 - A spoiler's text showed in the places a message is previewed as plain text: reply previews, the Replying to bar, the Threads list, forum post titles and snippets, pop-up notifications and phone notifications. It's hidden in all of them now (thanks birdycrazy).
 

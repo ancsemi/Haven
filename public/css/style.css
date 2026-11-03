@@ -11,7 +11,7 @@
 @import url('/css/style-theme-picker.css?v=4.27.12');
 @import url('/css/style-sidebar.css?v=4.27.44');
 @import url('/css/style-messages.css?v=4.27.14');
-@import url('/css/style-profile-servers-modals.css?v=4.27.29');
+@import url('/css/style-profile-servers-modals.css?v=4.27.50');
 @import url('/css/style-image-zoom.css?v=4.23.12');
 @import url('/css/style-emoji-reactions-threads.css?v=4.27.47');
 @import url('/css/style-thread-unread.css?v=4.26.8');
@@ -19,8 +19,9 @@
 @import url('/css/style-e2e-spoilers.css?v=4.26.17');
 @import url('/css/style-settings.css?v=4.27.29');
 @import url('/css/style-mobile.css?v=4.26.10');
-@import url('/css/style-streams-markdown.css?v=4.27.45');
+@import url('/css/style-streams-markdown.css?v=4.27.51');
 @import url('/css/style-presence-connections.css?v=4.27.23');
+@import url('/css/style-media-controls.css?v=4.27.50');
 @import url('/css/style-roles-layout-polls.css?v=4.22.12');
 @import url('/css/style-admin-panels.css?v=4.27.9');
 @import url('/css/style-channel-types.css?v=4.27.42');

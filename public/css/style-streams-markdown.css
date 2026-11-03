@@ -1334,8 +1334,9 @@ ul.chat-list { list-style-type: disc; }
 }
 .lp-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.25rem 0.5rem;
 }
 .lp-site {
   flex: 1 1 auto;
@@ -1348,67 +1349,6 @@ ul.chat-list { list-style-type: disc; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.lp-size,
-.lp-collapse {
-  flex: 0 0 auto;
-  background: none;
-  border: 0;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-}
-/* A YouTube card's own volume (app-media-playback.js): YouTube's player
-   shows only a mute button on narrow and Shorts layouts. */
-.lp-volume {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.lp-volume input { width: 5rem; accent-color: var(--lp-accent, var(--accent)); cursor: pointer; }
-
-/* Keep playing pin (app-media-playback.js): faint until hovered or pinned,
-   and gone while pausing scrolled-away media is switched off. */
-.media-keep, .media-loop, .media-listen {
-  margin-left: 0.375rem; padding: 0 0.25rem; border: 1px solid transparent; border-radius: var(--radius-sm, 4px);
-  background: none; font-size: 0.8rem; line-height: 1.4; cursor: pointer; opacity: 0.35; filter: grayscale(1);
-  vertical-align: middle;
-}
-.media-keep:hover, .media-keep:focus-visible, .media-loop:hover, .media-loop:focus-visible, .media-listen:hover, .media-listen:focus-visible { opacity: 0.85; }
-.media-keep[aria-pressed="true"], .media-loop[aria-pressed="true"] { opacity: 1; filter: none; border-color: var(--accent); }
-body.pause-offscreen-off .media-keep { display: none; }
-
-/* In a card's top bar every control is the same height and spaced by the
-   bar's gap alone, with the icons clear enough to find. */
-.lp-header > button,
-.lp-header > .lp-volume {
-  height: 1.5rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 0.375rem;
-  border-radius: 0.25rem;
-}
-.lp-header > .media-keep,
-.lp-header > .media-loop { margin-left: 0; min-width: 1.5rem; font-size: 0.875rem; opacity: 0.6; }
-.lp-header > .media-keep:hover,
-.lp-header > .media-loop:hover,
-.lp-volume:hover { background: rgba(255, 255, 255, 0.07); }
-.lp-header > .media-keep:hover,
-.lp-header > .media-loop:hover { opacity: 1; }
-.lp-volume input { height: 1rem; }
-.lp-size:hover,
-.lp-collapse:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text-secondary);
 }
 .lp-content {
   display: flex;
