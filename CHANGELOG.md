@@ -10,14 +10,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Added
 - Video players in chat have Theater (as wide as the chat) and Fullscreen buttons: YouTube cards, uploaded videos and videos in link previews.
+- Add all members on a channel that already exists: right-click it. Everyone on the server joins it, for the admin and anyone who can invite people. Private channels stay invite-only.
+- Hide pictures and videos (Settings > Chat & media): pictures, GIFs and videos in chat show as a small tag you click to see them, videos keep their file name, and link cards start folded. For reading chat around other people. Only changes what you see, on that device (thanks MutantRabbit767).
 
 ### Changed
+- Tooltips are drawn by Haven: they wrap at a readable width, stay inside the window and follow the theme. A long one used to run far past the edge of the app.
+- In Permissions, clicking a role's name opens its full settings (name, level, color, icon) on top of the table, and changes waiting to be saved stay. A click anywhere in a box's cell ticks the box.
 - The controls on videos, sounds and link previews are rebuilt: matching drawn icons in one size, with playing controls and view controls in separate groups. The speaker button mutes, and the size button opens a menu of Small, Medium and Large. It used to look like a fullscreen button.
 - The "Full" preview size is now called Large, and a YouTube player at that size is about 750 pixels wide instead of 480. At every size the player now fills its card.
 - With a mouse, the buttons that appear when you hover a message (react, reply, quote, thread, more) now sit at the bottom of the message: beside the reaction chips when it has some, and in the bottom corner when it doesn't. They used to cover the top right of the message. Touch screens are unchanged.
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
+- The last plain browser pop-ups are Haven's own themed dialogs now: moving a channel under another, leaving a channel, deleting a webhook, bot or member, backups, invite links and more. The password box for signing out other sessions hides what you type.
 - A `/tts` message with a line break or a slash in it (a link, "and/or") posted as plain text with `/tts` showing and never spoke. The same went for other slash commands.
 - Clicking the ... button on a voice-only channel also joined its voice. It only opens the menu now (thanks dlmorgan999, #5846).
 - A spoiler's text showed in the places a message is previewed as plain text: reply previews, the Replying to bar, the Threads list, forum post titles and snippets, pop-up notifications and phone notifications. It's hidden in all of them now (thanks birdycrazy).

@@ -60,6 +60,7 @@ function setup({ members, cached, confirmed = true, admin = false }) {
     _groupRoster: async () => (members ? { members } : null),
     _collectDmAttachments: async () => ['/uploads/a.bin'],
     _showConfirmModal: async () => confirmed,
+    _confirm: async () => confirmed,
     _showToast: (message, type) => toasts.push({ message, type }),
     socket: { emit: (ev, data) => emitted.push([ev, data]) },
   };

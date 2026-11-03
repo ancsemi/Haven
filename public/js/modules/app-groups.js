@@ -725,7 +725,7 @@ async _groupIsMineAlone(code) {
 },
 async _leaveGroup(code) {
   const ch = this.channels.find(c => c.code === code);
-  if (!ch || !confirm(t('groups.leave_confirm', { group: this._groupName(ch) }))) return;
+  if (!ch || !await this._confirm(t('groups.leave_confirm', { group: this._groupName(ch) }))) return;
   this._leavingGroup = code;
   // The last one out deletes the group, so its encrypted attachments are
   // gathered first for the server to remove with it.

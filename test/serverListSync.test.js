@@ -534,10 +534,10 @@ test('removing and renaming wait for the user\'s answer in the Desktop app', asy
 
 test('the server bar skips its own question only where the Desktop app asks', () => {
   const bar = fs.readFileSync(path.join(__dirname, '..', 'public/js/modules/app-server-bar.js'), 'utf8');
-  const remove = bar.slice(bar.indexOf('_removeServerByUser(url, name, done) {'));
-  assert.match(remove, /if \(!manager\.desktopAsksFor\(url\)\) \{\s+if \(!confirm\(t\('confirm\.remove_server'/);
+  const remove = bar.slice(bar.indexOf('async _removeServerByUser(url, name, done) {'));
+  assert.match(remove, /if \(!manager\.desktopAsksFor\(url\)\) \{\s+if \(!await this\._confirm\(t\('confirm\.remove_server'/);
   assert.match(remove, /manager\.removeThroughDesktop\(url\)/);
-  assert.equal((bar.match(/confirm\(t\('confirm\.remove_server'/g) || []).length, 1, 'both remove buttons go through one place');
+  assert.equal((bar.match(/_confirm\(t\('confirm\.remove_server'/g) || []).length, 1, 'both remove buttons go through one place');
   assert.match(bar, /else if \(this\.serverManager\.desktopGated\(\)\) \{\s+await this\._addServerThroughDesktop/);
   assert.match(bar, /if \(result === 'declined'\) return;/);
   const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));

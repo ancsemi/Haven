@@ -400,7 +400,35 @@ _saveHiddenImages() {
 },
 
 _isImageHidden(u) {
-  return this._loadHiddenImages().has(this._normalizeImgSrc(u));
+  return this._loadHiddenImages().has(this._normalizeImgSrc(u)) || this._isMediaHeld(u);
+},
+
+// ── Hide media (Settings > Chat & media) ──
+// Every picture and video waits behind the same click-to-show tag, and link
+// cards start folded: for reading chat around other people. Per device. What
+// you reveal stays shown until the page reloads.
+
+_hideMediaOn() {
+  if (this._hideMedia === undefined) this._hideMedia = localStorage.getItem('haven-hide-media') === 'true';
+  return this._hideMedia;
+},
+
+_isMediaHeld(u) {
+  return this._hideMediaOn() && !this._revealedMedia?.has(this._normalizeImgSrc(u));
+},
+
+_setupHideMedia() {
+  const toggle = document.getElementById('hide-media-toggle');
+  if (!toggle) return;
+  toggle.checked = this._hideMediaOn();
+  toggle.addEventListener('change', () => {
+    this._hideMedia = toggle.checked;
+    try { localStorage.setItem('haven-hide-media', String(toggle.checked)); } catch { /* storage blocked: the choice lasts until reload */ }
+    // What is on screen was drawn the other way, so the open channel is drawn again.
+    if (this.currentChannel && this.socket?.connected) {
+      this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
+    }
+  });
 },
 
 _hideImage(u) {
@@ -422,11 +450,15 @@ _eyeIcon(off, size = 14) {
     : `<svg class="eye-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
 },
 
-_hiddenImagePlaceholder(u) {
-  const abs = this._escapeHtml(this._normalizeImgSrc(u));
-  const label = t('app.messages.image_hidden');
+// `kind` is 'video' for an uploaded video, or an image type for a picture in
+// an encrypted DM; both keep their /uploads path, which is what they need to
+// be drawn again.
+_hiddenImagePlaceholder(u, kind = '') {
+  const src = this._escapeHtml(kind ? u : this._normalizeImgSrc(u));
+  const label = t(kind === 'video' ? 'app.messages.video_hidden' : 'app.messages.image_hidden');
   const hint = t('app.messages.click_to_show');
-  return `<span class="hidden-image" role="button" tabindex="0" data-hidden-src="${abs}" title="${this._escapeHtml(hint)}">${this._eyeIcon(true)} ${this._escapeHtml(label)}: ${this._escapeHtml(hint)}</span>`;
+  const kindAttr = kind ? ` data-hidden-kind="${this._escapeHtml(kind)}"` : '';
+  return `<span class="hidden-image" role="button" tabindex="0" data-hidden-src="${src}"${kindAttr} title="${this._escapeHtml(hint)}">${this._eyeIcon(true)} ${this._escapeHtml(label)}: ${this._escapeHtml(hint)}</span>`;
 },
 
 // Swap a clicked "hidden image" placeholder back to a live image element.
@@ -435,6 +467,14 @@ _revealHiddenImage(ph) {
   const src = ph.dataset.hiddenSrc;
   if (!src) return;
   this._unhideImage(src);
+  if (!this._revealedMedia) this._revealedMedia = new Set();
+  this._revealedMedia.add(this._normalizeImgSrc(src));
+  const kind = ph.dataset.hiddenKind;
+  if (kind) {
+    // Only this server's uploads, as when the placeholder was drawn.
+    if (/^\/uploads\//.test(src)) this._revealHeldUpload(ph, src, kind);
+    return;
+  }
   const img = document.createElement('img');
   // Route through the media proxy like every other remote image, so revealing
   // a hidden image does not turn into the one request that leaks your IP.
@@ -444,6 +484,33 @@ _revealHiddenImage(ph) {
   img.className = 'chat-image';
   img.alt = t('media_runtime.image.alt');
   ph.replaceWith(img);
+},
+
+// A video gets its player and its controls back; a picture in an encrypted
+// DM is decrypted like any other.
+_revealHeldUpload(ph, src, kind) {
+  const holder = ph.parentElement;
+  if (kind === 'video') {
+    const wrap = document.createElement('div');
+    wrap.className = 'file-video-wrap';
+    const video = document.createElement('video');
+    video.controls = true;
+    video.preload = 'none';
+    video.src = src;
+    video.className = 'file-video';
+    wrap.appendChild(video);
+    ph.replaceWith(wrap);
+    holder?.querySelector('.file-info')?.insertAdjacentHTML('beforeend', this._mediaControlsHtml?.('video') || '');
+    if (holder) this._setupVideos(holder);
+    return;
+  }
+  const img = document.createElement('img');
+  img.dataset.e2eSrc = src;
+  img.dataset.e2eMime = kind;
+  img.className = 'chat-image e2e-img-pending';
+  img.alt = t('app.messages.e2e_image_alt');
+  ph.replaceWith(img);
+  if (holder) this._decryptE2EImages(holder);
 },
 
 // A picture in an encrypted DM is decrypted in the browser, and the feed lets

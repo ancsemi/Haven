@@ -506,12 +506,12 @@ _renderConnections() {
   // clears every key the provider uses so Spotify cannot be left with an id
   // but no secret.
   host.querySelectorAll('.connection-forget').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const provider = PROVIDERS.find(x => x.id === btn.dataset.provider);
       if (!provider) return;
       const keys = provider.fields.map(f => f.key);
       const label = provider.name;
-      if (!confirm(t('users.connections.remove_key_confirm', { provider: label }))) return;
+      if (!await this._confirm(t('users.connections.remove_key_confirm', { provider: label }), { danger: true, confirmLabel: t('modals.common.remove') })) return;
       this.socket.emit('clear-integration-key', { keys });
     });
   });

@@ -790,7 +790,7 @@ _renderPersonasList() {
       const id = parseInt(btn.dataset.id);
       const persona = (this._personas || []).find(p => p.id === id);
       if (!persona) return;
-      if (!confirm(t('personas.delete_confirm', { name: persona.name }))) return;
+      if (!await this._confirm(t('personas.delete_confirm', { name: persona.name }), { danger: true })) return;
       try {
         const res = await fetch(`/api/personas/${id}`, {
           method: 'DELETE',

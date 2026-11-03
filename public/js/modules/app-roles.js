@@ -91,8 +91,8 @@ _initRoleManagement() {
   this.socket.on('roles-updated', () => this._loadRoles());
 
   // Reset roles to default
-  document.getElementById('reset-roles-btn')?.addEventListener('click', () => {
-    if (!confirm(t('settings.admin.roles_reset_confirm'))) return;
+  document.getElementById('reset-roles-btn')?.addEventListener('click', async () => {
+    if (!await this._confirm(t('settings.admin.roles_reset_confirm'))) return;
     this._roleEmit('reset-roles-to-default', {}, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('settings.admin.roles_reset_success'), 'success');

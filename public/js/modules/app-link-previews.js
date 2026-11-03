@@ -256,7 +256,7 @@ _fetchLinkPreviews(containerEl) {
       const msgContent = link.closest('.message-content, .thread-msg-content');
       if (!msgContent) return;
       if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
-      const ytCollapsed = this._collapsedEmbeds.has(url);
+      const ytCollapsed = this._embedFolded(url);
       const wrapper = document.createElement('div');
       wrapper.className = 'link-preview link-preview--yt' + (ytCollapsed ? ' lp-collapsed' : '');
       wrapper.dataset.url = url;
@@ -294,7 +294,7 @@ _fetchLinkPreviews(containerEl) {
         // Unified rich embed card: social posts (Bluesky / X) gain an author
         // row, avatar and engagement stats; everything else renders the same
         // chrome (accent header, size toggle, collapse) with title/text/media.
-        const collapsed = this._collapsedEmbeds.has(url);
+        const collapsed = this._embedFolded(url);
         const accent = (typeof data.accentColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(data.accentColor)) ? data.accentColor : null;
         const isSocial = !!(data.author || data.handle);
         const hasGallery = Array.isArray(data.images) && data.images.length >= 2;
@@ -498,6 +498,11 @@ _embedHeaderHtml(siteName, collapsed, playHtml = '', viewHtml = '') {
     + '</span></div>';
 },
 
+// Folded by hand, or, with Hide media on, folded until it is opened.
+_embedFolded(url) {
+  return this._collapsedEmbeds.has(url) || (!!this._hideMediaOn?.() && !this._openedEmbeds?.has(url));
+},
+
 /** Wire the size + collapse buttons on a freshly-built embed card. */
 _wireEmbedControls(card, url) {
   const sizeBtn = card.querySelector('.lp-size');
@@ -511,7 +516,14 @@ _wireEmbedControls(card, url) {
     e.preventDefault();
     e.stopPropagation();
     const isCol = card.classList.toggle('lp-collapsed');
-    isCol ? this._collapsedEmbeds.add(url) : this._collapsedEmbeds.delete(url);
+    if (isCol) {
+      this._collapsedEmbeds.add(url);
+      this._openedEmbeds?.delete(url);
+    } else {
+      this._collapsedEmbeds.delete(url);
+      if (!this._openedEmbeds) this._openedEmbeds = new Set();
+      this._openedEmbeds.add(url);
+    }
     const fold = t(isCol ? 'app.messages.expand' : 'app.messages.collapse');
     colBtn.title = fold;
     colBtn.setAttribute('aria-label', fold);

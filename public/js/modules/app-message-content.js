@@ -73,6 +73,7 @@ _formatContent(str) {
   if (e2eImgMatch) {
     const mime = this._escapeHtml(e2eImgMatch[1]);
     const url = this._escapeHtml(e2eImgMatch[2]);
+    if (this._isMediaHeld?.(e2eImgMatch[2])) return this._hiddenImagePlaceholder(e2eImgMatch[2], e2eImgMatch[1]);
     return `<img data-e2e-src="${url}" data-e2e-mime="${mime}" class="chat-image e2e-img-pending" alt="${t('app.messages.e2e_image_alt')}" title="${t('app.messages.e2e_image_title')}">`;
   }
 
@@ -131,7 +132,8 @@ _formatContent(str) {
         const l = lines[i];
         if (!mediaLine(l.trim())) { text.push(l); continue; }
         flush();
-        const run = this._mediaGridOff ? [] : (this._mediaGridRun?.(lines, i) || []);
+        // With Hide media on, each picture gets its own click-to-show tag.
+        const run = (this._mediaGridOff || this._hideMediaOn?.()) ? [] : (this._mediaGridRun?.(lines, i) || []);
         if (run.length >= 2) {
           parts.push(this._mediaGridHtml(run));
           i += run.length - 1;
@@ -200,6 +202,13 @@ _formatContent(str) {
       </div>`;
     }
     if (['mp4', 'webm', 'mov', 'm4v', 'ogv'].includes(ext)) {
+      // Hide media: the name and size show, the player waits for a click.
+      if (this._isMediaHeld?.(fileMatch[2])) {
+        return `<div class="file-attachment">
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
+        ${this._hiddenImagePlaceholder(fileMatch[2], 'video')}
+      </div>`;
+      }
       return `<div class="file-attachment">
         <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._mediaControlsHtml?.('video') || ''}</div>
         <div class="file-video-wrap">

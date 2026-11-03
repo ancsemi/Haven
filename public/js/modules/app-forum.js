@@ -144,6 +144,8 @@ _forumSnippetOf(msg) {
 },
 
 _forumThumbOf(msg) {
+  // Hide media: the card shows its plain placeholder instead.
+  if (this._hideMediaOn?.()) return null;
   const content = String(msg.content || '');
   for (const line of content.split(/\s+/)) {
     const l = line.trim();

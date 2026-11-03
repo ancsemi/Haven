@@ -1353,7 +1353,8 @@ _flushPendingMedia() {
 },
 
 // ── Generic prompt modal (replaces window.prompt for Electron compat) ──
-_showPromptModal(title, message, defaultValue = '') {
+// `password` hides what is typed, for asking for the account password.
+_showPromptModal(title, message, defaultValue = '', { password = false } = {}) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -1363,7 +1364,7 @@ _showPromptModal(title, message, defaultValue = '') {
       <div class="modal" style="max-width:380px">
         <h3 style="margin-top:0">${this._escapeHtml(title)}</h3>
         ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
-        <input type="text" class="modal-input" id="prompt-modal-input" value="${this._escapeHtml(defaultValue)}" style="width:100%;box-sizing:border-box">
+        <input type="${password ? 'password' : 'text'}"${password ? ' autocomplete="current-password"' : ''} class="modal-input" id="prompt-modal-input" value="${this._escapeHtml(defaultValue)}" style="width:100%;box-sizing:border-box">
         <div class="modal-actions" style="margin-top:12px">
           <button class="btn-sm" id="prompt-modal-cancel">${t('modals.common.cancel')}</button>
           <button class="btn-sm btn-accent" id="prompt-modal-ok">${t('modals.common.ok')}</button>
@@ -1425,6 +1426,16 @@ _showConfirmModal(title, message, opts = {}) {
   });
 },
 
+// Themed stand-ins for the browser's confirm() and alert(), which it draws
+// in its own plain style. _confirm resolves true for OK.
+_confirm(message, opts = {}) {
+  return this._showConfirmModal(opts.title || t('modals.common.confirm'), message, opts);
+},
+
+_alert(message) {
+  return this._askChoice('', message, [{ id: 'ok', label: t('modals.common.ok'), accent: true }]);
+},
+
 // A question with several answers. Resolves the id of the button pressed, or
 // null for Escape or a click outside. Focus starts on the first button and
 // Enter only presses the focused one, so a stray Enter (someone still sending)
@@ -1437,7 +1448,7 @@ _askChoice(title, message, buttons) {
     overlay.style.zIndex = '100002';
     overlay.innerHTML = `
       <div class="modal modal-confirm">
-        <h3 style="margin-top:0">${this._escapeHtml(title || '')}</h3>
+        ${title ? `<h3 style="margin-top:0">${this._escapeHtml(title)}</h3>` : ''}
         ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
         <div class="modal-actions" style="margin-top:12px;flex-wrap:wrap"></div>
       </div>

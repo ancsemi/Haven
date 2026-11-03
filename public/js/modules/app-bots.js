@@ -199,8 +199,8 @@ _showBotDetail(botId) {
       } catch { /* could not copy */ }
     });
   });
-  panel.querySelector('#bot-detail-delete').addEventListener('click', () => {
-    if (confirm(t('media_runtime.bot.delete_confirm', { name: wh.name }))) {
+  panel.querySelector('#bot-detail-delete').addEventListener('click', async () => {
+    if (await this._confirm(t('media_runtime.bot.delete_confirm', { name: wh.name }), { danger: true })) {
       this._selectedBotId = null;
       this.socket.emit('delete-webhook', { id: botId });
     }
