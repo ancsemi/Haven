@@ -207,13 +207,13 @@ _openReparentModal(code) {
 
   // Wire up click handlers on the targets
   listEl.querySelectorAll('.reparent-option').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', async () => {
       const target = el.dataset.target;
       const newParentCode = target === '__top__' ? null : target;
       const action = newParentCode === null
         ? t('channels.confirm_promote', { name: ch.name })
         : t('channels.confirm_move', { name: ch.name, parent: this.channels.find(c => c.code === newParentCode)?.name || target });
-      if (confirm(action)) {
+      if (await this._confirm(action)) {
         this.socket.emit('reparent-channel', { code, newParentCode });
         document.getElementById('reparent-modal').style.display = 'none';
       }
@@ -834,8 +834,8 @@ _renderWebhookList(webhooks, channelCode) {
   }).join('');
 
   container.querySelectorAll('.webhook-delete-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (confirm(t('channels.webhook_delete_confirm'))) {
+    btn.addEventListener('click', async () => {
+      if (await this._confirm(t('channels.webhook_delete_confirm'), { danger: true })) {
         this.socket.emit('delete-webhook', { webhookId: parseInt(btn.dataset.id) });
       }
     });

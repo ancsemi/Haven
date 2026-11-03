@@ -216,11 +216,11 @@ _setupServerBar() {
     document.getElementById('code-settings-modal').style.display = 'none';
   });
 
-  document.getElementById('code-rotate-now-btn')?.addEventListener('click', () => {
+  document.getElementById('code-rotate-now-btn')?.addEventListener('click', async () => {
     const channel = this.channels.find(c => c.code === this.currentChannel);
     if (!channel) return;
 
-    if (!confirm(t('confirm.rotate_channel_code'))) return;
+    if (!await this._confirm(t('confirm.rotate_channel_code'))) return;
     this.socket.emit('rotate-channel-code', { channelId: channel.id });
     document.getElementById('code-settings-modal').style.display = 'none';
   });
@@ -366,10 +366,10 @@ async _addServerThroughDesktop(name, url, icon, autoPull) {
 /** Remove a server the user picked. A Desktop app that asks first asks
  *  instead of this page, and the server goes once the user said yes there.
  *  done() runs after it is gone. */
-_removeServerByUser(url, name, done) {
+async _removeServerByUser(url, name, done) {
   const manager = this.serverManager;
   if (!manager.desktopAsksFor(url)) {
-    if (!confirm(t('confirm.remove_server', { name }))) return;
+    if (!await this._confirm(t('confirm.remove_server', { name }), { danger: true, confirmLabel: t('modals.common.remove') })) return;
     // Also removed from the Desktop app's list, so no other server's
     // sidebar brings it back.
     manager.remove(url);

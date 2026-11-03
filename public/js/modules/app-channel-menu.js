@@ -160,13 +160,13 @@ _bindChannelMenu() {
     setTimeout(() => this._joinVoice(), 300);
   });
   // Leave channel
-  document.querySelector('[data-action="leave-channel"]')?.addEventListener('click', () => {
+  document.querySelector('[data-action="leave-channel"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
     this._closeChannelCtxMenu();
     const ch = this.channels.find(c => c.code === code);
     const name = ch ? ch.name : code;
-    if (!confirm(t('confirm.leave_channel', { name }))) return;
+    if (!await this._confirm(t('confirm.leave_channel', { name }))) return;
     this.socket.emit('leave-channel', { code }, (res) => {
       if (res && res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('toasts.left_channel', { name }), 'success');
@@ -592,13 +592,13 @@ _bindChannelMenu() {
     this._openReparentModal(code);
   });
   // Promote sub-channel to top-level
-  document.querySelector('[data-action="promote-channel"]')?.addEventListener('click', () => {
+  document.querySelector('[data-action="promote-channel"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
     this._closeChannelCtxMenu();
     const ch = this.channels.find(c => c.code === code);
     if (!ch || !ch.parent_channel_id) return;
-    if (confirm(t('confirm.promote_channel', { name: ch.name }))) {
+    if (await this._confirm(t('confirm.promote_channel', { name: ch.name }))) {
       this.socket.emit('reparent-channel', { code, newParentCode: null });
     }
   });
