@@ -29,6 +29,7 @@
 @import url('/css/style-move-thread.css?v=4.24.29');
 @import url('/css/style-badges.css?v=4.24.15');
 @import url('/css/style-media-grid.css?v=4.24.34');
+@import url('/css/style-tooltips.css?v=4.27.51');
 @import url('/css/style-accessibility.css?v=4.22.13');
 
 /* The rules themselves live in the files imported above, in this order. Later
