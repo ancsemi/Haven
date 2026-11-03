@@ -684,7 +684,8 @@
       "camera": "Camera",
       "soundboard": "Soundboard",
       "listen_together": "Listen Together",
-      "settings": "Voice Settings"
+      "settings": "Voice Settings",
+      "call_controls": "Call controls"
     },
     "music_file_platform": "Audio file",
     "music_file_listen": "Play for everyone in voice",

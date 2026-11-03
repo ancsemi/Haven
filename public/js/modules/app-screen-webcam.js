@@ -11,7 +11,7 @@ _createFullscreenCallToolbar(tile) {
   toolbar.className = 'fullscreen-call-toolbar';
   toolbar.hidden = true;
   toolbar.setAttribute('role', 'group');
-  toolbar.setAttribute('aria-label', t('voice.panel.settings'));
+  toolbar.setAttribute('aria-label', t('voice.panel.call_controls'));
 
   const addButton = (className, titleKey, icon, action) => {
     const button = document.createElement('button');
@@ -128,60 +128,103 @@ _bindFullscreenCallTile(tile, toolbar) {
   if (!this._fullscreenCallTileBindings) this._fullscreenCallTileBindings = new Map();
   if (this._fullscreenCallTileBindings.has(tile)) return;
   const onFullscreenChange = () => {
-    const active = document.fullscreenElement === tile;
+    const active = this._fullscreenElement() === tile;
     toolbar.hidden = !active;
     tile.classList.toggle('is-fullscreen', active);
     if (active) {
+      // Browsers can report the same fullscreen state more than once (and the
+      // WebKit-prefixed event may arrive as well). Setting up again would save
+      // the already-suffixed label as the original and reset the chosen source.
+      if (this._fullscreenCallActiveTile === tile) return;
+      // Fullscreen moved straight from another tile: put that one back first,
+      // since its own listener may not have run yet.
+      if (this._fullscreenCallActiveTile) this._endFullscreenCallTile(this._fullscreenCallActiveTile);
       this._fullscreenCallActiveTile = tile;
       this._fullscreenCallOriginalStream = tile._fullscreenCallSourceStream || tile.querySelector('video')?.srcObject || null;
       this._fullscreenCallSelectedTile = tile;
-      this._fullscreenCallOriginalLabel = this._fullscreenStreamLabelNode(tile)?.textContent ?? null;
+      tile._fullscreenCallOriginalLabel = this._fullscreenStreamLabelNode(tile)?.textContent ?? null;
       this._setFullscreenVideoSource(tile, tile, this._fullscreenCallOriginalStream);
       this._revealFullscreenCallControls(tile);
       this._refreshFullscreenStreamPicker?.();
-    } else if (this._fullscreenCallActiveTile === tile) {
-      this._setFullscreenVideoSource(tile, tile, this._fullscreenCallOriginalStream);
-      this._restoreFullscreenStreamLabel(tile);
-      const audioPopover = toolbar.querySelector('.fullscreen-audio-popover');
-      const audioTrigger = toolbar.querySelector('.fullscreen-call-audio');
-      if (audioPopover && audioTrigger) this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
-      this._fullscreenCallActiveTile = null;
-      this._fullscreenCallOriginalStream = null;
-      this._fullscreenCallSelectedTile = null;
-      this._fullscreenCallOriginalLabel = null;
-      tile.classList.remove('fullscreen-controls-idle');
+    } else {
+      this._endFullscreenCallTile(tile);
     }
   };
   const onActivity = () => this._revealFullscreenCallControls(tile);
+  // Controls are up only while the pointer is over the screen: hide them the
+  // moment it leaves, unless the settings popup is open.
+  const onPointerLeave = () => {
+    if (this._fullscreenElement() !== tile) return;
+    clearTimeout(tile._fullscreenControlsTimer);
+    if (tile.classList.contains('fullscreen-popup-open')) return;
+    const focused = document.activeElement;
+    // A focused button would keep the toolbar showing (:focus-within). A
+    // dropdown is left alone so it does not close under the user.
+    if (focused && toolbar.contains?.(focused) && focused.matches?.('button')) focused.blur?.();
+    tile.classList.add('fullscreen-controls-idle');
+  };
   document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+  tile.addEventListener('mouseleave', onPointerLeave);
   tile.addEventListener('mousemove', onActivity);
   tile.addEventListener('touchstart', onActivity, { passive: true });
   tile.addEventListener('focusin', onActivity);
   toolbar.addEventListener('focusin', onActivity);
   toolbar.addEventListener('click', event => event.stopPropagation());
   toolbar.addEventListener('dblclick', event => event.stopPropagation());
-  this._fullscreenCallTileBindings.set(tile, { toolbar, onFullscreenChange, onActivity });
+  this._fullscreenCallTileBindings.set(tile, { toolbar, onFullscreenChange, onActivity, onPointerLeave });
+},
+
+// The element in fullscreen, including the WebKit-prefixed API older Safari uses.
+_fullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+},
+
+_exitDocumentFullscreen() {
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  if (!exit) return;
+  try {
+    Promise.resolve(exit.call(document)).catch(() => { /* fullscreen refused or already exited */ });
+  } catch { /* fullscreen refused or already exited */ }
+},
+
+// Puts a tile back as it was before fullscreen: its own stream and label, the
+// settings popup closed, no idle state. Safe to call more than once.
+_endFullscreenCallTile(tile) {
+  if (this._fullscreenCallActiveTile !== tile) return;
+  this._setFullscreenVideoSource(tile, tile, this._fullscreenCallOriginalStream);
+  this._restoreFullscreenStreamLabel(tile);
+  const toolbar = this._fullscreenCallTileBindings?.get(tile)?.toolbar;
+  const audioPopover = toolbar?.querySelector('.fullscreen-audio-popover');
+  const audioTrigger = toolbar?.querySelector('.fullscreen-call-audio');
+  if (audioPopover && audioTrigger) this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
+  this._fullscreenCallActiveTile = null;
+  this._fullscreenCallOriginalStream = null;
+  this._fullscreenCallSelectedTile = null;
+  tile._fullscreenCallOriginalLabel = null;
+  clearTimeout(tile._fullscreenControlsTimer);
+  tile.classList.remove('fullscreen-controls-idle');
 },
 
 _revealFullscreenCallControls(tile) {
   tile.classList.remove('fullscreen-controls-idle');
   clearTimeout(tile._fullscreenControlsTimer);
-  if (document.fullscreenElement !== tile) return;
+  if (this._fullscreenElement() !== tile) return;
   tile._fullscreenControlsTimer = setTimeout(() => {
     const binding = this._fullscreenCallTileBindings?.get(tile);
     const hasFocus = !!(binding?.toolbar && document.activeElement &&
       binding.toolbar.contains?.(document.activeElement));
     const hovering = !!binding?.toolbar.matches?.(':hover');
     const popupOpen = tile.classList.contains('fullscreen-popup-open');
-    if (!hasFocus && !hovering && !popupOpen && document.fullscreenElement === tile) {
+    if (!hasFocus && !hovering && !popupOpen && this._fullscreenElement() === tile) {
       tile.classList.add('fullscreen-controls-idle');
     }
   }, 3200);
 },
 
 _toggleTileFullscreen(tile) {
-  if (document.fullscreenElement) {
-    Promise.resolve(document.exitFullscreen?.()).catch(() => { /* fullscreen refused or already exited */ });
+  if (this._fullscreenElement()) {
+    this._exitDocumentFullscreen();
     return;
   }
   const request = tile.requestFullscreen || tile.webkitRequestFullscreen;
@@ -192,8 +235,8 @@ _toggleTileFullscreen(tile) {
 },
 
 _exitFullscreenCallControls() {
-  if (!document.fullscreenElement || !this._fullscreenCallActiveTile) return;
-  Promise.resolve(document.exitFullscreen?.()).catch(() => { /* fullscreen unavailable in this context */ });
+  if (!this._fullscreenElement() || !this._fullscreenCallActiveTile) return;
+  this._exitDocumentFullscreen();
 },
 
 _toggleFullscreenAudioPopover(tile, popover, trigger) {
@@ -300,7 +343,7 @@ _listLiveFullscreenStreams(excludeTile = null) {
     const track = stream?.getVideoTracks?.().find(item => item.readyState === 'live');
     if (!track) return [];
     const labelNode = this._fullscreenStreamLabelNode(tile);
-    const originalLabel = tile === this._fullscreenCallActiveTile ? this._fullscreenCallOriginalLabel : null;
+    const originalLabel = tile === this._fullscreenCallActiveTile ? tile._fullscreenCallOriginalLabel : null;
     const tileUserId = tile._fullscreenCallUserId;
     const isOwnStream = tileUserId == null ||
       (this.user?.id != null && String(tileUserId) === String(this.user.id));
@@ -317,8 +360,8 @@ _fullscreenStreamLabelNode(tile) {
 
 _restoreFullscreenStreamLabel(tile) {
   const label = this._fullscreenStreamLabelNode(tile);
-  if (label && this._fullscreenCallOriginalLabel !== null && this._fullscreenCallOriginalLabel !== undefined) {
-    label.textContent = this._fullscreenCallOriginalLabel;
+  if (label && tile._fullscreenCallOriginalLabel != null) {
+    label.textContent = tile._fullscreenCallOriginalLabel;
   }
 },
 
@@ -382,23 +425,29 @@ _handleFullscreenSourceEnded(tile) {
 
 _refreshFullscreenStreamPicker() {
   const streams = this._listLiveFullscreenStreams();
+  // Rebuilding an open dropdown closes it, and this runs on many events, so
+  // the options are only rebuilt when a stream or its label actually changed.
+  const signature = streams.map(item => `${item.tile.id}\u0000${item.label}`).join('\u0001');
   for (const [picker] of this._fullscreenStreamPickers || []) {
     const currentValue = this._fullscreenCallSelectedTile?.id || this._fullscreenCallActiveTile?.id || '';
-    picker.replaceChildren();
-    for (const item of streams) {
-      const option = document.createElement('option');
-      option.value = item.tile.id;
-      option.textContent = item.label;
-      picker.appendChild(option);
+    if (picker._fullscreenStreamSignature !== signature) {
+      picker.replaceChildren();
+      for (const item of streams) {
+        const option = document.createElement('option');
+        option.value = item.tile.id;
+        option.textContent = item.label;
+        picker.appendChild(option);
+      }
+      picker._fullscreenStreamSignature = signature;
     }
-    if (streams.some(item => item.tile.id === currentValue)) picker.value = currentValue;
-    else if (streams.length) picker.value = streams[0].tile.id;
+    const nextValue = streams.some(item => item.tile.id === currentValue) ? currentValue : streams[0]?.tile.id;
+    if (nextValue !== undefined && picker.value !== nextValue) picker.value = nextValue;
     picker.disabled = streams.length < 2;
   }
 },
 
 _selectFullscreenStream(fullscreenTile, sourceTileId) {
-  if (document.fullscreenElement !== fullscreenTile || !fullscreenTile.parentNode) return;
+  if (this._fullscreenElement() !== fullscreenTile || !fullscreenTile.parentNode) return;
   const sourceTile = document.getElementById(sourceTileId);
   if (!sourceTile || !sourceTile.parentNode) return;
   const stream = this._listLiveFullscreenStreams().find(item => item.tile === sourceTile)?.stream;
@@ -418,10 +467,7 @@ _handleFullscreenTileRemoval(tile) {
   const activeTile = this._fullscreenCallActiveTile;
   if (activeTile === tile) {
     this._exitFullscreenCallControls();
-    this._fullscreenCallActiveTile = null;
-    this._fullscreenCallOriginalStream = null;
-    this._fullscreenCallSelectedTile = null;
-    this._fullscreenCallOriginalLabel = null;
+    this._endFullscreenCallTile(tile);
   } else if (activeTile && this._fullscreenCallSelectedTile === tile) {
     const fallback = this._listLiveFullscreenStreams(tile)[0];
     if (fallback) {
@@ -434,10 +480,13 @@ _handleFullscreenTileRemoval(tile) {
   const binding = this._fullscreenCallTileBindings?.get(tile);
   if (binding) {
     binding.toolbar.hidden = true;
+    tile.classList.remove('is-fullscreen');
     const audioPopover = binding.toolbar.querySelector('.fullscreen-audio-popover');
     const audioTrigger = binding.toolbar.querySelector('.fullscreen-call-audio');
     if (audioPopover && audioTrigger) this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
     document.removeEventListener?.('fullscreenchange', binding.onFullscreenChange);
+    document.removeEventListener?.('webkitfullscreenchange', binding.onFullscreenChange);
+    tile.removeEventListener?.('mouseleave', binding.onPointerLeave);
     tile.removeEventListener?.('mousemove', binding.onActivity);
     tile.removeEventListener?.('touchstart', binding.onActivity);
     tile.removeEventListener?.('focusin', binding.onActivity);

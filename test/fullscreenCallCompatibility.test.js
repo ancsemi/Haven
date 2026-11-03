@@ -1,5 +1,12 @@
 'use strict';
 
+/**
+ * Fullscreen call controls change only the client, so the Socket.IO events a
+ * call already uses must keep working across a reconnect.
+ *
+ *   node --test test/fullscreenCallCompatibility.test.js
+ */
+
 const assert = require('node:assert/strict');
 const net = require('node:net');
 const test = require('node:test');

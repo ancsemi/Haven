@@ -1,5 +1,13 @@
 'use strict';
 
+/**
+ * Fullscreen call controls: the toolbar and stream picker drawn over a camera
+ * or screen-share tile in fullscreen, and how they follow Haven's existing
+ * voice actions and the tile's lifecycle.
+ *
+ *   node --test test/appFullscreenCallControls.test.js
+ */
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -975,4 +983,146 @@ test('leaving voice clears fullscreen controls through the existing local leave 
 
   assert.equal(leaveCalls, 1);
   assert.equal(fullscreenCleanupCalls, 1);
+});
+
+function enterFullscreen(document, tile) {
+  tile.requestFullscreen = () => {
+    document.fullscreenElement = tile;
+    return Promise.resolve();
+  };
+  tile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
+  document.dispatch('fullscreenchange');
+}
+
+function leaveFullscreen(document) {
+  document.fullscreenElement = null;
+  document.dispatch('fullscreenchange');
+}
+
+test('repeated fullscreen change events do not stack the stream label or reset the chosen source', () => {
+  const { document, cameraTile, shareTile, cameraStream } = renderBothMediaTiles();
+  const cameraLabel = cameraTile.querySelector('.webcam-tile-label');
+  const original = cameraLabel.textContent;
+  enterFullscreen(document, cameraTile);
+  document.dispatch('fullscreenchange');
+  document.dispatch('fullscreenchange');
+  assert.equal(cameraLabel.textContent, `${original} — voice.panel.camera`);
+
+  const picker = cameraTile.querySelector('.fullscreen-stream-select');
+  picker.value = shareTile.id;
+  picker.listeners.change[0]({ stopPropagation() {} });
+  document.dispatch('fullscreenchange');
+  assert.equal(cameraLabel.textContent, `${original} — voice.screen_share`);
+
+  leaveFullscreen(document);
+  assert.equal(cameraLabel.textContent, original);
+  assert.equal(cameraTile.querySelector('video').srcObject, cameraStream);
+});
+
+test('closing the fullscreen tile puts its label and fullscreen state back', () => {
+  const { app, document, cameraTile } = renderBothMediaTiles();
+  const label = cameraTile.querySelector('.webcam-tile-label');
+  const original = label.textContent;
+  enterFullscreen(document, cameraTile);
+  assert.notEqual(label.textContent, original);
+
+  app._handleFullscreenTileRemoval(cameraTile);
+
+  assert.equal(label.textContent, original);
+  assert.equal(cameraTile.classList.contains('is-fullscreen'), false);
+  assert.equal(cameraTile.querySelector('.fullscreen-call-toolbar').hidden, true);
+});
+
+test('moving fullscreen straight from one tile to another restores the first tile label', () => {
+  const { document, cameraTile, shareTile } = renderBothMediaTiles();
+  const shareLabel = shareTile.querySelector('.screen-share-tile-label');
+  const original = shareLabel.textContent;
+  enterFullscreen(document, shareTile);
+  assert.equal(shareLabel.textContent, `${original} — voice.screen_share`);
+
+  document.fullscreenElement = cameraTile;
+  document.dispatch('fullscreenchange');
+
+  assert.equal(shareLabel.textContent, original);
+});
+
+test('fullscreen controls also follow the WebKit-prefixed fullscreen API', () => {
+  const { document, tile } = renderWebcamTile();
+  const toolbar = tile.querySelector('.fullscreen-call-toolbar');
+  let exits = 0;
+  document.webkitExitFullscreen = () => {
+    exits++;
+    document.webkitFullscreenElement = null;
+    document.dispatch('webkitfullscreenchange');
+  };
+  document.webkitFullscreenElement = tile;
+  document.dispatch('webkitfullscreenchange');
+  assert.equal(toolbar.hidden, false);
+  assert.equal(tile.classList.contains('is-fullscreen'), true);
+
+  tile.querySelector('.fullscreen-call-exit').listeners.click[0]({ stopPropagation() {} });
+
+  assert.equal(exits, 1);
+  assert.equal(toolbar.hidden, true);
+  assert.equal(tile.classList.contains('is-fullscreen'), false);
+});
+
+test('fullscreen controls hide as soon as the pointer leaves the screen', () => {
+  const { document, tile } = renderWebcamTile();
+  enterFullscreen(document, tile);
+  assert.equal(tile.classList.contains('fullscreen-controls-idle'), false);
+
+  tile.listeners.mouseleave[0]();
+  assert.equal(tile.classList.contains('fullscreen-controls-idle'), true);
+
+  tile.listeners.mousemove[0]();
+  assert.equal(tile.classList.contains('fullscreen-controls-idle'), false);
+
+  tile.classList.add('fullscreen-popup-open');
+  tile.listeners.mouseleave[0]();
+  assert.equal(tile.classList.contains('fullscreen-controls-idle'), false, 'an open settings popup stays up');
+});
+
+test('leaving the screen drops focus from a toolbar button but not from an open dropdown', () => {
+  const { document, tile } = renderWebcamTile();
+  enterFullscreen(document, tile);
+  const toolbar = tile.querySelector('.fullscreen-call-toolbar');
+  const button = tile.querySelector('.fullscreen-call-mute');
+  const picker = tile.querySelector('.fullscreen-stream-select');
+  let blurred = 0;
+  button.blur = () => { blurred++; };
+  picker.blur = () => { blurred++; };
+
+  toolbar.contains = el => el === button;
+  document.activeElement = button;
+  tile.listeners.mouseleave[0]();
+  assert.equal(blurred, 1);
+  assert.equal(tile.classList.contains('fullscreen-controls-idle'), true);
+
+  toolbar.contains = el => el === picker;
+  document.activeElement = picker;
+  tile.listeners.mouseleave[0]();
+  assert.equal(blurred, 1, 'a focused dropdown is left alone');
+});
+
+test('the stream picker is only rebuilt when its list of streams changes', () => {
+  const { app, cameraTile, shareTrack } = renderBothMediaTiles();
+  const picker = cameraTile.querySelector('.fullscreen-stream-select');
+  const before = [...picker.children];
+  assert.equal(before.length, 2);
+
+  app._refreshFullscreenStreamPicker();
+  app._refreshFullscreenStreamPicker();
+  assert.deepEqual(picker.children.map((option, index) => option === before[index]), [true, true]);
+
+  shareTrack.end();
+  assert.equal(picker.children.length, 1);
+});
+
+test('the fullscreen toolbar is named as call controls, not voice settings', () => {
+  const { tile } = renderWebcamTile();
+  const toolbar = tile.querySelector('.fullscreen-call-toolbar');
+  assert.equal(toolbar.attributes['aria-label'], 'voice.panel.call_controls');
+  const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
+  assert.equal(en.voice.panel.call_controls, 'Call controls');
 });

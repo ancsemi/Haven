@@ -1,5 +1,12 @@
 'use strict';
 
+/**
+ * Fullscreen call controls, stylesheet side: the layout and state colors that
+ * the fullscreen tile and its toolbar rely on.
+ *
+ *   node --test test/fullscreenCallLayoutStyles.test.js
+ */
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
