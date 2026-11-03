@@ -2900,7 +2900,7 @@
       "roles_hint": "Roles decide who can do what. Open Permissions to set what each role can do, or to give someone a role. A role's level is its rank: people can only act on members ranked below them.",
       "perm_matrix": {
         "title": "Permissions",
-        "lead_roles": "Set what each role can do. Everyone who holds a role gets what is ticked in its column. Level, color and icon are under More options.",
+        "lead_roles": "Set what each role can do. Everyone who holds a role gets what is ticked in its column. Click a role's name to change its name, level, color or icon.",
         "lead_users": "Give someone a role with the buttons at the top. The boxes show what this person can do. Changing one makes an exception for them alone: it wins over their roles and does not change the role.",
         "level": "Lv. {{level}}",
         "level_hint": "The role's rank. People can only act on members ranked below them, and Auto-mod skips anyone at or above its exempt level.",
@@ -2930,6 +2930,7 @@
         "remove_role_confirm": "Remove {{name}}? Anyone who had it loses those powers.",
         "keep_one": "Keep at least one role besides Admin.",
         "classic": "More options (levels, colors, icons)",
+        "edit_role": "Change this role's name, level, color or icon. Level is its rank: people can only act on members ranked below them.",
         "search_users": "Search members…",
         "no_users": "No members match.",
         "pick_user": "Pick a member.",
