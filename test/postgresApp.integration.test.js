@@ -210,6 +210,45 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     assert.equal(await db.prepare("SELECT id FROM channels WHERE name = 'unconverted'").get(), undefined);
     socket.disconnect();
   });
+  await t.test('real PostgreSQL sockets mark all rooms and forum topics read and synchronize thread receipts', async () => {
+    const forum = await db.prepare("INSERT INTO channels (name, code, is_forum) VALUES ('Read forum', 'e3333333', 1) RETURNING id").get();
+    await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(forum.id, alice.user.id);
+    const parent = await db.prepare("INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, 'topic') RETURNING id").get(forum.id, alice.user.id);
+    const reply = await db.prepare("INSERT INTO messages (channel_id, user_id, content, thread_id) VALUES (?, ?, 'reply', ?) RETURNING id").get(forum.id, alice.user.id, parent.id);
+    const empty = await db.prepare("INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, 'empty topic') RETURNING id").get(forum.id, alice.user.id);
+    const { socket } = await connect(alice.token);
+    const peer = await connect(alice.token);
+    const ack = (client, event, data = {}) => new Promise((resolve, reject) => client.timeout(10000).emit(event, data, (err, result) => err ? reject(err) : resolve(result)));
+    try {
+      assert.deepEqual(await ack(socket, 'get-thread-read-state', { parentIds: [parent.id, empty.id] }), { reads: { [parent.id]: 0, [empty.id]: 0 } });
+      const threadRead = packet(peer.socket, 'thread-read');
+      socket.emit('mark-thread-read', { parentId: parent.id });
+      assert.deepEqual(await threadRead, { channelCode: 'e3333333', parentId: parent.id });
+      assert.deepEqual(await ack(socket, 'get-thread-read-state', { parentIds: [parent.id] }), { reads: { [parent.id]: reply.id } });
+      const selfRead = packet(socket, 'forum-read'), peerRead = packet(peer.socket, 'forum-read');
+      socket.emit('mark-forum-read', { code: 'e3333333' });
+      assert.deepEqual(await selfRead, { channelCode: 'e3333333' });
+      assert.deepEqual(await peerRead, { channelCode: 'e3333333' });
+      assert.deepEqual(await ack(peer.socket, 'get-thread-read-state', { parentIds: [parent.id, empty.id] }), {
+        reads: { [parent.id]: reply.id, [empty.id]: 0 },
+      });
+      const result = await ack(socket, 'mark-all-read');
+      assert.deepEqual(result, { ok: true, channels: 2 });
+      assert.equal((await db.prepare('SELECT last_read_message_id FROM read_positions WHERE user_id = ? AND channel_id = ?').get(alice.user.id, forum.id)).last_read_message_id, empty.id);
+      const outsider = (await signup('ReceiptOutsider')).body;
+      const outside = await connect(outsider.token);
+      try {
+        outside.socket.emit('mark-thread-read', { parentId: parent.id });
+        outside.socket.emit('mark-forum-read', { code: 'e3333333' });
+        await emit(outside.socket, 'get-preferences', 'preferences');
+        assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM thread_reads WHERE user_id = ?').get(outsider.user.id)).n, 0);
+        assert.deepEqual(await ack(outside.socket, 'get-thread-read-state', { parentIds: [parent.id] }), { reads: {} });
+      } finally { outside.socket.disconnect(); }
+    } finally {
+      socket.disconnect(); peer.socket.disconnect();
+      await db.prepare('DELETE FROM channels WHERE id = ?').run(forum.id);
+    }
+  });
   await t.test('the initial browser burst includes roles, notices and scoped admin reads', async () => {
     const { socket } = await connect(alice.token);
     assert.ok((await emit(socket, 'get-roles', 'roles-list')).some(role => role.name === 'Member' && role.permissions.length));

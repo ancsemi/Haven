@@ -47,7 +47,7 @@ db.prepare('INSERT INTO user_signing_keys (user_id, fp, jwk) VALUES (?, ?, ?)')
   .run(users.alice, 'alice-key', JSON.stringify(sign));
 const rooms = {};
 let codeNumber = 0x10000000;
-for (const [name, dm] of [['room', 0], ['dm', 1], ['private', 0], ['empty', 0], ['threadOnly', 0]]) {
+for (const [name, dm] of [['room', 0], ['dm', 1], ['private', 0], ['empty', 0], ['threadOnly', 0], ['forum', 0], ['emptyForum', 0], ['zero', 0]]) {
   const code = (++codeNumber).toString(16);
   const id = db.prepare('INSERT INTO channels (name, code, is_dm) VALUES (?, ?, ?)').run(name, code, dm).lastInsertRowid;
   rooms[name] = { id, code };
@@ -61,8 +61,13 @@ const roomLast = post('room', 'latest top-level');
 post('room', 'thread reply', roomFirst);
 post('dm', 'first DM');
 const dmLast = post('dm', 'latest DM');
-post('private', 'private message');
+const privatePost = post('private', 'private message');
 post('threadOnly', 'only a thread reply', roomFirst);
+db.prepare('UPDATE channels SET is_forum = 1 WHERE id IN (?, ?)').run(rooms.forum.id, rooms.emptyForum.id);
+const forumFirst = post('forum', 'first topic');
+const forumReply = post('forum', 'topic reply', forumFirst);
+const forumEmpty = post('forum', 'topic without replies');
+db.prepare('INSERT INTO messages (id, channel_id, user_id, content) VALUES (0, ?, ?, ?)').run(rooms.zero.id, users.bob, 'id zero');
 const baselineMessageId = db.prepare('SELECT MAX(id) AS id FROM messages').get().id;
 
 const timers = [];
@@ -102,6 +107,19 @@ sockets.on('connection', socket => {
     sendPushNotifications: () => {}, fireWebhookCallbacks: () => {},
     processSlashCommand: (command, arg) => command === 'me' ? { content: '*alice ' + arg + '*' } : null,
   };
+  const pending = new Set();
+  const on = socket.on;
+  socket.on = function(event, handler) {
+    return on.call(this, event, (...args) => {
+      const result = handler(...args);
+      if (result && typeof result.then === 'function') {
+        pending.add(result);
+        result.then(() => pending.delete(result), () => pending.delete(result));
+      }
+      return result;
+    });
+  };
+  require('../src/socketHandlers/threadReadState')(socket, ctx);
   registerUsers(socket, ctx);
   registerGroups(socket, ctx);
   for (const row of db.prepare('SELECT c.code FROM channels c JOIN channel_members cm ON cm.channel_id = c.id WHERE cm.user_id = ?').all(socket.user.id)) socket.join('channel:' + row.code);
@@ -113,12 +131,14 @@ sockets.on('connection', socket => {
   });
   try { registerMessages(socket, ctx); }
   finally { registrationTimers.mock.restore(); }
+  socket.on = on;
   socket.on('send-message', () => {
     if (db.async.kind === 'sqlite') {
       immediateMarkers.push(db.prepare('SELECT last_read_message_id FROM read_positions WHERE user_id = ? ORDER BY last_read_message_id DESC LIMIT 1').get(socket.user.id)?.last_read_message_id);
     }
   });
   socket.on('test-barrier', async (_data, callback) => {
+    await Promise.all([...pending]);
     await (db.async || db).prepare('SELECT 1').get();
     callback({ ok: true });
   });
@@ -155,8 +175,9 @@ async function open(name) {
   await new Promise((resolve, reject) => { client.once('connect', resolve); client.once('connect_error', reject); });
   return client;
 }
+const ack = (client, event, data = {}) => new Promise((resolve, reject) => client.timeout(5000).emit(event, data, (err, result) => err ? reject(err) : resolve(result)));
 const barrier = client => new Promise((resolve, reject) => client.timeout(5000).emit('test-barrier', {}, (err, result) => err ? reject(err) : resolve(result)));
-const tables = ['users', 'user_signing_keys', 'channels', 'channel_members', 'messages', 'read_positions'];
+const tables = ['users', 'user_signing_keys', 'channels', 'channel_members', 'messages', 'read_positions', 'thread_reads'];
 
 for (const backend of ['sqlite', 'postgres']) {
   test(backend + ' DM key reads and message read positions', {
@@ -166,7 +187,7 @@ for (const backend of ['sqlite', 'postgres']) {
     const fixture = backend === 'postgres' ? await createPostgresFixture(db, tables) : null;
     const driver = fixture ? fixture.db : sqliteAsync;
     if (fixture) {
-      await driver.exec('CREATE UNIQUE INDEX metadata_read_position_key ON read_positions (user_id, channel_id); ALTER TABLE user_signing_keys ADD COLUMN insertion_id BIGINT');
+      await driver.exec('CREATE UNIQUE INDEX metadata_thread_read_key ON thread_reads (user_id, thread_id); CREATE UNIQUE INDEX metadata_read_position_key ON read_positions (user_id, channel_id); ALTER TABLE user_signing_keys ADD COLUMN insertion_id BIGINT');
       // Test fixtures preserve source rowids, not a production data migration.
       for (const row of db.prepare('SELECT rowid, user_id, fp FROM user_signing_keys').all()) {
         await driver.prepare('UPDATE user_signing_keys SET insertion_id = ? WHERE user_id = ? AND fp = ?').run(row.rowid, row.user_id, row.fp);
@@ -358,6 +379,178 @@ for (const backend of ['sqlite', 'postgres']) {
       alice.emit('mark-read', { code: rooms.room.code, messageId: roomLast });
       await barrier(alice);
       assert.deepEqual(await cursor('alice', 'room'), { last_read_message_id: roomLast });
+    });
+    await t.test('mark-all-read covers every joined room and DM, excludes replies, and preserves its channel count', async () => {
+      await clear();
+      await driver.prepare('INSERT INTO read_positions (user_id, channel_id, last_read_message_id) VALUES (?, ?, ?)').run(users.alice, rooms.zero.id, 500);
+      assert.deepEqual(await ack(alice, 'mark-all-read'), { ok: true, channels: 5 });
+      for (const [room, latest] of [['room', roomLast], ['dm', dmLast], ['private', privatePost], ['forum', forumEmpty], ['zero', 500]]) {
+        assert.deepEqual(await cursor('alice', room), { last_read_message_id: latest });
+      }
+      for (const room of ['empty', 'threadOnly', 'emptyForum']) assert.equal(await cursor('alice', room), undefined);
+      assert.deepEqual(await ack(bob, 'mark-all-read'), { ok: true, channels: 2 });
+      assert.equal(await cursor('bob', 'private'), undefined);
+      assert.deepEqual(await ack(admin, 'mark-all-read'), { ok: true, channels: 0 });
+      await driver.prepare('UPDATE read_positions SET last_read_message_id = 9000 WHERE user_id = ? AND channel_id = ?').run(users.alice, rooms.room.id);
+      assert.deepEqual(await ack(alice, 'mark-all-read'), { ok: true, channels: 5 });
+      assert.equal((await cursor('alice', 'room')).last_read_message_id, 9000);
+    });
+    await t.test('a failed mark-all-read rolls back the entire batch and acknowledges the failure', async st => {
+      await clear();
+      st.mock.method(console, 'error', () => {});
+      if (fixture) {
+        await driver.exec(`CREATE FUNCTION refuse_metadata_cursor() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+          BEGIN IF NEW.channel_id = ${rooms.dm.id} THEN RAISE EXCEPTION 'receipt test failure'; END IF; RETURN NEW; END $$;
+          CREATE TRIGGER refuse_metadata_cursor BEFORE INSERT ON read_positions FOR EACH ROW EXECUTE FUNCTION refuse_metadata_cursor();`);
+      } else {
+        db.exec(`CREATE TEMP TRIGGER refuse_metadata_cursor BEFORE INSERT ON read_positions
+          WHEN NEW.channel_id = ${rooms.dm.id} BEGIN SELECT RAISE(ABORT, 'receipt test failure'); END;`);
+      }
+      try {
+        assert.deepEqual(await ack(alice, 'mark-all-read'), { error: 'Could not mark everything read' });
+        assert.equal((await driver.prepare('SELECT COUNT(*) AS n FROM read_positions').get()).n, 0);
+      } finally {
+        if (fixture) await driver.exec('DROP TRIGGER refuse_metadata_cursor ON read_positions; DROP FUNCTION refuse_metadata_cursor()');
+        else db.exec('DROP TRIGGER refuse_metadata_cursor');
+      }
+      assert.deepEqual(await ack(alice, 'mark-all-read'), { ok: true, channels: 5 });
+    });
+    await t.test('two devices marking all read cannot lower an existing cursor', async () => {
+      await clear();
+      const peer = await open('alice');
+      try {
+        alice.emit('mark-read', { code: rooms.room.code, messageId: 9000 });
+        await barrier(alice);
+        assert.deepEqual(await Promise.all([ack(alice, 'mark-all-read'), ack(peer, 'mark-all-read')]), [
+          { ok: true, channels: 5 }, { ok: true, channels: 5 },
+        ]);
+        assert.equal((await cursor('alice', 'room')).last_read_message_id, 9000);
+      } finally { peer.disconnect(); }
+    });
+    const threadCursor = (user, parent) => driver.prepare('SELECT last_read_reply_id FROM thread_reads WHERE user_id = ? AND thread_id = ?').get(users[user], parent);
+    await t.test('forum receipts cover its topics, including no replies, and notify every device of this account', async () => {
+      await driver.prepare('DELETE FROM thread_reads').run();
+      const peer = await open('alice');
+      let other = 0;
+      const onOther = () => other++;
+      bob.on('forum-read', onOther);
+      try {
+        const selfRead = packet(alice, 'forum-read'), peerRead = packet(peer, 'forum-read');
+        alice.emit('mark-forum-read', { code: ' ' + rooms.forum.code + ' ' });
+        assert.deepEqual(await selfRead, { channelCode: rooms.forum.code });
+        assert.deepEqual(await peerRead, { channelCode: rooms.forum.code });
+        assert.deepEqual(await threadCursor('alice', forumFirst), { last_read_reply_id: forumReply });
+        assert.deepEqual(await threadCursor('alice', forumEmpty), { last_read_reply_id: 0 });
+        assert.equal(await threadCursor('alice', forumReply), undefined, 'a reply is not a topic');
+        assert.equal(other, 0);
+        await driver.prepare('UPDATE thread_reads SET last_read_reply_id = 9000 WHERE user_id = ? AND thread_id = ?').run(users.alice, forumFirst);
+        await ask(alice, 'mark-forum-read', 'forum-read', { code: rooms.forum.code });
+        assert.equal((await threadCursor('alice', forumFirst)).last_read_reply_id, 9000);
+        assert.deepEqual(await ask(alice, 'mark-forum-read', 'forum-read', { code: rooms.emptyForum.code }), { channelCode: rooms.emptyForum.code });
+      } finally { bob.off('forum-read', onOther); peer.disconnect(); }
+    });
+    await t.test('forum receipts refuse nonmembers and non-forums while keeping the admin exemption', async () => {
+      await driver.prepare('DELETE FROM thread_reads').run();
+      bob.emit('mark-forum-read', { code: rooms.forum.code });
+      alice.emit('mark-forum-read', { code: rooms.room.code });
+      alice.emit('mark-forum-read', { code: "bad';--" });
+      await barrier(bob); await barrier(alice);
+      assert.equal((await driver.prepare('SELECT COUNT(*) AS n FROM thread_reads').get()).n, 0);
+      await ask(admin, 'mark-forum-read', 'forum-read', { code: rooms.forum.code });
+      assert.equal((await threadCursor('admin', forumFirst)).last_read_reply_id, forumReply);
+    });
+    await t.test('thread receipts notify the other devices, retain the greatest reply, and handle an empty topic', async () => {
+      await driver.prepare('DELETE FROM thread_reads').run();
+      const peer = await open('alice');
+      let own = 0, other = 0;
+      const onOwn = () => own++, onOther = () => other++;
+      alice.on('thread-read', onOwn); bob.on('thread-read', onOther);
+      try {
+        const heard = packet(peer, 'thread-read');
+        alice.emit('mark-thread-read', { parentId: forumFirst });
+        assert.deepEqual(await heard, { channelCode: rooms.forum.code, parentId: forumFirst });
+        assert.equal((await threadCursor('alice', forumFirst)).last_read_reply_id, forumReply);
+        assert.equal(own, 0); assert.equal(other, 0);
+        await driver.prepare('UPDATE thread_reads SET last_read_reply_id = 9000 WHERE user_id = ? AND thread_id = ?').run(users.alice, forumFirst);
+        const repeated = packet(peer, 'thread-read');
+        alice.emit('mark-thread-read', { parentId: forumFirst });
+        await repeated;
+        assert.equal((await threadCursor('alice', forumFirst)).last_read_reply_id, 9000);
+        const empty = packet(peer, 'thread-read');
+        alice.emit('mark-thread-read', { parentId: forumEmpty });
+        await empty;
+        assert.equal((await threadCursor('alice', forumEmpty)).last_read_reply_id, 0);
+      } finally { alice.off('thread-read', onOwn); bob.off('thread-read', onOther); peer.disconnect(); }
+    });
+    await t.test('thread receipts refuse nonmembers, reply ids and invalid inputs while admins may mark a nonjoined thread', async () => {
+      await driver.prepare('DELETE FROM thread_reads').run();
+      bob.emit('mark-thread-read', { parentId: privatePost });
+      for (const parentId of [forumReply, 999999, String(forumFirst), 1.5, null]) alice.emit('mark-thread-read', { parentId });
+      await barrier(bob); await barrier(alice);
+      assert.equal((await driver.prepare('SELECT COUNT(*) AS n FROM thread_reads').get()).n, 0);
+      admin.emit('mark-thread-read', { parentId: forumFirst });
+      await barrier(admin);
+      assert.equal((await threadCursor('admin', forumFirst)).last_read_reply_id, forumReply);
+    });
+    for (const [event, method, data] of [
+      ['mark-forum-read', 'run', { code: rooms.forum.code }],
+      ['mark-thread-read', 'get', { parentId: forumFirst }],
+    ]) {
+      await t.test(event + ' checks membership when its delayed write executes', async st => {
+        await driver.prepare('DELETE FROM thread_reads').run();
+        const prepare = driver.prepare.bind(driver);
+        let release, started;
+        const gate = new Promise(resolve => { release = resolve; });
+        const reached = new Promise(resolve => { started = resolve; });
+        st.mock.method(driver, 'prepare', sql => {
+          const statement = prepare(sql);
+          if (!sql.includes('INSERT INTO thread_reads')) return statement;
+          return { ...statement, async [method](...params) {
+            started(); await gate;
+            return statement[method](...params);
+          } };
+        });
+        alice.emit(event, data);
+        await reached;
+        try {
+          await prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(rooms.forum.id, users.alice);
+          release();
+          await barrier(alice);
+          assert.equal(await threadCursor('alice', forumFirst), undefined);
+          assert.equal(await threadCursor('alice', forumEmpty), undefined);
+        } finally {
+          release();
+          await prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(rooms.forum.id, users.alice);
+        }
+      });
+    }
+    await t.test('thread read state keeps membership, unread zeroes and its original response shape', async st => {
+      await driver.prepare('DELETE FROM thread_reads').run();
+      if (fixture) st.mock.method(db, 'prepare', () => { throw new Error('Legacy SQLite thread lookup reached'); });
+      assert.deepEqual(await ack(alice, 'get-thread-read-state', { parentIds: [forumFirst, forumEmpty, forumReply, 999999, forumFirst, '1', null, -1] }), {
+        reads: { [forumFirst]: 0, [forumEmpty]: 0 },
+      });
+      alice.emit('mark-thread-read', { parentId: forumFirst });
+      await barrier(alice);
+      assert.deepEqual(await ack(alice, 'get-thread-read-state', { parentIds: [forumFirst] }), { reads: { [forumFirst]: forumReply } });
+      assert.deepEqual(await ack(bob, 'get-thread-read-state', { parentIds: [forumFirst, privatePost] }), { reads: {} });
+      assert.deepEqual(await ack(admin, 'get-thread-read-state', { parentIds: [forumFirst] }), { reads: {} }, 'admin still needs membership for this lookup');
+      assert.deepEqual(await ack(alice, 'get-thread-read-state', {}), { reads: {} });
+    });
+    await t.test('thread read state caps a deduplicated request at 200 parents', async () => {
+      const ids = Array.from({ length: 205 }, (_, i) => 100000 + i);
+      for (const id of ids) await driver.prepare('INSERT INTO messages (id, channel_id, user_id, content) VALUES (?, ?, ?, ?)').run(id, rooms.room.id, users.alice, 'remembered thread');
+      try {
+        const result = await ack(alice, 'get-thread-read-state', { parentIds: [ids[0], ...ids] });
+        assert.deepEqual(Object.keys(result.reads).map(Number), ids.slice(0, 200));
+      } finally { await driver.prepare('DELETE FROM messages WHERE id >= ?').run(ids[0]); }
+    });
+    await t.test('failed thread read-state lookups retain the empty response instead of leaking unread data', async st => {
+      st.mock.method(console, 'warn', () => {});
+      const prepare = driver.prepare.bind(driver);
+      st.mock.method(driver, 'prepare', sql => sql.includes('COALESCE(tr.last_read_reply_id')
+        ? { async all() { throw new Error('backend unavailable'); } } : prepare(sql));
+      assert.deepEqual(await ack(alice, 'get-thread-read-state', { parentIds: [forumFirst] }), { reads: {} });
     });
     await t.test('actual room, encrypted-DM and slash-command sends advance the sender cursor', async () => {
       await clear();

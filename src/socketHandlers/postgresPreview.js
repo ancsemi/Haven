@@ -245,16 +245,38 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       const ch = await accessible(socket, data?.code);
       await readPositions.markChannelRead(socket.user.id, ch.code);
     });
+    on('mark-all-read', async (data, callback) => {
+      try {
+        const channels = await readPositions.markAllRead(socket.user.id);
+        if (typeof callback === 'function') callback({ ok: true, channels });
+      } catch (err) {
+        console.error('Mark all read error:', err);
+        if (typeof callback === 'function') callback({ error: 'Could not mark everything read' });
+      }
+    });
+    on('mark-forum-read', async data => {
+      if (typeof data?.code !== 'string') return;
+      const code = data.code.trim();
+      if (!/^[a-f0-9]{8}$/i.test(code)) return;
+      if (!await readPositions.markForumRead(socket.user.id, code, socket.user.isAdmin)) return;
+      for (const s of io.sockets.sockets.values()) {
+        if (s.user && s.user.id === socket.user.id) s.emit('forum-read', { channelCode: code });
+      }
+    });
+    on('mark-thread-read', async data => {
+      if (!Number.isInteger(data?.parentId)) return;
+      const parent = await readPositions.markThreadRead(socket.user.id, data.parentId, socket.user.isAdmin);
+      if (!parent) return;
+      for (const s of io.sockets.sockets.values()) {
+        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parent.channel_code, parentId: data.parentId });
+      }
+    });
     on('get-thread-read-state', async (data, callback) => {
       if (typeof callback !== 'function') return;
       const ids = Array.isArray(data?.parentIds) ? [...new Set(data.parentIds.filter(id => Number.isInteger(id) && id > 0))].slice(0, 200) : [];
-      if (!ids.length) return callback({ reads: {} });
-      const rows = await db.prepare(`SELECT m.id, m.channel_id, c.role_gate, COALESCE(tr.last_read_reply_id, 0) AS last_read
-        FROM messages m JOIN channels c ON c.id = m.channel_id JOIN channel_members cm ON cm.channel_id = m.channel_id AND cm.user_id = ?
-        LEFT JOIN thread_reads tr ON tr.thread_id = m.id AND tr.user_id = ?
-        WHERE m.id IN (${ids.map(() => '?').join(',')}) AND m.thread_id IS NULL`).all(socket.user.id, socket.user.id, ...ids);
+      const rows = await readPositions.threadState(socket.user.id, ids);
       const reads = {};
-      for (const row of rows) if (socket.user.isAdmin || await permissions.roleGateAllows(socket.user.id, { id: row.channel_id, role_gate: row.role_gate })) reads[row.id] = row.last_read;
+      for (const row of rows) if (socket.user.isAdmin || await permissions.roleGateAllows(socket.user.id, { id: row.channel_id, role_gate: row.role_gate })) reads[row.parentId] = row.lastRead;
       callback({ reads });
     });
 
