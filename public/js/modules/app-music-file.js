@@ -96,7 +96,7 @@ _stopMusicFilePlayer() {
 // "Play for everyone in voice" on an uploaded audio file.
 _musicListenHtml(fileUrl, fileName) {
   if (!this._isMusicFileUrl(fileUrl)) return '';
-  return `<button type="button" class="media-listen" data-url="${this._escapeHtml(fileUrl)}" data-title="${this._escapeHtml(fileName || '')}" title="${t('voice.music_file_listen')}" aria-label="${t('voice.music_file_listen')}">🎶</button>`;
+  return `<button type="button" class="media-btn media-listen" data-url="${this._escapeHtml(fileUrl)}" data-title="${this._escapeHtml(fileName || '')}" title="${t('voice.music_file_listen')}" aria-label="${t('voice.music_file_listen')}">${this._mediaIcon('music')}</button>`;
 },
 
 _setupMusicListenButtons() {

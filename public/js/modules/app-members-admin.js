@@ -62,9 +62,9 @@ _renderBanList(bans) {
   });
 
   list.querySelectorAll('.btn-delete-user').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const name = btn.dataset.uname;
-      if (confirm(t('settings.admin.confirm_delete_user', { name }))) {
+      if (await this._confirm(t('settings.admin.confirm_delete_user', { name }), { danger: true })) {
         this.socket.emit('delete-user', { userId: parseInt(btn.dataset.uid) });
       }
     });
@@ -338,10 +338,10 @@ _openBulkCleanup() {
     });
   });
 
-  confirmBtn.addEventListener('click', () => {
+  confirmBtn.addEventListener('click', async () => {
     const ids = selectedIds();
     if (ids.length === 0) return;
-    if (!confirm(t('modals.bulk_cleanup.confirm').replace('{n}', ids.length))) return;
+    if (!await this._confirm(t('modals.bulk_cleanup.confirm').replace('{n}', ids.length), { danger: true })) return;
     confirmBtn.disabled = true;
     confirmBtn.textContent = t('modals.bulk_cleanup.working');
     this.socket.emit('bulk-remove-users', {
@@ -888,8 +888,7 @@ _confirmAdminResetPassword(userId, username) {
           return;
         }
         const msg = resp?.error || t('modals.admin_reset_pw.errors.generic');
-        if (this._showToast) this._showToast(msg, 'error', 8000);
-        else alert(msg);
+        this._showToast(msg, 'error', 8000);
         return;
       }
       this._showAdminResetPwReveal(resp.username, resp.tempPassword);

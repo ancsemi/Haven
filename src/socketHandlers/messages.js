@@ -14,6 +14,7 @@ const threadNotify = require('../threadNotify');
 const protectedMessages = require('../protectedMessages');
 const mediaGroup = require('../mediaGroup');
 const { takeSilent } = require('../silentMessages');
+const { parseSlash } = require('../slashParse');
 const { tagAccess } = require('../uploadTagRoles');
 const { moveToChannel } = require('../moveMessages');
 const storage = require('../storage');
@@ -1428,11 +1429,9 @@ module.exports = function register(socket, ctx) {
     const trimmed = content.trim();
     const isImage = data.isImage === true;
     const isUpload = /^\/uploads\b/i.test(trimmed);
-    const isPath = trimmed.startsWith('/') && trimmed.indexOf('/', 1) !== -1;
-    const slashMatch = (!isImage && !isUpload && !isPath) ? trimmed.match(/^\/([a-zA-Z]+)(?:\s+(.*))?$/) : null;
-    if (slashMatch) {
-      const cmd = slashMatch[1].toLowerCase();
-      const arg = (slashMatch[2] || '').trim();
+    const slash = (!isImage && !isUpload) ? parseSlash(trimmed) : null;
+    if (slash) {
+      const { cmd, arg } = slash;
       const slashResult = processSlashCommand(cmd, arg, socket.user.displayName, channel.id, code);
       if (slashResult && slashResult.botCommand) {
         // Bot command fired; bot will respond via webhook endpoint

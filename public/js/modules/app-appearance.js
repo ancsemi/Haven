@@ -620,7 +620,7 @@ _setupEmbedSizePicker() {
 },
 
 // Embed size is the single source of truth shared by the Settings picker and
-// the per-embed ⤢ toggle (see app-messages.js). Legacy values are migrated.
+// the per-embed size menu (see app-media-playback.js). Legacy values are migrated.
 _normalizeEmbedSize(mode) {
   mode = ({ normal: 'medium', large: 'full' })[mode] || mode;
   return ['full', 'medium', 'small', 'off'].includes(mode) ? mode : 'medium';
@@ -635,8 +635,8 @@ _applyEmbedSize(mode) {
   localStorage.setItem('haven-embed-size', mode);
   document.body.classList.remove('embed-size-off', 'embed-size-small', 'embed-size-medium', 'embed-size-full');
   document.body.classList.add(`embed-size-${mode}`);
-  const label = `⤢ ${t(`settings.embed_display.${mode}`)}`;
-  document.querySelectorAll('.lp-size').forEach(b => { b.textContent = label; });
+  const label = t(`settings.embed_display.${mode}`);
+  document.querySelectorAll('.lp-size-label').forEach(b => { b.textContent = label; });
   const picker = document.getElementById('embed-size-picker');
   if (picker) picker.querySelectorAll('[data-embed-size]').forEach(b => b.classList.toggle('active', b.dataset.embedSize === mode));
 },

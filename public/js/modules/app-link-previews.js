@@ -256,13 +256,13 @@ _fetchLinkPreviews(containerEl) {
       const msgContent = link.closest('.message-content, .thread-msg-content');
       if (!msgContent) return;
       if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
-      const ytCollapsed = this._collapsedEmbeds.has(url);
+      const ytCollapsed = this._embedFolded(url);
       const wrapper = document.createElement('div');
       wrapper.className = 'link-preview link-preview--yt' + (ytCollapsed ? ' lp-collapsed' : '');
       wrapper.dataset.url = url;
       wrapper.style.setProperty('--lp-accent', '#ff0000');
       wrapper.innerHTML =
-        this._embedHeaderHtml('YouTube', ytCollapsed, this._ytVolumeHtml()) +
+        this._embedHeaderHtml('YouTube', ytCollapsed, this._ytVolumeHtml(), this._mediaViewHtml()) +
         // referrerpolicy is set per-iframe on purpose. Haven's document-level
         // Referrer-Policy has defaulted to same-origin since 3.41.0, which
         // sends NOTHING cross-origin. YouTube's embed player treats a missing
@@ -294,7 +294,7 @@ _fetchLinkPreviews(containerEl) {
         // Unified rich embed card: social posts (Bluesky / X) gain an author
         // row, avatar and engagement stats; everything else renders the same
         // chrome (accent header, size toggle, collapse) with title/text/media.
-        const collapsed = this._collapsedEmbeds.has(url);
+        const collapsed = this._embedFolded(url);
         const accent = (typeof data.accentColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(data.accentColor)) ? data.accentColor : null;
         const isSocial = !!(data.author || data.handle);
         const hasGallery = Array.isArray(data.images) && data.images.length >= 2;
@@ -355,7 +355,7 @@ _fetchLinkPreviews(containerEl) {
         }
 
         card.innerHTML =
-          this._embedHeaderHtml(data.siteName, collapsed) +
+          this._embedHeaderHtml(data.siteName, collapsed, isInlineVideo ? this._loopHtml() + this._keepPlayingHtml() : '', isInlineVideo ? this._mediaViewHtml() : '') +
           '<div class="lp-content">' +
             (meta ? `<a class="lp-meta" href="${this._escapeHtml(url)}" target="_blank" rel="noopener noreferrer nofollow">${meta}</a>` : '') +
             media +
@@ -464,9 +464,9 @@ _runLinkPreviewTask(task) {
 // ── Shared embed chrome (size toggle + per-message collapse) ──────────
 // Mirrors the Haven mobile app's embed controls. The global Full/Medium/Small/Off
 // size preference is the shared one driven by the Settings picker (_embedSize /
-// _applyEmbedSize live in app-media.js); the per-card ⤢ button is a quick cycle
-// through Full→Medium→Small (Off stays Settings-only so the button can't hide
-// itself), and the ▾/▸ caret collapses a single embed for this session.
+// _applyEmbedSize live in app-media.js); the per-card size button opens a menu
+// of Small, Medium and Large (Off stays Settings-only so the button can't hide
+// itself), and the chevron collapses a single embed for this session.
 
 // A link wrapped in a || spoiler || carries that spoiler onto its embed
 // card: the card is blurred behind the same tag used for spoiler images
@@ -483,16 +483,24 @@ _applyEmbedSpoiler(embedEl, link) {
   embedEl.appendChild(tag);
 },
 
-/** Header row markup: site name (accent), size cycle button, collapse caret. */
-_embedHeaderHtml(siteName, collapsed, extraHtml = '') {
-  const size = this._embedSize();
-  const label = t(`settings.embed_display.${size}`);
+/** Header row markup: site name (accent), then the playing controls, then the
+ *  view controls: size menu, theater and fullscreen, collapse. */
+_embedHeaderHtml(siteName, collapsed, playHtml = '', viewHtml = '') {
+  const label = t(`settings.embed_display.${this._embedSize()}`);
+  const fold = t(collapsed ? 'app.messages.expand' : 'app.messages.collapse');
   return '<div class="lp-header">'
     + `<span class="lp-site">${this._escapeHtml(siteName || t('app.messages.link'))}</span>`
-    + extraHtml
-    + `<button type="button" class="lp-size" title="${t('app.messages.embed_size_hint')}">⤢ ${label}</button>`
-    + `<button type="button" class="lp-collapse" title="${t('app.messages.collapse')}">${collapsed ? '▸' : '▾'}</button>`
-    + '</div>';
+    + (playHtml ? `<span class="media-controls">${playHtml}</span>` : '')
+    + '<span class="media-controls">'
+    + `<button type="button" class="media-btn lp-size" aria-haspopup="menu" title="${t('app.messages.embed_size')}"><span class="lp-size-label">${label}</span>${this._mediaIcon('chevron')}</button>`
+    + viewHtml
+    + `<button type="button" class="media-btn lp-collapse" title="${fold}" aria-label="${fold}">${this._mediaIcon('chevron')}</button>`
+    + '</span></div>';
+},
+
+// Folded by hand, or, with Hide media on, folded until it is opened.
+_embedFolded(url) {
+  return this._collapsedEmbeds.has(url) || (!!this._hideMediaOn?.() && !this._openedEmbeds?.has(url));
 },
 
 /** Wire the size + collapse buttons on a freshly-built embed card. */
@@ -501,16 +509,24 @@ _wireEmbedControls(card, url) {
   if (sizeBtn) sizeBtn.addEventListener('click', e => {
     e.preventDefault();
     e.stopPropagation();
-    const order = ['full', 'medium', 'small'];
-    this._applyEmbedSize(order[(order.indexOf(this._embedSize()) + 1) % order.length]);
+    this._openEmbedSizeMenu(sizeBtn);
   });
   const colBtn = card.querySelector('.lp-collapse');
   if (colBtn) colBtn.addEventListener('click', e => {
     e.preventDefault();
     e.stopPropagation();
     const isCol = card.classList.toggle('lp-collapsed');
-    isCol ? this._collapsedEmbeds.add(url) : this._collapsedEmbeds.delete(url);
-    colBtn.textContent = isCol ? '▸' : '▾';
+    if (isCol) {
+      this._collapsedEmbeds.add(url);
+      this._openedEmbeds?.delete(url);
+    } else {
+      this._collapsedEmbeds.delete(url);
+      if (!this._openedEmbeds) this._openedEmbeds = new Set();
+      this._openedEmbeds.add(url);
+    }
+    const fold = t(isCol ? 'app.messages.expand' : 'app.messages.collapse');
+    colBtn.title = fold;
+    colBtn.setAttribute('aria-label', fold);
   });
 },
 

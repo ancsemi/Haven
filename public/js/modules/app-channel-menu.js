@@ -150,6 +150,18 @@ _bindChannelMenu() {
     this._closeChannelCtxMenu();
     this._copyChannelLink(code);
   });
+  // Put everyone on the server in this channel (socketHandlers/channelAddAll.js).
+  document.querySelector('#channel-ctx-menu [data-action="add-all-members"]')?.addEventListener('click', async () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    const ch = this.channels.find(c => c.code === code);
+    if (!await this._confirm(t('channels.add_all_confirm', { name: ch ? ch.name : code }))) return;
+    this.socket.emit('add-all-members', { code }, (res) => {
+      if (!res || res.error) { this._showToast(res?.error || t('channels.add_all_failed'), 'error'); return; }
+      this._showToast(res.added ? t('channels.add_all_done', { count: res.added }) : t('channels.add_all_none'), 'success');
+    });
+  });
   // Join voice from context menu
   document.querySelector('[data-action="join-voice"]')?.addEventListener('click', () => {
     const code = this._ctxMenuChannel;
@@ -160,13 +172,13 @@ _bindChannelMenu() {
     setTimeout(() => this._joinVoice(), 300);
   });
   // Leave channel
-  document.querySelector('[data-action="leave-channel"]')?.addEventListener('click', () => {
+  document.querySelector('[data-action="leave-channel"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
     this._closeChannelCtxMenu();
     const ch = this.channels.find(c => c.code === code);
     const name = ch ? ch.name : code;
-    if (!confirm(t('confirm.leave_channel', { name }))) return;
+    if (!await this._confirm(t('confirm.leave_channel', { name }))) return;
     this.socket.emit('leave-channel', { code }, (res) => {
       if (res && res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('toasts.left_channel', { name }), 'success');
@@ -592,13 +604,13 @@ _bindChannelMenu() {
     this._openReparentModal(code);
   });
   // Promote sub-channel to top-level
-  document.querySelector('[data-action="promote-channel"]')?.addEventListener('click', () => {
+  document.querySelector('[data-action="promote-channel"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
     this._closeChannelCtxMenu();
     const ch = this.channels.find(c => c.code === code);
     if (!ch || !ch.parent_channel_id) return;
-    if (confirm(t('confirm.promote_channel', { name: ch.name }))) {
+    if (await this._confirm(t('confirm.promote_channel', { name: ch.name }))) {
       this.socket.emit('reparent-channel', { code, newParentCode: null });
     }
   });

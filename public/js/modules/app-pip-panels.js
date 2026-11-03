@@ -827,7 +827,7 @@ _setDMPiPReply(msgEl, msgId) {
     }
   }
   author = author || t('voice.someone');
-  const content = msgEl.querySelector('.message-content')?.textContent || '';
+  const content = this._replyPreviewText(msgEl.dataset.rawContent || msgEl.querySelector('.message-content')?.textContent || '');
   const preview = content.length > 60 ? content.substring(0, 60) + '…' : content;
   this._dmPipReplyingTo = { id: msgId, username: author, content };
   const bar = document.getElementById('dm-pip-reply-bar');

@@ -1582,12 +1582,18 @@ async function verifyTokenAsync(token, opts = {}) {
     const decoded = jwt.verify(token, JWT_SECRET);
     if (decoded && (decoded.purpose || decoded.scope) && !opts.allowScoped) return null;
     if (decoded && decoded.id && !decoded.purpose) {
-      const row = await getAsyncDb().prepare('SELECT password_version FROM users WHERE id = ?').get(decoded.id);
+      let row;
+      try {
+        row = await getAsyncDb().prepare('SELECT password_version FROM users WHERE id = ?').get(decoded.id);
+      } catch (err) {
+        console.warn('[auth] could not check the session, refusing it:', err.message);
+        return null;
+      }
       if (!row || (decoded.pwv || 1) !== (row.password_version || 1)) return null;
     }
     return decoded;
   } catch {
-    return null;
+    return null; // a bad or expired token: an everyday answer, not worth a log
   }
 }
 

@@ -134,16 +134,18 @@ _forumTitleOf(msg) {
   if (lp && typeof lp.title === 'string' && lp.title.trim()) return lp.title.trim().slice(0, 120);
   const lines = String(msg.content || '').split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^(?:spoiler-img:)?\[file:/.test(l));
   const first = lines[0] || (this._isImageUrl(String(msg.content || '').trim()) ? t('forum.image_topic') : String(msg.content || ''));
-  return first.replace(/^#+\s*/, '').replace(/^\*\*(.+)\*\*$/, '$1').slice(0, 120);
+  return this._maskSpoilers(first).replace(/^#+\s*/, '').replace(/^\*\*(.+)\*\*$/, '$1').slice(0, 120);
 },
 
 _forumSnippetOf(msg) {
   const lines = String(msg.content || '').split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^(?:spoiler-img:)?\[file:/.test(l));
   const body = msg.title ? lines.join(' ') : lines.slice(1).join(' ');
-  return body.replace(/[*_`>#]/g, '').slice(0, 220);
+  return this._maskSpoilers(body).replace(/[*_`>#]/g, '').slice(0, 220);
 },
 
 _forumThumbOf(msg) {
+  // Hide media: the card shows its plain placeholder instead.
+  if (this._hideMediaOn?.()) return null;
   const content = String(msg.content || '');
   for (const line of content.split(/\s+/)) {
     const l = line.trim();

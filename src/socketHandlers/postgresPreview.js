@@ -154,7 +154,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
         }
       }
       if (key === 'muted_users') {
-        let ids; try { ids = JSON.parse(value); } catch { return; }
+        let ids; try { ids = JSON.parse(value); } catch { return; /* not a list: nothing to save */ }
         if (!Array.isArray(ids)) return;
         stored = JSON.stringify([...new Set(ids.map(Number).filter(n => Number.isInteger(n) && n > 0 && n !== socket.user.id))].slice(0, 500));
       }
@@ -369,7 +369,7 @@ function registerBootstrapReads(socket, on, db, permissions, accessible) {
       row.enabled = !!row.enabled;
       row.is_expired = !!row.is_expired;
       try { const parsed = JSON.parse(row.channels || '[]'); row.channels = Array.isArray(parsed) ? parsed : []; }
-      catch { row.channels = []; }
+      catch { row.channels = []; /* malformed: an invite with no channels */ }
     }
     socket.emit('invite-codes-list', rows);
   });
@@ -397,7 +397,7 @@ function registerBootstrapReads(socket, on, db, permissions, accessible) {
     for (const row of rows) {
       if (!socket.user.isAdmin && row.channel_id != null) {
         try { if ((await accessible(socket, row.channel_code)).is_dm) continue; }
-        catch { continue; }
+        catch { continue; /* no access to that channel: leave its entry out */ }
       }
       if (!socket.user.isAdmin) row.channel_code = null;
       delete row.channel_id;

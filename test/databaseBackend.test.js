@@ -46,7 +46,7 @@ test('full PostgreSQL server startup is guarded without opening SQLite or exposi
       return true;
     });
     assert.equal(fs.existsSync(path.join(DATA, 'haven.db')), false);
-    assert.equal(load.mock.callCount(), 1);
+    assert.equal(load.mock.callCount(), 0, 'nothing is downloaded just to refuse');
   } finally { delete process.env.HAVEN_DATABASE_URL; }
 });
 

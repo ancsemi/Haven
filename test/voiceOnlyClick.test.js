@@ -51,8 +51,8 @@ test('the click joins only for someone allowed to use voice', () => {
 });
 
 test('the channel click joins a voice-only channel unless already in its voice', () => {
-  const click = SRC.slice(SRC.indexOf("el.addEventListener('click', () => {\n      // Clicking the forum"), SRC.indexOf("// Right-click to open context menu"));
-  assert.match(click, /this\._isVoiceOnlyChannel\(ch\.code\) && this\._canUseVoice\(\)/);
+  const click = SRC.slice(SRC.indexOf("el.addEventListener('click', (e) => {\n      // Clicking the forum"), SRC.indexOf("// Right-click to open context menu"));
+  assert.match(click, /!e\.target\.closest\('\.channel-more-btn'\) && this\._isVoiceOnlyChannel\(ch\.code\) && this\._canUseVoice\(\)/, 'the ... button only opens its menu');
   assert.match(click, /!\(this\.voice\?\.inVoice && this\.voice\.currentChannel === ch\.code\)/);
   assert.match(click, /if \(this\._isVoiceOnlyChannel\(ch\.code\)\) return;/, 'the double-click does not join a second time');
 });

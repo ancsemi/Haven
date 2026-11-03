@@ -1,8 +1,14 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
 const Database = require('better-sqlite3');
+
+// mediaProxy loads the data folder paths: keep them away from a real server's.
+process.env.HAVEN_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-media-token-'));
 const mediaProxy = require('../src/mediaProxy');
 
 test('a media token stops working once its account is banned or deleted', async t => {

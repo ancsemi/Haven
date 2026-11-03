@@ -147,6 +147,13 @@ _openChannelCtxMenu(code, btnEl) {
     const hasTarget = this._reparentTargets(ch).length > 0;
     moveToBtn.style.display = (sourceOk && hasTarget && !ch.is_dm && !hasChildren) ? '' : 'none';
   }
+  // "Add all members": who may tick it when making a channel, and not for a
+  // private channel, which stays invite-only.
+  const addAllBtn = menu.querySelector('[data-action="add-all-members"]');
+  if (addAllBtn) {
+    const canAddAll = !!this.user?.isAdmin || this._hasGlobalPerm?.('invite_users') || this._hasGlobalPerm?.('manage_server');
+    addAllBtn.style.display = (canAddAll && ch && !ch.is_dm && !ch.is_private) ? '' : 'none';
+  }
   // Show "Promote to Channel" only for sub-channels
   const promoteBtn = menu.querySelector('[data-action="promote-channel"]');
   if (promoteBtn && ch) {

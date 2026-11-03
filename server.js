@@ -3650,6 +3650,8 @@ late.shutdown = (reason) => {
 };
 
 })().catch(err => {
-  console.error('Haven could not start:', err.code || err.message);
+  // The whole reason, for whoever has to fix it: a bare code such as
+  // MODULE_NOT_FOUND says nothing. A database address can hold a password.
+  console.error('Haven could not start:', String(err.stack || err.message).replace(/\/\/[^@\s/]+@/g, '//***@'));
   process.exit(1);
 });

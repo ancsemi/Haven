@@ -604,7 +604,7 @@ _fireNativeNotification(message, channelCode, opts) {
   const title = t('notifications_runtime.title', { sender, channel: channelLabel });
   let rawContent = message.content || '';
   // A Discord emote token reads as its :name: in a notification.
-  rawContent = rawContent.replace(/<a?:([A-Za-z0-9_]{2,32}):\d{15,25}>/g, ':$1:');
+  rawContent = this._maskSpoilers(rawContent).replace(/<a?:([A-Za-z0-9_]{2,32}):\d{15,25}>/g, ':$1:');
   // Detect E2E encrypted envelope: show generic text instead of ciphertext
   try { const p = JSON.parse(rawContent); if (p && p.v && p.ct) rawContent = ''; } catch { /* not JSON */ }
   // Burn-after-read: never reveal the message content in a notification

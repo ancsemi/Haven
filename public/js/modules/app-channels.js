@@ -686,13 +686,14 @@ _renderChannels() {
       el.appendChild(bell);
     }
 
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
       // Clicking the forum you are already in, with one of its topics open,
       // goes back to the topic list (#5688).
       if (ch.code === this.currentChannel && this._activeThreadParent && this._isForumChannel?.(ch.code)) this._closeThread();
       this.switchChannel(ch.code);
       // A voice-only channel has nothing else to do there, so one click joins.
-      if (this._isVoiceOnlyChannel(ch.code) && this._canUseVoice() &&
+      // Not from its ... button, which is there to change the channel (#5846).
+      if (!e.target.closest('.channel-more-btn') && this._isVoiceOnlyChannel(ch.code) && this._canUseVoice() &&
           !(this.voice?.inVoice && this.voice.currentChannel === ch.code)) {
         setTimeout(() => this._joinVoice(), 300);
       }

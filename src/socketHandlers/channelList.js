@@ -84,7 +84,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
               ).all(...ids);
             }
           } catch {
-            targetRows = [];
+            targetRows = []; // a malformed default_join_channels setting: join nothing extra
           }
 
           if (targetRows.length === 0) {
@@ -360,7 +360,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
               ).all(...ids);
             }
           } catch {
-            targetRows = [];
+            targetRows = []; // a malformed default_join_channels setting: join nothing extra
           }
 
           if (targetRows.length === 0) {

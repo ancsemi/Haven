@@ -40,7 +40,7 @@ async function createPostgresFixture(sqlite, tables) {
       },
     };
   } catch (err) {
-    if (created) await client.query(`DROP SCHEMA ${quote(schema)} CASCADE`).catch(() => {});
+    if (created) await client.query(`DROP SCHEMA ${quote(schema)} CASCADE`).catch(() => { /* a throwaway schema; the setup error below is the one that matters */ });
     await db.close();
     throw err;
   }

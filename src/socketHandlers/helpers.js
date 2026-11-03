@@ -243,6 +243,12 @@ function toReplyContext(row) {
   };
 }
 
+// A spoiler stays hidden in a notification. The same pattern the client's
+// renderer uses, which also leaves `||` inside code alone.
+function maskSpoilers(text) {
+  return String(text ?? '').replace(/(```[\s\S]*?```|`[^`\n]+`)|\|\|.+?\|\|/g, (m, code) => code || '▒▒▒');
+}
+
 // ── Role mentions (#5579) ────────────────────────────────────────
 // "@Moderators" pings everyone holding that role, which is @everyone in a
 // smaller hat, so a sender without mention_everyone gets the treatment they
@@ -340,6 +346,6 @@ module.exports = {
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
   sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_MENU_EMOJI_RE, roleMenuContent,
   normalizeWordGroups, validEscalation, filterIdleOnline,
-  replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads,
+  replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads, maskSpoilers,
   NEW_DMS_PER_HOUR,
 };

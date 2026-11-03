@@ -73,6 +73,7 @@ _formatContent(str) {
   if (e2eImgMatch) {
     const mime = this._escapeHtml(e2eImgMatch[1]);
     const url = this._escapeHtml(e2eImgMatch[2]);
+    if (this._isMediaHeld?.(e2eImgMatch[2])) return this._hiddenImagePlaceholder(e2eImgMatch[2], e2eImgMatch[1]);
     return `<img data-e2e-src="${url}" data-e2e-mime="${mime}" class="chat-image e2e-img-pending" alt="${t('app.messages.e2e_image_alt')}" title="${t('app.messages.e2e_image_title')}">`;
   }
 
@@ -131,7 +132,8 @@ _formatContent(str) {
         const l = lines[i];
         if (!mediaLine(l.trim())) { text.push(l); continue; }
         flush();
-        const run = this._mediaGridOff ? [] : (this._mediaGridRun?.(lines, i) || []);
+        // With Hide media on, each picture gets its own click-to-show tag.
+        const run = (this._mediaGridOff || this._hideMediaOn?.()) ? [] : (this._mediaGridRun?.(lines, i) || []);
         if (run.length >= 2) {
           parts.push(this._mediaGridHtml(run));
           i += run.length - 1;
@@ -195,13 +197,20 @@ _formatContent(str) {
     // if the element fires `error`, so listing a format here is safe.
     if (['mp3', 'ogg', 'oga', 'wav', 'm4a', 'aac', 'flac', 'opus', 'weba'].includes(ext)) {
       return `<div class="file-attachment">
-        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._loopHtml?.() || ''}${this._keepPlayingHtml?.() || ''}${this._musicListenHtml?.(fileUrl, fileName) || ''}</div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._mediaControlsHtml?.('audio', this._musicListenHtml?.(fileUrl, fileName) || '') || ''}</div>
         <audio controls preload="none" src="${fileUrl}" class="file-audio"></audio>
       </div>`;
     }
     if (['mp4', 'webm', 'mov', 'm4v', 'ogv'].includes(ext)) {
+      // Hide media: the name and size show, the player waits for a click.
+      if (this._isMediaHeld?.(fileMatch[2])) {
+        return `<div class="file-attachment">
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
+        ${this._hiddenImagePlaceholder(fileMatch[2], 'video')}
+      </div>`;
+      }
       return `<div class="file-attachment">
-        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._loopHtml?.() || ''}${this._keepPlayingHtml?.() || ''}</div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._mediaControlsHtml?.('video') || ''}</div>
         <div class="file-video-wrap">
           <video controls preload="none" src="${fileUrl}" class="file-video"></video>
         </div>
@@ -881,6 +890,7 @@ _updateMessageReactions(messageId, reactions) {
     if (!html) return;
     const content = msgEl.querySelector('.message-content, .thread-msg-content');
     if (content) content.insertAdjacentHTML('afterend', html);
+    if (msgEl.matches(':hover')) this._placeMessageToolbar?.(msgEl);
   });
 
   if (wasAtBottom) this._scrollToBottom(true);
@@ -894,9 +904,19 @@ _updateMessageReactions(messageId, reactions) {
 // label, not the address they are stored under (an encrypted picture's
 // "e2e-img:image/png:/uploads/..." used to show as it was).
 // Several pictures in a row read as one count, not a label each (#5799).
+// A spoiler stays hidden wherever a message is shown as plain text. The same
+// pattern the renderer uses, which also leaves `||` inside code alone.
+_maskSpoilers(text) {
+  return String(text ?? '').replace(/(```[\s\S]*?```|`[^`\n]+`)|\|\|.+?\|\|/g, (m, code) => code || '▒▒▒');
+},
+
 _replyPreviewText(content) {
   const isPicture = (l) => this._isImageUrl(l) || /^\/uploads\/\S+$/i.test(l);
-  const lines = String(content || '').split('\n').map(l => l.trim()).filter(Boolean);
+  let text = this._maskSpoilers(content || '');
+  // A reply can carry only the start of a long message, which may cut off the
+  // bars that close a spoiler.
+  if (String(content || '').length >= 200) text = text.replace(/\|\|[^\n]*$/, '▒▒▒');
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   return lines.map((l, i) => {
     if (isPicture(l)) {
       if (i > 0 && isPicture(lines[i - 1])) return null;
@@ -968,7 +988,7 @@ _setReply(msgEl, msgId) {
     }
   }
   author = author || t('voice.someone');
-  const content = msgEl.querySelector('.message-content')?.textContent || '';
+  const content = this._replyPreviewText(msgEl.dataset.rawContent || msgEl.querySelector('.message-content')?.textContent || '');
   const preview = content.length > 60 ? content.substring(0, 60) + '…' : content;
 
   this.replyingTo = { id: msgId, username: author, content };

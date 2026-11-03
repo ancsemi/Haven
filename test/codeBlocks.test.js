@@ -140,6 +140,7 @@ test('delegated clicks on code-copy buttons invoke copying and stop the click', 
 test('hover delegation shifts the copy button only when it overlaps the message toolbar', () => {
   const listeners = {};
   const app = loadApp({ onDocumentListener: (type, handler) => { listeners[type] = handler; } });
+  app._placeMessageToolbar = () => {}; // covered by messageToolbarPlacement.test.js
   app._bindCodeBlockCopy();
   assert.equal(typeof listeners.pointerover, 'function');
   assert.equal(typeof listeners.pointerout, 'function');

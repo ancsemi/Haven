@@ -19,6 +19,11 @@ const { installGuard: installProtectedGuard } = require('./protectedMessages');
 let db;
 
 function initDatabase() {
+  // Refuse before fromEnv(): selecting PostgreSQL there downloads its client,
+  // which helps nobody when the next step is to stop.
+  if (String(process.env.HAVEN_DATABASE_URL || '').trim()) {
+    throw new Error('PostgreSQL full server startup is not supported yet. Leave HAVEN_DATABASE_URL unset to use SQLite; the query adapter is available for migration tests.');
+  }
   const driver = fromEnv();
   // Full startup and legacy synchronous calls still require SQLite. The
   // opt-in PostgreSQL browser preview uses initDatabaseAsync() below. Never

@@ -22,6 +22,7 @@ _bindCodeBlockCopy() {
     if (!msgEl || msgEl.contains(e.relatedTarget)) return;
     requestAnimationFrame(() => {
       if (msgEl.isConnected === false || !msgEl.matches(':hover')) return;
+      this._placeMessageToolbar(msgEl);
       this._updateCodeBlockCopyPlacement(msgEl);
     });
   });
@@ -30,10 +31,59 @@ _bindCodeBlockCopy() {
     if (!msgEl || (e.relatedTarget && msgEl.contains(e.relatedTarget))) return;
     msgEl.querySelectorAll('.code-block').forEach(block => block.classList.remove('copy-button-shifted'));
   });
+  // Scrolling inside a tall message moves its bottom edge while the pointer
+  // stays put, so the toolbar has to follow. Once a frame at most.
+  let scrollFrame = 0;
+  document.addEventListener('scroll', (e) => {
+    if (scrollFrame || !e.target?.matches?.('#messages, #thread-messages, #dm-pip-messages')) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = 0;
+      e.target.querySelectorAll('.message:hover, .message-compact:hover, .thread-message:hover')
+        .forEach(msgEl => this._placeMessageToolbar(msgEl));
+    });
+  }, true);
   window.addEventListener('resize', () => {
     document.querySelectorAll('.message:hover, .message-compact:hover, .thread-message:hover')
-      .forEach(msgEl => this._updateCodeBlockCopyPlacement(msgEl));
+      .forEach(msgEl => {
+        this._placeMessageToolbar(msgEl);
+        this._updateCodeBlockCopyPlacement(msgEl);
+      });
   });
+},
+
+// Beside the last reaction chip when there is room, level with the chips. With
+// no chips the stylesheet's bottom corner stands. Either way it stays on screen
+// on a message taller than the list.
+_placeMessageToolbar(msgEl) {
+  const bar = msgEl.querySelector('.msg-toolbar, .thread-msg-toolbar');
+  if (!bar) return;
+  bar.style.left = '';
+  bar.style.right = '';
+  bar.style.bottom = '';
+  const box = bar.offsetParent;
+  if (!box || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  const boxRect = box.getBoundingClientRect();
+  let bottom = null;
+
+  const chips = [...(msgEl.querySelector('.reactions-row')?.children || [])].map(c => c.getBoundingClientRect());
+  if (chips.length) {
+    const lastRowTop = Math.max(...chips.map(c => c.top));
+    const lastRow = chips.filter(c => c.top === lastRowTop);
+    const left = Math.max(...lastRow.map(c => c.right)) - boxRect.left + 8;
+    if (left + bar.offsetWidth <= boxRect.width - 8) {
+      bar.style.left = `${left}px`;
+      bar.style.right = 'auto';
+      bottom = boxRect.bottom - lastRow[0].bottom - (bar.offsetHeight - lastRow[0].height) / 2;
+      bar.style.bottom = `${bottom}px`;
+    }
+  }
+
+  const list = msgEl.closest('#messages, #thread-messages, #dm-pip-messages');
+  const below = list ? bar.getBoundingClientRect().bottom - list.getBoundingClientRect().bottom : 0;
+  if (below > 0) {
+    const now = bottom ?? (boxRect.bottom - bar.getBoundingClientRect().bottom);
+    bar.style.bottom = `${now + below + 4}px`;
+  }
 },
 
 _updateCodeBlockCopyPlacement(msgEl) {
