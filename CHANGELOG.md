@@ -32,6 +32,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Clicking the ... button on a voice-only channel also joined its voice. It only opens the menu now (thanks dlmorgan999, #5846).
 - A spoiler's text showed in the places a message is previewed as plain text: reply previews, the Replying to bar, the Threads list, forum post titles and snippets, pop-up notifications and phone notifications. It's hidden in all of them now (thanks birdycrazy).
 - On a phone, an uploaded video's controls squeezed its file name into a column one letter wide. The controls sit in their own shaded box now, so they no longer read as part of the name, and move below the name when the row is narrow (#5855).
+- The button in Settings that opens the Discord import read "Import Selected", the label of the button inside the import window. It says Import from Discord again, in every language.
 - Opening a picture from an encrypted DM on a phone, in an installed app window or in the Android app showed a white page. It opens in Haven's own picture viewer there now (#5853).
 
 ### Security
