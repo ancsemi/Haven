@@ -230,7 +230,14 @@
   background: #000;
 }
 /* When a stream/webcam video is fullscreened, override tile constraints */
-video:fullscreen,
+video:fullscreen {
+  max-height: unset !important;
+  max-width: unset !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  background: #000;
+}
 video:-webkit-full-screen {
   max-height: unset !important;
   max-width: unset !important;
@@ -240,7 +247,15 @@ video:-webkit-full-screen {
   background: #000;
 }
 /* When the file-video wrapper is the fullscreen element, center the video */
-.file-video-wrap:fullscreen,
+.file-video-wrap:fullscreen {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #000 !important;
+  max-width: unset !important;
+  width: 100% !important;
+  height: 100% !important;
+}
 .file-video-wrap:-webkit-full-screen {
   display: flex !important;
   align-items: center !important;
@@ -250,7 +265,14 @@ video:-webkit-full-screen {
   width: 100% !important;
   height: 100% !important;
 }
-.file-video-wrap:fullscreen .file-video,
+.file-video-wrap:fullscreen .file-video {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  margin: 0 !important;
+}
 .file-video-wrap:-webkit-full-screen .file-video {
   max-width: 100% !important;
   max-height: 100% !important;
@@ -1478,5 +1500,197 @@ ul.chat-list { list-style-type: disc; }
 
 .channel-topic-bar:hover {
   color: var(--text-primary);
+}
+
+/* Use the app state class: fullscreen can be native in browsers or manual in Desktop. */
+.webcam-tile.is-fullscreen,
+.screen-share-tile.is-fullscreen,
+.webcam-tile.haven-manual-fullscreen,
+.screen-share-tile.haven-manual-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: #000;
+  z-index: 10000;
+}
+.webcam-tile.is-fullscreen video,
+.screen-share-tile.is-fullscreen video,
+.webcam-tile.haven-manual-fullscreen video,
+.screen-share-tile.haven-manual-fullscreen video {
+  display: block !important;
+  flex: 1 1 auto;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  object-fit: contain;
+}
+.webcam-tile.is-fullscreen > .webcam-tile-label,
+.screen-share-tile.is-fullscreen > .screen-share-tile-label,
+.webcam-tile.haven-manual-fullscreen > .webcam-tile-label,
+.screen-share-tile.haven-manual-fullscreen > .screen-share-tile-label {
+  top: 1rem;
+  bottom: auto;
+  left: 1rem;
+  right: auto;
+  z-index: 11;
+}
+.webcam-tile.is-fullscreen > .stream-popout-btn,
+.webcam-tile.is-fullscreen > .stream-fullscreen-btn,
+.webcam-tile.is-fullscreen > .stream-minimize-btn,
+.webcam-tile.is-fullscreen > .stream-close-btn,
+.screen-share-tile.is-fullscreen > .stream-popout-btn,
+.screen-share-tile.is-fullscreen > .stream-fullscreen-btn,
+.screen-share-tile.is-fullscreen > .stream-minimize-btn,
+.screen-share-tile.is-fullscreen > .stream-close-btn,
+.webcam-tile.haven-manual-fullscreen > .stream-popout-btn,
+.webcam-tile.haven-manual-fullscreen > .stream-fullscreen-btn,
+.webcam-tile.haven-manual-fullscreen > .stream-minimize-btn,
+.webcam-tile.haven-manual-fullscreen > .stream-close-btn,
+.screen-share-tile.haven-manual-fullscreen > .stream-popout-btn,
+.screen-share-tile.haven-manual-fullscreen > .stream-fullscreen-btn,
+.screen-share-tile.haven-manual-fullscreen > .stream-minimize-btn,
+.screen-share-tile.haven-manual-fullscreen > .stream-close-btn,
+.screen-share-tile.is-fullscreen > .stream-audio-controls,
+.screen-share-tile.haven-manual-fullscreen > .stream-audio-controls {
+  display: none !important;
+}
+.fullscreen-call-toolbar:not([hidden]) {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  max-width: calc(100vw - 1.5rem);
+  box-sizing: border-box;
+  padding: 0.5rem;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 0.75rem;
+  color: #fff;
+  background: rgba(18, 20, 26, 0.88);
+  box-shadow: 0 0.5rem 1.75rem rgba(0,0,0,0.45);
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.fullscreen-call-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 0.625rem;
+  color: #fff;
+  background: rgba(255,255,255,0.12);
+  font-size: 1.125rem;
+  cursor: pointer;
+}
+.fullscreen-call-control:hover,
+.fullscreen-call-control:focus-visible { background: rgba(255,255,255,0.24); }
+.fullscreen-call-control:focus-visible,
+.fullscreen-stream-select:focus-visible,
+.fullscreen-device-select:focus-visible,
+.fullscreen-call-volume:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fullscreen-call-control:disabled { opacity: 0.45; cursor: not-allowed; }
+.fullscreen-call-control.muted,
+.fullscreen-call-control.deafened { background: #a8323e; }
+.fullscreen-call-control.sharing {
+  background: var(--success);
+  color: var(--success-text);
+}
+.fullscreen-call-control.fullscreen-call-leave {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  border: 1px solid var(--danger);
+  border-radius: 50%;
+  background: var(--danger);
+  color: var(--danger-text);
+}
+.fullscreen-call-control.fullscreen-call-leave:hover,
+.fullscreen-call-control.fullscreen-call-leave:focus-visible {
+  background: #d93636;
+  color: var(--danger-text);
+}
+.fullscreen-stream-select {
+  max-width: min(18rem, 32vw);
+  min-height: 2.75rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 0.625rem;
+  color: #fff;
+  background: #242832;
+  font-size: 0.875rem;
+}
+.fullscreen-audio-popover:not([hidden]) {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.625rem);
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr);
+  gap: 0.625rem;
+  width: min(19rem, calc(100vw - 2rem));
+  max-height: min(60vh, 28rem);
+  overflow: auto;
+  padding: 0.875rem;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 0.75rem;
+  color: #fff;
+  background: rgba(24, 27, 34, 0.97);
+  box-shadow: 0 0.5rem 1.75rem rgba(0,0,0,0.5);
+  text-align: left;
+}
+.fullscreen-audio-popover label {
+  display: grid;
+  gap: 0.25rem;
+  color: rgba(255,255,255,0.85);
+  font-size: 0.75rem;
+}
+.fullscreen-device-select {
+  width: 100%;
+  min-height: 2rem;
+  color: #fff;
+  background: #30343d;
+}
+.fullscreen-call-volume { width: 100%; }
+.fullscreen-controls-idle .fullscreen-call-toolbar:not(:focus-within) {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 0.75rem);
+}
+.fullscreen-controls-idle.fullscreen-popup-open .fullscreen-call-toolbar,
+.fullscreen-controls-idle .fullscreen-call-toolbar:hover,
+.fullscreen-controls-idle .fullscreen-call-toolbar:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%);
+}
+@media (max-width: 40rem) {
+  .fullscreen-call-toolbar:not([hidden]) { gap: 0.25rem; padding: 0.375rem; }
+  .fullscreen-call-control { min-width: 2.375rem; min-height: 2.375rem; font-size: 1rem; }
+  .fullscreen-stream-select { max-width: 34vw; min-height: 2.375rem; font-size: 0.75rem; }
 }
 

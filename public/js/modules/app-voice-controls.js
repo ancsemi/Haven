@@ -4,6 +4,20 @@
 
 export default {
 
+_applyVoiceDeviceSelection(kind, deviceId) {
+  const keys = {
+    input: 'haven_input_device',
+    output: 'haven_output_device',
+    camera: 'haven_cam_device',
+  };
+  const key = keys[kind];
+  if (!key) return;
+  localStorage.setItem(key, deviceId);
+  if (kind === 'input' && this.voice?.inVoice) this.voice.switchInputDevice(deviceId);
+  else if (kind === 'output' && this.voice) this.voice.switchOutputDevice(deviceId);
+  else if (kind === 'camera' && this.voice?.isWebcamActive) this.voice.switchCamera(deviceId);
+},
+
 _bindVoiceControls() {
   // Voice buttons
   document.getElementById('voice-join-btn').addEventListener('click', () => this._joinVoice());
@@ -119,22 +133,12 @@ _bindVoiceControls() {
   const camDeviceSelect    = document.getElementById('voice-cam-device');
   if (inputDeviceSelect) {
     inputDeviceSelect.addEventListener('change', (e) => {
-      const deviceId = e.target.value;
-      localStorage.setItem('haven_input_device', deviceId);
-      // Hot-swap if in voice
-      if (this.voice && this.voice.inVoice) {
-        this.voice.switchInputDevice(deviceId);
-      }
+      this._applyVoiceDeviceSelection('input', e.target.value);
     });
   }
   if (outputDeviceSelect) {
     outputDeviceSelect.addEventListener('change', (e) => {
-      const deviceId = e.target.value;
-      localStorage.setItem('haven_output_device', deviceId);
-      // Hot-swap output
-      if (this.voice) {
-        this.voice.switchOutputDevice(deviceId);
-      }
+      this._applyVoiceDeviceSelection('output', e.target.value);
     });
   }
   const camQualitySelect = document.getElementById('voice-cam-quality');
@@ -152,12 +156,7 @@ _bindVoiceControls() {
   }
   if (camDeviceSelect) {
     camDeviceSelect.addEventListener('change', (e) => {
-      const deviceId = e.target.value;
-      localStorage.setItem('haven_cam_device', deviceId);
-      // Hot-swap camera if webcam is active
-      if (this.voice && this.voice.isWebcamActive) {
-        this.voice.switchCamera(deviceId);
-      }
+      this._applyVoiceDeviceSelection('camera', e.target.value);
     });
   }
   // Stream size slider

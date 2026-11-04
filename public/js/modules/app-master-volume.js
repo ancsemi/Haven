@@ -9,7 +9,10 @@ _setupMasterVolume() {
   const voice = document.getElementById('voice-master-volume');
   if (voice && this.voice) {
     voice.value = String(Math.round(this.voice._voiceMasterLevel() * 100));
-    voice.addEventListener('input', () => this.voice.setVoiceMasterVolume(voice.value / 100));
+    voice.addEventListener('input', () => {
+      this.voice.setVoiceMasterVolume(voice.value / 100);
+      this._syncFullscreenCallVolume?.();
+    });
   }
   const notif = document.getElementById('notif-master-volume');
   if (notif && this.notifications) {

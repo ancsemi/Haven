@@ -126,6 +126,7 @@ _hideStreamTile(tile, userId, who, muteAudio = false) {
   }
   this._updateHiddenStreamsBar();
   this._updateScreenShareVisibility();
+  this._handleFullscreenTileHidden?.(tile);
 },
 
 _showStreamTile(tileId, userId) {
@@ -161,6 +162,7 @@ _showStreamTile(tileId, userId) {
   }
   this._updateHiddenStreamsBar();
   this._updateScreenShareVisibility();
+  this._refreshFullscreenStreamPicker?.();
 },
 
 _updateHiddenStreamsBar() {
