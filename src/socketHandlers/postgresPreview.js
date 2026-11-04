@@ -11,10 +11,13 @@ const { parseBorderTransform, utcStamp } = require('./helpers');
 const { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS } = require('./settingEffects');
 const { compatibleThemeFiles, validatedThemeDefault, themePreferenceAllowed } = require('../themeMetadata');
 const { cleanChannelOrder } = require('./users');
+const createEncryptionKeyReads = require('../db/encryptionKeys');
+const createReadPositions = require('../db/readPositions');
 const THEMES_DIR = path.join(__dirname, '..', '..', 'themes');
 
 function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
   const permissions = createPermissions(db);
+  const readPositions = createReadPositions(db);
   const lists = createChannelLists({
     db, userHasPermission: permissions.userHasPermission, roleGateAllows: permissions.roleGateAllows,
     getUserEffectiveLevel: permissions.getUserEffectiveLevel,
@@ -236,19 +239,44 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       const ch = await accessible(socket, data?.code);
       if (!Number.isInteger(data.messageId) || data.messageId <= 0) return;
       if (!await db.prepare('SELECT 1 FROM messages WHERE id = ? AND channel_id = ? AND thread_id IS NULL').get(data.messageId, ch.id)) return;
-      await db.prepare(`INSERT INTO read_positions (user_id, channel_id, last_read_message_id) VALUES (?, ?, ?)
-        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = GREATEST(read_positions.last_read_message_id, excluded.last_read_message_id)`).run(socket.user.id, ch.id, data.messageId);
+      await readPositions.markRead(socket.user.id, ch.code, data.messageId);
+    });
+    on('mark-read-channel', async data => {
+      const ch = await accessible(socket, data?.code);
+      await readPositions.markChannelRead(socket.user.id, ch.code);
+    });
+    on('mark-all-read', async (data, callback) => {
+      try {
+        const channels = await readPositions.markAllRead(socket.user.id);
+        if (typeof callback === 'function') callback({ ok: true, channels });
+      } catch (err) {
+        console.error('Mark all read error:', err);
+        if (typeof callback === 'function') callback({ error: 'Could not mark everything read' });
+      }
+    });
+    on('mark-forum-read', async data => {
+      if (typeof data?.code !== 'string') return;
+      const code = data.code.trim();
+      if (!/^[a-f0-9]{8}$/i.test(code)) return;
+      if (!await readPositions.markForumRead(socket.user.id, code, socket.user.isAdmin)) return;
+      for (const s of io.sockets.sockets.values()) {
+        if (s.user && s.user.id === socket.user.id) s.emit('forum-read', { channelCode: code });
+      }
+    });
+    on('mark-thread-read', async data => {
+      if (!Number.isInteger(data?.parentId)) return;
+      const parent = await readPositions.markThreadRead(socket.user.id, data.parentId, socket.user.isAdmin);
+      if (!parent) return;
+      for (const s of io.sockets.sockets.values()) {
+        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parent.channel_code, parentId: data.parentId });
+      }
     });
     on('get-thread-read-state', async (data, callback) => {
       if (typeof callback !== 'function') return;
       const ids = Array.isArray(data?.parentIds) ? [...new Set(data.parentIds.filter(id => Number.isInteger(id) && id > 0))].slice(0, 200) : [];
-      if (!ids.length) return callback({ reads: {} });
-      const rows = await db.prepare(`SELECT m.id, m.channel_id, c.role_gate, COALESCE(tr.last_read_reply_id, 0) AS last_read
-        FROM messages m JOIN channels c ON c.id = m.channel_id JOIN channel_members cm ON cm.channel_id = m.channel_id AND cm.user_id = ?
-        LEFT JOIN thread_reads tr ON tr.thread_id = m.id AND tr.user_id = ?
-        WHERE m.id IN (${ids.map(() => '?').join(',')}) AND m.thread_id IS NULL`).all(socket.user.id, socket.user.id, ...ids);
+      const rows = await readPositions.threadState(socket.user.id, ids);
       const reads = {};
-      for (const row of rows) if (socket.user.isAdmin || await permissions.roleGateAllows(socket.user.id, { id: row.channel_id, role_gate: row.role_gate })) reads[row.id] = row.last_read;
+      for (const row of rows) if (socket.user.isAdmin || await permissions.roleGateAllows(socket.user.id, { id: row.channel_id, role_gate: row.role_gate })) reads[row.parentId] = row.lastRead;
       callback({ reads });
     });
 
@@ -390,8 +418,9 @@ function publicKey(jwk) {
   return publicJwk;
 }
 function registerKeys(socket, on, db, io) {
+  const keyReads = createEncryptionKeyReads(db);
   on('get-encrypted-key', async () => {
-    const row = await db.prepare('SELECT encrypted_private_key, e2e_key_salt, public_key, signing_key, signing_backup FROM users WHERE id = ?').get(socket.user.id);
+    const row = await keyReads.encryptedKey(socket.user.id);
     const hasBackup = !!(row && row.encrypted_private_key && row.e2e_key_salt);
     socket.emit('encrypted-key-result', {
       encryptedKey: row?.encrypted_private_key || null, salt: row?.e2e_key_salt || null,
@@ -437,13 +466,12 @@ function registerKeys(socket, on, db, io) {
   });
   on('get-public-key', async data => {
     if (!Number.isInteger(data?.userId) || data.userId <= 0) return;
-    const row = await db.prepare('SELECT public_key FROM users WHERE id = ?').get(data.userId);
+    const row = await keyReads.publicKey(data.userId);
     socket.emit('public-key-result', { userId: data.userId, jwk: row?.public_key ? JSON.parse(row.public_key) : null });
   });
   on('get-signing-key', async data => {
     if (!Number.isInteger(data?.userId) || data.userId <= 0) return;
-    const row = await db.prepare('SELECT signing_key FROM users WHERE id = ?').get(data.userId);
-    const keys = await db.prepare('SELECT jwk FROM user_signing_keys WHERE user_id = ? ORDER BY created_at DESC, fp DESC LIMIT 50').all(data.userId);
+    const { row, keys } = await keyReads.signingKeys(data.userId);
     socket.emit('signing-key-result', { userId: data.userId, jwk: row?.signing_key ? JSON.parse(row.signing_key) : null, keys: keys.map(r => JSON.parse(r.jwk)) });
   });
 }

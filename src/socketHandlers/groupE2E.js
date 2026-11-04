@@ -14,9 +14,11 @@ const { isInt, NEW_DMS_PER_HOUR } = require('./helpers');
 
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { CONVERSATION_REFUSAL } = require('../protectedMessages');
+const createEncryptionKeyReads = require('../db/encryptionKeys');
 module.exports = function register(socket, ctx) {
   ctx.leaveGroupDm = async (code, userId, attachments) => { const ch = groupOf(code); if (ch && isMember(ch.id, userId)) { await leaveGroup(ch, userId, attachments); return true; } return false; };
   const { io, db, generateUniqueSharedCode } = ctx;
+  const keyReads = createEncryptionKeyReads(db);
   const { refuseYoungAccount } = require('./postingWait')(socket, ctx);
 
   // Group invites a member may send per hour, by call. A group invite lands
@@ -177,17 +179,21 @@ module.exports = function register(socket, ctx) {
    * A user's current signing key, plus every key they have published before
    * (newest first), so history signed before a key reset still verifies.
    */
-  socket.on('get-signing-key', (data) => {
+  socket.on('get-signing-key', async (data) => {
     const userId = isInt(data && data.userId) ? data.userId : null;
     if (!userId) return;
-    const row = db.prepare('SELECT signing_key FROM users WHERE id = ?').get(userId);
-    const keys = db.prepare('SELECT jwk FROM user_signing_keys WHERE user_id = ? ORDER BY rowid DESC LIMIT 50').all(userId)
-      .map((r) => JSON.parse(r.jwk));
-    socket.emit('signing-key-result', {
-      userId,
-      jwk: row && row.signing_key ? JSON.parse(row.signing_key) : null,
-      keys,
-    });
+    try {
+      const { row, keys: history } = await keyReads.signingKeys(userId);
+      const keys = history.map((r) => JSON.parse(r.jwk));
+      socket.emit('signing-key-result', {
+        userId,
+        jwk: row && row.signing_key ? JSON.parse(row.signing_key) : null,
+        keys,
+      });
+    } catch (err) {
+      console.error('Get signing key error:', err);
+      socket.emit('error-msg', 'Failed to get signing key');
+    }
   });
 
   /* ── Group creation ─────────────────────────────── */
