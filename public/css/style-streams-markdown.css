@@ -602,6 +602,51 @@ video:-webkit-full-screen {
   object-fit: contain;
   display: block;
 }
+/* A popped-out stream in fullscreen: its frame fills the screen and the
+   video fits inside it (app-stream-tiles.js, app-screen-webcam.js). */
+.stream-pip-video:fullscreen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+.stream-pip-video:-webkit-full-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+.stream-pip-video:fullscreen video {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+.stream-pip-video:-webkit-full-screen video {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+/* Haven Desktop fills the window with a class instead of real fullscreen. */
+.stream-pip-video.haven-manual-fullscreen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stream-pip-video.haven-manual-fullscreen video {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
 
 /* Maximized state: fill the whole window so the stream can take up a full
    monitor. !important is required to beat the inline width/height the drag +

@@ -539,8 +539,8 @@ test('the fullscreen stream picker keeps one participant camera and share as sep
   assert.ok(picker, 'each fullscreen toolbar has a stream picker');
   assert.equal(picker.attributes['aria-label'], 'voice_runtime.stream');
   assert.deepEqual(picker.children.map(option => option.textContent), [
-    'Participant — voice.panel.camera',
-    'Participant — voice.screen_share',
+    'Participant · voice.panel.camera',
+    'Participant · voice.screen_share',
   ]);
   assert.deepEqual(picker.children.map(option => option.value), [cameraTile.id, shareTile.id]);
   assert.equal(app.voice.inVoice, true);
@@ -590,8 +590,8 @@ test('the fullscreen stream label follows the selected source and restores on ex
   assert.equal(cameraLabel.textContent, selectedOption.textContent);
   app._refreshFullscreenStreamPicker();
   assert.deepEqual(picker.children.map(option => option.textContent), [
-    'Participant — voice.panel.camera',
-    'Participant — voice.screen_share',
+    'Participant · voice.panel.camera',
+    'Participant · voice.screen_share',
   ]);
 
   document.fullscreenElement = null;
@@ -613,13 +613,13 @@ test('fullscreen local stream labels use the account username instead of You', (
 
   const picker = cameraTile.querySelector('.fullscreen-stream-select');
   assert.deepEqual(picker.children.map(option => option.textContent), [
-    'niko — voice.panel.camera',
-    'niko — voice.screen_share',
+    'niko · voice.panel.camera',
+    'niko · voice.screen_share',
   ]);
-  assert.equal(cameraLabel.textContent, 'niko — voice.panel.camera');
+  assert.equal(cameraLabel.textContent, 'niko · voice.panel.camera');
   picker.value = shareTile.id;
   picker.listeners.change[0]({ stopPropagation() {} });
-  assert.equal(cameraLabel.textContent, 'niko — voice.screen_share');
+  assert.equal(cameraLabel.textContent, 'niko · voice.screen_share');
 
   document.fullscreenElement = null;
   document.dispatch('fullscreenchange');
@@ -658,7 +658,7 @@ test('the fullscreen picker keeps camera labels correct after the wrapper gains 
 
   const cameraOption = cameraTile.querySelector('.fullscreen-stream-select').children
     .find(option => option.value === cameraTile.id);
-  assert.equal(cameraOption.textContent, 'Participant — voice.panel.camera');
+  assert.equal(cameraOption.textContent, 'Participant · voice.panel.camera');
 });
 
 test('the fullscreen picker excludes cameras inside a collapsed webcam container', () => {
@@ -1006,13 +1006,13 @@ test('repeated fullscreen change events do not stack the stream label or reset t
   enterFullscreen(document, cameraTile);
   document.dispatch('fullscreenchange');
   document.dispatch('fullscreenchange');
-  assert.equal(cameraLabel.textContent, `${original} — voice.panel.camera`);
+  assert.equal(cameraLabel.textContent, `${original} · voice.panel.camera`);
 
   const picker = cameraTile.querySelector('.fullscreen-stream-select');
   picker.value = shareTile.id;
   picker.listeners.change[0]({ stopPropagation() {} });
   document.dispatch('fullscreenchange');
-  assert.equal(cameraLabel.textContent, `${original} — voice.screen_share`);
+  assert.equal(cameraLabel.textContent, `${original} · voice.screen_share`);
 
   leaveFullscreen(document);
   assert.equal(cameraLabel.textContent, original);
@@ -1038,7 +1038,7 @@ test('moving fullscreen straight from one tile to another restores the first til
   const shareLabel = shareTile.querySelector('.screen-share-tile-label');
   const original = shareLabel.textContent;
   enterFullscreen(document, shareTile);
-  assert.equal(shareLabel.textContent, `${original} — voice.screen_share`);
+  assert.equal(shareLabel.textContent, `${original} · voice.screen_share`);
 
   document.fullscreenElement = cameraTile;
   document.dispatch('fullscreenchange');

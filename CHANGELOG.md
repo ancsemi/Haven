@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.29.0] - Unreleased
 
 ### Added
+- Call controls in fullscreen (thanks Roolk, #5849): mute, deafen, camera, screen share, call settings and leave stay on screen over a fullscreen camera or screen share, and a picker switches which stream is shown without leaving fullscreen.
 - Video players in chat have Theater (as wide as the chat) and Fullscreen buttons: YouTube cards, uploaded videos and videos in link previews.
 - Platform emoji built into Haven: Windows, Mac, iPhone, Android and Linux, under Platforms in the emoji picker. They work in messages, reactions and role menus.
 - Role menus: each role's emoji is picked from a searchable list of every emoji, the server's custom ones and Haven's own included. A role named after a platform starts with its icon.
@@ -21,9 +22,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - The controls on videos, sounds and link previews are rebuilt: matching drawn icons in one size, with playing controls and view controls in separate groups. The speaker button mutes, and the size button opens a menu of Small, Medium and Large. It used to look like a fullscreen button.
 - The "Full" preview size is now called Large, and a YouTube player at that size is about 750 pixels wide instead of 480. At every size the player now fills its card.
 - With a mouse, the buttons that appear when you hover a message (react, reply, quote, thread, more) now sit at the bottom of the message: beside the reaction chips when it has some, and in the bottom corner when it doesn't. They used to cover the top right of the message. Touch screens are unchanged.
-- Groundwork for optional PostgreSQL support (thanks Slyke, #5827). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
+- Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
+- A call's camera or screen share in fullscreen paused when clicked. Fullscreen now goes on the stream's frame instead of the bare video, in the call grid and in popped-out streams.
 - The microphone could stay on after leaving a call, until Haven was closed: when changing the mic device overlapped with leaving, or when joining failed partway. Both let go of it now (#5850).
 - The last plain browser pop-ups are Haven's own themed dialogs now: moving a channel under another, leaving a channel, deleting a webhook, bot or member, backups, invite links and more. The password box for signing out other sessions hides what you type.
 - A `/tts` message with a line break or a slash in it (a link, "and/or") posted as plain text with `/tts` showing and never spoke. The same went for other slash commands.

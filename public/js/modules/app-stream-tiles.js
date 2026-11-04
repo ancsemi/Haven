@@ -666,8 +666,10 @@ _popOutStreamWindow(tile, userId) {
   pip.querySelector('.stream-pip-close').addEventListener('click', closePip);
   pip.querySelector('.stream-pip-fullscreen').addEventListener('click', (e) => {
     e.stopPropagation();
-    const vid = pip.querySelector('video');
-    const target = vid || pip;
+    // The video's frame goes fullscreen, not the video itself: a video in
+    // fullscreen gets the browser's own controls, and a click on it paused
+    // the stream.
+    const target = pip.querySelector('.stream-pip-video') || pip;
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
     } else {
