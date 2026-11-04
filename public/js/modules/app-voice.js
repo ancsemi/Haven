@@ -511,8 +511,12 @@ async _populateAudioDevices() {
         tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch { /* microphone refused: devices are listed without names */ }
     }
-    devices = await navigator.mediaDevices.enumerateDevices();
-    if (tempStream) tempStream.getTracks().forEach(t => t.stop());
+    try {
+      devices = await navigator.mediaDevices.enumerateDevices();
+    } finally {
+      // Only opened to learn the device names; closed even if listing fails.
+      if (tempStream) tempStream.getTracks().forEach(t => t.stop());
+    }
   } catch (err) {
     console.warn('[Haven] Could not enumerate audio devices:', err);
     return;
