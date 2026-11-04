@@ -1235,7 +1235,6 @@ html.reduce-motion .forum-unread-dot { animation: none; }
 .rg-roles, .rm-roles { max-height: 40vh; overflow: auto; border: 1px solid var(--border); border-radius: 0.5rem; padding: 4px 8px; margin-top: 8px; }
 .rm-row { display: flex; align-items: center; gap: 8px; }
 .rm-row .toggle-row { flex: 1; }
-.rm-row .rm-emoji { width: 3.6rem !important; text-align: center; }
 .role-menu-widget { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
 /* "Pick one" / "Pick up to 2" on a menu with a pick limit (#5800). */
 .role-menu-limit { flex-basis: 100%; font-size: 0.75rem; color: var(--text-muted); }

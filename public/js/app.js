@@ -77,7 +77,7 @@ import ForumMethods    from './modules/app-forum.js?v=4.27.51';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
-import RoleToolMethods from './modules/app-role-tools.js?v=4.26.5';
+import RoleToolMethods from './modules/app-role-tools.js?v=4.27.54';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.27.51';
 import CallMethods from './modules/app-calls.js?v=4.22.24';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
@@ -103,6 +103,7 @@ import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
 import SettingsPageMethods from './modules/app-settings-pages.js?v=4.27.41';
+import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.27.54';
 import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';
 import { startTooltips } from './modules/tooltips.js?v=4.27.51';
 
@@ -573,6 +574,7 @@ class HavenApp {
 // ── Merge all method groups onto the prototype ────────────
 Object.assign(HavenApp.prototype,
   SocketMethods,
+  EmojiChooseMethods,
   SocketChannelMethods,
   SocketEventMethods,
   UIBindMethods,

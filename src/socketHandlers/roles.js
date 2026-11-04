@@ -2,11 +2,12 @@
 
 const bcrypt = require('bcryptjs');
 const OTPAuth = require('otpauth');
-const { isString, isInt, VALID_ROLE_PERMS, ROLE_MENU_EMOJI_RE, roleMenuContent } = require('./helpers');
+const { isString, isInt, VALID_ROLE_PERMS, roleMenuContent } = require('./helpers');
 const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('../roleDefaults');
 const createRoleRefresh = require('./roleRefresh');
 const { reachableChannel } = require('./channelAccess');
 const picks = require('../roleMenuPicks');
+const { isUsableEmoji } = require('../builtinEmojis');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -288,14 +289,14 @@ module.exports = function register(socket, ctx) {
     return { roles: entries.map(e => ({ roleId: e.roleId, emoji: e.emoji })), ...(limit ? { maxPicks: limit } : {}) };
   }
   function roleMenuEntries(raw) {
-    const emojiOk = ROLE_MENU_EMOJI_RE;
     const wanted = Array.isArray(raw) ? raw.slice(0, 20) : [];
     const myLevel = socket.user.isAdmin ? 100 : getUserEffectiveLevel(socket.user.id);
     const seen = new Set();
     const entries = [];
     for (const e of wanted) {
       const roleId = isInt(e && e.roleId) ? e.roleId : null;
-      const emoji = isString(e && e.emoji, 1, 8) && emojiOk.test(e.emoji) ? e.emoji : null;
+      // A Unicode emoji, or a named one (Haven's own or the server's custom).
+      const emoji = isString(e && e.emoji, 1, 32) && isUsableEmoji(db, e.emoji) ? e.emoji : null;
       if (!roleId || !emoji || seen.has(roleId) || seen.has(emoji)) continue;
       const role = db.prepare('SELECT id, name, level FROM roles WHERE id = ?').get(roleId);
       if (!role) continue;

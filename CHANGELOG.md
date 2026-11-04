@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ### Added
 - Video players in chat have Theater (as wide as the chat) and Fullscreen buttons: YouTube cards, uploaded videos and videos in link previews.
 - Platform emoji built into Haven: Windows, Mac, iPhone, Android and Linux, under Platforms in the emoji picker. They work in messages, reactions and role menus.
+- Role menus: each role's emoji is picked from a searchable list of every emoji, the server's custom ones and Haven's own included. A role named after a platform starts with its icon.
 - Add all members on a channel that already exists: right-click it. Everyone on the server joins it, for the admin and anyone who can invite people. Private channels stay invite-only.
 - Hide pictures and videos (Settings > Chat & media): pictures, GIFs and videos in chat show as a small tag you click to see them, videos keep their file name, and link cards start folded. For reading chat around other people. Only changes what you see, on that device (thanks MutantRabbit767).
 

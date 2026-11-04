@@ -2,8 +2,9 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { sanitizeText, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_MENU_EMOJI_RE, roleMenuContent, normalizeWordGroups, validEscalation } = require('./socketHandlers/helpers');
+const { sanitizeText, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, roleMenuContent, normalizeWordGroups, validEscalation } = require('./socketHandlers/helpers');
 const { sniffImageType, stripImageBuffer } = require('./imageMetadata');
+const { isPortableEmoji } = require('./builtinEmojis');
 const { generateUniqueChannelCode } = require('./channelRotation');
 const diskGuard = require('./diskGuard');
 const { STAGING_DIR } = require('./paths');
@@ -230,7 +231,7 @@ async function exportTemplate(db, opts = {}) {
     .map((a) => ({ role: roleRef.get(a.role_id), channel: chRef.get(a.channel_id), grantOnPromote: !!a.grant_on_promote, revokeOnDemote: !!a.revoke_on_demote })), LIMITS.access, 'role channel access rows');
   // A menu's text is not exported: an import always posts the standard text
   // the menu's roles make.
-  const menuEmoji = (e) => typeof e === 'string' && e.length <= 8 && ROLE_MENU_EMOJI_RE.test(e);
+  const menuEmoji = (e) => isPortableEmoji(e);
   const menuRoles = (list) => {
     const seen = new Set();
     return (Array.isArray(list) ? list : []).filter((x) => x && roleRef.has(x.roleId) && menuEmoji(x.emoji) && !seen.has(`r:${x.roleId}`) && !seen.has(`e:${x.emoji}`) && seen.add(`r:${x.roleId}`).add(`e:${x.emoji}`))
@@ -404,7 +405,7 @@ function validateTemplate(input) {
     // ignored: the menu is posted with the standard text its roles make.
     const seen = new Set();
     const roles = c.list(m.roles, 20, `${at}.roles`).map((x) => {
-      if (!isObj(x) || typeof x.emoji !== 'string' || x.emoji.length > 8 || !ROLE_MENU_EMOJI_RE.test(x.emoji)) return c.fail(`${at}.roles`, 'each entry needs a role and an emoji');
+      if (!isObj(x) || !isPortableEmoji(x.emoji)) return c.fail(`${at}.roles`, 'each entry needs a role and an emoji');
       if (seen.has(`r:${x.role}`) || seen.has(`e:${x.emoji}`)) return c.fail(`${at}.roles`, 'a role or an emoji is on the menu twice');
       seen.add(`r:${x.role}`).add(`e:${x.emoji}`);
       return { role: roleRef(x.role, `${at}.roles`), emoji: x.emoji };

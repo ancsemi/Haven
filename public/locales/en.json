@@ -3189,6 +3189,7 @@
         "title_label": "Title",
         "title_placeholder": "Pick your roles",
         "emoji": "Emoji people react with",
+        "emoji_pick": "Pick the emoji people react with",
         "pick_one": "Tick at least one role",
         "posted": "Role menu posted",
         "edit": "Edit role menu",
@@ -4555,6 +4556,7 @@
     "search_placeholder": "Search emojis..."
   },
   "emoji": {
+    "choose": "Choose an emoji",
     "search_placeholder": "Search emoji…",
     "no_results": "No emoji found",
     "section_emoji": "Emoji",
