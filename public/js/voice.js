@@ -1782,21 +1782,7 @@ class VoiceManager {
       // Do not let Socket.IO buffer a stale voice-join if the connection
       // dropped while microphone and noise processing were being prepared.
       if (this.socket && this.socket.connected === false) {
-        this._disableRNNoise();
-        this._stopNoiseGate();
-        this._stopLocalTalkDetection();
-        if (this.rawStream) {
-          this.rawStream.getTracks().forEach(track => track.stop());
-          this.rawStream = null;
-        }
-        if (this.localStream) {
-          this.localStream.getTracks().forEach(track => track.stop());
-          this.localStream = null;
-        }
-        if (this.audioCtx) {
-          this.audioCtx.close().catch(() => { /* already closed */ });
-          this.audioCtx = null;
-        }
+        this._dropUnjoinedMic();
         return false;
       }
 
@@ -1827,10 +1813,32 @@ class VoiceManager {
       return true;
     } catch (err) {
       console.error('Voice join failed:', err);
+      // The mic may already be open; nothing else would ever close it (#5850).
+      if (!this.inVoice) this._dropUnjoinedMic();
       return false;
     } finally {
       this._joinInFlight = false;
       this._joiningChannelCode = null;
+    }
+  }
+
+  // A join that stopped before it finished lets go of the mic and the audio
+  // processing it set up.
+  _dropUnjoinedMic() {
+    this._disableRNNoise();
+    this._stopNoiseGate();
+    this._stopLocalTalkDetection();
+    if (this.rawStream) {
+      this.rawStream.getTracks().forEach(track => track.stop());
+      this.rawStream = null;
+    }
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream = null;
+    }
+    if (this.audioCtx) {
+      this.audioCtx.close().catch(() => { /* already closed */ });
+      this.audioCtx = null;
     }
   }
 
@@ -4034,6 +4042,12 @@ class VoiceManager {
       newRawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
     } catch (err) {
       console.error('[Voice] Failed to switch input device:', err);
+      return;
+    }
+    // The call ended while the new mic was opening: let it go again, or it
+    // stays open with nothing left to close it (#5850).
+    if (!this.inVoice || !this.audioCtx) {
+      newRawStream.getTracks().forEach(t => t.stop());
       return;
     }
 
