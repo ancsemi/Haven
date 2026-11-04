@@ -529,12 +529,28 @@ _freshImageUrl(img) {
   return Promise.resolve({ url: this._lazyRealSrc ? this._lazyRealSrc(img) : (img && img.src) || '', blob: null, ephemeral: false });
 },
 
+// Whether a tab opened from here can read this page's object URLs. On a
+// phone, in an installed app window or inside the Android app, a new tab is
+// another app or browser that cannot, so it showed a white page (#5853).
+_newTabSharesSession() {
+  if (this._isMobileApp || window !== window.top) return false;
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) return false;
+  return !(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+},
+
 _openImageInNewTab(img) {
   this._freshImageUrl(img).then(async ({ url, blob, ephemeral }) => {
     if (!url) return;
     // An object URL only resolves for a tab that shares this page's session,
     // so the decrypted copy opens without noopener; a plain link keeps it.
     if (!ephemeral) { window.open(url, '_blank', 'noopener,noreferrer'); return; }
+    // Where no such tab exists, the picture opens in Haven's own viewer.
+    if (!this._newTabSharesSession()) {
+      try { URL.revokeObjectURL(url); } catch { /* already revoked */ }
+      this._hideImageContextMenu?.();
+      this._openLightbox(img.src, img);
+      return;
+    }
     // The decrypted copy opens as a page on Haven's own origin, and the
     // sender picked its type. An SVG there is a document that can run script
     // as Haven, so anything but a plain raster picture is redrawn to a PNG
