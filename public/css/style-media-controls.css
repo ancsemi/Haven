@@ -7,13 +7,18 @@
   display: inline-flex;
   align-items: center;
   gap: 0.125rem;
+  padding: 0.125rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
-.media-controls + .media-controls {
-  margin-left: 0.25rem;
-  padding-left: 0.5rem;
-  border-left: 1px solid var(--border-color);
-}
+.media-controls + .media-controls { margin-left: 0.25rem; }
 .file-info .media-controls { margin-left: auto; }
+
+/* A file row keeps at least a few words of the name on its line: when the
+   controls do not fit beside it they move to a line of their own, instead of
+   squeezing the name to a letter per line on a phone (#5855). */
+.file-info { flex-wrap: wrap; row-gap: 0.25rem; }
+.file-info .file-name { flex: 1 1 0; min-width: min(7rem, 100%); }
 
 .media-btn {
   flex: 0 0 auto;
