@@ -74,6 +74,25 @@ test('dismissing with no channel code is a no-op and never throws', () => {
   assert.doesNotThrow(() => app._dismissChannelNotifications(undefined));
 });
 
+test('an older Desktop app (a bridge without dismissNotification), no service worker, or one not yet active is skipped without error', () => {
+  const { app, window } = loadChannelUnread();
+  // Haven Desktop 1.8.2: has the bridge and notify(), but not dismissNotification().
+  window.havenDesktop = { notify() {} };
+  assert.doesNotThrow(() => app._dismissChannelNotifications('chan-e'));
+
+  app._swRegistration = null;
+  assert.doesNotThrow(() => app._dismissChannelNotifications('chan-e'));
+  app._swRegistration = { active: null }; // installing or waiting
+  assert.doesNotThrow(() => app._dismissChannelNotifications('chan-e'));
+
+  // A service worker that throws on postMessage must not stop the Desktop call.
+  const dismissed = [];
+  app._swRegistration = { active: { postMessage: () => { throw new Error('worker gone'); } } };
+  window.havenDesktop = { dismissNotification: (code) => dismissed.push(code) };
+  assert.doesNotThrow(() => app._dismissChannelNotifications('chan-f'));
+  assert.deepEqual(dismissed, ['chan-f']);
+});
+
 test("a listener on the socket is wired to dismiss notifications for the read channel", () => {
   const context = vm.createContext({
     module: { exports: {} }, console, t: (k) => k, URL, URLSearchParams, window: {},
