@@ -4584,6 +4584,7 @@
       "travel": "Travel",
       "objects": "Objects",
       "symbols": "Symbols",
+      "platforms": "Platforms",
       "flags": "Flags",
       "custom": "Custom"
     }

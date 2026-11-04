@@ -34,7 +34,7 @@ import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.25.28';
 import AppearanceMethods from './modules/app-appearance.js?v=4.27.49';
 import AccessibilityMethods from './modules/app-accessibility.js?v=4.27.19';
 import SoundMethods from './modules/app-sounds.js?v=4.25.21';
-import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
+import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.27.54';
 import BotMethods from './modules/app-bots.js?v=4.27.52';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
 import ChannelMethods  from './modules/app-channels.js?v=4.27.46';
@@ -58,7 +58,7 @@ import MusicFileMethods from './modules/app-music-file.js?v=4.27.49';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.27.52';
 import MessageContentMethods from './modules/app-message-content.js?v=4.27.51';
-import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.25.2';
+import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.27.54';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
 import ThreadMethods from './modules/app-threads.js?v=4.27.20';
 import AdminMethods    from './modules/app-admin.js?v=4.27.41';
@@ -202,6 +202,7 @@ class HavenApp {
       'Travel':   ['🚗','🚕','🚀','✈️','🚁','🛸','🚢','🏠','🏢','🏰','🗼','🗽','⛩️','🌋','🏔️','🌊','🌅','🌄','🌉','🎡','🎢','🗺️','🧭','🏖️','🏕️','🌍','🌎','🌏','🛳️','⛵','🚂','🚇','🏎️','🏍️','🛵','🛶'],
       'Objects':  ['⌚','📱','💻','⌨️','🖥️','💾','📷','🔭','🔬','💡','🔦','📚','📝','✏️','📎','📌','🔑','🔒','🔓','🛡️','⚔️','🔧','💰','💎','📦','🎁','✉️','🔔','🪙','💸','🏷️','🔨','🪛','🧲','🧪','🧫','💊','🩺','🩹','🧬','💬','💭','🗨️','🗯️','📣','📢','🔊','🔇','📰','🗞️','📋','📁','📂','🗂️','📅','📆','🗓️','🖊️','🖋️','✒️','📏','📐','🗑️','👑','💍','👒','🎩','🧢','👓','🕶️','🧳','🌂','☂️'],
       'Symbols':  ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💝','✨','⭐','🌟','💫','🔥','💯','✅','❌','❗','❓','❕','❔','‼️','⁉️','!','?',',','.','💤','🚫','⚠️','♻️','🏳️','🏴','🎵','➕','➖','➗','💲','♾️','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🟤','🔶','🔷','🔺','🔻','💠','🔘','🏳️‍🌈','🏴‍☠️','⚡','☀️','🌙','🌈','☁️','❄️','💨','🌪️','☮️','✝️','☪️','🕉️','☯️','✡️','🔯','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','⛎','🆔','⚛️','🈶','🈚','🈸','🈺','🈷️','🆚','🉐','🈹','🈲','🉑','🈴','🈳','㊗️','㊙️','🈵','🔅','🔆','🔱','📛','♻️','🔰','⭕','✳️','❇️','🔟','🔠','🔡','🔢','🔣','🔤','🆎','🆑','🆒','🆓','ℹ️','🆕','🆖','🅾️','🆗','🅿️','🆘','🆙','🆚','🈁','🈂️','💱','💲','#️⃣','*️⃣','0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟','©️','®️','™️'],
+      'Platforms': [':os_windows:',':os_mac:',':os_ios:',':os_android:',':os_linux:'],
       'Flags':    [':flag_us:',':us_betsy_ross:',':gadsden:',':flag_gb:',':flag_ca:',':flag_au:',':flag_nz:',':flag_ie:',':flag_fr:',':flag_de:',':flag_it:',':flag_es:',':flag_pt:',':flag_nl:',':flag_be:',':flag_lu:',':flag_ch:',':flag_at:',':flag_dk:',':flag_no:',':flag_se:',':flag_fi:',':flag_is:',':flag_pl:',':flag_ee:',':flag_lv:',':flag_lt:',':flag_cz:',':flag_sk:',':flag_hu:',':flag_ro:',':flag_bg:',':flag_si:',':flag_hr:',':flag_gr:',':flag_al:',':flag_me:',':flag_mk:',':flag_ua:',':flag_tr:',':flag_jp:',':flag_kr:',':flag_tw:',':flag_ph:',':flag_th:',':flag_sg:',':flag_in:',':flag_id:',':flag_my:',':flag_vn:',':flag_mn:',':flag_bd:',':flag_lk:',':flag_np:',':flag_il:',':flag_sa:',':flag_ae:',':flag_qa:',':flag_bh:',':flag_kw:',':flag_om:',':flag_jo:',':flag_eg:',':flag_ma:',':flag_tn:',':flag_mx:',':flag_br:',':flag_ar:',':flag_cl:',':flag_co:',':flag_pe:',':flag_uy:',':flag_ec:',':flag_cr:',':flag_pa:',':flag_gt:',':flag_do:',':flag_jm:',':flag_bs:',':flag_tt:',':flag_za:',':flag_ke:',':flag_ng:',':flag_gh:',':flag_sn:',':flag_rw:',':flag_bw:',':flag_ci:',':flag_tz:']
     };
 
@@ -349,6 +350,13 @@ class HavenApp {
       { name: 'flag_tz', url: '/emoji/flags/tz.svg', keywords: 'tanzania flag' },
       { name: 'us_betsy_ross', url: '/emoji/us-betsy-ross.svg', keywords: 'betsy ross flag united states america usa stars stripes colonies historical patriotic' },
       { name: 'gadsden', url: '/emoji/us-gadsden.svg', keywords: 'gadsden dont tread on me snake rattlesnake flag united states america usa liberty patriotic' },
+      // Platforms, for roles like Windows or Android. Drawn for Haven; see
+      // emoji/platforms/ATTRIBUTION.txt.
+      { name: 'os_windows', url: '/emoji/platforms/windows.svg', keywords: 'windows microsoft pc computer os platform' },
+      { name: 'os_mac', url: '/emoji/platforms/mac.svg', keywords: 'mac macos macintosh apple computer os platform' },
+      { name: 'os_ios', url: '/emoji/platforms/ios.svg', keywords: 'ios iphone ipad apple phone mobile os platform' },
+      { name: 'os_android', url: '/emoji/platforms/android.svg', keywords: 'android google phone mobile robot os platform' },
+      { name: 'os_linux', url: '/emoji/platforms/linux.svg', keywords: 'linux tux penguin gnu os platform' },
     ];
     this.stickers = []; // [{id, name, pack_name, url}], loaded from server
     this._emojiPickerContext = 'main'; // 'main' | 'thread' | 'dmpip', set by emoji button handlers

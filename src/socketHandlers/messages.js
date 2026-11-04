@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const selfDestruct = require('../selfDestruct');
+const { isUsableEmoji } = require('../builtinEmojis');
 const { applyTagsToMessage, applyTagsToFiles, fileTags, messageTags, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, extractUploadPaths, effectiveLimits } = require('../uploadTags');
 const { votesFor, pieceVotesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
@@ -2651,16 +2652,8 @@ module.exports = function register(socket, ctx) {
       const reactMute = activeMuteNotice(socket.user.id);
       if (reactMute) return socket.emit('error-msg', reactMute);
 
-      const allowed = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]+$/u;
-      const customEmojiPattern = /^:[a-zA-Z0-9_-]{1,30}:$/;
-      if (!allowed.test(data.emoji) && !customEmojiPattern.test(data.emoji)) return;
-      if (data.emoji.length > 32) return;
-
-      if (customEmojiPattern.test(data.emoji)) {
-        const emojiName = data.emoji.slice(1, -1).toLowerCase();
-        const exists = db.prepare('SELECT 1 FROM custom_emojis WHERE name = ?').get(emojiName);
-        if (!exists) return;
-      }
+      // A Unicode emoji, or :name: for one of Haven's own or the server's custom ones.
+      if (!isUsableEmoji(db, data.emoji)) return;
 
       // Look up the channel from the message itself, not socket.currentChannel.
       // Reactions can be triggered from the DM PiP while the user's main pane

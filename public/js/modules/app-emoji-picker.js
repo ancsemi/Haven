@@ -295,7 +295,7 @@ _toggleEmojiPicker(anchorEl) {
   // swapping it out, so every category is reachable by scrolling too.
   const tabRow = document.createElement('div');
   tabRow.className = 'emoji-tab-row';
-  const catIcons = { 'Smileys':'😀', 'People':'👋', 'Animals':'🐶', 'Food':'🍕', 'Activities':'🎮', 'Travel':'🚀', 'Objects':'💡', 'Symbols':'❤️', 'Flags':'🚩', 'Custom':'⭐' };
+  const catIcons = { 'Smileys':'😀', 'People':'👋', 'Animals':'🐶', 'Food':'🍕', 'Activities':'🎮', 'Travel':'🚀', 'Objects':'💡', 'Symbols':'❤️', 'Platforms':'💻', 'Flags':'🚩', 'Custom':'⭐' };
   const catTabs = {};
   const catSections = {}; // cat -> non-sticky section wrapper, our stable scroll anchor
   const setActiveTab = (cat) => {

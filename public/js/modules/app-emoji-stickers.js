@@ -346,10 +346,11 @@ async _loadStandardEmojis() {
     if (!res.ok) return;
     const data = await res.json();
     if (!data.categories || !Object.keys(data.categories).length) return;
-    // Keep Haven's bundled flag category (its :flag_xx: images render on every
-    // OS, unlike Unicode's regional-indicator flags) and layer the rest under it.
-    const flags = this.emojiCategories.Flags;
-    this.emojiCategories = { ...data.categories, ...(flags ? { Flags: flags } : {}) };
+    // Keep Haven's bundled categories (platform icons, and flags, whose
+    // :flag_xx: images render on every OS, unlike Unicode's regional-indicator
+    // flags) and layer the rest under them.
+    const { Platforms: platforms, Flags: flags } = this.emojiCategories;
+    this.emojiCategories = { ...data.categories, ...(platforms ? { Platforms: platforms } : {}), ...(flags ? { Flags: flags } : {}) };
     this.emojis = Object.values(this.emojiCategories).flat();
     // Built-in keywords are richer than Unicode's bare names, so let them win
     // where they exist and use the Unicode name to fill every other gap.
