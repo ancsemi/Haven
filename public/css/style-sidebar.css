@@ -84,6 +84,34 @@
   white-space: nowrap;
 }
 
+/* Own custom status under the name (#5859). Always present so "Set status" is
+   findable without knowing to click the small status dot. */
+.user-bar-status-text {
+  display: block;
+  width: 100%;
+  margin: 0.0625rem 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-bar-status-text.is-empty {
+  color: var(--text-muted);
+}
+.user-bar-status-text:hover,
+.user-bar-status-text:focus-visible {
+  color: var(--text-primary);
+  outline: none;
+}
+
+
 .icon-btn {
   background: transparent;
   border: none;

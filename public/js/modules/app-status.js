@@ -35,12 +35,30 @@ _setupStatusPicker() {
     userBar.appendChild(statusBtn);
   }
 
+  // Own custom status under the name in the user bar (#5859). Empty state
+  // still shows "Set status" so the control is findable without knowing to
+  // click the small status dot.
+  if (userNames && !document.getElementById('user-bar-status-text')) {
+    const statusLine = document.createElement('button');
+    statusLine.type = 'button';
+    statusLine.id = 'user-bar-status-text';
+    statusLine.className = 'user-bar-status-text is-empty';
+    statusLine.title = t('app.profile.set_status');
+    statusLine.setAttribute('aria-label', t('app.profile.set_status'));
+    statusLine.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._toggleStatusPicker({ focusCustom: true });
+    });
+    userNames.appendChild(statusLine);
+  }
+
   // Build dropdown (opens downward to avoid clipping)
   const picker = document.createElement('div');
   picker.id = 'status-picker';
   picker.className = 'status-picker';
   picker.style.display = 'none';
   picker.innerHTML = `
+    <div class="status-option status-set-custom" data-focus-custom="1">${t('app.profile.set_status')}</div>
     <div class="status-option" data-status="online"><span class="user-dot"></span> ${t('app.profile.online')}</div>
     <div class="status-option" data-status="away"><span class="user-dot away"></span> ${t('app.profile.away')}</div>
     <div class="status-option" data-status="dnd"><span class="user-dot dnd"></span> ${t('app.profile.dnd')}</div>
@@ -64,6 +82,15 @@ _setupStatusPicker() {
 
   picker.querySelectorAll('.status-option').forEach(opt => {
     opt.addEventListener('click', () => {
+      if (opt.dataset.focusCustom) {
+        const input = document.getElementById('status-text-input');
+        if (input) {
+          input.value = this.userStatusText || '';
+          input.focus();
+          input.select();
+        }
+        return;
+      }
       const status = opt.dataset.status;
       const statusText = document.getElementById('status-text-input').value.trim();
       // Track whether user manually chose a non-online status (away/dnd/invisible)
@@ -121,13 +148,16 @@ _setupStatusPicker() {
 
   // Close picker on outside click
   document.addEventListener('click', (e) => {
-    if (!picker.contains(e.target) && !statusBtn.contains(e.target)) {
+    const statusLine = document.getElementById('user-bar-status-text');
+    if (!picker.contains(e.target) && !statusBtn.contains(e.target) && !(statusLine && statusLine.contains(e.target))) {
       picker.style.display = 'none';
     }
   });
+
+  this._updateStatusPickerUI();
 },
 
-_toggleStatusPicker() {
+_toggleStatusPicker(opts = {}) {
   const picker = document.getElementById('status-picker');
   // Anchor on the button, which is the visible surface now, falling back to the
   // dot so nothing breaks if the markup is ever built the old way.
@@ -139,6 +169,8 @@ _toggleStatusPicker() {
     picker.style.display = 'none';
     return;
   }
+  const input = document.getElementById('status-text-input');
+  if (input) input.value = this.userStatusText || '';
   // Position the fixed picker relative to the status dot
   if (dot) {
     const rect = dot.getBoundingClientRect();
@@ -172,6 +204,13 @@ _toggleStatusPicker() {
     }
   }
   picker.style.display = 'block';
+  if (opts.focusCustom) {
+    const custom = document.getElementById('status-text-input');
+    if (custom) {
+      custom.focus();
+      custom.select();
+    }
+  }
 },
 
 // Is there anything linked that could actually produce this kind of activity?
@@ -220,6 +259,23 @@ _updateStatusPickerUI() {
     if (this.userStatus === 'away') dot.classList.add('away');
     else if (this.userStatus === 'dnd') dot.classList.add('dnd');
     else if (this.userStatus === 'invisible') dot.classList.add('invisible');
+  }
+  const line = document.getElementById('user-bar-status-text');
+  if (line) {
+    const textValue = (this.userStatusText || '').trim();
+    if (textValue) {
+      line.textContent = textValue;
+      line.title = textValue;
+      line.classList.remove('is-empty');
+    } else {
+      line.textContent = t('app.profile.set_status');
+      line.title = t('app.profile.set_status');
+      line.classList.add('is-empty');
+    }
+  }
+  const input = document.getElementById('status-text-input');
+  if (input && document.activeElement !== input) {
+    input.value = this.userStatusText || '';
   }
 },
 

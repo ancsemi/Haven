@@ -25,6 +25,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
+- The custom status line under your name was easy to miss on desktop: friends could see it on your profile while you had no clear place to set it. Your own status now shows under your name in the user bar (or "Set status" when empty), clicking it opens the status picker, and the picker starts with a Set status entry (#5859).
+
 - A call's camera or screen share in fullscreen paused when clicked. Fullscreen now goes on the stream's frame instead of the bare video, in the call grid and in popped-out streams.
 - The microphone could stay on after leaving a call, until Haven was closed: when changing the mic device overlapped with leaving, or when joining failed partway. Both let go of it now (#5850).
 - The last plain browser pop-ups are Haven's own themed dialogs now: moving a channel under another, leaving a channel, deleting a webhook, bot or member, backups, invite links and more. The password box for signing out other sessions hides what you type.

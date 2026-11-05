@@ -135,6 +135,13 @@
   background: var(--bg-hover);
 }
 
+.status-option.status-set-custom {
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.125rem;
+  padding-bottom: 0.5rem;
+}
+
 .status-option .user-dot {
   position: static;
   flex-shrink: 0;
