@@ -24,6 +24,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - The "Full" preview size is now called Large, and a YouTube player at that size is about 750 pixels wide instead of 480. At every size the player now fills its card.
 - With a mouse, the buttons that appear when you hover a message (react, reply, quote, thread, more) now sit at the bottom of the message: beside the reaction chips when it has some, and in the bottom corner when it doesn't. They used to cover the top right of the message. Touch screens are unchanged.
 - The donors list calls the people who give every month Monthly Supporters instead of Sponsors.
+- The account bar at the top of the sidebar shows your profile picture, in your chosen shape, and clicking it opens Edit Profile. The server connection light sits on its top-left corner.
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
