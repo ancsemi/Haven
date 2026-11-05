@@ -15,6 +15,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Role menus: each role's emoji is picked from a searchable list of every emoji, the server's custom ones and Haven's own included. A role named after a platform starts with its icon.
 - Add all members on a channel that already exists: right-click it. Everyone on the server joins it, for the admin and anyone who can invite people. Private channels stay invite-only.
 - Hide pictures and videos (Settings > Chat & media): pictures, GIFs and videos in chat show as a small tag you click to see them, videos keep their file name, and link cards start folded. For reading chat around other people. Only changes what you see, on that device (thanks MutantRabbit767).
+- Video tutorials: short how-to videos are linked from the website, the README and the setup guide, and are on YouTube and Rumble.
 
 ### Changed
 - Tooltips are drawn by Haven: they wrap at a readable width, stay inside the window and follow the theme. A long one used to run far past the edge of the app.
@@ -22,6 +23,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - The controls on videos, sounds and link previews are rebuilt: matching drawn icons in one size, with playing controls and view controls in separate groups. The speaker button mutes, and the size button opens a menu of Small, Medium and Large. It used to look like a fullscreen button.
 - The "Full" preview size is now called Large, and a YouTube player at that size is about 750 pixels wide instead of 480. At every size the player now fills its card.
 - With a mouse, the buttons that appear when you hover a message (react, reply, quote, thread, more) now sit at the bottom of the message: beside the reaction chips when it has some, and in the bottom corner when it doesn't. They used to cover the top right of the message. Touch screens are unchanged.
+- The donors list calls the people who give every month Monthly Supporters instead of Sponsors.
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
