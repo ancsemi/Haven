@@ -721,25 +721,45 @@ _prependMessages(messages) {
   }
 
   // 7. Keep anchor stable while async content (images, embeds, link previews)
-  //    loads in the prepended area above the viewport.
+  //    loads in the prepended area above the viewport. Stop these late
+  //    corrections as soon as the reader scrolls themselves — otherwise a
+  //    preview or image that arrives later snaps them back to the position
+  //    captured at prepend time (#5858). Same stop events as _scrollToMessage.
+  let lateRealign = true;
+  let mo = null;
+  const stopLateRealign = () => {
+    if (!lateRealign) return;
+    lateRealign = false;
+    if (mo) mo.disconnect();
+    for (const ev of ['wheel', 'touchstart', 'keydown', 'mousedown']) {
+      container.removeEventListener(ev, stopLateRealign, true);
+    }
+  };
+  const maybeRealign = () => {
+    if (!lateRealign || this._coupledToBottom) return;
+    realign();
+  };
   for (const el of addedEls) {
     if (!container.contains(el)) continue;
     el.querySelectorAll('img').forEach(img => {
       if (!img.complete) {
-        img.addEventListener('load', () => { if (!this._coupledToBottom) realign(); }, { once: true });
-        img.addEventListener('error', () => { if (!this._coupledToBottom) realign(); }, { once: true });
+        img.addEventListener('load', () => { maybeRealign(); }, { once: true });
+        img.addEventListener('error', () => { maybeRealign(); }, { once: true });
       }
     });
   }
 
   // Watch for DOM changes in prepended messages (link previews, YouTube
   // embeds, E2E image decryption) that add height above the anchor.
-  const mo = new MutationObserver(() => { if (!this._coupledToBottom) realign(); });
+  mo = new MutationObserver(() => { maybeRealign(); });
   for (const el of addedEls) {
     if (!container.contains(el)) continue;
     mo.observe(el, { childList: true, subtree: true });
   }
-  setTimeout(() => mo.disconnect(), 15000);
+  for (const ev of ['wheel', 'touchstart', 'keydown', 'mousedown']) {
+    container.addEventListener(ev, stopLateRealign, { capture: true, passive: true });
+  }
+  setTimeout(stopLateRealign, 15000);
 
   // 8. Unfreeze on next frame
   requestAnimationFrame(() => { this._suppressCoupleCheck = false; });
