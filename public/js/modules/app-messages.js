@@ -661,12 +661,14 @@ _prependMessages(messages) {
   container.insertBefore(fragment, container.firstChild);
 
   // 5. Realign anchor immediately after insert
+  let placed = container.scrollTop;
   const realign = () => {
     if (!anchorEl) return;
     const cr = container.getBoundingClientRect();
     const ar = anchorEl.getBoundingClientRect();
     const drift = (ar.top - cr.top) - anchorOffset;
     if (Math.abs(drift) > 0.5) container.scrollTop += drift;
+    placed = container.scrollTop;
   };
   realign();
 
@@ -722,19 +724,25 @@ _prependMessages(messages) {
 
   // 7. Keep anchor stable while async content (images, embeds, link previews)
   //    loads in the prepended area above the viewport.
+  placed = container.scrollTop;
+  let live = true;
+  const late = () => {
+    live = live && Math.abs(container.scrollTop - placed) <= 1;
+    live ? this._coupledToBottom || realign() : mo.disconnect();
+  };
   for (const el of addedEls) {
     if (!container.contains(el)) continue;
     el.querySelectorAll('img').forEach(img => {
       if (!img.complete) {
-        img.addEventListener('load', () => { if (!this._coupledToBottom) realign(); }, { once: true });
-        img.addEventListener('error', () => { if (!this._coupledToBottom) realign(); }, { once: true });
+        img.addEventListener('load', late, { once: true });
+        img.addEventListener('error', late, { once: true });
       }
     });
   }
 
   // Watch for DOM changes in prepended messages (link previews, YouTube
   // embeds, E2E image decryption) that add height above the anchor.
-  const mo = new MutationObserver(() => { if (!this._coupledToBottom) realign(); });
+  const mo = new MutationObserver(late);
   for (const el of addedEls) {
     if (!container.contains(el)) continue;
     mo.observe(el, { childList: true, subtree: true });
