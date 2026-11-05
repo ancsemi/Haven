@@ -2,6 +2,8 @@
 
 Welcome to **Haven**, your private chat server. This guide covers everything you need to get Haven running and invite your friends.
 
+Prefer to watch? There are short [video tutorials](https://haven-app.com/tutorials.html) for the most common tasks, also on [YouTube](https://www.youtube.com/@Haven-App_Tutorials) and [Rumble](https://rumble.com/user/HavenApp).
+
 ---
 
 ## What You Need
@@ -16,6 +18,8 @@ Welcome to **Haven**, your private chat server. This guide covers everything you
 ## Docker Setup (Alternative)
 
 If you'd rather run Haven in a container (great for NAS boxes, servers, or if you just like Docker):
+
+Video: [Install with Docker](https://haven-app.com/tutorials.html#install-docker)
 
 ### Quick Start
 
@@ -169,6 +173,8 @@ See the [Proxmox VE LXC Deployment Guide](docs/examples/proxmox-lxc/README.md) f
 ## Getting Started
 
 ### Step 1: First Launch
+
+Videos: [Install on Windows](https://haven-app.com/tutorials.html#install-windows) · [Install on Linux](https://haven-app.com/tutorials.html#install-linux) · [First login](https://haven-app.com/tutorials.html#first-login)
 
 Double-click **`Start Haven.bat`**
 

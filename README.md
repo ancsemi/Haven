@@ -34,6 +34,9 @@ channel, share the code. The certificate warning on first load is expected, clic
 
 [One-click cloud deploy on Zeabur](https://zeabur.com/templates?repoURL=https://github.com/ancsemi/Haven) · [on RepoCloud](https://repocloud.io/details/Haven/) · [Full setup guide](GUIDE.md)
 
+**Prefer video?** Short [video tutorials](https://haven-app.com/tutorials.html) walk through installing and running a
+server. They are also on [YouTube](https://www.youtube.com/@Haven-App_Tutorials) and [Rumble](https://rumble.com/user/HavenApp).
+
 ---
 
 ## Three ways in
@@ -130,6 +133,9 @@ Everything in detail lives in **[GUIDE.md](GUIDE.md)**: setup, Docker, remote ac
 (port forwarding, Tailscale, Cloudflare Tunnel, reverse proxies), themes, voice and
 TURN, Discord import, Ferry, encryption, backups, configuration, translations, the
 bot API, and troubleshooting.
+
+Short how-to videos are on the [tutorials page](https://haven-app.com/tutorials.html), [YouTube](https://www.youtube.com/@Haven-App_Tutorials) and
+[Rumble](https://rumble.com/user/HavenApp).
 
 Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
