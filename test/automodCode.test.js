@@ -94,3 +94,19 @@ test('an uploaded file whose name looks like a site is not a link', () => {
   assert.equal(blocked('[file:ssstwitter.com_1 (1) [HD] [2].mp4](/uploads/a.mp4|1 MB)', chat), null);
   assert.ok(blocked('[file:x] evil.com [y](/uploads/a.txt|1 KB)', chat));
 });
+
+test('file markup cannot carry a clickable link past the filter', () => {
+  // Chat shows these as plain text (no size, an extra bracket, words around
+  // them), and an address with :// in the name becomes a link there. A real
+  // file name never has a slash in it.
+  assert.ok(blocked('[file:https://evil.com](/uploads/x)', chat));
+  assert.ok(blocked('hi\n[file:a [b] https://evil.com](/uploads/x|1 KB)', chat));
+  assert.ok(blocked('look [file:https://evil.com x](/uploads/x.txt|1 KB)', chat));
+  assert.ok(blocked('[file:http://evil.com/a.mp4](/uploads/a.mp4|1 MB)'));
+  // The same goes for any [text](target) whose target is not a web address.
+  assert.ok(blocked('[https://evil.com](/anything)', chat));
+  assert.ok(blocked('[see https://evil.com/x](#)'));
+  // A real link's label is what the reader sees; its target is what is checked.
+  assert.equal(blocked('[https://github.com/a](https://github.com/b)', chat), null);
+  assert.equal(blocked('[notes about evil.com](/uploads/x.txt)', chat), null);
+});
