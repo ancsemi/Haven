@@ -8,6 +8,7 @@ export default {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 _updateAvatarPreview() {
+  this._renderUserBarAvatar();
   const preview = document.getElementById('avatar-upload-preview');
   if (!preview) return;
   if (this.user.avatar) {
@@ -1398,6 +1399,7 @@ async _commitAvatarSettings() {
     }
 
     if (status) { status.textContent = t('media_runtime.avatar.saved'); status.style.color = 'var(--success, #6f6)'; }
+    this._renderUserBarAvatar();
     this._showToast(t('media_runtime.avatar.saved_toast'), 'success');
     setTimeout(() => { if (status) status.textContent = ''; }, 3000);
 

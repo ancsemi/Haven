@@ -15,6 +15,8 @@ docs/index.html        text working-tree-encoding=UTF-8 eol=lf
 website/index.html     text working-tree-encoding=UTF-8 eol=lf
 docs/support.html      text working-tree-encoding=UTF-8 eol=lf
 website/support.html   text working-tree-encoding=UTF-8 eol=lf
+docs/tutorials.html    text working-tree-encoding=UTF-8 eol=lf
+website/tutorials.html text working-tree-encoding=UTF-8 eol=lf
 CHANGELOG.md           text working-tree-encoding=UTF-8 eol=lf
 README.md              text working-tree-encoding=UTF-8 eol=lf
 GUIDE.md               text working-tree-encoding=UTF-8 eol=lf
