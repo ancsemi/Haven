@@ -1193,7 +1193,7 @@ _createMessageEl(msg, prevMsg) {
     el.innerHTML = `
       <span class="compact-time">${this._fmtTime(msg.created_at)}</span>
       <div class="message-body">
-        <div class="message-content">${pinnedTag}${archivedTag}${ephemeralTag}${this._formatContent(msg.content)}${editedHtml}${statusSlotHtml}</div>
+        <div class="message-content">${pinnedTag}${archivedTag}${ephemeralTag}${this._formatContent(msg.content, { e2e: !!msg._e2e })}${editedHtml}${statusSlotHtml}</div>
         ${pollHtml}${roleMenuHtml}${destructHtml}
         ${reactionsHtml}
         ${tagsHtml}
@@ -1342,7 +1342,7 @@ _createMessageEl(msg, prevMsg) {
           ${statusSlotHtml}
           <span class="message-header-spacer"></span>
         </div>
-        <div class="message-content">${this._formatContent(msg.content)}${editedHtml}</div>
+        <div class="message-content">${this._formatContent(msg.content, { e2e: !!msg._e2e })}${editedHtml}</div>
         ${pollHtml}${roleMenuHtml}${destructHtml}
         ${reactionsHtml}
         ${tagsHtml}

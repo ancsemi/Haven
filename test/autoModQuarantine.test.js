@@ -281,6 +281,29 @@ test('a link with $& in it cannot paste HTML back into the quarantine markup', (
   assert.ok(!blocked.includes('<a href'), 'blocked card is literal too');
 });
 
+test('text from an encrypted DM is never quarantined or sent for a scan', () => {
+  const plugin = new AutoModQuarantine();
+  plugin._settings.enabled = true;
+  const queued = [];
+  plugin._enqueueScan = (url) => queued.push(url);
+  let patched = null;
+  const prevApi = global.HavenApi, prevWindow = global.window;
+  global.HavenApi = { Patcher: { instead: (id, obj, name, fn) => { patched = fn; } } };
+  global.window = { app: { _formatContent: () => '' } };
+  try {
+    plugin._patchMessageFormatting();
+    const html = '<a href="https://evil.example/x">https://evil.example/x</a>';
+    const orig = () => html;
+    assert.equal(patched(['https://evil.example/x', { e2e: true }], orig), html);
+    assert.deepEqual(queued, []);
+    assert.notEqual(patched(['https://evil.example/x'], orig), html, 'channel messages are still checked');
+    assert.equal(queued.length, 1);
+  } finally {
+    global.HavenApi = prevApi;
+    global.window = prevWindow;
+  }
+});
+
 test('recordInfraction and issueWarning tracks strikes and escalates', () => {
   const plugin = new AutoModQuarantine();
   assert.equal(plugin.getUserStrikes(42), 0);
