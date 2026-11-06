@@ -23,7 +23,8 @@ const setup = ({ auth = { user: { id: 1 }, isAdmin: true }, user = { id: 1 }, fe
   const engine = registerAutomodRelay({
     app: { get: (p, ...f) => { routes[`GET ${p}`] = f.at(-1); }, post: (p, ...f) => { routes[`POST ${p}`] = f.at(-1); }, put: (p, ...f) => { routes[`PUT ${p}`] = f.at(-1); } },
     getModUser: () => auth,
-    verifyToken: t => t === 'good' ? user : null,
+    verifyToken: t => (t === 'good' || t === 'banned') ? { ...user, id: t === 'banned' ? 99 : user.id } : null,
+    isBanned: id => id === 99,
     rateLimit: () => (q, s, n) => n(),
     fetchImpl: fetchImpl || ollama,
     profilePath,
@@ -177,4 +178,9 @@ test('one member posting links cannot crowd out a moderator', async () => {
   assert.equal((await mod).body.safe, false, 'the moderator still gets an answer');
   await tick(40);
   assert.ok(s.chats().length <= 11, `one member gets a limited share of the queue (${s.chats().length} scans)`);
+});
+test('a banned account gets nothing from the scan routes', async () => {
+  const { call } = setup();
+  assert.equal((await call('POST /api/automod/scan', { url: 'https://example.com/' }, 'banned')).code, 401);
+  assert.equal((await call('GET /api/automod/local-status', null, 'banned')).code, 401);
 });
