@@ -142,7 +142,10 @@
 .user-bar-status-text:hover,
 .user-bar-status-text:focus-visible {
   color: var(--text-primary);
-  outline: none;
+}
+.user-bar-status-text:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
 }
 
 
