@@ -43,6 +43,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Opening a picture from an encrypted DM on a phone, in an installed app window or in the Android app showed a white page. It opens in Haven's own picture viewer there now (#5853).
 
 ### Security
+- Fixes from a full line-by-line review of recent contributions: AutoMod's link filter and the AI link checks plugin are tightened, links in end-to-end encrypted DMs are never sent for an AI check, and banned accounts can no longer use the AI check routes.
 - The libraries the backup zip writer leans on (glob and minimatch) are moved to their fixed versions. Haven never handed them anything a user typed, so this closes two Dependabot alerts rather than a hole anyone could use.
 
 ## [4.28.0] - Unreleased
