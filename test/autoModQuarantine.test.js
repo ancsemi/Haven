@@ -268,6 +268,19 @@ test('transformMessageHtml catches bare root URLs and HTML-escaped &amp; query p
   assert.equal((out.match(/haven-quarantine-capsule/g) || []).length, 2);
 });
 
+test('a link with $& in it cannot paste HTML back into the quarantine markup', () => {
+  const plugin = new AutoModQuarantine();
+  const url = 'https://x.com/a/$&/style=position:fixed';
+  const rawText = `look ${url}`;
+  const html = `look <a href="${url}">${url}</a>`;
+  const out = plugin.transformMessageHtml(html, rawText);
+  assert.ok(!out.includes('<a href'), 'the original tag is replaced, not pasted back');
+  assert.ok(out.includes('$&amp;') || out.includes('$&'), 'the $& stays literal text');
+  plugin._cache.set(plugin.extractUrls(rawText)[0].url, { status: 'blocked', reason: 'x $& y' });
+  const blocked = plugin.transformMessageHtml(html, rawText);
+  assert.ok(!blocked.includes('<a href'), 'blocked card is literal too');
+});
+
 test('recordInfraction and issueWarning tracks strikes and escalates', () => {
   const plugin = new AutoModQuarantine();
   assert.equal(plugin.getUserStrikes(42), 0);
