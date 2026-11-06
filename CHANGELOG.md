@@ -25,14 +25,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - With a mouse, the buttons that appear when you hover a message (react, reply, quote, thread, more) now sit at the bottom of the message: beside the reaction chips when it has some, and in the bottom corner when it doesn't. They used to cover the top right of the message. Touch screens are unchanged.
 - The donors list calls the people who give every month Monthly Supporters instead of Sponsors.
 - The account bar at the top of the sidebar shows your profile picture, in your chosen shape, and clicking it opens Edit Profile. The server connection light sits on its top-left corner.
+- Your custom status shows under your name in the account bar, or Set status when you have none, and clicking it opens the status picker. It used to be hidden behind the status dot (thanks reverb256, #5859).
+- Reading a channel on one device clears its unread badge and closes its notification on your other devices too, Haven Desktop's included once it is updated (thanks Roolk).
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
-- The custom status line under your name was easy to miss on desktop: friends could see it on your profile while you had no clear place to set it. Your own status now shows under your name in the user bar (or "Set status" when empty), clicking it opens the status picker, and the picker starts with a Set status entry (#5859).
-
 - A call's camera or screen share in fullscreen paused when clicked. Fullscreen now goes on the stream's frame instead of the bare video, in the call grid and in popped-out streams.
 - The microphone could stay on after leaving a call, until Haven was closed: when changing the mic device overlapped with leaving, or when joining failed partway. Both let go of it now (#5850).
-- Everyone could stop hearing you for the rest of a call, with Haven still showing you connected, after your microphone went away mid-call (a headset unplugged or reconnecting, for example). Only leaving and rejoining brought your voice back. Haven now opens the microphone again by itself, falling back to the default one, and tries again when a device appears (#5851).
+- Everyone could stop hearing you for the rest of a call, with Haven still showing you connected, after your microphone went away mid-call (a headset unplugged or reconnecting, for example). Only leaving and rejoining brought your voice back. Haven now opens the microphone again by itself, falling back to the default one, and tries again when a device appears (thanks Amnibro, #5851).
+- Scrolling up through older messages could snap you back to where you were when they loaded, again and again for a while, as their pictures and link previews finished loading. It stays where you scroll now (thanks Amnibro and reverb256, #5858).
 - The last plain browser pop-ups are Haven's own themed dialogs now: moving a channel under another, leaving a channel, deleting a webhook, bot or member, backups, invite links and more. The password box for signing out other sessions hides what you type.
 - A `/tts` message with a line break or a slash in it (a link, "and/or") posted as plain text with `/tts` showing and never spoke. The same went for other slash commands.
 - Clicking the ... button on a voice-only channel also joined its voice. It only opens the menu now (thanks dlmorgan999, #5846).
