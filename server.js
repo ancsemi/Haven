@@ -2572,7 +2572,10 @@ app.get('/api/moderation/mutes', modLimiter, (req, res) => {
   `).all();
   res.json({ mutes });
 });
-const automod = require('./src/routes/automodRelay')({ app, getModUser, verifyToken, rateLimit });
+const automod = require('./src/routes/automodRelay')({
+  app, getModUser, verifyToken, rateLimit,
+  isBanned: (userId) => !!require('./src/database').getDb().prepare('SELECT 1 FROM bans WHERE user_id = ?').get(userId),
+});
 
 
 // ═══════════════════════════════════════════════════════════

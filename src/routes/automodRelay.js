@@ -30,7 +30,7 @@ function loadPlugin(pluginPath) {
   }
 }
 
-module.exports = function registerAutomodRelay({ app, getModUser, verifyToken, rateLimit, fetchImpl = (...a) => fetch(...a), profilePath = PROFILE, pluginPath = PLUGIN, settings = null }) {
+module.exports = function registerAutomodRelay({ app, getModUser, verifyToken, isBanned, rateLimit, fetchImpl = (...a) => fetch(...a), profilePath = PROFILE, pluginPath = PLUGIN, settings = null }) {
   const limiter = rateLimit({ windowMs: 60 * 1000, max: 60, message: { error: 'Rate limit exceeded' } });
   const scanLimiter = rateLimit({ windowMs: 60 * 1000, max: 240, message: { error: 'Rate limit exceeded' } });
   const Plugin = loadPlugin(pluginPath);
@@ -69,7 +69,13 @@ module.exports = function registerAutomodRelay({ app, getModUser, verifyToken, r
   const origin = p => new URL(p.recommendedEndpoint || 'http://127.0.0.1:11434').origin;
   const member = req => {
     const t = req.headers.authorization?.split(' ')[1], u = t ? verifyToken(t) : null;
-    return u && !u.purpose ? u : null;
+    if (!u || u.purpose) return null;
+    try {
+      return isBanned(u.id) ? null : u;
+    } catch (e) {
+      console.warn('[AutoMod] ban check failed, refusing the request:', e.message);
+      return null;
+    }
   };
   const mod = req => {
     const a = getModUser(req, 'delete_message');
