@@ -108,9 +108,15 @@ test('an encrypted DM file is noted for cleanup when the DM is deleted', async (
   const refused = next(A, 'error-msg');
   A.emit('delete-dm', { code: dm.code });
   assert.match(await refused || '', /asks before deleting/);
+  const refusedAck = await new Promise((resolve) => A.emit('delete-dm', { code: dm.code }, resolve));
+  assert.match(refusedAck.error || '', /asks before deleting/, 'an app that waits gets the refusal as well');
   assert.strictEqual(readDb('SELECT COUNT(*) AS n FROM messages WHERE id = ?', msg.message.id)[0].n, 1, 'an unconfirmed delete keeps the DM');
 
-  A.emit('delete-dm', { code: dm.code, confirmed: true });
+  // The app that asked is told the delete went through, so it can drop the
+  // conversation even if this window misses channel-deleted (the pop-out DM
+  // case in #5848).
+  const acked = await new Promise((resolve) => A.emit('delete-dm', { code: dm.code, confirmed: true }, resolve));
+  assert.deepStrictEqual(acked, { success: true }, 'the deleting app gets a success reply');
   let released = [];
   for (let i = 0; i < 20 && !released.length; i++) {
     await wait(200);
