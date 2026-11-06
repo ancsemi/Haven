@@ -43,6 +43,7 @@ const { clearChannelRuntimeState } = require('../channelRotation');
 const { reachableChannel } = require('./channelAccess');
 const protectedMessages = require('../protectedMessages');
 const channelTypes = require('../channelTypes');
+const directMessages = require('../db/directMessages');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -1927,21 +1928,9 @@ module.exports = function register(socket, ctx) {
     const targetId = isInt(data.targetUserId) ? data.targetUserId : null;
     if (!targetId) return;
     const isSelfDm = targetId === socket.user.id;
-    const target = db.prepare(
-      'SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE u.id = ? AND b.id IS NULL'
-    ).get(targetId);
+    const target = directMessages.target(db, targetId);
     if (!target) return socket.emit('error-msg', 'User not found');
-    // For self-DM, the channel has only one channel_members row, so both EXISTS
-    // clauses below collapse to the same check, which still matches correctly.
-    // A group DM that shrank to two (or one) members is still a group, not
-    // this pair's 1:1 conversation.
-    const existingDm = db.prepare(`
-      SELECT c.id, c.code, c.name FROM channels c
-      WHERE c.is_dm = 1 AND COALESCE(c.is_group, 0) = 0
-      AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id = c.id AND user_id = ?)
-      AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id = c.id AND user_id = ?)
-      AND (SELECT COUNT(*) FROM channel_members WHERE channel_id = c.id) = ${isSelfDm ? 1 : 2}
-    `).get(socket.user.id, targetId);
+    const existingDm = directMessages.existing(db, socket.user.id, targetId);
     if (existingDm) {
       socket.emit('dm-opened', {
         id: existingDm.id, code: existingDm.code, name: existingDm.name,
@@ -1955,11 +1944,7 @@ module.exports = function register(socket, ctx) {
       if (!socket.user.isAdmin) {
         let started;
         try {
-          started = db.prepare(`
-            SELECT COUNT(*) AS n FROM channels
-            WHERE created_by = ? AND is_dm = 1 AND COALESCE(is_group, 0) = 0 AND COALESCE(is_self_dm, 0) = 0
-              AND created_at >= datetime('now', '-1 hour')
-          `).get(socket.user.id).n;
+          started = directMessages.recentCount(db, socket.user.id).n;
         } catch (err) {
           console.warn('[dm] could not count new conversations, refusing:', err.message);
           return socket.emit('error-msg', 'Could not start the conversation. Try again in a moment.');
@@ -1971,12 +1956,12 @@ module.exports = function register(socket, ctx) {
     }
     const code = generateUniqueSharedCode();
     try {
-      const result = db.prepare('INSERT INTO channels (name, code, created_by, is_dm, is_self_dm) VALUES (?, ?, ?, 1, ?)').run('DM', code, socket.user.id, isSelfDm ? 1 : 0);
+      const result = directMessages.create(db, code, socket.user.id, isSelfDm);
       const channelId = result.lastInsertRowid;
-      db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, socket.user.id);
+      directMessages.join(db, channelId, socket.user.id);
       // Self-DMs only have one member; PRIMARY KEY prevents duplicate insert.
       if (!isSelfDm) {
-        db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, targetId);
+        directMessages.join(db, channelId, targetId);
       }
       socket.join(`channel:${code}`);
       socket.emit('dm-opened', { id: channelId, code, name: 'DM', is_dm: 1, is_self_dm: isSelfDm ? 1 : 0, dm_target: { id: target.id, username: target.username } });

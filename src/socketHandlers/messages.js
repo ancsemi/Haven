@@ -15,6 +15,8 @@ const forumUnread = require('../forumUnread');
 const threadNotify = require('../threadNotify');
 const protectedMessages = require('../protectedMessages');
 const mediaGroup = require('../mediaGroup');
+const { sizeCeiling, sizeRefusal, isGroupEnvelope } = require('../messageLimits');
+const { REPLY_CONTEXT_SELECT, insertMessage, getActiveMute, muteNotice } = require('../db/messagePosting');
 const { takeSilent } = require('../silentMessages');
 const { parseSlash } = require('../slashParse');
 const { tagAccess } = require('../uploadTagRoles');
@@ -23,41 +25,8 @@ const storage = require('../storage');
 const { groupHistoryFloor } = require('../groupHistory');
 const { isSafeUploadRelPath } = storage;
 const createReadPositions = require('../db/readPositions');
+const emitChannelRead = require('./channelReadEvents');
 const { mentionsMeCondition } = require('../mentionFilter');
-
-// The length limit is on what people type. An encrypted DM reaches the
-// server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
-// up to about four times the typed length (a character can take three bytes
-// as UTF-8 and base64 adds a third). A DM near the limit was refused after
-// the message box had already cleared (#5691), so ciphertext gets that room.
-function encryptedDmCap(maxChars) {
-  return maxChars * 4 + 256;
-}
-function looksEncrypted(content) {
-  if (typeof content !== 'string' || content.charCodeAt(0) !== 123) return false;
-  try {
-    const o = JSON.parse(content);
-    return !!(o && (o.v === 1 || o.v === 2 || (o.v === 3 && Number.isInteger(o.e) && typeof o.sig === 'string')) && typeof o.iv === 'string' && typeof o.ct === 'string');
-  } catch { return false; }
-}
-function isGroupEnvelope(content) {
-  return looksEncrypted(content) && JSON.parse(content).v === 3;
-}
-// The longest a message can be before its channel is known: ciphertext room
-// for a DM, or text at the limit with a full set of upload lines.
-function sizeCeiling(maxChars) {
-  return Math.max(encryptedDmCap(maxChars), mediaGroup.ceiling(maxChars));
-}
-// Why a message cannot go out for its size, or null. An encrypted DM gets
-// ciphertext room; anything else is held to the typed limit, with room for
-// the upload lines of pictures sent together, and to the number of files one
-// message carries (src/mediaGroup.js, #5799).
-function sizeRefusal(content, channel, { maxChars, maxAttachments, forumTopic = false }) {
-  if (channel && channel.is_dm && looksEncrypted(content)) {
-    return content.length > encryptedDmCap(maxChars) ? `Message too long (max ${maxChars} characters)` : null;
-  }
-  return mediaGroup.refusal(content, { maxChars, maxAttachments, forumTopic });
-}
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
@@ -188,12 +157,6 @@ module.exports = function register(socket, ctx) {
     }
   }
 
-  // Reply banners must match message rendering: bots live in webhook_* with
-  // user_id NULL, so a users-table COALESCE alone becomes "[Deleted User]".
-  const REPLY_CONTEXT_SELECT = `
-    SELECT m.id, m.content, m.user_id, m.is_webhook, m.webhook_username, m.imported_from, m.persona_username,
-           COALESCE(u.display_name, u.username, '[Deleted User]') as username
-    FROM messages m LEFT JOIN users u ON m.user_id = u.id`;
 
   // ── Get message history ─────────────────────────────────
   // ── Forum channels (#144) ──────────────────────────────
@@ -1586,9 +1549,11 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, nsfw, e2e_files, destruct_at, silent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicNsfw, e2eFiles, destructAt, silent);
+      const result = insertMessage(db, {
+        channelId: channel.id, userId: socket.user.id, content: finalContent, replyTo, burnSeconds,
+        personaId, personaUsername, personaAvatar, breakChain, ferryLabel,
+        topicTitle, topicTags, topicNsfw, e2eFiles, destructAt, silent,
+      });
       if (destructAt) selfDestruct.schedule(destructAt);
 
       // Attachment tags (#tagging): the composer sends `attachmentTags` alongside
@@ -2169,12 +2134,7 @@ module.exports = function register(socket, ctx) {
   // mute. Sends, edits and reactions in the server's channels all go through
   // it; DMs are exempt (#5640).
   function activeMuteNotice(userId) {
-    const row = db.prepare(
-      'SELECT expires_at FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') ORDER BY expires_at DESC LIMIT 1'
-    ).get(userId);
-    if (!row) return null;
-    const remaining = Math.ceil((new Date(row.expires_at + 'Z') - Date.now()) / 60000);
-    return `You are in a timeout for ${remaining} more minute${remaining !== 1 ? 's' : ''}`;
+    return muteNotice(getActiveMute(db, userId));
   }
 
   socket.on('edit-message', (data) => {
@@ -2924,20 +2884,6 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Read positions ──────────────────────────────────────
-  // Tell every connected device of one account that channels were read, so
-  // each can drop its own notification for them. Looks at the sockets once
-  // however many channels there are. Other accounts never see it.
-  function emitChannelRead(userId, reads) {
-    if (!reads.length) return;
-    const devices = [];
-    for (const [, connected] of io.sockets.sockets) {
-      if (connected.user && connected.user.id === userId) devices.push(connected);
-    }
-    for (const connected of devices) {
-      for (const read of reads) connected.emit('channel-read', read);
-    }
-  }
-
   socket.on('mark-read', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
@@ -2948,7 +2894,7 @@ module.exports = function register(socket, ctx) {
       const result = await readPositions.markRead(socket.user.id, code, data.messageId);
       // Only a receipt that was actually stored (the account is a member)
       // is worth telling the account's other devices about.
-      if (result?.changes) emitChannelRead(socket.user.id, [{ channelCode: code, messageId: data.messageId }]);
+      if (result?.changes) emitChannelRead(io, socket.user.id, [{ channelCode: code, messageId: data.messageId }]);
     } catch (err) {
       console.error('Mark read error:', err);
     }
@@ -2966,11 +2912,11 @@ module.exports = function register(socket, ctx) {
       const result = await readPositions.markChannelRead(socket.user.id, code);
       if (result?.changes) {
         const latest = await (db.async || db).prepare(`
-          SELECT MAX(m.id) AS messageId
+          SELECT MAX(m.id) AS "messageId"
           FROM channels c JOIN messages m ON m.channel_id = c.id AND m.thread_id IS NULL
           WHERE c.code = ?
         `).get(code);
-        emitChannelRead(socket.user.id, [{ channelCode: code, messageId: latest?.messageId || null }]);
+        emitChannelRead(io, socket.user.id, [{ channelCode: code, messageId: latest?.messageId || null }]);
       }
     } catch (err) {
       console.error('Mark read channel error:', err);
@@ -2986,13 +2932,13 @@ module.exports = function register(socket, ctx) {
       const channels = await readPositions.markAllRead(socket.user.id);
       const driver = db.async || db;
       const readChannels = await driver.prepare(`
-        SELECT c.code, MAX(m.id) AS messageId
+        SELECT c.code, MAX(m.id) AS "messageId"
         FROM channels c
         JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
         LEFT JOIN messages m ON m.channel_id = c.id AND m.thread_id IS NULL
         GROUP BY c.id, c.code
       `).all(socket.user.id);
-      emitChannelRead(socket.user.id, readChannels
+      emitChannelRead(io, socket.user.id, readChannels
         .filter(channel => channel.messageId)
         .map(channel => ({ channelCode: channel.code, messageId: channel.messageId })));
       cb({ ok: true, channels });
