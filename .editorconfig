@@ -9,7 +9,7 @@ trim_trailing_whitespace = true
 # Public landing pages get a BOM intentionally so editors and PS5 detect
 # UTF-8 unambiguously and never re-save as Windows-1252. See AGENT_INSTRUCTIONS.md
 # ("Emoji / UTF-8 safety") for the why.
-[{docs/index.html,website/index.html,docs/support.html,website/support.html}]
+[{docs/index.html,website/index.html,docs/support.html,website/support.html,docs/tutorials.html,website/tutorials.html}]
 charset = utf-8-bom
 
 [*.{bat,cmd}]

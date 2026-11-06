@@ -9,11 +9,39 @@ _avatarMaxMb() {
   return n >= 1 && n <= 10 ? n : 2;
 },
 
+// Your own picture in the account bar at the top of the sidebar, in your
+// chosen shape, or your initial on your color when you have none.
+_renderUserBarAvatar() {
+  const face = document.getElementById('user-bar-face');
+  if (!face || !this.user || !this.user.username) return;
+  face.className = 'user-bar-face avatar-' + (this.user.avatarShape || 'circle');
+  const initial = this.user.username.charAt(0).toUpperCase();
+  const color = this._getUserColor(this.user.username);
+  const showInitial = () => {
+    face.textContent = initial;
+    face.style.backgroundColor = color;
+  };
+  if (!this.user.avatar) { showInitial(); return; }
+  face.style.backgroundColor = '';
+  face.innerHTML = `<img ${this._imgSrcAttr(this.user.avatar)}${this._animAttr(this.user.animateProfile)} alt="">`;
+  const img = face.querySelector('img');
+  img.addEventListener('error', showInitial, { once: true });
+  this._freezePfpImg(img);
+},
+
 _bindPeople() {
   // Rename username
   document.getElementById('rename-btn').addEventListener('click', () => {
     this._openRenameModal();
   });
+  // Your picture in the account bar opens the same window, and plays an
+  // animated picture while hovered, like avatars in chat.
+  const barAvatar = document.getElementById('user-bar-avatar');
+  if (barAvatar) {
+    barAvatar.addEventListener('click', () => this._openRenameModal());
+    barAvatar.addEventListener('mouseenter', () => this._setPfpAnimation(barAvatar, true));
+    barAvatar.addEventListener('mouseleave', () => this._setPfpAnimation(barAvatar, false));
+  }
 
   // A name or avatar in the thread panel: a reply's, or the starter's in the
   // header. Webhook and imported replies have no account, so no card.

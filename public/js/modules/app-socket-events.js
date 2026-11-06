@@ -397,6 +397,7 @@ _listenMessageChanges() {
     document.getElementById('current-user').textContent = data.user.displayName || data.user.username;
     const loginEl = document.getElementById('login-name');
     if (loginEl) loginEl.textContent = `@${data.user.username}`;
+    this._renderUserBarAvatar();
     this._showToast(t('toasts.display_name_changed', { name: data.user.displayName || data.user.username }), 'success');
     // Refresh admin UI in case admin status changed
     this.user.permissions = data.user.permissions || this.user.permissions || [];

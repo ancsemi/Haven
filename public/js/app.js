@@ -6,7 +6,7 @@
 
 import SocketMethods   from './modules/app-socket.js?v=4.27.25';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.27.26';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.26.15';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.29.4';
 import UIBindMethods   from './modules/app-ui.js?v=4.27.37';
 import ComposerMethods from './modules/app-composer.js?v=4.27.28';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
@@ -18,7 +18,7 @@ import VoiceControlMethods from './modules/app-voice-controls.js?v=4.27.56';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.27.52';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.27.48';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.27.45';
-import PeopleMethods from './modules/app-people.js?v=4.27.52';
+import PeopleMethods from './modules/app-people.js?v=4.29.2';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.27.52';
 import AdminReauthMethods from './modules/app-admin-reauth.js?v=4.23.8';
@@ -30,7 +30,7 @@ import ImageZoomMethods from './modules/app-image-zoom.js?v=4.25.20';
 import MediaGridMethods from './modules/app-media-grid.js?v=4.27.31';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.25.26';
 import AttachmentMethods from './modules/app-attachments.js?v=4.26.17';
-import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.25.28';
+import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.29.2';
 import AppearanceMethods from './modules/app-appearance.js?v=4.27.49';
 import AccessibilityMethods from './modules/app-accessibility.js?v=4.27.19';
 import SoundMethods from './modules/app-sounds.js?v=4.25.21';
@@ -511,6 +511,7 @@ class HavenApp {
     document.getElementById('current-user').textContent = this.user.displayName || this.user.username;
     const loginEl = document.getElementById('login-name');
     if (loginEl) loginEl.textContent = `@${this.user.username}`;
+    this._renderUserBarAvatar();
 
     if (this.user.isAdmin || this._hasGlobalPerm('create_channel')) {
       document.getElementById('admin-controls').style.display = 'block';

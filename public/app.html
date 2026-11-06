@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.27.56">
+  <link rel="stylesheet" href="/css/style.css?v=4.29.3">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.27.19"></script>
 </head>
@@ -48,7 +48,10 @@
           </div>
           <button id="mobile-sidebar-close" class="mobile-panel-close" data-i18n-title="modals.common.close" data-i18n-aria-label="app.actions.close_sidebar" title="Close" aria-label="Close sidebar">&times;</button>
           <div class="user-bar" data-haven-region="account">
-            <span class="led on" id="connection-led" data-i18n-title="app.status.server_connection" title="Server connection"></span>
+            <button type="button" class="user-bar-avatar" id="user-bar-avatar" data-i18n-title="users.edit_profile" data-i18n-aria-label="users.edit_profile" title="Edit Profile" aria-label="Edit Profile">
+              <span class="user-bar-face avatar-circle" id="user-bar-face"></span>
+              <span class="led on" id="connection-led" data-i18n-title="app.status.server_connection" title="Server connection"></span>
+            </button>
             <div class="user-names">
               <span class="current-user" id="current-user"></span>
               <span class="login-name" id="login-name" data-i18n-title="app.profile.login_username" title="Your login username"></span>
@@ -3794,7 +3797,7 @@
           <h5 class="settings-section-subtitle">📦 <span data-i18n="settings.admin.import_title">Discord Import</span></h5>
           <small class="settings-hint" data-i18n="settings.admin.import_hint">Import channels and messages from a Discord export file</small>
           <div style="margin-top:8px;">
-            <button class="btn-sm btn-full btn-accent" id="open-import-btn">📦 <span data-i18n="settings.admin.import_btn">Import from Discord</span></button>
+            <button class="btn-sm btn-full btn-accent" id="open-import-btn">📦 <span data-i18n="modals.discord_import.title">Import from Discord</span></button>
           </div>
         </div>
 
@@ -5383,7 +5386,7 @@
 
       <div class="donors-tiers" id="donors-tiers">
         <div class="donors-tier">
-          <h3 class="donors-tier-title donors-sponsor-title">✨ <span data-i18n="modals.donors.sponsors_title">Sponsors</span></h3>
+          <h3 class="donors-tier-title donors-sponsor-title">✨ <span data-i18n="modals.donors.sponsors_title">Monthly Supporters</span></h3>
           <div class="donors-grid" id="sponsors-grid"></div>
         </div>
 
@@ -5508,14 +5511,14 @@
   <script src="/js/notifications.js?v=4.23.6"></script>
   <script src="/js/servers.js?v=4.23.9"></script>
   <script src="/js/voice-relay.js?v=4.27.5"></script>
-  <script src="/js/voice.js?v=4.27.55"></script>
+  <script src="/js/voice.js?v=4.27.59"></script>
   <script src="/js/modmode.js?v=4.21.0"></script>
   <script src="/js/e2e-group.js?v=4.21.0"></script>
   <script src="/js/e2e.js?v=4.21.0"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.27.27"></script>
-  <script type="module" src="/js/app.js?v=4.27.57"></script>
+  <script type="module" src="/js/app.js?v=4.27.60"></script>
   <script src="/js/plugin-loader.js?v=4.27.52"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

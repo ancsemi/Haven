@@ -2200,7 +2200,7 @@
     "donors": {
       "title": "감사합니다",
       "subtitle": "Haven은 애정으로 만들어지고 여러분 같은 분들의 후원으로 유지됩니다. 크든 작든 모든 후원이 정말 큰 힘이 됩니다.",
-      "sponsors_title": "스폰서",
+      "sponsors_title": "정기 후원자",
       "donors_title": "후원자",
       "note": "새 후원자는 릴리스마다 추가됩니다. 후원하셨는데 이름이 보이지 않는다면 다음 업데이트에 포함될 거예요!",
       "kofi_btn": "Ko-fi에서 Haven 후원하기",
