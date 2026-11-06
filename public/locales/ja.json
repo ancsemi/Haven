@@ -256,6 +256,7 @@
       "logout": "ログアウト",
       "invite": "ユーザーを招待",
       "change_display_name": "表示名を変更",
+      "mentions": "メンションと返信",
       "close_sidebar": "サイドバーを閉じる",
       "message_actions": "メッセージの操作",
       "organize_channels": "チャンネルを整理",

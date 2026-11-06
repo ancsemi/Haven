@@ -16,6 +16,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Add all members on a channel that already exists: right-click it. Everyone on the server joins it, for the admin and anyone who can invite people. Private channels stay invite-only.
 - Hide pictures and videos (Settings > Chat & media): pictures, GIFs and videos in chat show as a small tag you click to see them, videos keep their file name, and link cards start folded. For reading chat around other people. Only changes what you see, on that device (thanks MutantRabbit767).
 - Video tutorials: short how-to videos are linked from the website, the README and the setup guide, and are on YouTube and Rumble.
+- Mentions and replies: the @ button next to your name lists every message that @mentions you or replies to you, newest first, and clicking one jumps to it. A small count on the button shows how many you have not seen yet (thanks broilpromptu). Typing `mentions:me` in search does the same and works with the other filters.
 
 ### Changed
 - Tooltips are drawn by Haven: they wrap at a readable width, stay inside the window and follow the theme. A long one used to run far past the edge of the app.

@@ -22,6 +22,7 @@ const storage = require('../storage');
 const { groupHistoryFloor } = require('../groupHistory');
 const { isSafeUploadRelPath } = storage;
 const createReadPositions = require('../db/readPositions');
+const { mentionsMeCondition } = require('../mentionFilter');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -615,7 +616,7 @@ module.exports = function register(socket, ctx) {
     const token = data.token;
 
     // ── Parse filters out of the query text ──
-    const filters = { from: null, in: null, has: null, pinned: null, before: null, after: null, during: null, tag: null };
+    const filters = { from: null, in: null, has: null, pinned: null, before: null, after: null, during: null, tag: null, mentions: null };
     query = query.replace(/\bfrom:(\S+)/gi, (_, v) => { filters.from = v; return ''; });
     // tag: supports a quoted value so multi-word tags work (tags allow spaces);
     // the filter picker and clickable message tags append the quoted form.
@@ -628,6 +629,8 @@ module.exports = function register(socket, ctx) {
     query = query.replace(/\bbefore:(\S+)/gi, (_, v) => { filters.before = v; return ''; });
     query = query.replace(/\bafter:(\S+)/gi, (_, v) => { filters.after = v; return ''; });
     query = query.replace(/\bduring:(\S+)/gi, (_, v) => { filters.during = v; return ''; });
+    // mentions:me lists messages that @mention you or reply to you (the @ button).
+    query = query.replace(/\bmentions:me\b/gi, () => { filters.mentions = 'me'; return ''; });
     query = query.trim();
 
     // Only keep well-formed YYYY-MM-DD dates; drop anything else silently.
@@ -648,7 +651,7 @@ module.exports = function register(socket, ctx) {
 
     // Never dump the whole corpus: require free text or at least one filter.
     const anyFilter = filters.from || filters.has || filters.in || filters.pinned ||
-                      filters.before || filters.after || filters.during || filters.tag;
+                      filters.before || filters.after || filters.during || filters.tag || filters.mentions;
     if (!usesFts && !anyFilter) {
       return socket.emit('search-results', empty);
     }
@@ -718,6 +721,15 @@ module.exports = function register(socket, ctx) {
       if (!norm) return socket.emit('search-results', empty);
       conditions.push("m.id IN (SELECT at.message_id FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id WHERE ut.name_norm LIKE ? ESCAPE '\\')");
       params.push(escapeLike(norm.norm) + '%');
+    }
+
+    // ── mentions:me filter (src/mentionFilter.js) ──
+    if (filters.mentions) {
+      const me = db.prepare('SELECT username FROM users WHERE id = ?').get(socket.user.id);
+      const cond = me && mentionsMeCondition(socket.user.id, me.username);
+      if (!cond) return socket.emit('search-results', empty);
+      conditions.push(cond.sql);
+      params.push(...cond.params);
     }
 
     // ── date filters (created_at). during: is the whole named day. ──

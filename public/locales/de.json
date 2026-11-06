@@ -251,6 +251,7 @@
     "actions": {
       "logout": "Abmelden",
       "change_display_name": "Anzeigename ändern",
+      "mentions": "Erwähnungen und Antworten",
       "close_sidebar": "Seitenleiste schließen",
       "message_actions": "Nachrichtenaktionen",
       "organize_channels": "Kanäle organisieren",

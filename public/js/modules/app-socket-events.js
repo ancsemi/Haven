@@ -16,6 +16,7 @@ _listenFeatureEvents() {
     if (!data?.channelCode) return;
     this._dismissChannelNotifications(data.channelCode);
     this._applyChannelRead(data.channelCode, data.messageId);
+    this._mentionsSeenInChannel?.(data.channelCode, data.messageId);
   });
 
   // ── Reactions ──────────────────────────────────────

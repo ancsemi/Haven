@@ -200,6 +200,7 @@ async switchChannel(code) {
   this._updateBadge(code);
   // Refresh thread-mention pill for the channel we just entered
   this._updateThreadMentionsPill?.();
+  this._mentionsSeenInChannel?.(code);
 
   document.getElementById('status-channel').textContent = isDm && channel.is_group ? this._groupName(channel) : isDm && channel.dm_target
     ? t('channels.dm_status', { name: channel.dm_target.username }) : channel ? channel.name : code;

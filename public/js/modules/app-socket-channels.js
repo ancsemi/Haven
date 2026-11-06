@@ -512,6 +512,7 @@ _listenChannelsAndMessages() {
           if (!isActivelyViewing && !_quiet) {
             this._fireNativeNotification(data.message, data.channelCode, _notifOpts);
           }
+          if (!isActivelyViewing) this._mentionsCount?.(data.message, data.channelCode);
         }
       }
       // TTS: speak the message aloud for all listeners
@@ -578,6 +579,7 @@ _listenChannelsAndMessages() {
         }
         // Fire native OS notification when tab/window is not visible
         if (!_quiet2) this._fireNativeNotification(data.message, data.channelCode, _notifOpts2);
+        this._mentionsCount?.(data.message, data.channelCode);
       }
     }
 

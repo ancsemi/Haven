@@ -256,6 +256,7 @@
       "logout": "로그아웃",
       "invite": "사용자 초대",
       "change_display_name": "표시 이름 변경",
+      "mentions": "멘션 및 답장",
       "close_sidebar": "사이드바 닫기",
       "message_actions": "메시지 작업",
       "organize_channels": "채널 정리",

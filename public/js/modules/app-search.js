@@ -618,6 +618,7 @@ _searchRenderPanel() {
     if (st.filters.before) tags.push(`<span class="search-filter-tag">before:${this._escapeHtml(st.filters.before)}</span>`);
     if (st.filters.during) tags.push(`<span class="search-filter-tag">during:${this._escapeHtml(st.filters.during)}</span>`);
     if (st.filters.tag)    tags.push(`<span class="search-filter-tag">tag:${this._escapeHtml(st.filters.tag)}</span>`);
+    if (st.filters.mentions) tags.push('<span class="search-filter-tag">mentions:me</span>');
     if (tags.length) filterInfo = `<div class="search-filter-tags">${tags.join(' ')}</div>`;
   }
   const localTag = st.isDM ? ` <span class="search-filter-tag">${t('header.search_dm_local_tag')}</span>` : '';
@@ -626,7 +627,7 @@ _searchRenderPanel() {
   // Highlight the plain text (all filter tokens stripped).
   const highlightQuery = (st.query || '')
     .replace(/\btag:"[^"]*"/gi, '')
-    .replace(/\b(?:from|in|has|pinned|before|after|during|tag):\S+/gi, '')
+    .replace(/\b(?:from|in|has|pinned|before|after|during|tag|mentions):\S+/gi, '')
     .trim();
 
   list.innerHTML = total === 0

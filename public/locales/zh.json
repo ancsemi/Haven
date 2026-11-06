@@ -276,6 +276,7 @@
       "logout": "退出登录",
       "invite": "邀请用户",
       "change_display_name": "修改显示名称",
+      "mentions": "提及和回复",
       "close_sidebar": "关闭侧边栏",
       "message_actions": "消息操作",
       "organize_channels": "整理频道",

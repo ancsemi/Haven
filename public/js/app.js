@@ -5,8 +5,8 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.27.25';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.27.26';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.29.8';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.9';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.29.9';
 import UIBindMethods   from './modules/app-ui.js?v=4.27.37';
 import ComposerMethods from './modules/app-composer.js?v=4.27.28';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
@@ -37,7 +37,7 @@ import SoundMethods from './modules/app-sounds.js?v=4.25.21';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.27.54';
 import BotMethods from './modules/app-bots.js?v=4.27.52';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
-import ChannelMethods  from './modules/app-channels.js?v=4.27.46';
+import ChannelMethods  from './modules/app-channels.js?v=4.29.9';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.27.53';
 import ChannelTypeMethods from './modules/app-channel-types.js?v=4.27.42';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.27.52';
@@ -71,7 +71,7 @@ import RoleMethods from './modules/app-roles.js?v=4.27.52';
 import RoleAssignMethods from './modules/app-role-assign.js?v=4.26.16';
 import ModerationMethods from './modules/app-moderation.js?v=4.27.9';
 import PlatformMethods from './modules/app-platform.js?v=4.27.49';
-import SearchMethods   from './modules/app-search.js?v=4.24.32';
+import SearchMethods   from './modules/app-search.js?v=4.29.9';
 import FerryMethods    from './modules/app-ferry.js?v=4.27.52';
 import ForumMethods    from './modules/app-forum.js?v=4.27.51';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';
@@ -102,6 +102,7 @@ import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
+import MentionsMethods from './modules/app-mentions.js?v=4.29.9';
 import SettingsPageMethods from './modules/app-settings-pages.js?v=4.27.41';
 import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.27.54';
 import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';
@@ -512,6 +513,7 @@ class HavenApp {
     const loginEl = document.getElementById('login-name');
     if (loginEl) loginEl.textContent = `@${this.user.username}`;
     this._renderUserBarAvatar();
+    this._mentionsInit();
 
     if (this.user.isAdmin || this._hasGlobalPerm('create_channel')) {
       document.getElementById('admin-controls').style.display = 'block';
@@ -674,6 +676,7 @@ Object.assign(HavenApp.prototype,
   SilentMethods,
   SettingsPageMethods,
   ChannelTypeMethods,
+  MentionsMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────
