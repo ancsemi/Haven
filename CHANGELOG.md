@@ -30,6 +30,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ### Fixed
 - A call's camera or screen share in fullscreen paused when clicked. Fullscreen now goes on the stream's frame instead of the bare video, in the call grid and in popped-out streams.
 - The microphone could stay on after leaving a call, until Haven was closed: when changing the mic device overlapped with leaving, or when joining failed partway. Both let go of it now (#5850).
+- Everyone could stop hearing you for the rest of a call, with Haven still showing you connected, after your microphone went away mid-call (a headset unplugged or reconnecting, for example). Only leaving and rejoining brought your voice back. Haven now opens the microphone again by itself, falling back to the default one, and tries again when a device appears (#5851).
 - The last plain browser pop-ups are Haven's own themed dialogs now: moving a channel under another, leaving a channel, deleting a webhook, bot or member, backups, invite links and more. The password box for signing out other sessions hides what you type.
 - A `/tts` message with a line break or a slash in it (a link, "and/or") posted as plain text with `/tts` showing and never spoke. The same went for other slash commands.
 - Clicking the ... button on a voice-only channel also joined its voice. It only opens the menu now (thanks dlmorgan999, #5846).
