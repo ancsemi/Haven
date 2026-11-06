@@ -637,10 +637,55 @@ _fireNativeNotification(message, channelCode, opts) {
         this.switchChannel(channelCode);
         n.close();
       };
+      // Tracked so a 'channel-read' from another device/tab can close it
+      // before the auto-close timer below runs.
+      this._liveNotificationsByChannel ||= new Map();
+      this._liveNotificationsByChannel.set(channelCode, n);
+      n.onclose = () => {
+        if (this._liveNotificationsByChannel?.get(channelCode) === n) {
+          this._liveNotificationsByChannel.delete(channelCode);
+        }
+      };
       // Auto-close after 5 seconds
       setTimeout(() => n.close(), 5000);
     } catch { /* Notification constructor can throw in some contexts */ }
   }
+},
+
+/**
+ * Another device/tab for this account marked a channel read: dismiss any
+ * notification we are currently showing for it here too (browser Notification,
+ * web-push via the service worker, or Haven Desktop's native toast).
+ */
+_dismissChannelNotifications(channelCode) {
+  if (!channelCode) return;
+  const live = this._liveNotificationsByChannel?.get(channelCode);
+  if (live) { try { live.close(); } catch { /* already closed */ } }
+  if (this._swRegistration?.active) {
+    try { this._swRegistration.active.postMessage({ type: 'close-channel-notifications', channelCode }); }
+    catch (err) { console.warn('[Notifications] could not message the service worker', err); }
+  }
+  if (window.havenDesktop?.dismissNotification) {
+    try { window.havenDesktop.dismissNotification(channelCode); }
+    catch (err) { console.warn('[Notifications] could not dismiss the desktop notification', err); }
+  }
+},
+
+/**
+ * Another device of this account read a channel: clear its unread count and
+ * the badges built from it, unless a newer message has arrived here since
+ * (then the read marker is behind us and the count is still right).
+ */
+_applyChannelRead(channelCode, messageId) {
+  if (!channelCode || !this.unreadCounts?.[channelCode]) return;
+  const channel = this.channels?.find(c => c.code === channelCode);
+  const latest = channel?.latestMessageId || 0;
+  if (messageId && latest && latest > messageId) return;
+  this.unreadCounts[channelCode] = 0;
+  try { this._updateBadge?.(channelCode); } catch (err) { console.warn('[Unread] _updateBadge failed', err); }
+  try { this._updateDmSectionBadge?.(); } catch (err) { console.warn('[Unread] _updateDmSectionBadge failed', err); }
+  try { this._updateTabTitle?.(); } catch (err) { console.warn('[Unread] _updateTabTitle failed', err); }
+  try { this._updateDesktopBadge?.(); } catch (err) { console.warn('[Unread] _updateDesktopBadge failed', err); }
 },
 
 _updateDmSectionBadge() {

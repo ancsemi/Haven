@@ -301,6 +301,61 @@ for (const backend of ['sqlite', 'postgres']) {
       assert.equal(await cursor('bob', 'private'), undefined);
       assert.equal(await cursor('admin', 'room'), undefined, 'admin is not a substitute for membership');
     });
+    await t.test('a stored receipt reaches every device of that account and nobody else', async () => {
+      await clear();
+      const second = await open('alice');
+      const seen = { alice: [], second: [], bob: [] };
+      const watch = [[alice, seen.alice], [second, seen.second], [bob, seen.bob]].map(([client, list]) => {
+        const listener = data => list.push({ channelCode: data.channelCode, messageId: data.messageId });
+        client.on('channel-read', listener);
+        return () => client.off('channel-read', listener);
+      });
+      // A barrier answered on a socket comes after anything the server sent it
+      // before, so nothing is left in flight when the lists are read.
+      const settle = async () => { await barrier(alice); await barrier(second); await barrier(bob); };
+      try {
+        alice.emit('mark-read', { code: rooms.room.code, messageId: roomLast });
+        await settle();
+        const expected = [{ channelCode: rooms.room.code, messageId: roomLast }];
+        assert.deepEqual(seen.alice, expected, 'the device that read it is told too');
+        assert.deepEqual(seen.second, expected, 'the account\'s other device is told');
+        assert.deepEqual(seen.bob, [], 'another account is never told');
+
+        // A receipt the server refused (not a member) tells nobody.
+        for (const list of Object.values(seen)) list.length = 0;
+        bob.emit('mark-read', { code: rooms.private.code, messageId: 100 });
+        alice.emit('mark-read', { code: "bad';--", messageId: 40 });
+        await settle();
+        assert.deepEqual([seen.alice, seen.second, seen.bob], [[], [], []]);
+
+        // Marking a whole channel read reports the latest top-level message.
+        alice.emit('mark-read-channel', { code: rooms.dm.code });
+        await settle();
+        assert.deepEqual(seen.second, [{ channelCode: rooms.dm.code, messageId: dmLast }]);
+        assert.deepEqual(seen.bob, []);
+
+        // An empty channel stays unread, so there is nothing to clear.
+        for (const list of Object.values(seen)) list.length = 0;
+        alice.emit('mark-read-channel', { code: rooms.empty.code });
+        await settle();
+        assert.deepEqual(seen.second, []);
+
+        // Mark everything read: one entry per channel that has messages.
+        for (const list of Object.values(seen)) list.length = 0;
+        await ack(alice, 'mark-all-read');
+        await settle();
+        const byCode = Object.fromEntries(seen.second.map(read => [read.channelCode, read.messageId]));
+        assert.equal(byCode[rooms.room.code], roomLast);
+        assert.equal(byCode[rooms.dm.code], dmLast);
+        assert.equal(rooms.empty.code in byCode, false);
+        assert.equal(rooms.threadOnly.code in byCode, false);
+        assert.deepEqual(seen.alice, seen.second);
+        assert.deepEqual(seen.bob, []);
+      } finally {
+        watch.forEach(stop => stop());
+        second.disconnect();
+      }
+    });
     await t.test('marking a whole room or DM excludes thread replies and leaves empty channels alone', async () => {
       await clear();
       for (const [room, latest] of [['room', roomLast], ['dm', dmLast]]) {
