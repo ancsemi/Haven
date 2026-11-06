@@ -152,14 +152,20 @@
   // normalised hostname a browser would actually connect to, which is the only
   // thing worth making a policy decision about. opts.markdown: the text is a
   // chat message, so bare addresses inside code are not counted (see above).
-  var FILE_ATTACHMENT_RE = /\[file:(?:[^\[\]\n]|\[[^\[\]\n]*\])*\]\(\/uploads\/[^)\s|]*(?:\|[^)\n]*)?\)/g;
+  var FILE_ATTACHMENT_RE = /\[file:((?:[^\[\]\n]|\[[^\[\]\n]*\])*)\]\(\/uploads\/[^)\s|]*(?:\|[^)\n]*)?\)/g;
+  // No real file name has a slash in it, so a name with :// was typed to look
+  // like a file. Where chat shows that markup as text, the address in it
+  // becomes a clickable link, so it is checked like any other.
+  function skipFileMarkup(block, name) {
+    return name.indexOf('://') === -1 ? ' ' : block;
+  }
   function extractUrls(rawText, opts) {
     if (typeof rawText !== 'string' || !rawText) return [];
     if (opts && opts.markdown) rawText = codeLinksOnly(rawText);
     // An uploaded file's own message, [file:name](/uploads/...|size), points
     // at this server. Its name is whatever the file was called, and a name
     // like ssstwitter.com_123.mp4 is not a link someone posted.
-    rawText = rawText.replace(FILE_ATTACHMENT_RE, ' ');
+    rawText = rawText.replace(FILE_ATTACHMENT_RE, skipFileMarkup);
 
     var stripped = rawText.replace(INVISIBLE_RE, '');
     var d = deobfuscate(stripped);
@@ -203,7 +209,12 @@
     var MD_RE = /!?\[([^\]]*)\]\(\s*([^\s)]+)\s*\)/g;
     var m;
     while ((m = MD_RE.exec(text)) !== null) push(m[2], { viaMarkdown: true, label: m[1] });
-    var withoutMd = text.replace(MD_RE, ' ');
+    // Chat only turns [text](target) into a link when the target is a web
+    // address. Otherwise it shows the whole thing as text, and an address with
+    // :// in the text becomes a clickable link, so that one is checked too.
+    var withoutMd = text.replace(MD_RE, function (full, label, target) {
+      return /^https?:\/\//i.test(target) || label.indexOf('://') === -1 ? ' ' : ' ' + label + ' ';
+    });
 
     // Scheme-ful URLs (the ones Haven turns into clickable anchors and inline
     // <img> tags, so they carry all the real risk.
