@@ -1260,7 +1260,7 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
         });
       } else if (verdict && verdict.status === 'blocked') {
         const blockedCard = `<div class="haven-automod-blocked-card" data-hq-url="${this._escapeHtml(url)}">${this._blockedCardHtml(url, verdict)}</div>`;
-        modified = modified.replace(linkPattern, blockedCard);
+        modified = modified.replace(linkPattern, () => blockedCard);
       } else {
         const quarantineCapsule = `
           <span class="haven-quarantine-capsule scanning" data-hq-url="${this._escapeHtml(url)}" data-hq-text="${this._escapeHtml(item.label)}">
@@ -1271,7 +1271,7 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
             <span class="hq-status-pill">Scanning...</span>
           </span>
         `;
-        modified = modified.replace(linkPattern, quarantineCapsule);
+        modified = modified.replace(linkPattern, () => quarantineCapsule);
 
         this._enqueueScan(url, rawText);
       }
