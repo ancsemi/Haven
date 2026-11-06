@@ -6,7 +6,7 @@
 
 import SocketMethods   from './modules/app-socket.js?v=4.27.25';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.27.26';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.29.4';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.29.8';
 import UIBindMethods   from './modules/app-ui.js?v=4.27.37';
 import ComposerMethods from './modules/app-composer.js?v=4.27.28';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
@@ -42,7 +42,7 @@ import ChannelContextMethods from './modules/app-channel-context.js?v=4.27.53';
 import ChannelTypeMethods from './modules/app-channel-types.js?v=4.27.42';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.27.52';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.27.46';
-import MessageMethods  from './modules/app-messages.js?v=4.29.5';
+import MessageMethods  from './modules/app-messages.js?v=4.29.8';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.27.51';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.26.14';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.29';
@@ -57,7 +57,7 @@ import MusicMethods from './modules/app-music.js?v=4.27.17';
 import MusicFileMethods from './modules/app-music-file.js?v=4.27.49';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.27.52';
-import MessageContentMethods from './modules/app-message-content.js?v=4.27.51';
+import MessageContentMethods from './modules/app-message-content.js?v=4.29.8';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.27.54';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
 import ThreadMethods from './modules/app-threads.js?v=4.27.20';

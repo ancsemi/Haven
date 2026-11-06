@@ -1221,6 +1221,9 @@ Respond ONLY in valid raw JSON matching: {"safe": boolean, "category": string, "
       const rawText = args[0];
       const origHtml = orig.apply(this, args);
       if (!self._settings.enabled) return origHtml;
+      // Text from an end-to-end encrypted DM stays between its two people, so
+      // its links are never sent to the server's AI or a cloud one.
+      if (args[1] && args[1].e2e) return origHtml;
 
       return self.transformMessageHtml(origHtml, rawText);
     });

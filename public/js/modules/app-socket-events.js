@@ -443,7 +443,8 @@ _listenMessageChanges() {
       if (!msgEls.length) return;
       // E2E: decrypt once if needed (same content for both copies)
       let displayContent = data.content;
-      if (HavenE2E.isEncrypted(data.content) || this._isGroupEnvelope?.(data.content) || this._isGroupDm?.(data.channelCode)) {
+      const wasE2E = HavenE2E.isEncrypted(data.content) || !!this._isGroupEnvelope?.(data.content) || !!this._isGroupDm?.(data.channelCode);
+      if (wasE2E) {
         const partner = this._getE2EPartnerFor(data.channelCode);
         if (partner) {
           try {
@@ -461,7 +462,7 @@ _listenMessageChanges() {
       msgEls.forEach((msgEl) => {
         const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
         if (!contentEl) return;
-        contentEl.innerHTML = this._formatContent(displayContent);
+        contentEl.innerHTML = this._formatContent(displayContent, { e2e: wasE2E });
         msgEl.dataset.rawContent = displayContent;
         let editedTag = msgEl.querySelector('.edited-tag');
         if (!editedTag) {

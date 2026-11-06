@@ -43,7 +43,9 @@ _copyCodeBlock(button) {
   }
 },
 
-_formatContent(str) {
+// opts.e2e: the text came from an end-to-end encrypted DM. Formatting is the
+// same; plugins that patch this method use it to leave private text alone.
+_formatContent(str, opts) {
   if (typeof str !== 'string') str = String(str ?? '');
   // Control characters have no business in a message, and NUL in particular
   // is the delimiter of the placeholders below; strip them (keeping line
