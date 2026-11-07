@@ -65,20 +65,57 @@ const I18n = (() => {
     return _browserLocale();
   }
 
+  // A locale file that failed to load once (the server restarting for an
+  // update, a proxy or mobile network hiccup) left every t() showing its raw
+  // key for the whole visit, timestamps reading "utils.today_at" most of all.
+  // So each fetch gets a few tries.
+  async function _fetchLocale(locale) {
+    let lastErr = null;
+    for (const wait of [0, 700, 2000]) {
+      if (wait) await new Promise(r => setTimeout(r, wait));
+      try {
+        const res = await fetch(`/locales/${locale}.json`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr;
+  }
+
+  // English could not be loaded at all: keep trying in the background, and
+  // once it arrives redo the page text and every timestamp already drawn.
+  // (load() calls this again on each failure, up to 8 tries in all.)
+  let _lateRetryTimer = null;
+  let _lateRetries = 0;
+  function _retryLater() {
+    if (_lateRetryTimer || _lateRetries >= 8) return;
+    _lateRetries++;
+    _lateRetryTimer = setTimeout(async () => {
+      _lateRetryTimer = null;
+      if (Object.keys(_translations).length) return;
+      if (await load(DEFAULT)) {
+        applyDOM();
+        window.app?._refreshTimeLabels?.();
+        document.dispatchEvent(new CustomEvent('haven:localechange', { detail: { locale: DEFAULT, preference: _preference } }));
+      }
+    }, 15000 * _lateRetries);
+  }
+
   // ── Load a locale JSON file ──────────────────────────────────────────
   async function load(locale) {
     if (!SUPPORTED.includes(locale)) locale = DEFAULT;
     const version = ++_loadVersion;
     try {
-      const res = await fetch(`/locales/${locale}.json`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const translations = await res.json();
+      const translations = await _fetchLocale(locale);
       let fallback = _fallback;
       if (locale !== DEFAULT && !fallback) {
         try {
-          const fb = await fetch(`/locales/${DEFAULT}.json`);
-          if (fb.ok) fallback = await fb.json();
-        } catch { /* no fallback available; t() shows raw keys as before */ }
+          fallback = await _fetchLocale(DEFAULT);
+        } catch (err) {
+          console.warn('[i18n] English fallback unavailable, missing keys show as keys:', err.message);
+        }
       }
       // A slower earlier request must never overwrite a newer language choice.
       if (version !== _loadVersion) return false;
@@ -100,6 +137,7 @@ const I18n = (() => {
         console.info(`[i18n] Falling back to "${DEFAULT}"`);
         return load(DEFAULT);
       }
+      _retryLater();
       return false;
     }
   }

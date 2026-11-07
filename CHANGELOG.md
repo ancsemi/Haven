@@ -32,6 +32,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Fixed
 - A message you had already sent could come back in the message box the next time you opened Haven, mostly in Haven Desktop. Sending now forgets the saved draft for that channel.
+- Timestamps (and other text) could show as raw names like "utils.today_at" for a whole visit when Haven's language file failed to load once, for example while the server restarted for an update. It is tried again, and the page fixes itself when it arrives.
 - A DM deleted while it was open in the pop-out DM window could come back, with its messages, after switching servers or reloading (#5848). The delete is now confirmed by the server before the app drops the conversation, and a fresh channel list no longer puts a DM the server no longer has back in the sidebar.
 - A call's camera or screen share in fullscreen paused when clicked. Fullscreen now goes on the stream's frame instead of the bare video, in the call grid and in popped-out streams.
 - Everyone could stop hearing you for the rest of a call, with Haven still showing you connected, after your microphone went away mid-call (a headset unplugged or reconnecting, for example). Only leaving and rejoining brought your voice back. Haven now opens the microphone again by itself, falling back to the default one, and tries again when a device appears (thanks Amnibro, #5851).
