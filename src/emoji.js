@@ -92,7 +92,7 @@ function parseEmojiTest(text) {
   // Unicode has both a man and a woman version of it. People with no gendered
   // version (baby, ninja, snowboarder) stay.
   const known = new Set(Object.values(names));
-  const hidden = (categories.People || []).filter(glyph => hasGenderedForms(names[glyph], known));
+  const hidden = (categories.People || []).filter(glyph => LEFT_OUT.has(names[glyph]) || hasGenderedForms(names[glyph], known));
   if (hidden.length) {
     const drop = new Set(hidden);
     categories.People = categories.People.filter(glyph => !drop.has(glyph));
@@ -101,6 +101,9 @@ function parseEmojiTest(text) {
 
   return { categories, names, modifierBase: [...modifierBase], hidden };
 }
+
+// Left out by name as well.
+const LEFT_OUT = new Set(['pregnant man', 'woman: beard', 'man with veil', 'woman in tuxedo']);
 
 // Neutral names whose gendered versions don't follow the "man X" pattern.
 const GENDERED_FORMS = {

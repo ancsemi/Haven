@@ -14,7 +14,7 @@ const data = parseEmojiTest(read('src/emoji-test.txt'));
 const offered = new Set(Object.values(data.categories).flat());
 
 test('gender-neutral people are left out when a man and a woman version exist', () => {
-  for (const glyph of ['🧑', '🤷', '🙋', '🧑‍💻', '👮', '🧑‍🎄', '🫄', '🧒', '🧓', '🧑‍🤝‍🧑', '👪', '💏', '🏃', '🏃‍➡️']) {
+  for (const glyph of ['🧑', '🤷', '🙋', '🧑‍💻', '👮', '🧑‍🎄', '🫄', '🧒', '🧓', '🧑‍🤝‍🧑', '👪', '💏', '🏃', '🏃‍➡️', '🫃', '🧔‍♀️', '👰‍♂️', '🤵‍♀️']) {
     assert.ok(data.hidden.includes(glyph), `${glyph} should be left out`);
     assert.ok(!offered.has(glyph), `${glyph} should not be in the picker`);
     assert.equal(data.names[glyph], undefined, `${glyph} should not be searchable`);
@@ -22,10 +22,9 @@ test('gender-neutral people are left out when a man and a woman version exist', 
 });
 
 test('the man and woman versions stay, and so do people with no gendered version', () => {
-  for (const glyph of ['👨', '👩', '🤷‍♂️', '🤷‍♀️', '👨‍💻', '👩‍💻', '🎅', '🤶', '👦', '👧', '👫', '👶', '🥷', '🏂', '🫂', '👍']) {
+  for (const glyph of ['👨', '👩', '🤷‍♂️', '🤷‍♀️', '👨‍💻', '👩‍💻', '🎅', '🤶', '👦', '👧', '👫', '👶', '🥷', '🏂', '🫂', '👍', '🤰', '🧔‍♂️', '👰‍♀️', '🤵‍♂️']) {
     assert.ok(offered.has(glyph), `${glyph} should be in the picker`);
   }
-  assert.ok(!data.hidden.some(g => /^(man|woman|boy|girl)\b/.test(data.names[g] || '')));
 });
 
 test('the built-in list used before the server answers has no gender-neutral people', () => {
