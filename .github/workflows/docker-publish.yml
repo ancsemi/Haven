@@ -112,19 +112,44 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # :beta follows the newest version of any kind. A stable cut from an
+      # older beta (4.28.0 while 4.29.0-beta.2 is out) or a hotfix on an old
+      # stable must not move it backward (#5867).
+      - name: Decide whether this release is the newest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/releases" --paginate --jq '.[] | select(.draft | not) | .tag_name' > tags.txt
+          NEWEST=$(python3 - "$VERSION" tags.txt <<'EOF'
+          import re, sys
+          def key(v):
+              m = re.match(r'^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?$', v.strip())
+              if not m:
+                  return None
+              pre = m.group(4)
+              parts = tuple((0, int(p), '') if p.isdigit() else (1, 0, p) for p in pre.split('.')) if pre else ()
+              return (int(m.group(1)), int(m.group(2)), int(m.group(3)), 0 if pre else 1, parts)
+          mine = key(sys.argv[1])
+          others = [k for k in (key(t) for t in open(sys.argv[2])) if k]
+          print('true' if mine and all(mine >= k for k in others) else 'false')
+          EOF
+          )
+          echo "NEWEST=$NEWEST" >> "$GITHUB_ENV"
+          echo "Newest release of any kind: $NEWEST"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # :latest is the stable channel, so a pre-release never moves it.
-          # :beta is early access: every release, pre-release or stable.
+          # :beta is early access: the newest release, pre-release or stable.
           # (A pre-release only gets {{version}} from the semver patterns.)
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
-            type=raw,value=beta
+            type=raw,value=beta,enable=${{ env.NEWEST == 'true' }}
 
       # Combine the two per-arch tags into the public multi-arch tags
       # (<version>, <major>.<minor>, latest).
