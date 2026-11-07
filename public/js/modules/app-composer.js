@@ -666,6 +666,18 @@ _voiceMimeChoice() {
 
 async _toggleVoiceMessage() {
   if (this._voiceRec) { this._stopVoiceMessage(true); return; }
+  // A second press while the mic was still opening started a second
+  // recording, and the first one's microphone was never let go.
+  if (this._voiceRecStarting) return;
+  this._voiceRecStarting = true;
+  try {
+    await this._startVoiceMessage();
+  } finally {
+    this._voiceRecStarting = false;
+  }
+},
+
+async _startVoiceMessage() {
   const ch = this.channels.find(c => c.code === this.currentChannel);
   if (!ch) return;
   if (ch.media_enabled === 0) { this._showToast(t('media.uploads_disabled'), 'error'); return; }
