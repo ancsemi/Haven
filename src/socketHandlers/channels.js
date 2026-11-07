@@ -2045,28 +2045,34 @@ module.exports = function register(socket, ctx) {
     return true;
   }
   ctx.purgeDmChannel = purgeDmChannel;
-  socket.on('delete-dm', async (data) => {
+  socket.on('delete-dm', async (data, callback) => {
+    // An app may pass a reply callback so it can drop the conversation in the
+    // window it deleted from even when the channel-deleted broadcast does not
+    // reach it (a reconnect or server switch around the delete). Apps that
+    // pass no callback keep reading error-msg. (#5848)
+    const done = typeof callback === 'function' ? callback : null;
+    const fail = (msg) => (done ? done({ error: msg }) : socket.emit('error-msg', msg));
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     // Deleting a DM erases it for everyone in it, so the app must have asked
     // first. An app that sends this from a plain "close" gets refused instead.
     if (data.confirmed !== true) {
-      return socket.emit('error-msg', 'Deleting a conversation removes it for everyone in it. Please update your app so it asks before deleting.');
+      return fail('Deleting a conversation removes it for everyone in it. Please update your app so it asks before deleting.');
     }
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 1').get(code);
-    if (!channel) return socket.emit('error-msg', 'DM not found');
+    if (!channel) return fail('DM not found');
     const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!isMember && !socket.user.isAdmin) return socket.emit('error-msg', 'Not authorized');
+    if (!isMember && !socket.user.isAdmin) return fail('Not authorized');
     if (isMember && channel.is_group && ctx.leaveGroupDm) return void (await ctx.leaveGroupDm(code, socket.user.id, data.attachments));
     // An admin outside a group deletes it for everyone, with the same checks and notices as from its menu.
-    if (channel.is_group) return void (ctx.deleteGroupDmForEveryone ? await ctx.deleteGroupDmForEveryone(code, data.attachments) : socket.emit('error-msg', 'Not authorized'));
+    if (channel.is_group) return void (ctx.deleteGroupDmForEveryone ? await ctx.deleteGroupDmForEveryone(code, data.attachments) : fail('Not authorized'));
 
     // An admin deleting a conversation they are not in is on the record.
     const outsiders = isMember ? null : db.prepare(`
       SELECT COALESCE(u.display_name, u.username) AS name FROM channel_members cm JOIN users u ON u.id = cm.user_id WHERE cm.channel_id = ?
     `).all(channel.id).map(r => r.name);
-    if (!(await purgeDmChannel(channel, data.attachments))) return socket.emit('error-msg', protectedMessages.CONVERSATION_REFUSAL);
+    if (!(await purgeDmChannel(channel, data.attachments))) return fail(protectedMessages.CONVERSATION_REFUSAL);
     if (outsiders) {
       _audit({ actor: socket.user, action: 'dm_delete',
         target_type: 'channel', target_id: channel.id, target_name: outsiders.join(', ') });
@@ -2074,5 +2080,7 @@ module.exports = function register(socket, ctx) {
 
     io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
     clearChannelRuntimeState(state, code);
+    // The delete is committed, so the app that asked can drop it now.
+    if (done) done({ success: true });
   });
 };

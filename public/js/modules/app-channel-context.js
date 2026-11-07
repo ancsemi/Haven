@@ -553,7 +553,22 @@ _initDmContextMenu() {
     const ok = await this._showConfirmModal('⚠️ ' + t('channels.dm_delete_confirm'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') });
     if (!ok) return;
     const attachments = await this._collectDmAttachments(code);
-    this.socket.emit('delete-dm', { code, attachments, confirmed: true });
+    // Wait for the server's verdict before changing anything here. Relying on
+    // the channel-deleted broadcast alone left a conversation that had been
+    // deleted from the pop-out DM window visible in this client whenever the
+    // broadcast was missed (a reconnect or server switch around the delete),
+    // and the next list refresh could then put the stale row back. (#5848)
+    this.socket.emit('delete-dm', { code, attachments, confirmed: true }, (res) => {
+      if (res && res.error) {
+        this._showToast(res.error, 'error');
+        return;
+      }
+      this._removeChannelLocally?.(code);
+      if (this.currentChannel === code) {
+        this.currentChannel = null;
+        this._showWelcome?.();
+      }
+    });
   });
 
   // Close on outside click
