@@ -32,7 +32,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Fixed
 - A call's camera or screen share in fullscreen paused when clicked. Fullscreen now goes on the stream's frame instead of the bare video, in the call grid and in popped-out streams.
-- The microphone could stay on after leaving a call, until Haven was closed: when changing the mic device overlapped with leaving, or when joining failed partway. Both let go of it now (#5850).
 - Everyone could stop hearing you for the rest of a call, with Haven still showing you connected, after your microphone went away mid-call (a headset unplugged or reconnecting, for example). Only leaving and rejoining brought your voice back. Haven now opens the microphone again by itself, falling back to the default one, and tries again when a device appears (thanks Amnibro, #5851).
 - Scrolling up through older messages could snap you back to where you were when they loaded, again and again for a while, as their pictures and link previews finished loading. It stays where you scroll now (thanks Amnibro and reverb256, #5858).
 - The last plain browser pop-ups are Haven's own themed dialogs now: moving a channel under another, leaving a channel, deleting a webhook, bot or member, backups, invite links and more. The password box for signing out other sessions hides what you type.
@@ -40,14 +39,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Clicking the ... button on a voice-only channel also joined its voice. It only opens the menu now (thanks dlmorgan999, #5846).
 - A spoiler's text showed in the places a message is previewed as plain text: reply previews, the Replying to bar, the Threads list, forum post titles and snippets, pop-up notifications and phone notifications. It's hidden in all of them now (thanks birdycrazy).
 - On a phone, an uploaded video's controls squeezed its file name into a column one letter wide. The controls sit in their own shaded box now, so they no longer read as part of the name, and move below the name when the row is narrow (#5855).
-- The button in Settings that opens the Discord import read "Import Selected", the label of the button inside the import window. It says Import from Discord again, in every language.
 - Opening a picture from an encrypted DM on a phone, in an installed app window or in the Android app showed a white page. It opens in Haven's own picture viewer there now (#5853).
 
 ### Security
-- Fixes from a full line-by-line review of recent contributions: AutoMod's link filter and the AI link checks plugin are tightened, links in end-to-end encrypted DMs are never sent for an AI check, and banned accounts can no longer use the AI check routes.
 - The libraries the backup zip writer leans on (glob and minimatch) are moved to their fixed versions. Haven never handed them anything a user typed, so this closes two Dependabot alerts rather than a hole anyone could use.
 
-## [4.28.0] - Unreleased
+## [4.28.0] - 2026-11-06
 
 ### Added
 - Settings are split into a few pages, so each one is short: Appearance, Chat & media, Notifications and so on for you, and Server, People & roles, Safety, Content, Network & scale and Bots & data for admins. Longer explanations fold behind an ⓘ button (thanks Amnibro, #5838).
@@ -83,9 +80,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Bot (webhook) posts sent no push notifications, so phones, and browsers with push turned on, heard nothing when a bot posted.
 - Text typed in the message box followed you into the next channel or DM. Each one now keeps its own unsent message, also after a reload.
 - A temporary channel lasted until the server's date changed instead of the hours it was set for, so a 1 hour channel could stay up most of a day. Mutes made through the bot or HTTP API had the same problem.
+- The microphone could stay on after leaving a call, until Haven was closed: when changing the mic device overlapped with leaving, or when joining failed partway. Both let go of it now (#5850).
+- The Settings button that opens the Discord import read "Import Selected". It says Import from Discord again.
 
 ### Security
 - Updated multer and body-parser, which read uploads and requests, for two advisories that let one bad request slow the server down.
+- Fixes from a full line-by-line review of recent contributions: AutoMod's link filter and the AI link checks plugin are tightened, links in end-to-end encrypted DMs are never sent for an AI check, and banned accounts can no longer use the AI check routes.
 
 ## [4.27.1] - 2026-10-29
 
