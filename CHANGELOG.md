@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [4.28.0] - Unreleased
+## [4.28.0] - 2026-11-06
 
 ### Added
 - Settings are split into a few pages, so each one is short: Appearance, Chat & media, Notifications and so on for you, and Server, People & roles, Safety, Content, Network & scale and Bots & data for admins. Longer explanations fold behind an ⓘ button (thanks Amnibro, #5838).
@@ -42,9 +42,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Bot (webhook) posts sent no push notifications, so phones, and browsers with push turned on, heard nothing when a bot posted.
 - Text typed in the message box followed you into the next channel or DM. Each one now keeps its own unsent message, also after a reload.
 - A temporary channel lasted until the server's date changed instead of the hours it was set for, so a 1 hour channel could stay up most of a day. Mutes made through the bot or HTTP API had the same problem.
+- The microphone could stay on after leaving a call, until Haven was closed: when changing the mic device overlapped with leaving, or when joining failed partway. Both let go of it now (#5850).
+- The Settings button that opens the Discord import read "Import Selected". It says Import from Discord again.
 
 ### Security
 - Updated multer and body-parser, which read uploads and requests, for two advisories that let one bad request slow the server down.
+- Fixes from a full line-by-line review of recent contributions: AutoMod's link filter and the AI link checks plugin are tightened, links in end-to-end encrypted DMs are never sent for an AI check, and banned accounts can no longer use the AI check routes.
 
 ## [4.27.1] - 2026-10-29
 
