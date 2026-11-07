@@ -1673,8 +1673,18 @@ class VoiceManager {
       // Leave existing voice channel if connected elsewhere
       if (this.inVoice) this.leave();
 
+      // Leave pressed while this join is still getting ready cancels it.
+      // Otherwise the join finished anyway and put the mic back on (#5850).
+      const leavesAtStart = this._leaveCount || 0;
+      const abandoned = () => {
+        if ((this._leaveCount || 0) === leavesAtStart) return false;
+        this._dropUnjoinedMic();
+        return true;
+      };
+
       // Refresh ICE config (TURN credentials may have expired)
       await this._fetchIceServers();
+      if (abandoned()) return false;
 
       // Create/resume AudioContext with user gesture (needed for volume boost)
       this._ensureAudioCtx();
@@ -1724,6 +1734,7 @@ class VoiceManager {
         this.isListenerOnly = true;
       }
 
+      if (abandoned()) return false;
       if (this.rawStream) this._watchMic(this.rawStream);
       // Opt out of Windows audio ducking (Desktop app only).
       // Must be called after getUserMedia so our audio session exists.
@@ -1769,6 +1780,7 @@ class VoiceManager {
 
         // Initialize RNNoise and apply saved noise mode
         await this._initRNNoise();
+        if (abandoned()) return false;
         if (this.noiseMode === 'suppress' && this._rnnoiseWasmBytes) {
           this.setNoiseSensitivity(0);
           this._enableRNNoise();
@@ -1844,6 +1856,7 @@ class VoiceManager {
   }
 
   leave() {
+    this._leaveCount = (this._leaveCount || 0) + 1;
     // Breadcrumb for the maximize/resize "fake disconnect" bug: if leave()
     // runs when the user didn't click Disconnect, the stack tells us why.
     console.warn('[Voice] leave() invoked', {

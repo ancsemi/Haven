@@ -16,6 +16,9 @@ async _joinVoice() {
   // voice-join / voice-leave server events. The flag is cleared in a
   // finally block below regardless of outcome.
   if (this._joiningVoice) return;
+  // Already in this channel's call: a second click that landed after the
+  // first join finished left and rejoined, opening the mic a second time.
+  if (this.voice?.inVoice && this.voice.currentChannel === this.currentChannel) return;
   // If the socket is currently disconnected (e.g. user is mashing the
   // button during a server restart) refuse to start. Emits would be
   // buffered by socket.io and replayed N times on reconnect, producing

@@ -141,3 +141,16 @@ test('a muted call stays muted on the reopened microphone', async () => {
   assert.equal(raws[1].enabled, false);
   voice.leave();
 });
+test('leaving while a join is still getting ready cancels it and lets go of the mic (#5850)', async () => {
+  const { voice, raws } = setup();
+  let finishSetup;
+  voice._initRNNoise = () => new Promise((r) => { finishSetup = r; });
+  const joining = voice.join('aaaaaaaa');
+  await tick();
+  assert.equal(liveRaws(raws), 1, 'the mic is open while the join gets ready');
+  voice.leave();
+  finishSetup();
+  assert.equal(await joining, false);
+  assert.equal(voice.inVoice, false);
+  assert.equal(liveRaws(raws), 0);
+});

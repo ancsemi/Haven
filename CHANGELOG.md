@@ -31,6 +31,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
+- Leaving a call while Haven was still joining it (after a reconnect, for example) let the join finish and put the microphone back on, and a second click on a voice channel you were already in left and rejoined, opening the mic again (#5850).
 - A message you had already sent could come back in the message box the next time you opened Haven, mostly in Haven Desktop. Sending now forgets the saved draft for that channel.
 - Timestamps (and other text) could show as raw names like "utils.today_at" for a whole visit when Haven's language file failed to load once, for example while the server restarted for an update. It is tried again, and the page fixes itself when it arrives.
 - A DM deleted while it was open in the pop-out DM window could come back, with its messages, after switching servers or reloading (#5848). The delete is now confirmed by the server before the app drops the conversation, and a fresh channel list no longer puts a DM the server no longer has back in the sidebar.
