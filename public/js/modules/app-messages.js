@@ -57,7 +57,7 @@ async _sendMessage() {
     const code = this.currentChannel;
     const files = [...this._imageQueue];
     this._clearImageQueue();
-    input.value = '';
+    input.value = ''; this._draftSent?.();
     input.style.height = 'auto';
     input.focus();
     this._clearReply();
@@ -95,7 +95,7 @@ async _sendMessage() {
     if (sticker && sticker.url && destructAt) {
       content = sticker.url;
     } else if (sticker && sticker.url) {
-      input.value = '';
+      input.value = ''; this._draftSent?.();
       input.style.height = 'auto';
       this._clearReply();
       this._hideMentionDropdown();
@@ -112,7 +112,7 @@ async _sendMessage() {
     if (content.trim().toLowerCase() === '/tts:stop') {
       this.notifications?.stopTTS();
       this._showToast(t('toasts.tts_stopped'), 'info');
-      input.value = '';
+      input.value = ''; this._draftSent?.();
       input.style.height = 'auto';
       this._hideMentionDropdown();
       this._hideSlashDropdown();
@@ -124,7 +124,7 @@ async _sendMessage() {
       const arg = (parts[2] || '').trim();
       if (cmd === 'clear') {
         document.getElementById('messages').innerHTML = '';
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -132,7 +132,7 @@ async _sendMessage() {
       }
       if (cmd === 'nick' && arg) {
         this.socket.emit('rename-user', { username: arg });
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -151,7 +151,7 @@ async _sendMessage() {
           this.socket.emit('music-search', { query: arg, offset: 0 });
           this._showToast(t('toasts.searching'), 'info');
         }
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -160,7 +160,7 @@ async _sendMessage() {
       if (cmd === 'gif') {
         if (!arg) { this._showToast(t('commands.gif_usage'), 'error'); }
         else { this._showGifSlashResults(arg); }
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -170,7 +170,7 @@ async _sendMessage() {
         // No argument opens the picker modal; the toast is kept for input
         // that was typed but could not be parsed.
         if (!arg) {
-          input.value = '';
+          input.value = ''; this._draftSent?.();
           input.style.height = 'auto';
           this._hideMentionDropdown();
           this._hideSlashDropdown();
@@ -196,7 +196,7 @@ async _sendMessage() {
       }
       if (cmd === 'schedule') {
         // Send later (#5638): the text after the command is the message.
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -204,7 +204,7 @@ async _sendMessage() {
         return;
       }
       if (cmd === 'poll') {
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -248,7 +248,7 @@ async _sendMessage() {
   let groupPartner = null;
 
   // Clear UI immediately (before any async E2E work)
-  input.value = '';
+  input.value = ''; this._draftSent?.();
   input.style.height = 'auto';
   input.focus();
   this._clearReply();

@@ -43,6 +43,15 @@ _draftKeep(code, text) {
   for (let i = 0; i < codes.length - MAX_DRAFTS; i++) delete store[codes[i]];
 },
 
+// Sending empties the box without an input event, so the text that went out
+// would otherwise stay saved and come back as a draft on the next visit.
+_draftSent() {
+  const code = this.currentChannel;
+  if (!code || !(code in this._draftStore())) return;
+  this._draftKeep(code, '');
+  this._draftPersist();
+},
+
 // Leaving a channel: keep what is in the box for it.
 _draftStash(code) {
   const input = document.getElementById('message-input');
