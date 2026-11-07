@@ -35,6 +35,7 @@ import AppearanceMethods from './modules/app-appearance.js?v=4.27.49';
 import AccessibilityMethods from './modules/app-accessibility.js?v=4.27.19';
 import SoundMethods from './modules/app-sounds.js?v=4.25.21';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.29.12';
+import EmojiSearchMethods from './modules/app-emoji-search.js?v=4.29.12';
 import BotMethods from './modules/app-bots.js?v=4.27.52';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
 import ChannelMethods  from './modules/app-channels.js?v=4.29.9';
@@ -56,15 +57,15 @@ import StreamTileMethods from './modules/app-stream-tiles.js?v=4.27.56';
 import MusicMethods from './modules/app-music.js?v=4.27.17';
 import MusicFileMethods from './modules/app-music-file.js?v=4.27.49';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
-import UtilityMethods  from './modules/app-utilities.js?v=4.27.52';
+import UtilityMethods  from './modules/app-utilities.js?v=4.29.12';
 import MessageContentMethods from './modules/app-message-content.js?v=4.29.8';
-import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.27.54';
+import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.12';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
 import ThreadMethods from './modules/app-threads.js?v=4.27.20';
 import AdminMethods    from './modules/app-admin.js?v=4.27.41';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.52';
-import AutocompleteMethods from './modules/app-autocomplete.js?v=4.26.12';
+import AutocompleteMethods from './modules/app-autocomplete.js?v=4.29.12';
 import StatusMethods from './modules/app-status.js?v=4.29.2';
 import DiscordImportMethods from './modules/app-discord-import.js?v=4.27.52';
 import RoleMethods from './modules/app-roles.js?v=4.27.52';
@@ -104,7 +105,7 @@ import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
 import MentionsMethods from './modules/app-mentions.js?v=4.29.9';
 import SettingsPageMethods from './modules/app-settings-pages.js?v=4.27.41';
-import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.27.54';
+import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.29.12';
 import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';
 import { startTooltips } from './modules/tooltips.js?v=4.27.51';
 
@@ -604,6 +605,7 @@ Object.assign(HavenApp.prototype,
   AccessibilityMethods,
   SoundMethods,
   EmojiStickerMethods,
+  EmojiSearchMethods,
   BotMethods,
   ContextMethods,
   ChannelMethods,

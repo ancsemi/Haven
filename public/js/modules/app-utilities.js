@@ -557,22 +557,6 @@ _getEmojiPunctAliases() {
   return this._emojiPunctAliases;
 },
 
-// Shared emoji search matcher used by the emoji picker and reaction picker.
-// Matches on keyword substrings, the literal emoji character (so typing an
-// actual "?", "#", or a digit surfaces the matching emoji), and punctuation
-// aliases (typing "?" surfaces ❓ ⁉️ etc.).
-_emojiSearchMatch(emoji, keywords, rawQuery) {
-  const raw = (rawQuery || '').trim();
-  const q = raw.toLowerCase();
-  if (!q) return true;
-  const kw = (keywords || '').toLowerCase();
-  if (kw.includes(q)) return true;
-  if (typeof emoji === 'string' && raw && emoji.includes(raw)) return true;
-  const alias = this._getEmojiPunctAliases()[q];
-  if (alias && alias.split(/\s+/).some(w => kw.includes(w))) return true;
-  return false;
-},
-
 // ── Role mentions (#5579) ──
 // "@Moderators" lights up for everyone holding the role and pings them,
 // unless they have turned role pings off. Sending one needs the same

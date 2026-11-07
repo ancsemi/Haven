@@ -56,7 +56,7 @@ _chooseEmoji(anchor) {
       let html = '';
       const seen = new Set();
       for (const g of groups) {
-        const items = g.items.filter(e => !seen.has(e) && (!q || this._emojiChooserWords(e).includes(q)));
+        const items = g.items.filter(e => !seen.has(e) && (!q || (NAMED.test(e) ? this._emojiChooserWords(e).includes(q) : this._emojiSearchScore(e, q) >= 0)));
         if (!items.length) continue;
         items.forEach(e => seen.add(e));
         html += `<div class="emoji-chooser-label">${this._escapeHtml(t(`emoji.categories.${g.key}`))}</div>`

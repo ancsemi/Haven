@@ -380,11 +380,9 @@ _toggleEmojiPicker(anchorEl) {
     for (const k in catSections) delete catSections[k];
     if (filter) {
       const q = filter.toLowerCase().trim();
-      const matched = new Set();
-      // Search by keyword, literal character, and punctuation alias
-      for (const [emoji, keywords] of Object.entries(self.emojiNames)) {
-        if (self._emojiSearchMatch(emoji, keywords, filter)) matched.add(emoji);
-      }
+      // Search by name, keyword, literal character and punctuation alias,
+      // best matches first.
+      const matched = new Set(self._emojiSearch(filter));
       // Also search by category name
       for (const [cat, list] of Object.entries(self.emojiCategories)) {
         if (cat.toLowerCase().includes(q)) list.forEach(e => matched.add(e));
@@ -980,7 +978,7 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
     const lowerFilter = filter ? filter.toLowerCase() : '';
     for (const [category, emojis] of Object.entries(this.emojiCategories)) {
       const matching = lowerFilter
-        ? emojis.filter(e => this._emojiSearchMatch(e, this.emojiNames[e] || '', filter) || category.toLowerCase().includes(lowerFilter))
+        ? emojis.filter(e => this._emojiSearchScore(e, filter) >= 0 || category.toLowerCase().includes(lowerFilter))
         : emojis;
       if (matching.length === 0) continue;
 

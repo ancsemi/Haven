@@ -134,7 +134,7 @@ _setupEmojiManagement() {
   }
 
   this._setupEmojiCropperEvents();
-  this._loadStandardEmojis();
+  this._loadStandardEmojis().finally(() => this._loadEmojiKeywords());
   this._loadCustomEmojis();
 },
 
