@@ -634,20 +634,15 @@ _bindVoiceControls() {
   // "Join Voice" button while they're still in the call.
   this._startVoiceUiReconciler?.();
 
-  // ── File video fullscreen: redirect to wrapper for proper controls ──
-  // When a .file-video triggers fullscreen (via native controls), intercept and
-  // fullscreen the .file-video-wrap parent instead so controls stay visible.
-  if (!document.documentElement.hasAttribute('data-desktop-app')) {
-    // Web-only: Desktop app has its own shim in app-preload.js
-    const origRequestFS = Element.prototype.requestFullscreen;
-    Element.prototype.requestFullscreen = function (opts) {
-      if (this.classList?.contains('file-video')) {
-        const wrap = this.closest('.file-video-wrap');
-        if (wrap) return origRequestFS.call(wrap, opts);
-      }
-      return origRequestFS.call(this, opts);
-    };
-  }
+  this._redirectFileVideoFullscreen();
+},
+
+_redirectFileVideoFullscreen() {
+  const ask = Element.prototype.requestFullscreen;
+  Element.prototype.requestFullscreen = function (opts) {
+    const wrap = this.classList?.contains('file-video') && !document.documentElement.hasAttribute('data-desktop-app') && this.closest('.file-video-wrap');
+    return ask.call(wrap || this, opts);
+  };
 },
 
 };
