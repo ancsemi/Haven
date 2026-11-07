@@ -355,6 +355,9 @@ async _loadStandardEmojis() {
     // Built-in keywords are richer than Unicode's bare names, so let them win
     // where they exist and use the Unicode name to fill every other gap.
     this.emojiNames = { ...data.names, ...this.emojiNames };
+    // People Haven leaves out (see src/emoji.js) are not offered by search
+    // or :autocomplete either.
+    for (const glyph of data.hidden || []) delete this.emojiNames[glyph];
     if (Array.isArray(data.modifierBase) && data.modifierBase.length) {
       this._emojiModifierBase = new Set(data.modifierBase.map(h => String.fromCodePoint(parseInt(h, 16))));
     }

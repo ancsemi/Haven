@@ -28,6 +28,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - The account bar at the top of the sidebar shows your profile picture, in your chosen shape, and clicking it opens Edit Profile. The server connection light sits on its top-left corner.
 - Your custom status shows under your name in the account bar, or Set status when you have none, and clicking it opens the status picker. It used to be hidden behind the status dot (thanks reverb256, #5859).
 - Reading a channel on one device clears its unread badge and closes its notification on your other devices too, Haven Desktop's included once it is updated (thanks Roolk).
+- The emoji picker offers people as a man or a woman. The gender-neutral versions (person shrugging, technologist, Mx Claus and so on) are gone wherever a man and a woman version exist. People with no man or woman version, like baby, ninja or snowboarder, stay.
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
