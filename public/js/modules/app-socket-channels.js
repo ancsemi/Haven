@@ -33,19 +33,16 @@ _listenChannelsAndMessages() {
       this._migrateChannelCodeState(rotation.oldCode, rotation.newCode);
     }
 
-    // Preserve any DM channels that were added client-side (via dm-opened
-    // events). The server only sends server channels in channels-list, so
-    // overwriting would wipe DM entries and break E2E decryption until the
-    // user reopens the DM. A group DM only ever comes from this list, so one
-    // missing from it is a group this user is no longer in (left, removed or
-    // deleted) and goes. (#5740)
-    const existingDMs = (this.channels || []).filter(c => c.is_dm && !c.is_group);
+    // The server's list is authoritative for DMs as well as channels: it
+    // sends every 1:1 and group DM this person is still a member of. Keeping
+    // older local copies here let a deleted conversation come back on the
+    // next list refresh whenever its channel-deleted broadcast was missed
+    // (a reconnect or server switch around the delete), which is what #5848
+    // saw when the DM had been deleted from the pop-out DM window.
+    const openPiPCode = this._activeDMPip;
     this.channels = channels.map(c => c.is_group ? { ...c, dm_target: null } : c);
-    for (const dm of existingDMs) {
-      if (!this.channels.find(c => c.code === dm.code)) {
-        this.channels.push(dm);
-      }
-    }
+    // A DM that is gone from the fresh list must not stay open in the pop-out.
+    if (openPiPCode && !this.channels.some(c => c.code === openPiPCode)) this._closeDMPiP?.();
     this._persistChannelCodeMap(channels);
     // Streams or Listen Together switched on or off in the voice room you are in.
     this._applyVoiceRoomLimits?.();
@@ -838,10 +835,7 @@ _listenPresenceAndVoice() {
   });
 
   this.socket.on('channel-deleted', (data) => {
-    this.channels = this.channels.filter(c => c.code !== data.code);
-    this._renderChannels();
-    // A DM gone while open in the pop-out DM window closes it too.
-    if (this._activeDMPip === data.code) this._closeDMPiP?.();
+    this._removeChannelLocally(data.code);
     // Disconnect from voice if the user is in the deleted channel's voice
     if (this.voice && this.voice.inVoice && this.voice.currentChannel === data.code) {
       this._leaveVoice();
@@ -914,6 +908,24 @@ _listenPresenceAndVoice() {
     if (sentAt == null) return;
     document.getElementById('status-ping').textContent = Date.now() - sentAt;
   });
+},
+
+/**
+ * Drop a channel from this client for good: its sidebar row, its unread count
+ * and a pop-out DM showing it. Used both for the server's channel-deleted
+ * broadcast and for the reply to our own delete-dm, so a conversation deleted
+ * in this window goes at once even when the broadcast is missed (a reconnect
+ * or server switch around the delete) and cannot be put back by the next
+ * channel list. (#5848)
+ */
+_removeChannelLocally(code) {
+  if (!code) return;
+  this.channels = (this.channels || []).filter(c => c.code !== code);
+  if (this.unreadCounts) delete this.unreadCounts[code];
+  // A DM gone while open in the pop-out DM window closes it too.
+  if (this._activeDMPip === code) this._closeDMPiP?.();
+  this._renderChannels?.();
+  this._updateDmSectionBadge?.();
 },
 
 };

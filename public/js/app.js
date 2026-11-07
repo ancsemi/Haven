@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.27.25';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.9';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.10';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.9';
 import UIBindMethods   from './modules/app-ui.js?v=4.27.37';
 import ComposerMethods from './modules/app-composer.js?v=4.27.28';
@@ -38,7 +38,7 @@ import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.27.54';
 import BotMethods from './modules/app-bots.js?v=4.27.52';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
 import ChannelMethods  from './modules/app-channels.js?v=4.29.9';
-import ChannelContextMethods from './modules/app-channel-context.js?v=4.27.53';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.27.54';
 import ChannelTypeMethods from './modules/app-channel-types.js?v=4.27.42';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.27.52';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.27.46';
