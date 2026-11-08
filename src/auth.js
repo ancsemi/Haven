@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { getDb, getAsyncDb } = require('./database');
 const { grantAdminRole } = require('./roleDefaults');
+const { nameRefusal } = require('./blockedNames');
 const OTPAuth = require('otpauth');
 const QRCode = require('qrcode');
 const https = require('https');
@@ -358,6 +359,8 @@ router.post('/guest-login', authLimiter, async (req, res) => {
     if (username.toLowerCase() === ADMIN_USERNAME) {
       return res.status(400).json({ error: 'That username is reserved' });
     }
+    const blockedName = nameRefusal(db, username);
+    if (blockedName) return res.status(400).json({ error: blockedName });
     if (!eulaVersion) {
       return res.status(400).json({ error: 'You must accept the Terms of Service & Release of Liability Agreement' });
     }
@@ -541,6 +544,9 @@ router.post('/register', authLimiter, async (req, res) => {
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       return res.status(400).json({ error: 'Username: letters, numbers, underscores only' });
     }
+    // Words the admin has blocked from names (src/blockedNames.js).
+    const blockedName = nameRefusal(getDb(), username);
+    if (blockedName) return res.status(400).json({ error: blockedName });
     if (password.length < 8 || password.length > 128) {
       return res.status(400).json({ error: 'Password must be 8-128 characters' });
     }
@@ -2435,7 +2441,8 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
       try {
         const { normalizeDisplayName } = require('./socketHandlers/helpers');
         const dn = normalizeDisplayName(claims.name);
-        if (dn && dn.value) {
+        // A provider name with a blocked word in it is not used either.
+        if (dn && dn.value && !nameRefusal(db, dn.value)) {
           db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(dn.value, user.id);
           user.display_name = dn.value;
         }

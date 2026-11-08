@@ -16,6 +16,8 @@ const ADMIN_ONLY_SETTINGS = new Set([
   'turn_password', 'turnstile_secret_key',
   // A channel code, and usually a private staff channel's.
   'automod_log_channel',
+  // Words blocked from names (src/blockedNames.js): the admin's list only.
+  'blocked_name_words',
   // Voice relay setup: only the admin screen needs these.
   'voice_relay_mode', 'voice_relay_port', 'voice_relay_workers', 'voice_relay_address',
 ]);

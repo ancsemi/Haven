@@ -10,6 +10,7 @@ const { validHighScore, isKnownGame } = require('../highScores');
 const { badgesForProfile } = require('../badges');
 const { themePreferenceAllowed } = require('../themeMetadata');
 const { MEDIA_GROUP_LAYOUTS } = require('../mediaGroup');
+const { nameRefusal } = require('../blockedNames');
 const createEncryptionKeyReads = require('../db/encryptionKeys');
 
 const PUSH_SCOPES = ['all', 'mentions'];
@@ -81,6 +82,12 @@ module.exports = function register(socket, ctx) {
     // used to reserve impersonation-prone names (e.g. "Admin", "Moderator"),
     // which is also the only answer to homoglyph lookalikes (#5509).
     if (enforceAutomod(newName, { surface: 'profile' })) return;
+
+    // Words the admin blocked from names. The admin is not held to it.
+    if (!socket.user.isAdmin) {
+      const blocked = nameRefusal(db, newName);
+      if (blocked) return socket.emit('error-msg', blocked);
+    }
 
     // Reject if another user on this server already uses this display name
     // (case-insensitive). Mentions resolve by login username, but allowing
@@ -1243,6 +1250,10 @@ module.exports = function register(socket, ctx) {
       // reserves impersonation-prone names like "Admin" / "Moderator", and
       // holding this permission is no reason to be able to hand one out.
       if (enforceAutomod(raw, { surface: 'profile' })) return;
+      if (!socket.user.isAdmin) {
+        const blocked = nameRefusal(db, raw);
+        if (blocked) return socket.emit('error-msg', blocked);
+      }
       try {
         const conflict = db.prepare(`
           SELECT id FROM users

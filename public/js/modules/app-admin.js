@@ -712,6 +712,7 @@ _applyServerSettings() {
   if (!modalOpen && this.user && (this.user.isAdmin || this._hasPerm('manage_server'))) {
     this.socket.emit('get-whitelist');
   }
+  if (!modalOpen) this._loadBlockedNames?.();
 },
 
 /* ── Admin settings save / cancel ───────────────────── */
@@ -1132,6 +1133,9 @@ _saveAdminSettings() {
     this.socket.emit('update-server-setting', { key: 'max_poll_options', value: maxPollOpts });
     changed = true;
   }
+
+  // Blocked names save themselves; this catches an edit left unsaved.
+  if (this._saveBlockedNamesIfChanged?.()) changed = true;
 
   // Blocked file types (#5833): the server cleans the list up
   const blockedTypesEl = document.getElementById('blocked-upload-types');

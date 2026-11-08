@@ -62,7 +62,7 @@ import MessageContentMethods from './modules/app-message-content.js?v=4.29.13';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.12';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
 import ThreadMethods from './modules/app-threads.js?v=4.27.20';
-import AdminMethods    from './modules/app-admin.js?v=4.27.41';
+import AdminMethods    from './modules/app-admin.js?v=4.29.15';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.52';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.29.12';
@@ -89,6 +89,7 @@ import LoginBrandingMethods from './modules/app-login-branding.js?v=4.27.4';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
 import MessageGroupingMethods from './modules/message-grouping.js?v=4.25.1';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
+import BlockedNameMethods from './modules/app-blocked-names.js?v=4.29.15';
 import MasterVolumeMethods from './modules/app-master-volume.js?v=4.27.56';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.24.24';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
@@ -432,6 +433,7 @@ class HavenApp {
     this._setupDiscordImport();
     this._setupServerTemplates();
     this._setupAuditLog();
+    this._setupBlockedNames();
     this._initRoleManagement();
     this._initPermMatrix();
     this._initServerBranding();
@@ -592,6 +594,7 @@ Object.assign(HavenApp.prototype,
   PeopleMethods,
   SettingsMethods,
   AdminControlMethods,
+  BlockedNameMethods,
   ExtensionUpdateMethods,
   ServerBarMethods,
   MobileMethods,

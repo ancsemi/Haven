@@ -3569,6 +3569,16 @@
               <input type="number" id="registration-rate-limit-per-hour" class="settings-number-input" min="1" max="100000" value="20" style="width:90px">
             </div>
           </div>
+          <!-- Blocked names: words no username or display name may contain (admin only) -->
+          <div id="blocked-names-panel" style="display:none; margin-top:14px; padding-top:10px; border-top:1px dashed var(--border);">
+            <small class="settings-group-label" style="display:block">🚫 <span data-i18n="settings.admin.blocked_names_title">Blocked names</span></small>
+            <small class="settings-hint" style="display:block" data-i18n="settings.admin.blocked_names_hint">No username or display name may contain these words. One per line. Capitals, spaces, symbols and accents are ignored, and look-alike numbers count as letters, so a blocked word is caught even when someone writes it with a 0 for an o.</small>
+            <textarea id="blocked-names-input" class="settings-text-input" rows="5" maxlength="20000" style="margin-top:6px;font-family:inherit;width:100%;max-width:none;box-sizing:border-box;resize:vertical" data-i18n-placeholder="settings.admin.blocked_names_placeholder" placeholder="one word per line"></textarea>
+            <div style="display:flex;gap:4px;margin-top:4px">
+              <button class="btn-sm btn-accent" id="blocked-names-save" type="button" data-i18n="modals.common.save">Save</button>
+            </div>
+            <div id="blocked-names-matches" class="settings-hint" style="margin-top:8px"></div>
+          </div>
         </div>
 
         <!-- invites -->
@@ -5519,7 +5529,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.27.70"></script>
+  <script type="module" src="/js/app.js?v=4.27.72"></script>
   <script src="/js/plugin-loader.js?v=4.27.52"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

@@ -5,6 +5,7 @@
 // CAPTCHA/avatar work and password hashing happen before taking that lock.
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { parseBlockedNames, blockedWordIn, REFUSAL } = require('../../blockedNames');
 
 const unavailable = { error: 'Registration could not be completed: invalid username', code: 'username_unavailable' };
 function refuse(status, body) { throw Object.assign(new Error(body.error), { status, body }); }
@@ -12,11 +13,13 @@ const settingKeys = [
   'registration_token_enabled', 'invites_bypass_registration_token', 'registration_token',
   'whitelist_enabled', 'registration_captcha_enabled', 'turnstile_secret_key',
   'registration_rate_limit_enabled', 'registration_rate_limit_per_hour',
+  'blocked_name_words',
 ];
 
 async function gates(db, input, verifiedSecret) {
   const rows = await db.prepare(`SELECT key, value FROM server_settings WHERE key IN (${settingKeys.map(() => '?').join(',')})`).all(...settingKeys);
   const settings = Object.fromEntries(rows.map(row => [row.key, row.value]));
+  if (blockedWordIn(input.username, parseBlockedNames(settings.blocked_name_words))) refuse(400, { error: REFUSAL });
   let invite = null;
   if (settings.registration_token_enabled === 'true') {
     if (settings.invites_bypass_registration_token === 'true' && input.inviteCode) {

@@ -81,6 +81,7 @@ const registerBadges = require('./badges');
 const registerMoveToThread = require('./moveToThread');
 const registerChannelAddAll = require('./channelAddAll');
 const registerMessageNsfw = require('./messageNsfw');
+const registerBlockedNames = require('./blockedNames');
 const createLiveAccess = require('./liveAccess');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -2742,6 +2743,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerMoveToThread(socket, ctx);
     registerChannelAddAll(socket, ctx);
     registerMessageNsfw(socket, ctx);
+    registerBlockedNames(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made
