@@ -1,3 +1,4 @@
 These platform icons were drawn for Haven and are released with it under its license.
 They are simple pictures that stand for each platform, not the platforms' official logos.
 Windows, macOS, iOS, Android and Linux are trademarks of their owners.
+The Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the Creative Commons 3.0 Attribution License.
