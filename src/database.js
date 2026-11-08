@@ -987,6 +987,8 @@ function initDatabase() {
   // Which Haven message is which Discord message, for replies across the
   // bridge (src/ferryReplies.js).
   require('./ferryReplies').ensureSchema(db);
+  // Discord reactions on bridged messages (src/ferryReactions.js).
+  require('./ferryReactions').ensureSchema(db);
 
   // ── Migration: Ferry forum posts ────────────────────────
   // Which Haven forum topic is which Discord forum post, so replies keep

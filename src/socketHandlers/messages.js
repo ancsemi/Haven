@@ -10,6 +10,7 @@ const { votesFor, pieceVotesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
 const highlights = require('../messageHighlights');
 const quotes = require('../messageQuotes');
+const ferryReactions = require('../ferryReactions');
 const forumUnread = require('../forumUnread');
 const threadNotify = require('../threadNotify');
 const protectedMessages = require('../protectedMessages');
@@ -391,6 +392,7 @@ module.exports = function register(socket, ctx) {
         if (!reactionMap.has(r.message_id)) reactionMap.set(r.message_id, []);
         reactionMap.get(r.message_id).push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
       });
+      ferryReactions.mergeInto(db, msgIds, reactionMap);
 
       pinnedSet = new Set(
         db.prepare(`SELECT message_id FROM pinned_messages WHERE message_id IN (${ph})`)
@@ -2686,11 +2688,10 @@ module.exports = function register(socket, ctx) {
         'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
       ).run(data.messageId, socket.user.id, data.emoji);
       ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, true);
+      // On a message Ferry carried, the Discord copy gets the bot's reaction.
+      ctx.ferryReactionChanged?.({ messageId: data.messageId, channelId: msg.channel_id, emoji: data.emoji, added: true });
 
-      const reactions = db.prepare(`
-        SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
-        JOIN users u ON r.user_id = u.id WHERE r.message_id = ? ORDER BY r.id
-      `).all(data.messageId);
+      const reactions = ferryReactions.listFor(db, data.messageId);
 
       io.to(`channel:${code}`).emit('reactions-updated', {
         channelCode: code,
@@ -2733,11 +2734,9 @@ module.exports = function register(socket, ctx) {
         'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
       ).run(data.messageId, socket.user.id, data.emoji);
       ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, false);
+      ctx.ferryReactionChanged?.({ messageId: data.messageId, channelId: msgRow.channel_id, emoji: data.emoji, added: false });
 
-      const reactions = db.prepare(`
-        SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
-        JOIN users u ON r.user_id = u.id WHERE r.message_id = ? ORDER BY r.id
-      `).all(data.messageId);
+      const reactions = ferryReactions.listFor(db, data.messageId);
 
       io.to(`channel:${code}`).emit('reactions-updated', {
         channelCode: code,
@@ -3115,6 +3114,7 @@ module.exports = function register(socket, ctx) {
         if (!reactionMap.has(r.message_id)) reactionMap.set(r.message_id, []);
         reactionMap.get(r.message_id).push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
       });
+      ferryReactions.mergeInto(db, msgIds, reactionMap);
     }
 
     // Attachment tags on the replies' pictures, for their footers and the

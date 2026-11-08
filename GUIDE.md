@@ -1335,6 +1335,12 @@ To DM a Discord user (when the admin has enabled it), type `=>@` and search by n
 - **Set `PUBLIC_URL`** in your `.env` if you want Haven avatars to appear on the Discord
   side, and files too big for Discord to show as links. Discord has to be able to reach
   them over the internet. Without it names still come through, just without avatars
+- **Reactions cross both ways** on messages Ferry carried. A reaction on Discord shows on
+  the Haven copy with the person's Discord name. A reaction in Haven makes the bot react
+  on Discord, once per emoji, since Discord only lets a bot react as itself; it stays
+  while anyone who may send to Discord has that emoji on the message. The bot needs
+  **Add Reactions** in the channel. Custom emoji cross when the other side has one with
+  the same name
 - **Discord attachments arrive as links**, and Discord's own links expire after about a
   day. The text of the message is permanent, the pictures are not
 - **Other Discord bots are ignored** unless an admin turns on **Relay other bots**,

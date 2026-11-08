@@ -49,6 +49,7 @@ const { ipBanRefusal } = require('../ipBanGuard');
 const { createActivity } = require('../activity');
 const createDmCalls = require('../dmCalls');
 const ferry = require('../ferry');
+const ferryReactions = require('../ferryReactions');
 
 const registerChannels   = require('./channels');
 const registerMessages   = require('./messages');
@@ -1636,6 +1637,26 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   /**
+   * A reaction on Haven changed on a message Ferry carried (src/ferryReactions.js).
+   * The bot can only react as itself, once per emoji, so it reacts while
+   * someone who may use Ferry in this channel has that emoji on the message,
+   * and stops when the last of them takes it off.
+   */
+  function ferryReactionChanged({ messageId, channelId, emoji, added }) {
+    const cfg = ferry.getConfig();
+    if (!cfg.enabled || !cfg.token || !ferryLinksFor(channelId).length) return;
+    try {
+      const adminRow = db.prepare('SELECT is_admin FROM users WHERE id = ?');
+      const mayUse = (uid) => !!adminRow.get(uid)?.is_admin || userHasPermission(uid, 'use_ferry', channelId);
+      const on = ferryReactions.botShouldReact(db, messageId, emoji, mayUse);
+      if (added && on) ferry.reactOnDiscord(messageId, emoji, true);
+      else if (!added && !on) ferry.reactOnDiscord(messageId, emoji, false);
+    } catch (err) {
+      console.warn('[ferry] reaction relay check failed:', err.message);
+    }
+  }
+
+  /**
    * Relays one just-sent reply in a Haven forum topic into the Discord forum
    * post that topic is linked to. Same rules as ferryRelay: Ferry on, the
    * sender holds use_ferry, and only the channel's own pairings. A topic with
@@ -2678,7 +2699,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, dmCalls,
       // Ferry (Discord bridge)
-      ferry, ferryLinksFor, parseFerryTarget, ferryRelay, ferryRelayReply,
+      ferry, ferryLinksFor, parseFerryTarget, ferryRelay, ferryRelayReply, ferryReactionChanged,
       // Slash commands
       processSlashCommand,
       // Music helpers
