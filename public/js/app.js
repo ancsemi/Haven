@@ -13,7 +13,7 @@ import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
 import DraftMethods from './modules/app-drafts.js?v=4.29.11';
 import WhatsNewMethods from './modules/app-whats-new.js?v=4.27.25';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
-import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.27.53';
+import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.29.16';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.27.57';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.27.52';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.27.48';
@@ -39,7 +39,7 @@ import EmojiSearchMethods from './modules/app-emoji-search.js?v=4.29.12';
 import BotMethods from './modules/app-bots.js?v=4.27.52';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
 import ChannelMethods  from './modules/app-channels.js?v=4.29.9';
-import ChannelContextMethods from './modules/app-channel-context.js?v=4.27.54';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.29.16';
 import ChannelTypeMethods from './modules/app-channel-types.js?v=4.27.42';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.27.52';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.27.46';
@@ -79,6 +79,7 @@ import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.29.13';
+import ChannelAddMemberMethods from './modules/app-channel-add-members.js?v=4.29.16';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.27.51';
 import CallMethods from './modules/app-calls.js?v=4.22.24';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
@@ -595,6 +596,7 @@ Object.assign(HavenApp.prototype,
   SettingsMethods,
   AdminControlMethods,
   BlockedNameMethods,
+  ChannelAddMemberMethods,
   ExtensionUpdateMethods,
   ServerBarMethods,
   MobileMethods,

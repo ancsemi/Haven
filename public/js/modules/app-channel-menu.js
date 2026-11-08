@@ -150,17 +150,12 @@ _bindChannelMenu() {
     this._closeChannelCtxMenu();
     this._copyChannelLink(code);
   });
-  // Put everyone on the server in this channel (socketHandlers/channelAddAll.js).
-  document.querySelector('#channel-ctx-menu [data-action="add-all-members"]')?.addEventListener('click', async () => {
+  // Pick people to add to this channel (app-channel-add-members.js).
+  document.querySelector('#channel-ctx-menu [data-action="add-members"]')?.addEventListener('click', () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
     this._closeChannelCtxMenu();
-    const ch = this.channels.find(c => c.code === code);
-    if (!await this._confirm(t('channels.add_all_confirm', { name: ch ? ch.name : code }))) return;
-    this.socket.emit('add-all-members', { code }, (res) => {
-      if (!res || res.error) { this._showToast(res?.error || t('channels.add_all_failed'), 'error'); return; }
-      this._showToast(res.added ? t('channels.add_all_done', { count: res.added }) : t('channels.add_all_none'), 'success');
-    });
+    this._openAddChannelMembers(code);
   });
   // Join voice from context menu
   document.querySelector('[data-action="join-voice"]')?.addEventListener('click', () => {
