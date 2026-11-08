@@ -37,6 +37,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
+- In a DM with a short name, the lock menu (Verify Encryption and the rest) opened partly under the left sidebar. Menus from the chat header now stay inside the chat area.
+- In a narrow window, or with search open next to the app pills, the chat header ran on under the right sidebar: Join Voice, the search box and its filters were cut off and the channel name shrank to nothing. The header now wraps onto a second row instead.
 - Leaving a call while Haven was still joining it (after a reconnect, for example) let the join finish and put the microphone back on, and a second click on a voice channel you were already in left and rejoined, opening the mic again (#5850).
 - Pressing the voice message button twice quickly started two recordings, and the first one's microphone stayed on until Haven was closed.
 - A message you had already sent could come back in the message box the next time you opened Haven, mostly in Haven Desktop. Sending now forgets the saved draft for that channel.

@@ -7,7 +7,7 @@
 import SocketMethods   from './modules/app-socket.js?v=4.27.25';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.10';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.13';
-import UIBindMethods   from './modules/app-ui.js?v=4.27.37';
+import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
 import ComposerMethods from './modules/app-composer.js?v=4.29.11';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
 import DraftMethods from './modules/app-drafts.js?v=4.29.11';
@@ -72,7 +72,7 @@ import RoleMethods from './modules/app-roles.js?v=4.27.52';
 import RoleAssignMethods from './modules/app-role-assign.js?v=4.26.16';
 import ModerationMethods from './modules/app-moderation.js?v=4.27.9';
 import PlatformMethods from './modules/app-platform.js?v=4.27.49';
-import SearchMethods   from './modules/app-search.js?v=4.29.9';
+import SearchMethods   from './modules/app-search.js?v=4.29.18';
 import FerryMethods    from './modules/app-ferry.js?v=4.27.52';
 import ForumMethods    from './modules/app-forum.js?v=4.27.51';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';

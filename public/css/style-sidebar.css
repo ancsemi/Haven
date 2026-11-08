@@ -881,6 +881,17 @@
 
 .channel-info { display: flex; align-items: center; gap: 0.625rem; min-width: 0; }
 
+/* A header too wide for the chat column (a window about 1100px wide with
+   both sidebars open, or the search box open beside the app pills) wraps
+   onto a second row. It used to run on under the right sidebar, taking
+   Join Voice and the search box with it, while the channel name shrank to
+   nothing. The spacer before Join Voice still keeps it on the right. Phones
+   lay the header out on their own (style-mobile.css). */
+@media (min-width: 769px) {
+  .channel-header { flex-wrap: wrap; row-gap: 0.5rem; justify-content: flex-start; }
+  .channel-info { min-width: 4.5rem; }
+}
+
 /* ── Header actions box (code/settings | search/pin) ── */
 .header-actions-box {
   display: flex;

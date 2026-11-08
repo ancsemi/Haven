@@ -3,6 +3,8 @@
 // buttons, the sidebar collapse, the encryption menu, keyboard shortcuts,
 // games, member search, file uploads, resizable sidebars, and the donors list.
 
+import { keepInColumn } from './keep-in-column.js?v=4.29.18';
+
 export default {
 
 _setupUI() {
@@ -163,6 +165,8 @@ _bindAppChrome() {
     e.stopPropagation();
     const dd = document.getElementById('e2e-dropdown');
     dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+    // With a short DM name it opened under the left sidebar.
+    if (dd.style.display === 'block') keepInColumn(dd);
   });
   // Close dropdown on outside click
   document.addEventListener('click', () => {
