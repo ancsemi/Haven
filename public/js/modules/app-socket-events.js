@@ -463,7 +463,7 @@ _listenMessageChanges() {
       msgEls.forEach((msgEl) => {
         const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
         if (!contentEl) return;
-        contentEl.innerHTML = this._formatContent(displayContent, { e2e: wasE2E });
+        contentEl.innerHTML = this._formatContent(this._roleMenuText(data.messageId, displayContent), { e2e: wasE2E });
         msgEl.dataset.rawContent = displayContent;
         let editedTag = msgEl.querySelector('.edited-tag');
         if (!editedTag) {

@@ -373,8 +373,25 @@ export default {
     }
   },
 
+  // The buttons are the menu. The message text also lists each role (for apps
+  // that show no buttons) and the poster's reactions sit under it, so on
+  // screen both are dropped for the menu's roles and each shows once.
+  _roleMenuText(msgId, content) {
+    const menu = this._roleMenus?.get(String(msgId));
+    if (!menu || typeof content !== 'string') return content;
+    const norm = (s) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+    const listed = new Set(menu.roles.map(r => norm(`${r.emoji} ${r.name}`)));
+    return content.split('\n').filter(line => !listed.has(norm(line))).join('\n');
+  },
+
+  _roleMenuHidesReaction(msgId, emoji) {
+    const menu = this._roleMenus?.get(String(msgId));
+    return !!menu && menu.roles.some(r => r.emoji === emoji);
+  },
+
   _renderRoleMenu(msgId, menu) {
     if (!menu || !Array.isArray(menu.roles) || !menu.roles.length) return '';
+    (this._roleMenus ||= new Map()).set(String(msgId), menu);
     const held = new Set((menu.held || []).map(Number));
     // A menu with a pick limit says so above its buttons (#5800).
     const limit = Number.isInteger(menu.maxPicks) && menu.maxPicks > 0 ? menu.maxPicks : 0;

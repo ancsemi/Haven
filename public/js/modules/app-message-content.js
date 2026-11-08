@@ -853,6 +853,7 @@ _renderReactions(msgId, reactions) {
   // Group by emoji
   const grouped = {};
   reactions.forEach(r => {
+    if (this._roleMenuHidesReaction?.(msgId, r.emoji)) return;
     if (!grouped[r.emoji]) grouped[r.emoji] = { emoji: r.emoji, users: [] };
     grouped[r.emoji].users.push({ id: r.user_id, username: r.username });
   });
@@ -871,7 +872,7 @@ _renderReactions(msgId, reactions) {
     return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" data-users="${usersJson}" title="${this._escapeHtml(names)}">${emojiDisplay} ${g.users.length}</button>`;
   }).join('');
 
-  return `<div class="reactions-row">${badges}</div>`;
+  return badges ? `<div class="reactions-row">${badges}</div>` : '';
 },
 
 _updateMessageReactions(messageId, reactions) {

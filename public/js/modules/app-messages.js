@@ -1043,11 +1043,12 @@ _createMessageEl(msg, prevMsg) {
     this._highlightGroups(msg, prevMsg) &&
     this._groupsWithPrevious(prevMsg, msg);
 
+  // The role menu first: it decides which reactions and lines it stands in for.
+  const roleMenuHtml = msg.roleMenu ? this._renderRoleMenu(msg.id, msg.roleMenu) : '';
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
   const tagsHtml = this._renderAttachmentTags(msg.attachmentTags);
   const pollHtml = msg.poll ? this._renderPollWidget(msg.id, msg.poll) : '';
   const destructHtml = this._selfDestructHtml(msg.destruct_at);
-  const roleMenuHtml = msg.roleMenu ? this._renderRoleMenu(msg.id, msg.roleMenu) : '';
   const threadHtml = isDmContext ? ''
     : (msg.thread ? this._renderThreadPreview(msg.id, msg.thread, { forum: isForum })
       : (isForum ? this._renderThreadPreview(msg.id, { count: 0 }, { forum: true }) : ''));
@@ -1201,7 +1202,7 @@ _createMessageEl(msg, prevMsg) {
     el.innerHTML = `
       <span class="compact-time">${this._fmtTime(msg.created_at)}</span>
       <div class="message-body">
-        <div class="message-content">${pinnedTag}${archivedTag}${ephemeralTag}${this._formatContent(msg.content, { e2e: !!msg._e2e })}${editedHtml}${statusSlotHtml}</div>
+        <div class="message-content">${pinnedTag}${archivedTag}${ephemeralTag}${this._formatContent(this._roleMenuText(msg.id, msg.content), { e2e: !!msg._e2e })}${editedHtml}${statusSlotHtml}</div>
         ${pollHtml}${roleMenuHtml}${destructHtml}
         ${reactionsHtml}
         ${tagsHtml}
@@ -1350,7 +1351,7 @@ _createMessageEl(msg, prevMsg) {
           ${statusSlotHtml}
           <span class="message-header-spacer"></span>
         </div>
-        <div class="message-content">${this._formatContent(msg.content, { e2e: !!msg._e2e })}${editedHtml}</div>
+        <div class="message-content">${this._formatContent(this._roleMenuText(msg.id, msg.content), { e2e: !!msg._e2e })}${editedHtml}</div>
         ${pollHtml}${roleMenuHtml}${destructHtml}
         ${reactionsHtml}
         ${tagsHtml}
