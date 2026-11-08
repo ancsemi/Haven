@@ -166,6 +166,14 @@
             <li><a href="#install-linux">Install the server on Linux</a></li>
             <li><a href="#install-docker">Install with Docker</a></li>
             <li><a href="#first-login">First login: name, first channel and icon</a></li>
+            <li><a href="#reach-from-outside">Let friends reach your server</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Running your server</h3>
+          <ul>
+            <li><a href="#invites">Invite people</a></li>
+            <li><a href="#channels">Channels, categories and private channels</a></li>
           </ul>
         </div>
       </div>
@@ -259,6 +267,80 @@ then run the same docker run command again. Your messages and settings stay in t
           <li>Add a welcome message if you like, then click Save Settings.</li>
         </ol>
         <p class="meta small">1 min 27 sec &middot; Haven 4.29.0-beta.1 &middot; <a href="https://www.youtube.com/watch?v=ngJMXLkfsYA">YouTube</a> &middot; <a href="https://rumble.com/v7hwtjs--haven-first-time-setup.html">Rumble</a></p>
+      </div>
+    </article>
+    <article class="tut" id="reach-from-outside">
+      <div>
+        <button class="player" type="button" data-yt="i1UTbnKwEZU" aria-label="Play: Let friends reach your server">
+          <img src="img/tutorials/reach-from-outside.jpg" width="1280" height="720" alt="" loading="lazy">
+          <span class="play" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div>
+        <h3>Let friends reach your server</h3>
+        <p class="muted">By default only people on your home network can reach your Haven server. Here are the ways to let friends in from anywhere.</p>
+        <ol class="tut-steps">
+          <li>Open Settings, go to the Admin tab, and pick Network &amp; scale. Tunnel is on that page.</li>
+          <li>Choose a provider and click Start Tunnel.</li>
+          <li>Haven shows a public web address. Send it to your friends.</li>
+        </ol>
+        <p class="note">Easiest, built in: a tunnel
+1. Open Settings, go to the Admin tab, and pick Network &amp; scale. Tunnel is on that page.
+2. Choose a provider and click Start Tunnel.
+3. Haven shows a public web address. Send it to your friends.
+The address changes each time you start the tunnel.</p>
+        <p class="note">Other ways (step by step in the setup guide):
+- Port forwarding: forward TCP port 3000 on your router to this computer, and allow it through the firewall. Friends use https://YOUR_PUBLIC_IP:3000.
+- Tailscale: a private network between you and your friends, with nothing opened to the internet.
+- Cloudflare Tunnel with your own domain, or a reverse proxy like Caddy.</p>
+        <p class="note">Setup guide: https://github.com/ancsemi/Haven/blob/main/GUIDE.md#setting-up-remote-access-friends-over-the-internet</p>
+        <p class="meta small">1 min 3 sec &middot; Haven 4.29.0-beta.1 &middot; <a href="https://www.youtube.com/watch?v=i1UTbnKwEZU">YouTube</a> &middot; <a href="https://rumble.com/v7hwvo4--haven-forwarding-a-server-beyond-lan.html">Rumble</a></p>
+      </div>
+    </article>
+    </div>
+  </section>
+  <section id="running-your-server">
+    <div class="wrap">
+      <h2 class="group-head">Running your server</h2>
+    <article class="tut" id="invites">
+      <div>
+        <button class="player" type="button" data-yt="TpfmgWEpkxU" aria-label="Play: Invite people">
+          <img src="img/tutorials/invites.jpg" width="1280" height="720" alt="" loading="lazy">
+          <span class="play" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div>
+        <h3>Invite people</h3>
+        <p class="muted">Make an invite link and see what your friend sees when they open it.</p>
+        <ol class="tut-steps">
+          <li>Click Invite Users at the bottom right.</li>
+          <li>Open Create a new invite link, give it a label, and pick the channels it should join.</li>
+          <li>Choose how many people can use it and when it expires, then click Create invite link.</li>
+          <li>Copy the link and send it to your friend.</li>
+          <li>They open it, create an account, and land in those channels.</li>
+        </ol>
+        <p class="note">Each channel also has its own join code at the top. Anyone with an account can paste a code into Join a Channel. Private channels are never opened by an invite link.</p>
+        <p class="meta small">1 min 32 sec &middot; Haven 4.29.0-beta.1 &middot; <a href="https://www.youtube.com/watch?v=TpfmgWEpkxU">YouTube</a> &middot; <a href="https://rumble.com/v7hxr00--haven-inviting-friends-to-your-server.html">Rumble</a></p>
+      </div>
+    </article>
+    <article class="tut" id="channels">
+      <div>
+        <button class="player" type="button" data-yt="y3Z-PXSZtbY" aria-label="Play: Channels, categories and private channels">
+          <img src="img/tutorials/channels.jpg" width="1280" height="720" alt="" loading="lazy">
+          <span class="play" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div>
+        <h3>Channels, categories and private channels</h3>
+        <p class="muted">Set up the channels on your Haven server.</p>
+        <ol class="tut-steps">
+          <li>Type a name in the Create Channel box on the left and click +.</li>
+          <li>Turn on Private first for a channel only invited people can see.</li>
+          <li>To group channels under a heading, click Organize channels, pick a channel, type a category and click Set.</li>
+          <li>For a sub-channel, hover a channel, click the three dots, and choose Create Sub-channel.</li>
+        </ol>
+        <p class="note">Every channel has its own join code at the top. Channel options like slow mode, read-only and voice are under the three dots, in Channel Functions.</p>
+        <p class="meta small">1 min 37 sec &middot; Haven 4.29.0-beta.1 &middot; <a href="https://www.youtube.com/watch?v=y3Z-PXSZtbY">YouTube</a> &middot; <a href="https://rumble.com/v7i17z4--haven-creating-channels-and-categories.html">Rumble</a></p>
       </div>
     </article>
     </div>
