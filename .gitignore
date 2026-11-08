@@ -45,3 +45,5 @@ dist/
 backups/
 checklist-*.md
 config/
+# Local tool settings can hold commands with passwords; never commit them
+.claude/
