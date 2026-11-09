@@ -71,6 +71,7 @@ _toneEmoji(emoji) {
 },
 
 _getEmojiFavorites() {
+  // A malformed stored list reads as no favorites; the server cleans what it saves.
   try { const list = JSON.parse(this._userPrefs?.emoji_favorites || '[]'); return Array.isArray(list) ? list : []; } catch { return []; }
 },
 _toggleEmojiFavorite(emoji) {
@@ -81,8 +82,17 @@ _toggleEmojiFavorite(emoji) {
   this.socket?.emit('set-preference', { key: 'emoji_favorites', value: this._userPrefs.emoji_favorites });
 },
 _bindEmojiFavorite(btn, emoji, onChange) {
-  let timer = null, held = false, last = 0;
-  const toggle = () => { const now = Date.now(); if (now - last < 1000) return; last = now; this._toggleEmojiFavorite(emoji); onChange(); };
+  let timer = null, held = false;
+  // Kept on the app, not the button: a toggle rebuilds the grid, so a late
+  // contextmenu from the same long press lands on a new button and would
+  // flip the favorite straight back.
+  const toggle = () => {
+    const now = Date.now(), last = this._emojiFavLast;
+    if (last && last.emoji === emoji && now - last.at < 1000) return;
+    this._emojiFavLast = { emoji, at: now };
+    this._toggleEmojiFavorite(emoji);
+    onChange();
+  };
   btn.addEventListener('contextmenu', (e) => { e.preventDefault(); toggle(); });
   btn.addEventListener('touchstart', () => { held = false; timer = setTimeout(() => { held = true; toggle(); }, 500); }, { passive: true });
   btn.addEventListener('touchend', (e) => { clearTimeout(timer); if (held && e.cancelable) e.preventDefault(); });
@@ -393,8 +403,21 @@ _toggleEmojiPicker(anchorEl) {
     const q = searchInput.value.trim() || null;
     const top = grid.scrollTop;
     const before = catSections.Favorites?.offsetHeight || 0;
+    // The keyboard highlight stays on the emoji it was on (Alt+Enter), not
+    // the first one, or the next Enter would insert a favorite instead.
+    const active = grid.querySelector('.emoji-item.kb-active');
+    const activeEmoji = active?.dataset.emoji;
+    const fromFavorites = !!active?.closest('.emoji-cat') && active.closest('.emoji-cat') === catSections.Favorites;
     renderGrid(q);
     grid.scrollTop = top + (q ? 0 : (catSections.Favorites?.offsetHeight || 0) - before);
+    if (activeEmoji) {
+      const same = [...grid.querySelectorAll('.emoji-item')].filter(el => el.dataset.emoji === activeEmoji);
+      const keep = (fromFavorites ? same[0] : same.find(el => el.closest('.emoji-cat') !== catSections.Favorites)) || same[0];
+      if (keep) {
+        grid.querySelectorAll('.emoji-item.kb-active').forEach(el => el.classList.remove('kb-active'));
+        keep.classList.add('kb-active');
+      }
+    }
   }
   // Keyboard nav: highlight the first emoji so arrow keys + Enter work the
   // moment the picker opens (Discord-style). Re-run after every grid render.
