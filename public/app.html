@@ -1598,6 +1598,7 @@
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_content">Content</div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-emojis" style="display:none">😎 <span data-i18n="settings.nav.emojis">Emojis</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-stickers" style="display:none">🖼️ <span data-i18n="settings.nav.stickers">Stickers</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-gifs" style="display:none">🎞️ <span data-i18n="settings.nav.gifs">GIF Search</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-sounds-admin" style="display:none">🔊 <span data-i18n="settings.nav.admin_sounds">Sounds</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-uploads" style="display:none">📁 <span data-i18n="settings.nav.limits">Limits</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-tags-admin" style="display:none">🏷️ <span data-i18n="settings.nav.tags">Tags</span></div>
@@ -3702,6 +3703,18 @@
           </div>
         </div>
 
+        <!-- GIF search -->
+        <div class="admin-settings" id="section-gifs" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🎞️ <span data-i18n="settings.admin.gif_title">GIF Search</span></h5>
+          <small class="muted-text" style="display:block;font-size:0.75rem;line-height:1.5" data-i18n-html="settings.admin.gif_hint">GIF search is powered by GIPHY and needs a free API key: sign in at <a href="https://developers.giphy.com/" target="_blank" rel="noopener">developers.giphy.com</a>, click Create an App, choose API, and copy the key.</small>
+          <small class="muted-text" id="admin-gif-status" style="display:block;margin-top:6px;font-size:0.75rem;font-weight:600"></small>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <input type="password" id="admin-giphy-key-input" class="settings-text-input" style="flex:1;min-width:0" autocomplete="off" spellcheck="false" data-i18n-placeholder="gifs.setup.key_placeholder" placeholder="Paste your API key…">
+            <button class="btn-sm btn-accent" id="admin-giphy-key-save" data-i18n="gifs.setup.save_btn">Save</button>
+            <button class="btn-sm" id="admin-giphy-key-remove" data-i18n="settings.admin.remove_btn">Remove</button>
+          </div>
+        </div>
+
         <!-- sounds -->
         <div class="admin-settings" id="section-sounds-admin" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🔊 <span data-i18n="settings.admin.sounds_title">Custom Sounds</span></h5>
@@ -5540,7 +5553,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.20"></script>
+  <script type="module" src="/js/app.js?v=4.29.22"></script>
   <script src="/js/plugin-loader.js?v=4.27.52"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

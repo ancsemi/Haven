@@ -4,9 +4,9 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.27.25';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.20';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.29.13';
+import SocketMethods   from './modules/app-socket.js?v=4.29.21';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.22';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.29.20';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
 import ComposerMethods from './modules/app-composer.js?v=4.29.11';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
@@ -60,9 +60,9 @@ import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.29.12';
 import MessageContentMethods from './modules/app-message-content.js?v=4.29.13';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.12';
-import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
+import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
 import ThreadMethods from './modules/app-threads.js?v=4.27.20';
-import AdminMethods    from './modules/app-admin.js?v=4.29.19';
+import AdminMethods    from './modules/app-admin.js?v=4.29.20';
 import BrandingMethods from './modules/app-branding.js?v=4.29.19';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.52';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.29.12';
@@ -106,7 +106,7 @@ import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
 import MentionsMethods from './modules/app-mentions.js?v=4.29.9';
-import SettingsPageMethods from './modules/app-settings-pages.js?v=4.27.41';
+import SettingsPageMethods from './modules/app-settings-pages.js?v=4.29.20';
 import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.29.12';
 import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';
 import { startTooltips } from './modules/tooltips.js?v=4.27.51';

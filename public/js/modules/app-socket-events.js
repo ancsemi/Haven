@@ -880,9 +880,7 @@ _listenAdminAndPrefs() {
     // Which of these settings also have a value waiting in the environment,
     // so the panel can say which one is actually in effect. (#5489)
     this.serverEnvSettings = envInfo || {};
-    // No GIF provider on this server: the button would only open an empty
-    // picker, so it goes (#5654).
-    document.documentElement.toggleAttribute('data-no-gif', settings && settings.gif_search_available === 'false');
+    this._syncGifButton();
     // TEMPORARY (#5649): a one-time notice to admins that channel access moved
     // from roles to the channel's Required roles. Remove after the 4.8.x cycle.
     if (settings && settings.role_gate_notice === '1' && !this._roleGateNoticeShown &&
@@ -905,6 +903,7 @@ _listenAdminAndPrefs() {
   this.socket.on('server-setting-changed', (data) => {
     this.serverSettings[data.key] = data.value;
     if (data.key.startsWith('auto_away_')) this._refreshIdleTimeout?.();
+    if (data.key === 'gif_search_available') this._syncGifButton();
     this._applyServerSettings();
     if (data.key === 'channel_templates') this._renderChannelTemplates();
     if (data.key === 'hide_disabled_channel_badges' || data.key === 'category_layout' || data.key === 'category_short_names') this._renderChannels?.();
