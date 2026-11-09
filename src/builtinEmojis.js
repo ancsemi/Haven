@@ -45,4 +45,12 @@ function isPortableEmoji(text) {
   return !!m && BUILTIN_EMOJI_NAMES.has(m[1].toLowerCase());
 }
 
-module.exports = { BUILTIN_EMOJI_NAMES, NAMED_EMOJI_RE, isKnownNamedEmoji, isUsableEmoji, isPortableEmoji };
+const EMOJI_FAVORITES_MAX = 40;
+function cleanEmojiFavorites(raw) {
+  let list;
+  try { list = JSON.parse(raw); } catch { return null; }
+  if (!Array.isArray(list)) return null;
+  const kept = list.filter(e => typeof e === 'string' && e.length <= 32 && (UNICODE_EMOJI_RE.test(e) || NAMED_EMOJI_RE.test(e)));
+  return JSON.stringify([...new Set(kept)].slice(0, EMOJI_FAVORITES_MAX));
+}
+module.exports = { BUILTIN_EMOJI_NAMES, NAMED_EMOJI_RE, EMOJI_FAVORITES_MAX, isKnownNamedEmoji, isUsableEmoji, isPortableEmoji, cleanEmojiFavorites };
