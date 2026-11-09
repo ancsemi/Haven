@@ -111,6 +111,45 @@ _applyFaviconBranding(iconUrl) {
   }
 },
 
+// Banner height and offset: the member's own choice on this device if they
+// made one, otherwise the default the admin set under Branding, otherwise
+// 180px from the top.
+_bannerDisplayPrefs() {
+  const s = this.serverSettings || {};
+  const num = (v, min, max, fallback) => {
+    const n = parseInt(v, 10);
+    return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
+  };
+  const ownHeight = localStorage.getItem('haven_banner_height');
+  const ownOffset = localStorage.getItem('haven_banner_offset');
+  const defHeight = num(s.banner_default_height, 80, 400, 180);
+  const defOffset = num(s.banner_default_offset, 0, 100, 0);
+  return {
+    height: num(ownHeight, 80, 400, defHeight),
+    offset: num(ownOffset, 0, 100, defOffset),
+    defHeight,
+    defOffset,
+    own: ownHeight !== null || ownOffset !== null,
+  };
+},
+
+_syncBannerDefaultControls(prefs) {
+  const reset = document.getElementById('banner-use-default-btn');
+  if (reset) reset.style.display = prefs.own ? '' : 'none';
+  const controls = [
+    ['banner-default-height-slider', 'banner-default-height-value', prefs.defHeight, 'px'],
+    ['banner-default-offset-slider', 'banner-default-offset-value', prefs.defOffset, '%'],
+  ];
+  for (const [sliderId, labelId, value, unit] of controls) {
+    const slider = document.getElementById(sliderId);
+    // Left alone while the admin is dragging it.
+    if (!slider || slider === document.activeElement) continue;
+    slider.value = value;
+    const label = document.getElementById(labelId);
+    if (label) label.textContent = value + unit;
+  }
+},
+
 _initServerBranding() {
   // Server name, saved via admin Save button (no auto-save)
 
@@ -194,6 +233,7 @@ _initServerBranding() {
     });
     bannerSlider.addEventListener('change', (e) => {
       localStorage.setItem('haven_banner_height', e.target.value);
+      this._syncBannerDefaultControls(this._bannerDisplayPrefs());
     });
   }
 
@@ -208,6 +248,37 @@ _initServerBranding() {
     });
     bannerOffsetSlider.addEventListener('change', (e) => {
       localStorage.setItem('haven_banner_offset', e.target.value);
+      this._syncBannerDefaultControls(this._bannerDisplayPrefs());
+    });
+  }
+
+  // Back to the admin's default: forget this device's own height and offset.
+  document.getElementById('banner-use-default-btn')?.addEventListener('click', () => {
+    localStorage.removeItem('haven_banner_height');
+    localStorage.removeItem('haven_banner_offset');
+    this._applyServerSettings();
+  });
+
+  // The admin's default height and offset, for everyone who hasn't picked
+  // their own. The banner on screen follows the slider only when the admin
+  // has no choice of their own, since theirs is what they keep seeing.
+  const defaults = [
+    ['banner-default-height-slider', 'banner-default-height-value', 'banner_default_height', 'px',
+      (v) => { const bd = document.getElementById('server-banner-display'); if (bd) bd.style.height = v + 'px'; }],
+    ['banner-default-offset-slider', 'banner-default-offset-value', 'banner_default_offset', '%',
+      (v) => { const img = document.getElementById('server-banner-img'); if (img) img.style.objectPosition = 'center ' + v + '%'; }],
+  ];
+  for (const [sliderId, labelId, key, unit, preview] of defaults) {
+    const slider = document.getElementById(sliderId);
+    if (!slider) continue;
+    const label = document.getElementById(labelId);
+    slider.addEventListener('input', (e) => {
+      if (label) label.textContent = e.target.value + unit;
+      if (!this._bannerDisplayPrefs().own) preview(e.target.value);
+    });
+    slider.addEventListener('change', (e) => {
+      this.socket.emit('update-server-setting', { key, value: e.target.value });
+      this._showToast(t('settings.admin.banner_default_saved'), 'success');
     });
   }
 

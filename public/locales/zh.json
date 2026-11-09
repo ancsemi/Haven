@@ -2455,7 +2455,6 @@
       "upload_btn": "上传",
       "remove_btn": "移除",
       "server_banner_hint": "服务器横幅（宽幅，最大 4 MB）",
-      "server_banner_display_hint": "横幅显示设置（高度、偏移、页眉样式）在用户设置中。",
       "appearance_welcome": "外观与欢迎",
       "welcome_message": "欢迎消息",
       "welcome_message_placeholder": "例如：欢迎 {user}！",

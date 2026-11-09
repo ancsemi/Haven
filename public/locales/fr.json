@@ -2482,7 +2482,6 @@
       "upload_btn": "Téléverser",
       "remove_btn": "Supprimer",
       "server_banner_hint": "Bannière du serveur (large, 4 Mo max)",
-      "server_banner_display_hint": "Les réglages d'affichage de la bannière (hauteur, décalage, style d'en-tête) se trouvent dans les Paramètres utilisateur.",
       "appearance_welcome": "Apparence et accueil",
       "welcome_message": "Message de bienvenue",
       "welcome_message_placeholder": "ex. Bienvenue {user} !",

@@ -638,8 +638,9 @@ _applyServerSettings() {
   const bannerPreview = document.getElementById('server-banner-preview');
   const mainEl = document.querySelector('.main');
   const headerMode = localStorage.getItem('haven_banner_header_mode') || 'full';
-  const bannerHeight = parseInt(localStorage.getItem('haven_banner_height')) || 180;
-  const bannerOffset = parseInt(localStorage.getItem('haven_banner_offset')) || 0;
+  const bannerPrefs = this._bannerDisplayPrefs();
+  const bannerHeight = bannerPrefs.height;
+  const bannerOffset = bannerPrefs.offset;
   const hasBanner = !!this.serverSettings.server_banner;
   // Show/hide the banner display section in user settings
   const bannerSection = document.getElementById('section-banner-display');
@@ -680,6 +681,7 @@ _applyServerSettings() {
     offsetSlider.value = bannerOffset;
     if (offsetValue) offsetValue.textContent = bannerOffset + '%';
   }
+  this._syncBannerDefaultControls(bannerPrefs);
 
   // Role icon display checkboxes
   const riSidebar = document.getElementById('role-icon-sidebar');

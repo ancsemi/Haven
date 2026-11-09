@@ -2471,7 +2471,6 @@
       "upload_btn": "Prześlij",
       "remove_btn": "Usuń",
       "server_banner_hint": "Baner serwera (szeroki, maks. 4 MB)",
-      "server_banner_display_hint": "Ustawienia wyświetlania banera (wysokość, przesunięcie, styl nagłówka) znajdują się w Ustawieniach użytkownika.",
       "appearance_welcome": "Wygląd i powitanie",
       "welcome_message": "Wiadomość powitalna",
       "welcome_message_placeholder": "np. Witaj, {user}!",

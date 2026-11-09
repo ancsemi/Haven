@@ -2471,7 +2471,6 @@
       "upload_btn": "Завантажити",
       "remove_btn": "Видалити",
       "server_banner_hint": "Банер сервера (широкий, макс. 4 МБ)",
-      "server_banner_display_hint": "Налаштування показу банера (висота, зсув, стиль заголовка) є в налаштуваннях користувача.",
       "appearance_welcome": "Вигляд і привітання",
       "welcome_message": "Привітальне повідомлення",
       "welcome_message_placeholder": "напр. Ласкаво просимо, {user}!",

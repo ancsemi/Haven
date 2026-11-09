@@ -1900,7 +1900,8 @@
       "shaded": "Shaded Header",
       "minimal": "Minimal Header",
       "transparent": "Transparent Header",
-      "hint": "How the banner interacts with the channel header area. These settings are per-device."
+      "hint": "How the banner interacts with the channel header area. These settings are per-device.",
+      "use_default": "Use the server's default"
     },
     "chat_behavior": {
       "title": "Chat",
@@ -2512,7 +2513,10 @@
       "upload_btn": "Upload",
       "remove_btn": "Remove",
       "server_banner_hint": "Server banner (wide, max 4 MB)",
-      "server_banner_display_hint": "Banner display settings (height, offset, header style) are in User Settings.",
+      "banner_default_height": "Default height",
+      "banner_default_offset": "Default vertical offset",
+      "banner_defaults_hint": "Everyone sees the banner at this height and offset unless they pick their own under Settings > Banner Display.",
+      "banner_default_saved": "Banner default saved",
       "appearance_welcome": "Appearance & Welcome",
       "welcome_message": "Welcome Message",
       "welcome_message_placeholder": "e.g. Welcome {user}!",

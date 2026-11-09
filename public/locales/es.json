@@ -2471,7 +2471,6 @@
       "upload_btn": "Subir",
       "remove_btn": "Eliminar",
       "server_banner_hint": "Banner del servidor (ancho, máx. 4 MB)",
-      "server_banner_display_hint": "Los ajustes de visualización del banner (altura, desplazamiento, estilo del encabezado) están en Configuración de usuario.",
       "appearance_welcome": "Apariencia y bienvenida",
       "welcome_message": "Mensaje de bienvenida",
       "welcome_message_placeholder": "p.ej. ¡Bienvenido {user}!",

@@ -2037,6 +2037,7 @@
           <input type="range" id="banner-offset-slider" min="0" max="100" step="1" value="0" style="flex:1">
           <span id="banner-offset-value" style="min-width:30px;text-align:right;font-variant-numeric:tabular-nums">0%</span>
         </label>
+        <button type="button" class="btn-sm" id="banner-use-default-btn" style="margin-top:6px;display:none" data-i18n="settings.banner_display.use_default">Use the server's default</button>
         <label class="select-row" style="margin-top:8px">
           <span data-i18n="settings.banner_display.header_style">Header style</span>
           <select id="banner-header-mode" style="max-width:160px">
@@ -2907,7 +2908,17 @@
                 </div>
               </div>
             </div>
-            <small class="settings-hint" data-i18n="settings.admin.server_banner_display_hint">Banner display settings (height, offset, header style) are in User Settings.</small>
+            <label style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:0.75rem">
+              <span style="white-space:nowrap" data-i18n="settings.admin.banner_default_height">Default height</span>
+              <input type="range" id="banner-default-height-slider" min="80" max="400" step="10" value="180" style="flex:1">
+              <span id="banner-default-height-value" style="min-width:36px;text-align:right;font-variant-numeric:tabular-nums">180px</span>
+            </label>
+            <label style="margin-top:4px;display:flex;align-items:center;gap:8px;font-size:0.75rem">
+              <span style="white-space:nowrap" data-i18n="settings.admin.banner_default_offset">Default vertical offset</span>
+              <input type="range" id="banner-default-offset-slider" min="0" max="100" step="1" value="0" style="flex:1">
+              <span id="banner-default-offset-value" style="min-width:30px;text-align:right;font-variant-numeric:tabular-nums">0%</span>
+            </label>
+            <small class="settings-hint" data-i18n="settings.admin.banner_defaults_hint">Everyone sees the banner at this height and offset unless they pick their own under Settings > Banner Display.</small>
           </div>
 
           <!-- Theme & Welcome -->
@@ -5529,7 +5540,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.18"></script>
+  <script type="module" src="/js/app.js?v=4.29.19"></script>
   <script src="/js/plugin-loader.js?v=4.27.52"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

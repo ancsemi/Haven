@@ -2119,7 +2119,6 @@
       "fcm_enabled_label": "Google-FCM-Push-Benachrichtigungen aktivieren",
       "login_title_placeholder": "(wird auf der Anmeldeseite angezeigt)",
       "server_banner_hint": "Serverbanner (breit, max. 4 MB)",
-      "server_banner_display_hint": "Einstellungen für die Banneranzeige (Höhe, Versatz, Kopfzeilenstil) findest du in den Benutzereinstellungen.",
       "appearance_welcome": "Darstellung und Begrüßung",
       "welcome_message": "Begrüßungsnachricht",
       "welcome_message_placeholder": "z. B. Willkommen, {user}!",

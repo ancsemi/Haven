@@ -2151,7 +2151,6 @@
       "upload_btn": "Enviar",
       "remove_btn": "Remover",
       "server_banner_hint": "Banner do servidor (largo, máximo de 4 MB)",
-      "server_banner_display_hint": "As configurações de exibição do banner (altura, deslocamento e estilo do cabeçalho) ficam nas Configurações do usuário.",
       "appearance_welcome": "Aparência e boas-vindas",
       "welcome_message": "Mensagem de boas-vindas",
       "welcome_message_placeholder": "ex.: Boas-vindas, {user}!",

@@ -130,6 +130,7 @@ module.exports = function register(socket, ctx) {
       'deleted_retention_days', // how long files from deleted messages and channels are kept before they are removed for good
       'keep_self_destructed_attachments', // off removes a self destructed message's files for good instead of holding them
       'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner',
+      'banner_default_height', 'banner_default_offset', // what members see until they set their own
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
       'max_tags_per_attachment', 'max_tag_len', // (#tagging phase 4) upload-tag limits
       'blocked_upload_extensions', // (#5833) file types members cannot upload
@@ -422,6 +423,8 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'server_code') return; // managed via generate/rotate events
     if (key === 'server_banner') { if (value && !isValidUploadPath(value)) return; }
+    if (key === 'banner_default_height') { const n = parseInt(value, 10); if (String(n) !== value || n < 80 || n > 400) return; }
+    if (key === 'banner_default_offset') { const n = parseInt(value, 10); if (String(n) !== value || n < 0 || n > 100) return; }
     if (key === 'vanity_code') {
       if (value && (value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_-]+$/.test(value))) return;
       if (value) {
