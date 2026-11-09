@@ -122,6 +122,11 @@
   outline-offset: -2px;
 }
 
+.emoji-item.emoji-fav, .reaction-full-btn.emoji-fav { position: relative; }
+.emoji-item.emoji-fav::after, .reaction-full-btn.emoji-fav::after { content: '★'; position: absolute; top: 0; right: 0.125rem; font-size: 0.5rem; color: var(--accent); pointer-events: none; }
+.emoji-cat:first-child .emoji-item.emoji-fav::after { content: none; }
+.emoji-fav-hint { margin: 0; padding: 0.375rem 0.25rem; font-size: 0.75rem; }
+
 /* ── Stickers ───────────────────────────────────────── */
 /* Inline rendered sticker in messages: larger than chat-image, no background. */
 .sticker-img {
