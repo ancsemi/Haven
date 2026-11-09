@@ -38,6 +38,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
+- When the server turned a reconnect away (too many connections from one address in a minute, or a passing server error), the app never tried again and stayed offline until it was reloaded. It now tries again after a few seconds, waiting longer each time (#5875).
 - A server with no GIF key had no way to add one: the GIF button hides itself until a key is set, and the only place to enter the key was inside the picker that button opens (reported by Aphexamine). Admins, and anyone who can manage the server, now keep the button so they can set it up, and there is a GIF Search section under Settings > Admin > Content to add or remove the key. Members' GIF buttons appear as soon as a key is saved, without a reload.
 - In a DM with a short name, the lock menu (Verify Encryption and the rest) opened partly under the left sidebar. Menus from the chat header now stay inside the chat area.
 - In a narrow window, or with search open next to the app pills, the chat header ran on under the right sidebar: Join Voice, the search box and its filters were cut off and the channel name shrank to nothing. The header now wraps onto a second row instead.

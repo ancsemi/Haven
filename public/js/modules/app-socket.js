@@ -331,6 +331,7 @@ _listenSession() {
     document.getElementById('status-server-text').textContent = t('app.status.connected');
     this._lastConnectTime = Date.now();
     this._authErrorStreak = 0;
+    this._refusedStreak = 0;
     this._startPingMonitor();
     // (#self-absent-voice-panel) Cancel any pending soft-leave from a brief
     // socket blip: we reconnected before the 2 s deadline, so the voice
@@ -813,6 +814,20 @@ _listenSession() {
     this._setLed('connection-led', 'danger');
     this._setLed('status-server-led', 'danger');
     document.getElementById('status-server-text').textContent = t('app.status.error');
+    // A refusal from a server middleware ("Rate limited: too many
+    // connections", "Server error, try again") is final to socket.io: it
+    // does not retry those, so the app stayed offline until the page was
+    // hidden and shown again or reloaded (#5875). Try again on a growing
+    // delay. A ban is final and is left alone.
+    if (this.socket && !this.socket.active && !/banned/i.test(err.message || '')) {
+      this._refusedStreak = (this._refusedStreak || 0) + 1;
+      const delay = Math.min(60000, 5000 * this._refusedStreak) + Math.random() * 2000;
+      clearTimeout(this._refusedRetryTimer);
+      this._refusedRetryTimer = setTimeout(() => {
+        this._refusedRetryTimer = null;
+        if (this.socket && !this.socket.connected && !this.socket.active) this.socket.connect();
+      }, delay);
+    }
   });
 
   // Password was changed on this or another session: force re-login
