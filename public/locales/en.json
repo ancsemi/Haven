@@ -4844,7 +4844,9 @@
     "pick_one_only": "Pick one",
     "pick_up_to": "Pick up to {{count}}",
     "join": "Get the {{name}} role",
-    "leave": "Drop the {{name}} role"
+    "leave": "Drop the {{name}} role",
+    "picked_by": "Picked by: {{names}}",
+    "picked_by_more": "Picked by: {{names}} and {{count}} more"
   },
   "forum": {
     "new_post": "New Post",

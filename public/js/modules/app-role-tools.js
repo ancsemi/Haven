@@ -397,18 +397,30 @@ export default {
     const limit = Number.isInteger(menu.maxPicks) && menu.maxPicks > 0 ? menu.maxPicks : 0;
     const note = limit ? `<div class="role-menu-limit">${this._escapeHtml(limit === 1 ? t('role_menu.pick_one_only') : t('role_menu.pick_up_to', { count: limit }))}</div>` : '';
     return `<div class="role-menu-widget" data-msg-id="${msgId}">${note}${menu.roles.map(r => `
-      <button class="role-menu-btn${held.has(r.id) ? ' held' : ''}" type="button" data-msg-id="${msgId}" data-role-id="${r.id}" style="--role-c:${this._safeColor(r.color, '#aaa')};--role-fill:${this._roleFill(r, this._safeColor(r.color, '#aaa'))}" title="${this._escapeHtml(t(held.has(r.id) ? 'role_menu.leave' : 'role_menu.join', { name: r.name }))}">
+      <button class="role-menu-btn${held.has(r.id) ? ' held' : ''}" type="button" data-msg-id="${msgId}" data-role-id="${r.id}" style="--role-c:${this._safeColor(r.color, '#aaa')};--role-fill:${this._roleFill(r, this._safeColor(r.color, '#aaa'))}" title="${this._escapeHtml(this._roleMenuTitle(msgId, r.id, held.has(r.id)))}">
         <span class="rm-emoji">${this._emojiGlyphHtml(r.emoji, 18)}</span><span class="rm-name">${this._escapeHtml(r.name)}</span><span class="rm-state">${held.has(r.id) ? '✓' : '+'}</span>
       </button>`).join('')}</div>`;
   },
 
+  _roleMenuTitle(msgId, roleId, held) {
+    const menu = this._roleMenus?.get(String(msgId));
+    const role = menu?.roles.find(r => r.id === Number(roleId));
+    const { names = [], total = 0 } = menu?.pickers?.[Number(roleId)] || {};
+    const who = !names.length ? '' : total > names.length ? t('role_menu.picked_by_more', { names: names.join(', '), count: total - names.length }) : t('role_menu.picked_by', { names: names.join(', ') });
+    return role ? t(held ? 'role_menu.leave' : 'role_menu.join', { name: role.name }) + (who ? `\n${who}` : '') : '';
+  },
+  _refreshRoleMenuPickers(msgId, pickers) {
+    const menu = this._roleMenus?.get(String(msgId));
+    if (!menu || !pickers) return;
+    menu.pickers = pickers;
+    document.querySelectorAll(`.role-menu-btn[data-msg-id="${msgId}"]`).forEach(b => { b.title = this._roleMenuTitle(msgId, b.dataset.roleId, b.classList.contains('held')); });
+  },
   _markSelfRole(roleId, held) {
     document.querySelectorAll(`.role-menu-btn[data-role-id="${roleId}"]`).forEach(b => {
       b.classList.toggle('held', held);
       const s = b.querySelector('.rm-state');
       if (s) s.textContent = held ? '✓' : '+';
-      const name = b.querySelector('.rm-name')?.textContent || '';
-      b.title = t(held ? 'role_menu.leave' : 'role_menu.join', { name });
+      b.title = this._roleMenuTitle(b.dataset.msgId, roleId, held);
     });
   },
 };

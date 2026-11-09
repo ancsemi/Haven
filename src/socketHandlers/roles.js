@@ -120,12 +120,31 @@ module.exports = function register(socket, ctx) {
       }).filter(Boolean);
     } catch { return []; }
   }
+  // Who picked each role, for the button tooltip: the first 20 names and a
+  // count. A role hidden on profile cards (#5822) keeps its holders hidden
+  // here too, since everyone in the channel sees this list.
+  const PICKERS_FROM = 'FROM reactions x JOIN user_roles ur ON ur.user_id = x.user_id AND ur.role_id = ? AND ur.channel_id IS NULL JOIN users u ON u.id = x.user_id WHERE x.message_id = ? AND x.emoji = ?';
+  const rolePickers = (row) => {
+    const roles = readRoleMenu(row);
+    if (!roles.length) return {};
+    const hidden = new Set(db.prepare(`SELECT id FROM roles WHERE show_on_profile = 0 AND id IN (${roles.map(() => '?').join(',')})`).all(...roles.map(r => r.id)).map(r => r.id));
+    const names = db.prepare(`SELECT COALESCE(u.display_name, u.username) AS name ${PICKERS_FROM} ORDER BY x.id LIMIT 20`);
+    const count = db.prepare(`SELECT COUNT(*) AS n ${PICKERS_FROM}`);
+    return Object.fromEntries(roles.filter(r => !hidden.has(r.id)).map(r => {
+      const args = [r.id, row.message_id, r.emoji];
+      return [r.id, { names: names.all(...args).map(x => x.name), total: count.get(...args).n }];
+    }));
+  };
+  ctx.emitRolePickers = (code, messageId) => {
+    const row = db.prepare('SELECT * FROM role_menus WHERE message_id = ?').get(messageId);
+    if (row) io.to(`channel:${code}`).emit('role-menu-pickers', { channelCode: code, messageId, pickers: rolePickers(row) });
+  };
   ctx.buildRoleMenu = (row, viewerId) => {
     const roles = readRoleMenu(row);
     if (!roles.length) return null;
     const held = db.prepare('SELECT role_id FROM user_roles WHERE user_id = ? AND channel_id IS NULL').all(viewerId).map(r => r.role_id);
     const maxPicks = picks.maxPicksOf(row);
-    return { title: row.title || '', roles, held: roles.filter(r => held.includes(r.id)).map(r => r.id), ...(maxPicks ? { maxPicks } : {}) };
+    return { title: row.title || '', roles, held: roles.filter(r => held.includes(r.id)).map(r => r.id), pickers: rolePickers(row), ...(maxPicks ? { maxPicks } : {}) };
   };
 
   // Taking a role from a menu with a pick limit (#5800, src/roleMenuPicks.js):
@@ -514,6 +533,7 @@ module.exports = function register(socket, ctx) {
     `).all(messageId);
     const ch = db.prepare('SELECT code FROM channels WHERE id = ?').get(row.channel_id);
     if (ch) io.to(`channel:${ch.code}`).emit('reactions-updated', { channelCode: ch.code, messageId, reactions });
+    if (ch) ctx.emitRolePickers(ch.code, messageId);
     notifySelfRole(socket.user.id, messageId, roleId, held);
     cb({ success: true, held });
   });

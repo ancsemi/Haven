@@ -2698,6 +2698,7 @@ module.exports = function register(socket, ctx) {
         messageId: data.messageId,
         reactions
       });
+      ctx.emitRolePickers?.(code, data.messageId);
 
       // Webhook event: reaction-added (3.13.0)
       try {
@@ -2743,6 +2744,7 @@ module.exports = function register(socket, ctx) {
         messageId: data.messageId,
         reactions
       });
+      ctx.emitRolePickers?.(code, data.messageId);
     } catch (err) {
       console.error('remove-reaction error:', err.message);
     }
