@@ -15,6 +15,8 @@ test('FCM tokens are capped in length and in number per account', t => {
       token TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       scope TEXT NOT NULL DEFAULT 'all',
+      push_p256dh TEXT,
+      push_auth TEXT,
       UNIQUE(user_id, token)
     );
   `);
@@ -40,6 +42,8 @@ test('an FCM token keeps the push scope its device reports', t => {
       token TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       scope TEXT NOT NULL DEFAULT 'all',
+      push_p256dh TEXT,
+      push_auth TEXT,
       UNIQUE(user_id, token)
     );
   `);

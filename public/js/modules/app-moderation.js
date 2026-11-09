@@ -289,6 +289,7 @@ _initAutomodPanel() {
 
   on('voice-force-relay', 'change', (e) => setKey('voice_force_relay', e.target.checked ? 'true' : 'false'));
   on('fcm-enabled', 'change', (e) => setKey('fcm_enabled', e.target.checked ? 'true' : 'false'));
+  on('fcm-hide-content', 'change', (e) => setKey('fcm_hide_content', e.target.checked ? 'true' : 'false'));
   on('media-proxy-enabled', 'change', (e) => {
     setKey('media_proxy_enabled', e.target.checked ? 'true' : 'false');
     // Re-read the token so images start (or stop) routing through the proxy
@@ -421,6 +422,7 @@ _applyAutomodSettings() {
   bool('voice-force-relay', 'voice_force_relay', 'false');
   bool('media-proxy-enabled', 'media_proxy_enabled', 'true');
   bool('fcm-enabled', 'fcm_enabled', 'true');
+  bool('fcm-hide-content', 'fcm_hide_content', 'false');
 
   num('automod-min-account-hours', 'automod_link_min_account_hours', '0');
   num('automod-new-account-post-minutes', 'automod_new_account_post_minutes', '0');

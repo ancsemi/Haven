@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.29.0] - Unreleased
 
 ### Added
+- Encrypted mobile push (#5871): each app now gets its pushes sealed with its own key using the same scheme as web push (RFC 8291), so the push relay, Google and Apple only see "New message" and a blob. The title, text and channel are read on the phone. Apps that have not updated keep working as they do today, and Settings > Security > FCM Privacy has a new switch to hide the message text from those too.
 - Call controls in fullscreen (thanks Roolk, #5849): mute, deafen, camera, screen share, call settings and leave stay on screen over a fullscreen camera or screen share, and a picker switches which stream is shown without leaving fullscreen.
 - Video players in chat have Theater (as wide as the chat) and Fullscreen buttons: YouTube cards, uploaded videos and videos in link previews.
 - Platform emoji built into Haven: Windows, Mac, iPhone, Android and Linux, under Platforms in the emoji picker. They work in messages, reactions and role menus.

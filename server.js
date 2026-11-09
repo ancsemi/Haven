@@ -152,7 +152,7 @@ const {
 } = require('./src/botAudio');
 const { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup } = require('./src/tunnel');
 const { startDdns, getDdnsStatus, triggerDdnsNow } = require('./src/ddns');
-const { initFcm, setFcmAdminEnabled } = require('./src/fcm');
+const { initFcm, setFcmAdminEnabled, setFcmHideContent } = require('./src/fcm');
 const threadNotify = require('./src/threadNotify');
 const { takeSilent } = require('./src/silentMessages');
 
@@ -3143,6 +3143,12 @@ try {
   // setting must not quietly turn it back on.
   setFcmAdminEnabled(false);
   console.error('[fcm] Could not read the FCM Privacy setting, leaving FCM off:', err.message);
+}
+try {
+  setFcmHideContent(db.prepare("SELECT value FROM server_settings WHERE key = 'fcm_hide_content'").get()?.value === 'true');
+} catch (err) {
+  setFcmHideContent(true);
+  console.error('[fcm] Could not read the hide message text setting, hiding it:', err.message);
 }
 initFcm(DATA_DIR);
 // Clean photos and videos uploaded before the privacy pass existed.

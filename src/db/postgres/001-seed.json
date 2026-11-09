@@ -1042,6 +1042,10 @@
       "value": "true"
     },
     {
+      "key": "fcm_hide_content",
+      "value": "false"
+    },
+    {
       "key": "automod_seeded",
       "value": "true"
     },

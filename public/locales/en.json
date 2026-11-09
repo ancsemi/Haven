@@ -2497,6 +2497,8 @@
       "fcm_desc": "FCM (Firebase Cloud Messaging) is Google's system for delivering push notifications to Android phones. It's what wakes your phone when you receive a new message while Haven is closed. This means that all notifications (including your Haven username, channel name and message content) sent to your Android phone have to pass through Google's servers to reach your phone.<br><br>While this may be fine for most users, some may prefer to keep Google completely out of the equation. <a href=\"https://unifiedpush.org\" target=\"_blank\" rel=\"noopener\">UnifiedPush</a> is a decentralized notification standard that supports several notification apps, and if a UnifiedPush compatible app is installed on your phone, Haven Mobile will prioritize it over FCM.",
       "fcm_note": "<strong>Dangerous Action Warning: Before disabling this, please ensure every member in your Haven server including yourself has a UnifiedPush compatible app installed on their phone. Otherwise, some members of your server will not receive any mobile notifications.</strong>",
       "fcm_enabled_label": "Enable Google FCM Push Notifications",
+      "fcm_hide_note": "Updated Haven apps get encrypted pushes, so Google, Apple and the push relay only see a sealed blob. Older apps still send the message text through them. Turn this on and those older apps only show \"New message\".",
+      "fcm_hide_label": "Hide message text in pushes to older apps",
       "branding_title": "Server Branding",
       "presence_title": "Presence & Activity",
       "auto_away_visible": "Visible tab (minutes)",
