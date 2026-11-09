@@ -2174,6 +2174,26 @@ function setupSocketHandlers(io, db, opts = {}) {
     socket.currentChannel = null;
     socket.hasFocus = true;
 
+    // (#5875) One tab, one socket. A phone whose link dies does not notice
+    // until the server's ping timeout, and by then the page has already
+    // opened a replacement. The old socket stays in the channel rooms until
+    // that timeout, and a flaky link stacks several of them. The page only
+    // listens on the newest, so close the earlier ones from this same tab
+    // now. A different tab or device sends a different id and is left
+    // alone, as is any client that does not send one.
+    const tabId = socket.handshake && socket.handshake.auth && socket.handshake.auth.tabId;
+    if (typeof tabId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(tabId)) {
+      socket.tabId = tabId;
+      for (const other of [...io.of('/').sockets.values()]) {
+        if (other === socket || !other.user || other.user.id !== socket.user.id) continue;
+        if (other.tabId !== tabId) continue;
+        console.log(`♻️  ${socket.user.username} replaced a stale socket from the same tab`);
+        try { other.disconnect(true); } catch (err) {
+          console.warn('[socket] could not close the stale tab socket:', err.message);
+        }
+      }
+    }
+
     // (#5518 sibling) Your own open connections, for the session list in
     // Settings. Haven issues stateless tokens and keeps no session table, so
     // this is exactly what it says: sockets attached right now. A token with no

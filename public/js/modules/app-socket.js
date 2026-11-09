@@ -432,6 +432,13 @@ _listenSession() {
         code: this.currentChannel,
         iAmInVoice: !!(this.voice && this.voice.inVoice && this.voice.currentChannel === this.currentChannel)
       });
+      // (#5875) channels-list only proves the handshake. After a ping
+      // timeout the socket comes back, that list arrives, and the open
+      // channel still never delivers another message. The page used to
+      // treat that as healthy, so the reload that actually recovers it
+      // never ran. Watch the channel itself, not the handshake.
+      this._channelDeliveryTries = 0;
+      this._armChannelDeliveryWatch(this.currentChannel);
     }
     // Re-join voice if we were in voice before reconnect
     if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
@@ -930,6 +937,53 @@ _lightVoiceResync(reason) {
     }
   } catch (e) {
     console.warn('[light-resync] failed:', e);
+  }
+},
+
+// The open channel has to show that it is actually receiving again after a
+// connect. online-users (sent because we re-entered) or a new message both
+// count; the channels-list handshake does not. One miss resubscribes. A
+// second miss reloads the page, which is what gets a phone unstuck. A live
+// call is left up: reloading it would drop everyone.
+_armChannelDeliveryWatch(code) {
+  if (!code) return;
+  if (this._channelDeliveryTimer) clearTimeout(this._channelDeliveryTimer);
+  this._channelDeliveryCode = code;
+  this._channelDeliverySeen = false;
+  this._channelDeliveryTimer = setTimeout(() => {
+    this._channelDeliveryTimer = null;
+    if (this._channelDeliverySeen || this.currentChannel !== code) return;
+    // Socket down: the next connect arms this again. Reloading would race
+    // socket.io's own reconnect.
+    if (!this.socket?.connected) return;
+    const tries = this._channelDeliveryTries || 0;
+    if (tries < 1) {
+      this._channelDeliveryTries = tries + 1;
+      console.warn(`[channel-delivery] no live traffic for ${code} after connect, resubscribing`);
+      try { this.socket.emit('enter-channel', { code }); } catch (err) { console.warn('[channel-delivery] enter-channel failed', err); }
+      try { this.socket.emit('get-messages', { code }); } catch (err) { console.warn('[channel-delivery] get-messages failed', err); }
+      try { this.socket.emit('get-channels'); } catch (err) { console.warn('[channel-delivery] get-channels failed', err); }
+      this._armChannelDeliveryWatch(code);
+      return;
+    }
+    const voiceLive = !!(this.voice && this.voice.inVoice &&
+      ((this.voice.liveVoicePeerCount?.() || 0) > 0 || this.voice.localStream));
+    if (voiceLive) {
+      console.warn('[channel-delivery] still silent during a live call, leaving the call up');
+      return;
+    }
+    console.warn('[channel-delivery] connected but silent, reloading');
+    try { window.location.reload(); } catch (err) { console.warn('[channel-delivery] reload failed', err); }
+  }, 10000);
+},
+
+_noteChannelDelivery(code) {
+  if (!this._channelDeliveryCode || code !== this._channelDeliveryCode) return;
+  this._channelDeliverySeen = true;
+  this._channelDeliveryTries = 0;
+  if (this._channelDeliveryTimer) {
+    clearTimeout(this._channelDeliveryTimer);
+    this._channelDeliveryTimer = null;
   }
 },
 
