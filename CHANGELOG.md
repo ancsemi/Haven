@@ -34,7 +34,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - The emoji picker offers people as a man or a woman. The gender-neutral versions (person shrugging, technologist, Mx Claus and so on) are gone wherever a man and a woman version exist. People with no man or woman version, like baby, ninja or snowboarder, stay. Pregnant man, woman with beard, man with veil and woman in tuxedo are gone too.
 - Emoji search knows far more words: Unicode's keywords for every emoji plus everyday chat words, so "this" finds 👆, "dead" finds 💀 and "sus" finds 🤨. Results are ordered best match first, and a word has to start with what you type, so "ok" no longer turns up "book". Works in the emoji picker, reactions, role menus and `:` autocomplete.
 - Role menus show each role once, as its button. The list of roles in the message text and the row of reaction chips under it are no longer shown on top of the buttons.
-- Hover a role button in a role menu to see who picked that role, the way a reaction lists its people (asked for by quakeman00, #5869).
+- Hover a role button in a role menu to see who picked that role, the way a reaction lists its people (asked for by quakeman00, #5869). A role hidden on profile cards keeps who holds it hidden here too.
 - New Android, iPhone and Mac emoji: the Android robot, a modern iPhone and an iMac.
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
