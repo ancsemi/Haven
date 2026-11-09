@@ -537,6 +537,13 @@ _initDmContextMenu() {
     this._syncChannelMutePref(code, willBeMuted);
   });
 
+  // Pin to top / Unpin (app-dm-pins.js)
+  document.querySelector('[data-action="dm-pin"]')?.addEventListener('click', () => {
+    const code = this._dmCtxMenuCode;
+    this._closeDmCtxMenu();
+    if (code) this._toggleDmPin(code);
+  });
+
   document.querySelector('[data-action="dm-group-add"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._openGroupPicker({ code }); });
   document.querySelector('[data-action="dm-group-leave"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._leaveGroup(code); });
   document.querySelector('[data-action="dm-group-delete"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._deleteGroup(code); });
@@ -638,6 +645,8 @@ _openDmCtxMenu(code, anchorEl, mouseEvent) {
   const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
   const muteBtn = menu.querySelector('[data-action="dm-mute"]');
   if (muteBtn) muteBtn.textContent = muted.includes(code) ? `🔕 ${t('channels.unmute_dm')}` : `🔔 ${t('channels.mute_dm')}`;
+  const pinBtn = menu.querySelector('[data-action="dm-pin"]');
+  if (pinBtn) pinBtn.textContent = `📌 ${t(this._isDmPinned(code) ? 'channels.unpin_dm' : 'channels.pin_dm')}`;
 
   const isGroup = !!this.channels.find(c => c.code === code)?.is_group;
   menu.querySelectorAll('[data-action="dm-group-add"], [data-action="dm-group-leave"]').forEach(b => { b.style.display = isGroup ? '' : 'none'; });

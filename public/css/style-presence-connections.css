@@ -371,6 +371,14 @@
   color: var(--accent);
 }
 
+/* A DM pinned to the top of your own list (app-dm-pins.js). */
+.dm-pin-mark {
+  flex-shrink: 0;
+  margin-left: 0.25rem;
+  font-size: 0.625rem;
+  opacity: 0.7;
+}
+
 /* ── DM Category Headers ──────────────────────────────── */
 .dm-category-header {
   display: flex;

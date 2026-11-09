@@ -6,7 +6,7 @@
 
 import SocketMethods   from './modules/app-socket.js?v=4.29.21';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.22';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.29.20';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.29.30';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
 import ComposerMethods from './modules/app-composer.js?v=4.29.11';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
@@ -38,11 +38,12 @@ import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.29.12';
 import EmojiSearchMethods from './modules/app-emoji-search.js?v=4.29.12';
 import BotMethods from './modules/app-bots.js?v=4.27.52';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
-import ChannelMethods  from './modules/app-channels.js?v=4.29.9';
-import ChannelContextMethods from './modules/app-channel-context.js?v=4.29.16';
+import ChannelMethods  from './modules/app-channels.js?v=4.29.30';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.29.30';
 import ChannelTypeMethods from './modules/app-channel-types.js?v=4.27.42';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.27.52';
-import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.27.46';
+import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.29.30';
+import DmPinMethods from './modules/app-dm-pins.js?v=4.29.30';
 import MessageMethods  from './modules/app-messages.js?v=4.29.13';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.27.51';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.26.14';
@@ -664,6 +665,7 @@ Object.assign(HavenApp.prototype,
   MessageGroupingMethods,
   ModCaseMethods,
   ServerMuteMethods,
+  DmPinMethods,
   AdminReauthMethods,
   MasterVolumeMethods,
   ForumUnreadMethods,
