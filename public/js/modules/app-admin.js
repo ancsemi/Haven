@@ -777,6 +777,7 @@ _syncSettingsNav() {
     'section-modmode':      ['manage_server'],
     'section-emojis':       ['manage_emojis'],
     'section-stickers':     ['manage_stickers'],
+    'section-gifs':         ['manage_server'],
     'section-sounds-admin': ['manage_soundboard'],
     'section-roles':        ['manage_roles'],
     'section-badges':       ['manage_badges'],

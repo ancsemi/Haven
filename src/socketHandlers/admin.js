@@ -35,6 +35,12 @@ module.exports = function register(socket, ctx) {
   // so an admin who set SERVER_NAME in their compose file opened Settings,
   // saw an empty box, and had no way to tell whether it had taken effect or
   // what would happen if they typed in it. (#5489)
+  // Whether the GIF picker has a provider behind it: a key saved here or one
+  // in the environment.
+  const GIF_KEYS = ['giphy_api_key', 'klipy_api_key', 'tenor_api_key'];
+  const gifSearchAvailable = (rows) => rows.some(r => GIF_KEYS.includes(r.key) && !!r.value)
+    || !!(process.env.GIPHY_API_KEY || process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY);
+
   const ENV_BACKED_SETTINGS = [
     { key: 'server_name',   env: 'SERVER_NAME' },
     { key: 'stun_urls',     env: 'STUN_URLS' },
@@ -104,9 +110,7 @@ module.exports = function register(socket, ctx) {
     // Whether the GIF picker has a provider behind it, said without the key
     // itself, so a non-admin client can hide the button when there is none
     // (#5654). Read from the rows, since the keys are stripped above.
-    const gifKeys = ['giphy_api_key', 'klipy_api_key', 'tenor_api_key'];
-    settings.gif_search_available = String(rows.some(r => gifKeys.includes(r.key) && !!r.value)
-      || !!(process.env.GIPHY_API_KEY || process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY));
+    settings.gif_search_available = String(gifSearchAvailable(rows));
 
     socket.emit('server-settings', settings, envInfo);
   });
@@ -522,6 +526,12 @@ module.exports = function register(socket, ctx) {
     }
 
     afterSettingSaved(key, value);
+    // A key saved or removed shows or hides everyone's GIF button straight
+    // away, not at their next reload.
+    if (GIF_KEYS.includes(key)) {
+      const gifRows = db.prepare(`SELECT key, value FROM server_settings WHERE key IN (${GIF_KEYS.map(() => '?').join(',')})`).all(...GIF_KEYS);
+      io.except('bot-sockets').emit('server-setting-changed', { key: 'gif_search_available', value: String(gifSearchAvailable(gifRows)) });
+    }
 
     if (previousValue !== value) auditSettingChange(socket.user, key, value, previousValue);
 

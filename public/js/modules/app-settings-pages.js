@@ -13,7 +13,7 @@ const SETTINGS_PAGES = {
     ['server', '🏠', 'settings.pages.server', 'Server', ['section-branding', 'section-channel-types', 'section-custom-tos', 'section-presence', 'section-update', 'section-extension-updates']],
     ['people', '👥', 'settings.pages.people', 'People & roles', ['section-members', 'section-roles', 'section-badges', 'section-guests', 'section-whitelist', 'section-invite']],
     ['safety', '🛡️', 'settings.pages.safety', 'Safety', ['section-moderation', 'section-automod', 'section-security', 'section-modmode', 'section-audit-log']],
-    ['content', '😎', 'settings.pages.content', 'Content', ['section-emojis', 'section-stickers', 'section-sounds-admin', 'section-tags-admin', 'section-uploads', 'section-cleanup']],
+    ['content', '😎', 'settings.pages.content', 'Content', ['section-emojis', 'section-stickers', 'section-gifs', 'section-sounds-admin', 'section-tags-admin', 'section-uploads', 'section-cleanup']],
     ['network', '📡', 'settings.pages.network', 'Network & scale', ['section-connectivity', 'section-large-server', 'section-tunnel']],
     ['tools', '🤖', 'settings.pages.tools', 'Bots & data', ['section-bots', 'section-ferry', 'section-import', 'section-backup', 'section-template']]
   ]
