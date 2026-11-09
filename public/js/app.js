@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.27.25';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.10';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.20';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.13';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
 import ComposerMethods from './modules/app-composer.js?v=4.29.11';
@@ -78,7 +78,7 @@ import ForumMethods    from './modules/app-forum.js?v=4.27.51';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
-import RoleToolMethods from './modules/app-role-tools.js?v=4.29.13';
+import RoleToolMethods from './modules/app-role-tools.js?v=4.29.20';
 import ChannelAddMemberMethods from './modules/app-channel-add-members.js?v=4.29.16';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.27.51';
 import CallMethods from './modules/app-calls.js?v=4.22.24';

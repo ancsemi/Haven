@@ -120,12 +120,20 @@ module.exports = function register(socket, ctx) {
       }).filter(Boolean);
     } catch { return []; }
   }
+  const rolePickers = (row) => {
+    const q = db.prepare('SELECT COALESCE(u.display_name, u.username) AS name FROM reactions x JOIN user_roles ur ON ur.user_id = x.user_id AND ur.role_id = ? AND ur.channel_id IS NULL JOIN users u ON u.id = x.user_id WHERE x.message_id = ? AND x.emoji = ? ORDER BY x.id');
+    return Object.fromEntries(readRoleMenu(row).map(r => { const names = q.all(r.id, row.message_id, r.emoji).map(x => x.name); return [r.id, { names: names.slice(0, 20), total: names.length }]; }));
+  };
+  ctx.emitRolePickers = (code, messageId) => {
+    const row = db.prepare('SELECT * FROM role_menus WHERE message_id = ?').get(messageId);
+    if (row) io.to(`channel:${code}`).emit('role-menu-pickers', { channelCode: code, messageId, pickers: rolePickers(row) });
+  };
   ctx.buildRoleMenu = (row, viewerId) => {
     const roles = readRoleMenu(row);
     if (!roles.length) return null;
     const held = db.prepare('SELECT role_id FROM user_roles WHERE user_id = ? AND channel_id IS NULL').all(viewerId).map(r => r.role_id);
     const maxPicks = picks.maxPicksOf(row);
-    return { title: row.title || '', roles, held: roles.filter(r => held.includes(r.id)).map(r => r.id), ...(maxPicks ? { maxPicks } : {}) };
+    return { title: row.title || '', roles, held: roles.filter(r => held.includes(r.id)).map(r => r.id), pickers: rolePickers(row), ...(maxPicks ? { maxPicks } : {}) };
   };
 
   // Taking a role from a menu with a pick limit (#5800, src/roleMenuPicks.js):
@@ -514,6 +522,7 @@ module.exports = function register(socket, ctx) {
     `).all(messageId);
     const ch = db.prepare('SELECT code FROM channels WHERE id = ?').get(row.channel_id);
     if (ch) io.to(`channel:${ch.code}`).emit('reactions-updated', { channelCode: ch.code, messageId, reactions });
+    if (ch) ctx.emitRolePickers(ch.code, messageId);
     notifySelfRole(socket.user.id, messageId, roleId, held);
     cb({ success: true, held });
   });
