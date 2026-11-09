@@ -3418,6 +3418,11 @@
             <span data-i18n="settings.admin.fcm_enabled_label">Enable Google FCM Push Notifications</span>
             <input type="checkbox" id="fcm-enabled">
           </label>
+          <small class="settings-hint" style="display:block;margin-top:8px" data-i18n="settings.admin.fcm_hide_note">Updated Haven apps get encrypted pushes, so Google, Apple and the push relay only see a sealed blob. Older apps still send the message text through them. Turn this on and those older apps only show "New message".</small>
+          <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.fcm_hide_label">Hide message text in pushes to older apps</span>
+            <input type="checkbox" id="fcm-hide-content">
+          </label>
         </div>
 
         <!-- Auto-mod -->
@@ -5540,7 +5545,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.19"></script>
+  <script type="module" src="/js/app.js?v=4.29.20"></script>
   <script src="/js/plugin-loader.js?v=4.27.52"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

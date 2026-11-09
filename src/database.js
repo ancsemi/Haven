@@ -488,6 +488,7 @@ function initDatabase() {
   // ntfy) can turn it off under Settings → Security → FCM Privacy. Off skips FCM
   // sends only, so web-push to browsers is unaffected.
   insertSetting.run('fcm_enabled', 'true');
+  insertSetting.run('fcm_hide_content', 'false');
 
   // Unique server fingerprint: used by the multi-server sidebar to detect "self"
   const crypto = require('crypto');
@@ -1055,6 +1056,8 @@ function initDatabase() {
   // sounds and pop-ups. The device reports it when it registers.
   addColumn('push_subscriptions', 'scope', "TEXT NOT NULL DEFAULT 'all'");
   addColumn('fcm_tokens', 'scope', "TEXT NOT NULL DEFAULT 'all'");
+  addColumn('fcm_tokens', 'push_p256dh', 'TEXT DEFAULT NULL');
+  addColumn('fcm_tokens', 'push_auth', 'TEXT DEFAULT NULL');
 
   // ── Migration: per-user channel notification prefs ──────
   // Before 3.20.2 these lived only in localStorage, which meant the server

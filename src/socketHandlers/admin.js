@@ -172,6 +172,7 @@ module.exports = function register(socket, ctx) {
       'voice_relay_mode', 'voice_relay_port', 'voice_relay_workers', 'voice_relay_address',
       'media_proxy_enabled', // (v3.43.0) server-side fetch + cache for remote images
       'fcm_enabled', // admin gate for Google FCM mobile push; off = FCM sends skipped (web-push unaffected)
+      'fcm_hide_content',
       'unicode_emoji_auto_update' // monthly refresh of the built-in emoji set from unicode.org, opt-in
     ];
     if (!allowedKeys.includes(key)) return;
@@ -196,6 +197,7 @@ module.exports = function register(socket, ctx) {
     if (automodBools.includes(key) && !['true', 'false'].includes(value)) return;
     if (key === 'media_proxy_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'fcm_enabled' && !['true', 'false'].includes(value)) return;
+    if (key === 'fcm_hide_content' && !['true', 'false'].includes(value)) return;
     if (key === 'unicode_emoji_auto_update' && !['true', 'false'].includes(value)) return;
     if (key === 'automod_link_mode' && !['off', 'allowlist', 'blocklist'].includes(value)) return;
     if (key === 'automod_link_exempt_level') {
@@ -536,6 +538,7 @@ module.exports = function register(socket, ctx) {
     // Keep the in-memory FCM toggle in sync so the message hot path never reads
     // the database. isFcmEnabled() consults this on the next push. (FCM Privacy)
     if (key === 'fcm_enabled') require('../fcm').setFcmAdminEnabled(value !== 'false');
+    if (key === 'fcm_hide_content') require('../fcm').setFcmHideContent(value === 'true');
 
     // Turning the feature on shouldn't make the admin wait until the next boot:
     // refresh right away. ensureEmojiData is a no-op when the on-disk copy is

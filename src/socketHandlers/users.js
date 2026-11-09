@@ -559,7 +559,7 @@ module.exports = function register(socket, ctx) {
       // cleans itself up.
       // saveFcmToken claims the token for this account and applies the
       // length and per-account caps.
-      saveFcmToken(db, socket.user.id, data.token.trim(), data.scope);
+      saveFcmToken(db, socket.user.id, data.token.trim(), data.scope, data.pushKey);
     } catch (err) {
       console.error('FCM token register error:', err);
     }

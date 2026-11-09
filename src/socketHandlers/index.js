@@ -1372,12 +1372,12 @@ function setupSocketHandlers(io, db, opts = {}) {
 
         if (inactiveMembers.length) {
           const placeholders = inactiveMembers.map(() => '?').join(',');
-          const fcmRows = db.prepare(`SELECT token, user_id, scope FROM fcm_tokens WHERE user_id IN (${placeholders})`).all(...inactiveMembers);
+          const fcmRows = db.prepare(`SELECT token, user_id, scope, push_p256dh, push_auth FROM fcm_tokens WHERE user_id IN (${placeholders})`).all(...inactiveMembers);
           const fcmPinged = pingedAmong(fcmRows);
-          const tokens = fcmRows.filter(r => r.scope !== 'mentions' || fcmPinged.has(r.user_id)).map(r => r.token);
+          const devices = fcmRows.filter(r => r.scope !== 'mentions' || fcmPinged.has(r.user_id)).map(r => ({ token: r.token, p256dh: r.push_p256dh, auth: r.push_auth }));
 
-          if (tokens.length) {
-            sendFcm(tokens, title, body, { channelCode, tag: `haven-${channelCode}` })
+          if (devices.length) {
+            sendFcm(devices, title, body, { channelCode, tag: `haven-${channelCode}` })
               .then(res => {
                 if (res.failedTokens && res.failedTokens.length) {
                   const ph = res.failedTokens.map(() => '?').join(',');
