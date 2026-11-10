@@ -17,14 +17,14 @@ import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.29.16';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.27.57';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.27.52';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.29.40';
-import PipPanelMethods from './modules/app-pip-panels.js?v=4.27.45';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.29.50';
 import PeopleMethods from './modules/app-people.js?v=4.29.2';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.27.52';
 import AdminReauthMethods from './modules/app-admin-reauth.js?v=4.23.8';
 import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
 import ServerBarMethods from './modules/app-server-bar.js?v=4.27.52';
-import MobileMethods from './modules/app-mobile.js?v=4.24.24';
+import MobileMethods from './modules/app-mobile.js?v=4.29.50';
 import MediaMethods    from './modules/app-media.js?v=4.27.57';
 import ImageZoomMethods from './modules/app-image-zoom.js?v=4.25.20';
 import MediaGridMethods from './modules/app-media-grid.js?v=4.27.31';
@@ -61,9 +61,9 @@ import MusicFileMethods from './modules/app-music-file.js?v=4.27.49';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.29.12';
 import MessageContentMethods from './modules/app-message-content.js?v=4.29.13';
-import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.24';
+import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.50';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
-import ThreadMethods from './modules/app-threads.js?v=4.29.40';
+import ThreadMethods from './modules/app-threads.js?v=4.29.50';
 import AdminMethods    from './modules/app-admin.js?v=4.29.20';
 import BrandingMethods from './modules/app-branding.js?v=4.29.19';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.52';
@@ -98,6 +98,7 @@ import ServerMuteMethods from './modules/app-server-mute.js?v=4.24.24';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.27.20';
 import ThreadDockMethods from './modules/app-thread-dock.js?v=4.25.7';
+import NavHistoryMethods from './modules/app-nav-history.js?v=4.29.50';
 import TypingMethods from './modules/app-typing.js?v=4.25.8';
 import MessageNsfwMethods from './modules/app-message-nsfw.js?v=4.25.10';
 import MediaPlaybackMethods from './modules/app-media-playback.js?v=4.27.49';
@@ -469,6 +470,7 @@ class HavenApp {
     this._setupThreadUnread();
     this._setupThreadScroll();
     this._setupThreadDock();
+    this._setupNavHistory();
     this._setupTyping();
     this._setupMessageNsfw();
     this._setupMediaPlayback();
@@ -673,6 +675,7 @@ Object.assign(HavenApp.prototype,
   ForumUnreadMethods,
   ThreadUnreadMethods,
   ThreadDockMethods,
+  NavHistoryMethods,
   TypingMethods,
   MessageNsfwMethods,
   MediaPlaybackMethods,
