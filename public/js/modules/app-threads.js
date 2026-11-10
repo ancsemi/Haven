@@ -351,6 +351,8 @@ _closeThread() {
   if (this._moveSourceThread) this._exitMoveSelectionMode?.();
   this._activeThreadParent = null;
   this._clearThreadReply();
+  // A reaction picker opened on a reply has nothing left to react to.
+  this._closeReactionPickers?.();
   const panel = document.getElementById('thread-panel');
   if (panel) {
     panel.style.display = 'none';

@@ -868,21 +868,13 @@ _showReactionPicker(msgEl, msgId) {
   // Toggle: if this message already has a picker open, close it and bail
   const existingPicker = msgEl.querySelector('.reaction-picker');
   if (existingPicker) {
-    existingPicker.remove();
-    msgEl.classList.remove('showing-picker');
-    document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
-    document.querySelectorAll('.quick-emoji-editor').forEach(el => el.remove());
-    this._detachReactionPickerClose();
+    this._closeReactionPickers();
     return;
   }
 
-  // Clean up previous close-on-click-outside handler so it can't
-  // interfere with the new picker (e.g. removing showing-picker class).
-  this._detachReactionPickerClose();
-  document.querySelectorAll('.showing-picker').forEach(el => el.classList.remove('showing-picker'));
-  document.querySelectorAll('.reaction-picker').forEach(el => el.remove());
-  document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
-  document.querySelectorAll('.quick-emoji-editor').forEach(el => el.remove());
+  // One reaction picker at a time: whatever was open goes, with its
+  // close-on-click-outside handler.
+  this._closeReactionPickers();
 
   // Disable content-visibility containment so the picker isn't clipped
   msgEl.classList.add('showing-picker');
@@ -911,9 +903,9 @@ _showReactionPicker(msgEl, msgId) {
     }
     btn.addEventListener('click', () => {
       this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
-      picker.remove();
-      msgEl.classList.remove('showing-picker');
-      this._detachReactionPickerClose();
+      // Everything goes, not only this row: the full panel opened from its
+      // "..." used to stay behind with nothing left to close it.
+      this._closeReactionPickers();
     });
     picker.appendChild(btn);
   });
@@ -990,10 +982,7 @@ _showReactionPicker(msgEl, msgId) {
                (msgEl.contains(e.target) && e.target.closest('[data-action="react"]'))) {
       return;
     }
-    picker.remove();
-    msgEl.classList.remove('showing-picker');
-    document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
-    this._detachReactionPickerClose();
+    this._closeReactionPickers();
   };
   this._reactionPickerClose = close;
   setTimeout(() => {
@@ -1001,6 +990,16 @@ _showReactionPicker(msgEl, msgId) {
     document.addEventListener('click', close, true);
     document.addEventListener('keydown', close, true);
   }, 0);
+},
+
+// Close every reaction picker: the quick row on a message, the full panel
+// and the quick-row editor (both live on <body>), and the listener that
+// closes them on an outside click. Also called when the view they were
+// opened in goes away (a thread or pop-out DM closing, a channel switch).
+_closeReactionPickers() {
+  document.querySelectorAll('.reaction-picker, .reaction-full-picker, .quick-emoji-editor').forEach(el => el.remove());
+  document.querySelectorAll('.showing-picker').forEach(el => el.classList.remove('showing-picker'));
+  this._detachReactionPickerClose();
 },
 
 _detachReactionPickerClose() {
@@ -1043,10 +1042,7 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
     this._bindEmojiFavorite(btn, emoji, () => { const top = grid.scrollTop; renderAll(searchInput.value.trim()); grid.scrollTop = top; });
     btn.addEventListener('click', () => {
       this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
-      panel.remove();
-      quickPicker.remove();
-      msgEl.classList.remove('showing-picker');
-      this._detachReactionPickerClose();
+      this._closeReactionPickers();
     });
     return btn;
   };
