@@ -10,7 +10,8 @@ Prefer to watch? There are short [video tutorials](https://haven-app.com/tutoria
 
 - **Windows 10 or 11** (macOS / Linux can run it manually)
 - **Node.js** version 22 to 26 → [Download here](https://nodejs.org/)
-- About **50 MB** of disk space
+- About **200 MB** of disk space, plus whatever your community uploads
+- About **100 MB** of free memory for a small group. A Raspberry Pi is enough; measured numbers for every size are in [How much hardware does Haven need?](docs/hardware.md)
 - **OR** just [Docker](https://docs.docker.com/get-docker/), no Node.js needed
 
 ---
