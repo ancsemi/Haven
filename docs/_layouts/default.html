@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ page.title | default: "Documentation" | escape }} | Haven</title>
+<meta name="description" content="{{ page.description | default: site.description | default: 'Haven documentation' | escape }}">
+<meta property="og:title" content="{{ page.title | default: 'Haven documentation' | escape }}">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://haven-app.com{{ page.url }}">
+<link rel="canonical" href="https://haven-app.com{{ page.url }}">
+<meta name="theme-color" content="#F6F5F9">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/favicon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* The page frame for every Markdown page in docs/ (hardware.md, automod.md
+     and the rest), so they look like the homepage and the tutorials page.
+     The colors, type and header are the same as in tutorials.html. */
+  :root {
+    --paper: #F6F5F9;
+    --surface: #FFFFFF;
+    --ink: #1A1726;
+    --muted: #5E5A70;
+    --rule: #D9D5E3;
+    --rule-strong: #B9B3CB;
+    --accent: #5537C4;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #ECE8FA;
+    --sans: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "IBM Plex Mono", Consolas, "SFMono-Regular", Menlo, monospace;
+    --measure: 46rem;
+    --wide: 1080px;
+    --gutter: clamp(18px, 4vw, 40px);
+    --topbar: 64px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #14121C;
+      --surface: #1C1926;
+      --ink: #ECE9F3;
+      --muted: #A39FB3;
+      --rule: #2C2838;
+      --rule-strong: #443E57;
+      --accent: #A497F5;
+      --accent-ink: #14121C;
+      --accent-soft: #24203A;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14121C;
+    --surface: #1C1926;
+    --ink: #ECE9F3;
+    --muted: #A39FB3;
+    --rule: #2C2838;
+    --rule-strong: #443E57;
+    --accent: #A497F5;
+    --accent-ink: #14121C;
+    --accent-soft: #24203A;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 17px; line-height: 1.6; font-feature-settings: "kern" 1, "liga" 1; }
+  a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:hover { text-decoration-thickness: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+  h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; margin: 0; text-wrap: balance; scroll-margin-top: calc(var(--topbar) + 12px); }
+  h1 { font-size: clamp(32px, 4.6vw, 46px); font-weight: 700; letter-spacing: -0.025em; }
+  h2 { font-size: clamp(24px, 3vw, 30px); }
+  h3 { font-size: 20px; }
+  h4 { font-size: 17px; }
+  p { margin: 0; }
+  img { max-width: 100%; height: auto; }
+
+  .wrap { max-width: var(--wide); margin: 0 auto; padding: 0 var(--gutter); }
+
+  .top { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--rule); background: var(--paper); }
+  .top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: var(--topbar); flex-wrap: wrap; padding-top: 8px; padding-bottom: 8px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-weight: 600; font-size: 18px; letter-spacing: 0.01em; }
+  .brand svg { width: 26px; height: 26px; }
+  .nav { display: flex; gap: 22px; flex-wrap: wrap; }
+  .nav a { color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500; }
+  .nav a:hover { color: var(--ink); text-decoration: underline; }
+
+  /* The Markdown itself. Text keeps a readable width; tables and code may
+     use the full width and scroll sideways on a narrow screen. */
+  .doc { padding: clamp(28px, 4vw, 48px) 0 72px; }
+  .doc .wrap > * { max-width: var(--measure); }
+  .doc .wrap > table, .doc .wrap > pre, .doc .wrap > .highlighter-rouge { max-width: 100%; }
+  .doc h1 { margin-bottom: 20px; }
+  .doc h2 { margin-top: 44px; padding-top: 30px; border-top: 1px solid var(--rule); max-width: none; }
+  .doc h3 { margin-top: 30px; }
+  .doc h4 { margin-top: 24px; }
+  .doc p, .doc ul, .doc ol, .doc table, .doc pre, .doc blockquote, .doc .highlighter-rouge { margin-top: 14px; }
+  .doc .highlighter-rouge pre { margin-top: 0; }
+  .doc ul, .doc ol { margin-bottom: 0; padding-left: 1.25em; }
+  .doc li + li { margin-top: 0.35em; }
+  .doc li > ul, .doc li > ol { margin-top: 0.35em; }
+  .doc hr { border: 0; border-top: 1px solid var(--rule); margin: 36px 0 0; max-width: none; }
+  .doc blockquote { margin-left: 0; margin-right: 0; padding: 2px 0 2px 16px; border-left: 3px solid var(--rule-strong); color: var(--muted); }
+  .doc blockquote > :first-child { margin-top: 0; }
+  .doc code { font-family: var(--mono); font-size: 0.88em; background: var(--accent-soft); padding: 1px 5px; border-radius: 3px; }
+  .doc pre { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; overflow-x: auto; font-size: 15px; line-height: 1.5; }
+  .doc pre code { background: none; padding: 0; font-size: inherit; }
+  .doc table { display: block; width: max-content; overflow-x: auto; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .doc th, .doc td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+  .doc th { font-weight: 600; border-bottom-color: var(--rule-strong); }
+  .doc th:first-child, .doc td:first-child { padding-left: 0; }
+  /* Columns of numbers (right-aligned in the Markdown) stay on one line. */
+  .doc th[style*="right"], .doc td[style*="right"] { white-space: nowrap; }
+  .doc tbody tr:last-child td { border-bottom-color: var(--rule-strong); }
+
+  footer { border-top: 1px solid var(--rule); padding: 36px 0 48px; color: var(--muted); font-size: 15px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; align-items: center; }
+  footer nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+  footer a { color: var(--muted); }
+  footer a:hover { color: var(--ink); }
+
+  @media (max-width: 520px) {
+    body { font-size: 16px; }
+    .nav { gap: 14px; }
+    :root { --topbar: 96px; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Haven home">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="50,3 93,28 93,72 50,97 7,72 7,28" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/></svg>
+      Haven
+    </a>
+    <nav class="nav" aria-label="Site">
+      <a href="/#features">Features</a>
+      <a href="/#setup">Setup</a>
+      <a href="/tutorials.html">Tutorials</a>
+      <a href="/#download">Download</a>
+      <a href="https://github.com/ancsemi/Haven">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="doc">
+  <div class="wrap">
+{{ content }}
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <nav aria-label="Project links">
+      <a href="https://github.com/ancsemi/Haven">Server on GitHub</a>
+      <a href="https://github.com/ancsemi/Haven-Desktop">Desktop on GitHub</a>
+      <a href="https://github.com/ancsemi/Haven/blob/main/GUIDE.md">Setup guide</a>
+      <a href="https://www.youtube.com/@Haven-App_Tutorials">YouTube</a>
+      <a href="https://rumble.com/user/HavenApp">Rumble</a>
+      <a href="https://haven-app.com/support.html">Help and support</a>
+      <a href="https://github.com/ancsemi/Haven/issues">Report a bug</a>
+    </nav>
+    <span>Your server, your rules.</span>
+  </div>
+</footer>
+</body>
+</html>

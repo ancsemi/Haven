@@ -1,7 +1,5 @@
 # How much hardware does Haven need?
 
-[Haven home](https://haven-app.com/) · [Setup guide](https://github.com/ancsemi/Haven/blob/main/GUIDE.md)
-
 Very little. A Haven server is one Node.js process and one SQLite file. With
 nobody connected it holds about 100 MB of memory and uses no measurable
 processor time. The numbers below were measured, and you can
