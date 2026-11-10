@@ -4012,7 +4012,16 @@
       "pick_in_channel_title": "Go to #{{name}} and pick a message to put them under",
       "pick_base": "{{n}} selected: pick a message in #{{name}} to put them under",
       "select": "Select",
-      "deselect": "Deselect"
+      "deselect": "Deselect",
+      "unthread_desc_one": "Take {{n}} reply out of this thread:",
+      "unthread_desc_many": "Take {{n}} replies out of this thread:",
+      "unthread_back": "Back to #{{name}}",
+      "unthread_hint": "They become normal messages in the channel, in the order they were written, and keep their authors, times, reactions and pins.",
+      "unthreaded_one": "Moved {{n}} reply back to #{{name}}",
+      "unthreaded_many": "Moved {{n}} replies back to #{{name}}",
+      "unthread_mixed": "Messages in the channel and replies in a thread are moved separately. Deselect the others first.",
+      "unthread_failed": "Could not move the replies",
+      "select_replies": "Select replies to move"
     },
     "hidden_channels": {
       "title": "Hidden Channels",
@@ -4055,6 +4064,7 @@
         "badge_revoke": "took a badge back from",
         "messages_move": "moved messages to",
         "messages_move_to_thread": "moved messages into a thread in",
+        "messages_move_out_of_thread": "moved messages out of a thread in",
         "message_nsfw_on": "marked a message NSFW in",
         "message_nsfw_off": "took the NSFW mark off a message in",
         "admin_password_reset": "reset the password of",

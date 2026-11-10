@@ -327,7 +327,7 @@ _bindMessageActions() {
         return;
       }
 
-      if (e.shiftKey && this._lastMoveSelectedEl) {
+      if (e.shiftKey && this._lastMoveSelectedEl && !this._moveSourceThread) {
         // Shift+click: select all messages between last selected and this one
         const container = document.getElementById('messages');
         const allMsgs = Array.from(container.querySelectorAll('.message, .message-compact, .forum-topic'));

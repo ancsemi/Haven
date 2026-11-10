@@ -16,7 +16,7 @@ import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.29.16';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.27.57';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.27.52';
-import MessageActionMethods from './modules/app-message-actions.js?v=4.27.48';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.29.40';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.27.45';
 import PeopleMethods from './modules/app-people.js?v=4.29.2';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
@@ -46,8 +46,9 @@ import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.29.30';
 import DmPinMethods from './modules/app-dm-pins.js?v=4.29.30';
 import MessageMethods  from './modules/app-messages.js?v=4.29.13';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.27.51';
-import MessageToolMethods from './modules/app-message-tools.js?v=4.26.14';
-import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.29';
+import MessageToolMethods from './modules/app-message-tools.js?v=4.29.40';
+import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.29.40';
+import UnthreadMethods from './modules/app-unthread.js?v=4.29.40';
 import UserMethods     from './modules/app-users.js?v=4.27.52';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
 import VoiceMethods    from './modules/app-voice.js?v=4.29.11';
@@ -62,7 +63,7 @@ import UtilityMethods  from './modules/app-utilities.js?v=4.29.12';
 import MessageContentMethods from './modules/app-message-content.js?v=4.29.13';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.24';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
-import ThreadMethods from './modules/app-threads.js?v=4.27.20';
+import ThreadMethods from './modules/app-threads.js?v=4.29.40';
 import AdminMethods    from './modules/app-admin.js?v=4.29.20';
 import BrandingMethods from './modules/app-branding.js?v=4.29.19';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.52';
@@ -486,6 +487,7 @@ class HavenApp {
     this._initWelcomePopups();
     this._initMoveMessages();
     this._initMoveToThread();
+    this._initUnthread();
 
     // CSP-safe image error handling (no inline onerror attributes)
     // For avatar images, hide the broken img and show the letter-initial fallback
@@ -677,6 +679,7 @@ Object.assign(HavenApp.prototype,
   PermDraftMethods,
   ThreadScrollMethods,
   MoveToThreadMethods,
+  UnthreadMethods,
   ChannelCategoryMethods,
   ChannelPersonalOrderMethods,
   PushToMuteMethods,

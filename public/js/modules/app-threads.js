@@ -256,6 +256,8 @@ _toggleThread(parentId) {
 },
 
 _openThread(parentId) {
+  // Replies picked in another thread do not carry over (app-unthread.js).
+  if (this._moveSourceThread && Number(this._moveSourceThread) !== Number(parentId)) this._exitMoveSelectionMode?.();
   this._activeThreadParent = parentId;
   // Clear any pending thread mentions for this thread/channel
   this._clearThreadMentionsForParent(this.currentChannel, parentId);
@@ -269,6 +271,7 @@ _openThread(parentId) {
   panel.style.display = 'flex';
   panel.dataset.parentId = parentId;
   this._setThreadPiPEnabled(localStorage.getItem('haven_thread_panel_pip') === '1');
+  this._syncUnthreadSelectBtn?.();
   if (this._channelBlocksPosting?.()) this._applyThreadClosed(false);
 
   // Request thread messages from server
@@ -344,6 +347,8 @@ _applyThreadClosed(closed) {
 },
 
 _closeThread() {
+  // Replies picked in it went with the panel (app-unthread.js).
+  if (this._moveSourceThread) this._exitMoveSelectionMode?.();
   this._activeThreadParent = null;
   this._clearThreadReply();
   const panel = document.getElementById('thread-panel');

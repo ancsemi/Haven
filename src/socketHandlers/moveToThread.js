@@ -20,10 +20,21 @@
 //   thread-updated     to the base's channel: its reply chip and count
 // No new-thread-message goes out: these are old messages that were already
 // on screen, so nobody gets a sound or an "N new" marker for them.
+//
+// The way back out (src/moveOutOfThread.js):
+//   move-messages-out-of-thread { parentId, messageIds }
+//     -> { success, moved, toChannel } or { error }
+// The same permission as going in, in the thread's channel, so whoever can
+// put messages in a thread can take them out again. Then, to the channel:
+//   messages-unthreaded  the replies leave an open thread panel and the
+//                        channel feed reloads to show them in time order
+//   thread-updated       its reply chip and count (not in a forum, which
+//                        reloads instead, so no topic is bumped or lit up)
 
 const { utcStamp } = require('./helpers');
 const { reachableChannel, reachableChannelByCode } = require('./channelAccess');
 const { moveIntoThread } = require('../moveToThread');
+const { moveOutOfThread } = require('../moveOutOfThread');
 const forumUnread = require('../forumUnread');
 
 module.exports = function register(socket, ctx) {
@@ -115,5 +126,43 @@ module.exports = function register(socket, ctx) {
       });
     }
     cb({ success: true, moved: result.selected.length, brought, toChannel: to.code });
+  });
+
+  socket.on('move-messages-out-of-thread', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
+    const rootId = data.parentId;
+    if (!Number.isInteger(rootId) || rootId <= 0) return cb({ error: 'Invalid message' });
+
+    const root = db.prepare('SELECT channel_id FROM messages WHERE id = ?').get(rootId);
+    const channel = root ? reachableChannel(ctx, socket.user, root.channel_id) : null;
+    if (!channel) return cb({ error: 'That thread no longer exists' });
+    if (channel.is_dm) return cb({ error: 'Cannot move messages to or from DMs' });
+    if (!canMove(channel.id)) return cb({ error: 'You need message management permissions to move messages' });
+
+    let result;
+    try {
+      result = moveOutOfThread(db, { channel, rootId, messageIds: data.messageIds });
+    } catch (err) {
+      console.error('Move out of thread error:', err);
+      return cb({ error: 'Failed to move messages' });
+    }
+    if (result.error) return cb({ error: result.error });
+    forumUnread.forget(channel.id);
+
+    const room = io.to(`channel:${channel.code}`);
+    room.emit('messages-unthreaded', { channelCode: channel.code, parentId: rootId, messageIds: result.moved });
+    if (!channel.is_forum) {
+      room.emit('thread-updated', { channelCode: channel.code, parentId: rootId, thread: threadSummary(rootId) });
+    }
+
+    if (typeof logAudit === 'function') {
+      logAudit({
+        actor: socket.user, action: 'messages_move_out_of_thread',
+        target_type: 'channel', target_id: channel.id, target_name: channel.name,
+        details: { thread: rootId, messages: result.moved.length, messageIds: result.moved },
+      });
+    }
+    cb({ success: true, moved: result.moved.length, toChannel: channel.code });
   });
 };
