@@ -82,6 +82,8 @@ function fakeSocket() {
   const handlers = new Map();
   return {
     connected: true,
+    active: true,
+    connectCalls: 0,
     handlers,
     emits: [],
     on(ev, fn) {
@@ -91,6 +93,7 @@ function fakeSocket() {
     once(ev, fn) { this.on(ev, fn); },
     off() {},
     emit(ev, data) { this.emits.push({ ev, data }); },
+    connect() { this.connectCalls += 1; },
     fire(ev, data) {
       for (const fn of handlers.get(ev) || []) fn(data);
     },
@@ -180,6 +183,23 @@ test('channel traffic after reconnect counts as recovered and does not reload', 
   flushTimers();
   flushTimers();
   assert.equal(reloads.length, 0);
+});
+
+// The merge with main brings a second #5875 fix: a reconnect the server
+// turned away is retried instead of leaving the app offline. It shares
+// app-socket.js with the silence watchdog, so a bad conflict resolution
+// could drop it. Guard both here.
+test('a reconnect the server refused is retried, and the watchdog stays quiet while the socket is down', () => {
+  const { socket, reloads } = clientApp();
+  socket.fire('connect');
+  socket.fire('channels-list', [{ id: 1, code: 'abcd1234', name: 'general', unreadCount: 0 }]);
+  // The server turned the reconnect away, so socket.io has stopped trying.
+  socket.connected = false;
+  socket.active = false;
+  socket.fire('connect_error', new Error('Rate limited: too many connections'));
+  flushTimers();
+  assert.equal(socket.connectCalls, 1, 'the refused reconnect is tried again instead of staying offline');
+  assert.equal(reloads.length, 0, 'the channel watchdog does not reload while the socket is down');
 });
 
 const h = createHarness(3621, 'silent-reconnect');
