@@ -154,6 +154,10 @@ async switchChannel(code) {
   // send was then refused. (#5468)
   const _isReadOnly = channel && channel.read_only === 1 && !this.user?.isAdmin && !channel.canOverrideReadOnly;
   if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
+  // A media-only channel has no text box to press Enter in, so the send
+  // button is the only way to post an attachment: it stays, even for
+  // someone who chose to hide it (#5880).
+  if (msgInputArea) msgInputArea.classList.toggle('media-only', !!_textOff && !_mediaOff);
   this._updateReadOnlyNote(channel);
   // Text-only elements
   const _msgInput = document.getElementById('message-input');
@@ -162,7 +166,7 @@ async switchChannel(code) {
   const _gifBtn = document.getElementById('gif-btn');
   const _pollBtn = document.getElementById('poll-btn');
   if (_msgInput) _msgInput.style.display = _textOff ? 'none' : '';
-  if (_sendBtn) _sendBtn.style.display = _textOff ? 'none' : '';
+  if (_sendBtn) _sendBtn.style.display = (_textOff && _mediaOff) ? 'none' : '';
   if (_emojiBtn) _emojiBtn.style.display = _textOff ? 'none' : '';
   if (_gifBtn) _gifBtn.style.display = _textOff ? 'none' : '';
   if (_pollBtn) _pollBtn.style.display = _textOff ? 'none' : '';

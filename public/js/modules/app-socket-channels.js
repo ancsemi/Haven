@@ -135,6 +135,7 @@ _listenChannelsAndMessages() {
         // Per-channel, same reasoning as the composer gate in app-channels.js (#5468)
         const _isReadOnly = curCh.read_only === 1 && !this.user?.isAdmin && !curCh.canOverrideReadOnly;
         if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
+        if (msgInputArea) msgInputArea.classList.toggle('media-only', _textOff && !_mediaOff);
         this._updateReadOnlyNote(curCh);
         this._applyReactionLock?.();
       }
