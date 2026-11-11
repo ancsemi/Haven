@@ -4,7 +4,7 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.29.23';
+import SocketMethods   from './modules/app-socket.js?v=4.29.55';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.25';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.30';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
@@ -23,7 +23,7 @@ import SettingsMethods from './modules/app-settings.js?v=4.23.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.27.52';
 import AdminReauthMethods from './modules/app-admin-reauth.js?v=4.23.8';
 import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
-import ServerBarMethods from './modules/app-server-bar.js?v=4.27.52';
+import ServerBarMethods from './modules/app-server-bar.js?v=4.29.55';
 import MobileMethods from './modules/app-mobile.js?v=4.29.50';
 import MediaMethods    from './modules/app-media.js?v=4.27.57';
 import ImageZoomMethods from './modules/app-image-zoom.js?v=4.25.20';
@@ -60,7 +60,7 @@ import MusicMethods from './modules/app-music.js?v=4.27.17';
 import MusicFileMethods from './modules/app-music-file.js?v=4.27.49';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.29.12';
-import MessageContentMethods from './modules/app-message-content.js?v=4.29.54';
+import MessageContentMethods from './modules/app-message-content.js?v=4.29.55';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.50';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
 import ThreadMethods from './modules/app-threads.js?v=4.29.50';
@@ -76,7 +76,7 @@ import ModerationMethods from './modules/app-moderation.js?v=4.27.9';
 import PlatformMethods from './modules/app-platform.js?v=4.27.49';
 import SearchMethods   from './modules/app-search.js?v=4.29.18';
 import FerryMethods    from './modules/app-ferry.js?v=4.27.52';
-import ForumMethods    from './modules/app-forum.js?v=4.27.51';
+import ForumMethods    from './modules/app-forum.js?v=4.29.55';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
@@ -109,7 +109,7 @@ import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
 import MentionsMethods from './modules/app-mentions.js?v=4.29.11';
-import SettingsPageMethods from './modules/app-settings-pages.js?v=4.29.20';
+import SettingsPageMethods from './modules/app-settings-pages.js?v=4.29.55';
 import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.29.12';
 import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';
 import { startTooltips } from './modules/tooltips.js?v=4.27.51';

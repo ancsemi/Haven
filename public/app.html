@@ -1230,15 +1230,15 @@
   <div class="modal-overlay" id="add-server-modal" style="display:none">
     <div class="modal">
       <h3 id="add-server-modal-title" data-i18n="modals.add_server.title">Add a Server</h3>
-      <p class="modal-desc" data-i18n="modals.add_server.desc">Connect to a friend's Haven server</p>
-      <div class="form-group">
-        <label data-i18n="modals.add_server.name_label">Server Name</label>
-        <input type="text" id="add-server-name-input" placeholder='e.g. Jake&apos;s Haven' maxlength="30">
-      </div>
+      <p class="modal-desc" data-i18n="modals.add_server.desc_signin">Enter the address of another Haven server. You sign in there, or make an account, the first time you open it.</p>
       <div class="form-group">
         <label data-i18n="modals.add_server.address_label">Server Address</label>
         <input type="text" id="server-url-input" data-i18n-placeholder="modals.add_server.address_placeholder" placeholder="e.g. https://192.168.1.5:3000" list="known-servers-datalist">
         <datalist id="known-servers-datalist"></datalist>
+      </div>
+      <div class="form-group">
+        <label data-i18n="modals.add_server.name_label">Server Name</label> <span class="muted-text" data-i18n="modals.add_server.icon_optional">(optional)</span>
+        <input type="text" id="add-server-name-input" data-i18n-placeholder="modals.add_server.name_placeholder" placeholder="Leave blank to use the server's own name" maxlength="30">
       </div>
       <div class="form-group">
         <label data-i18n="modals.add_server.icon_label">Icon URL</label> <span class="muted-text" data-i18n="modals.add_server.icon_optional">(optional)</span>
@@ -5543,7 +5543,7 @@
       </div>
     </div>
   </div>
-  <script src="/js/theme.js?v=4.25.31"></script>
+  <script src="/js/theme.js?v=4.29.55"></script>
   <script src="/js/theme-gallery.js?v=4.26.1"></script>
   <script src="/js/notifications.js?v=4.23.6"></script>
   <script src="/js/servers.js?v=4.23.9"></script>
@@ -5555,7 +5555,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.53"></script>
+  <script type="module" src="/js/app.js?v=4.29.55"></script>
   <script src="/js/plugin-loader.js?v=4.27.52"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

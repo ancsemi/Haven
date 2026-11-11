@@ -81,7 +81,7 @@ _setupServerBar() {
     document.getElementById('add-server-icon-input').value = '';
     document.getElementById('save-server-btn').textContent = t('modals.add_server.add_btn');
     this._populateKnownServersDatalist();
-    document.getElementById('add-server-name-input').focus();
+    document.getElementById('server-url-input').focus();
   });
 
   document.getElementById('cancel-server-btn').addEventListener('click', () => {
@@ -283,13 +283,19 @@ async _populateKnownServersDatalist() {
 },
 
 async _addServer() {
-  const name = document.getElementById('add-server-name-input').value.trim();
+  const typedName = document.getElementById('add-server-name-input').value.trim();
   const url = document.getElementById('server-url-input').value.trim();
   const iconInput = document.getElementById('add-server-icon-input').value.trim();
   const autoPull = document.getElementById('server-auto-icon').checked;
-  if (!name || !url) return this._showToast(t('toasts.name_address_required'), 'error');
-
   const editUrl = this._editingServerUrl;
+  if (!url) return this._showToast(t('toasts.address_required'), 'error');
+  if (editUrl && !typedName) return this._showToast(t('toasts.name_address_required'), 'error');
+  // A new server needs only its address. With no name typed it is listed
+  // under the address until the server reports its own name, which then
+  // takes over (a name that is just the address is never kept as yours).
+  const bare = url.replace(/\/+$/, '');
+  const name = typedName || (/^https?:\/\//.test(bare) ? bare : 'https://' + bare);
+
   if (editUrl) {
     // Editing existing server (a name of your own is kept and, in the
     // Desktop app, shown on every server). A Desktop app that asks first

@@ -28,6 +28,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Hardware requirements, measured: `node scripts/benchmark.js` runs a throwaway server at several community sizes and prints the memory and processor time each one took. The results and what they mean for small machines are in docs/hardware.md. The load tester (`scripts/loadtest.js`) now reports the server's memory and processor use for each phase.
 
 ### Changed
+- Add a Server asks for the address first and the name is optional: left blank, the server's own name is used. The window also says that you sign in, or make an account, on that server when you open it (reported by Grester).
 - Tooltips are drawn by Haven: they wrap at a readable width, stay inside the window and follow the theme. A long one used to run far past the edge of the app.
 - In Permissions, clicking a role's name opens its full settings (name, level, color, icon) on top of the table, and changes waiting to be saved stay. A click anywhere in a box's cell ticks the box.
 - The controls on videos, sounds and link previews are rebuilt: matching drawn icons in one size, with playing controls and view controls in separate groups. The speaker button mutes, and the size button opens a menu of Small, Medium and Large. It used to look like a fullscreen button.
