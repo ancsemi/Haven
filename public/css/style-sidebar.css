@@ -96,6 +96,9 @@
   text-align: center;
   pointer-events: none;
 }
+.mentions-btn-unseen { color: var(--accent); }
+.mentions-btn-unseen .mentions-btn-count { animation: mentions-btn-pulse 2.4s ease-in-out infinite; }
+@keyframes mentions-btn-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.85); } }
 .user-bar-face {
   display: flex;
   align-items: center;

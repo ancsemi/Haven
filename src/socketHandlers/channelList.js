@@ -6,6 +6,7 @@
 
 const { groupHistoryFloor, groupHistoryFloorAsync } = require('../groupHistory');
 const forumUnread = require('../forumUnread');
+const { unreadMentionsQuery } = require('../mentionFilter');
 const automod = require('../automod');
 const createPermissions = require('./permissions');
 const createAsyncPermissions = require('./asyncPermissions');
@@ -119,7 +120,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
   // ── getEnrichedChannels ─────────────────────────────────
   // `shared` (optional) carries per-channel answers that are the same for
   // every viewer, so a broadcast to thousands of people works them out once.
-  function getEnrichedChannels(userId, isAdmin, joinRooms, shared = null) {
+  function getEnrichedChannels(userId, isAdmin, joinRooms, shared = null, withMentions = false) {
     let channels = getChannelRows(userId, isAdmin);
 
     // A role gate hides the channel from anyone who fails it, membership or
@@ -147,6 +148,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
       }
       if (shared) channelIds.forEach(id => { latestMap[id] = shared.latest.get(id) || 0; });
 
+      const mentionQ = withMentions ? unreadMentionsQuery(userId, db.prepare('SELECT username FROM users WHERE id = ?').get(userId)?.username) : null;
       channels.forEach(ch => {
         // A group DM member's count starts where their history does.
         const lastRead = Math.max(readMap[ch.id] || 0, groupHistoryFloor(db, ch, userId));
@@ -171,6 +173,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
         } else {
           ch.unreadCount = 0;
         }
+        if (mentionQ && ch.unreadCount && !ch.is_dm) { const ids = mentionQ.pick(db.prepare(mentionQ.sql).all(...mentionQ.params(ch.id, lastRead))); if (ids.length) ch.unreadMentionIds = ids; }
         // A forum's replies are not counted above, so it reports its unread
         // topics separately for the sidebar dot.
         if (ch.is_forum) {
@@ -402,12 +405,12 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
     return channels;
   }
 
-  async function getEnrichedChannelsAsync(userId, isAdmin, joinRooms, shared = null) {
+  async function getEnrichedChannelsAsync(userId, isAdmin, joinRooms, shared = null, withMentions = false) {
     // Membership repair, permission checks and joining rooms used to run
     // without yielding on SQLite. Keep that whole operation atomic behind
     // this promise until its write paths have async transaction support.
     const driver = db.async;
-    if (!driver || driver.kind === 'sqlite') return getEnrichedChannels(userId, isAdmin, joinRooms, shared);
+    if (!driver || driver.kind === 'sqlite') return getEnrichedChannels(userId, isAdmin, joinRooms, shared, withMentions);
     const asyncPermissions = createAsyncPermissions(driver);
     let channels = await getChannelRowsAsync(userId, isAdmin, driver, asyncPermissions);
 
@@ -442,6 +445,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
       }
       if (shared) channelIds.forEach(id => { latestMap[id] = shared.latest.get(id) || 0; });
 
+      const mentionQ = withMentions ? unreadMentionsQuery(userId, (await driver.prepare('SELECT username FROM users WHERE id = ?').get(userId))?.username) : null;
       for (const ch of channels) {
         // A group DM member's count starts where their history does.
         const lastRead = Math.max(readMap[ch.id] || 0, await groupHistoryFloorAsync(driver, ch, userId));
@@ -466,6 +470,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
         } else {
           ch.unreadCount = 0;
         }
+        if (mentionQ && ch.unreadCount && !ch.is_dm) { const ids = mentionQ.pick(await driver.prepare(mentionQ.sql).all(...mentionQ.params(ch.id, lastRead))); if (ids.length) ch.unreadMentionIds = ids; }
         // A forum's replies are not counted above, so it reports its unread
         // topics separately for the sidebar dot.
         if (ch.is_forum) {

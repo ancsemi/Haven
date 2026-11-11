@@ -13,6 +13,7 @@ _listenChannelsAndMessages() {
     // show messages they no longer have access to. Invalidate the panel off
     // this already-broadcast event, so no new server plumbing. (search-overhaul)
     this._searchInvalidate?.(channels);
+    this._mentionsMerge?.(channels);
     // Fresh authoritative state: an optimistic Channel Functions toggle that
     // was still awaiting a verdict has just been accepted, so drop its undo.
     this._cfnPendingToggle = null;
