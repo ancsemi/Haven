@@ -407,6 +407,9 @@ _formatContent(str, opts) {
       }
     }
   }
+  // Names that belong to an account, before persona names are added below:
+  // only these open a profile card, so a persona never leads to its owner.
+  const accountByName = new Map(nameToUserId);
   const selfLogin = (this.user.username || '').toLowerCase();
   if (selfLogin) validNames.add(selfLogin);
   // Also include known persona names so @PersonaName lights up as a mention
@@ -463,7 +466,10 @@ _formatContent(str, opts) {
     const uid = nameToUserId.get(lower);
     const nick = uid && this._nicknames ? this._nicknames[uid] : null;
     const display = nick || loginToDisplay.get(lower) || name;
-    return `<span class="mention${isSelf ? ' mention-self' : ''}">@${this._escapeHtml(display)}</span>`;
+    // The account behind the name, so a click can open its profile card (#5878).
+    const cardId = Number(accountByName.get(lower) || (isSelf && this.user.id)) || 0;
+    const card = cardId ? ` data-mention-user="${cardId}"` : '';
+    return `<span class="mention${isSelf ? ' mention-self' : ''}"${card}>@${this._escapeHtml(display)}</span>`;
   });
 
   // ── @everyone / @here mentions ──

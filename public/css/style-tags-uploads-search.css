@@ -780,6 +780,7 @@
   cursor: default;
 }
 
+.mention[data-mention-user] { cursor: pointer; }
 .mention.mention-role { color: var(--role-color, var(--accent)); }
 .mention-role-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.3rem; vertical-align: middle; }
 

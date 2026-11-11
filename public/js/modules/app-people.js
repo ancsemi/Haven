@@ -55,6 +55,29 @@ _bindPeople() {
     return { el, userId: parseInt(msgEl.dataset.userId, 10) };
   };
 
+  // ── Profile popup: click on an @mention of a person, wherever the message
+  // is shown (channel, thread, pop-out DM). Role and @everyone mentions have
+  // no account behind them. (#5878)
+  document.addEventListener('click', (e) => {
+    const mention = e.target.closest?.('.mention[data-mention-user]');
+    if (!mention) return;
+    const userId = parseInt(mention.dataset.mentionUser, 10);
+    if (isNaN(userId)) return;
+    clearTimeout(this._hoverProfileTimer);
+    clearTimeout(this._hoverCloseTimer);
+    clearTimeout(this._hoverAutoCloseTimer);
+    clearTimeout(this._hoverFadeTimeout);
+    const existingPopup = document.getElementById('profile-popup');
+    if (this._openProfileUserId === userId && existingPopup && !this._isHoverPopup) {
+      this._closeProfilePopup();
+      return;
+    }
+    this._isHoverPopup = false;
+    this._hoverTarget = null;
+    this._profilePopupAnchor = mention;
+    this.socket.emit('get-user-profile', { userId });
+  });
+
   // ── Profile popup: click on message author name or avatar ──
   document.getElementById('messages').addEventListener('click', (e) => {
     const author = e.target.closest('.message-author');
