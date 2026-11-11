@@ -407,6 +407,9 @@ _listenChannelsAndMessages() {
   }
 
   this.socket.on('new-message', async (data) => {
+    // (#5875) A message in the open channel means the reconnect really
+    // rejoined it, so the silence watchdog can stand down.
+    this._noteChannelDelivery?.(data?.channelCode);
     // E2E: ensure partner key is available before decrypting
     const msgCh = this.channels.find(c => c.code === data.channelCode);
     if (msgCh && msgCh.is_dm && msgCh.dm_target && !this._dmPublicKeys[msgCh.dm_target.id]) {
@@ -612,6 +615,7 @@ _listenPresenceAndVoice() {
   // channel. The server sends the whole list first, so a channel with no
   // list here yet is skipped until it does.
   this.socket.on('online-users-delta', (data) => {
+    this._noteChannelDelivery?.(data?.channelCode);
     const list = this._onlineByChannel?.get(data?.channelCode);
     if (!list) return;
     const upsert = Array.isArray(data.upsert) ? data.upsert.map(fillMember) : [];
@@ -625,6 +629,9 @@ _listenPresenceAndVoice() {
   });
 
   this.socket.on('online-users', (data) => {
+    // Re-entering a channel pushes this list to the room. Receiving it is
+    // how we know the socket is actually in that room again (#5875).
+    this._noteChannelDelivery?.(data?.channelCode);
     if (data?.slim && Array.isArray(data.users)) data = { ...data, users: data.users.map(fillMember) };
     applyOnlineUsers(data);
   });
