@@ -2207,6 +2207,9 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, async (re
   res.json({ success: true });
 });
 
+// ── Bot: Edit one of its own messages ─────────────────────
+require('./src/routes/webhookEdit')({ app, express, webhookLimiter, getWebhookByToken, getIo: () => io, sanitizeText });
+
 // ── Bot: Delete recent messages and their replies ─────────
 // Protected messages, and thread heads holding one, are left out.
 app.delete('/api/webhooks/:token/messages', webhookLimiter, async (req, res) => {

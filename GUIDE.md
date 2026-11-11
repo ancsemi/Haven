@@ -1573,7 +1573,7 @@ issue.
 
 ## Bot & Webhook Developer Guide
 
-Haven has a built-in bot API powered by webhooks. Bots can send messages, delete messages, play soundboard sounds, and register custom slash commands.
+Haven has a built-in bot API powered by webhooks. Bots can send messages, edit and delete messages, play soundboard sounds, and register custom slash commands.
 
 > **Looking for ready-made bots and webhooks?** The community library at [**ancsemi/haven-community**](https://github.com/ancsemi/haven-community) collects user-contributed integrations you can deploy as-is (a GitHub releases poster, etc.). PRs welcome there if you've built one of your own. See its [`CONTRIBUTING.md`](https://github.com/ancsemi/haven-community/blob/main/CONTRIBUTING.md) for how to submit.
 
@@ -1633,6 +1633,17 @@ Content-Type: application/json
 Response (regular): `{ "success": true, "message_id": 124 }` (plus `"thread_id": 123` for a thread reply)
 
 Response (ephemeral): `{ "success": true, "ephemeral": true, "recipient_id": 42, "delivered": true }`
+
+### Editing Messages
+
+```
+PATCH https://your-server.com/api/webhooks/<token>/messages/<message_id>
+Content-Type: application/json
+
+{ "content": "The new text" }
+```
+
+A bot can edit the messages it posted itself (use the `message_id` it got back when posting), and nobody else's. The message shows as edited. Returns `{ "success": true, "message_id": 124 }`.
 
 ### Deleting Messages
 

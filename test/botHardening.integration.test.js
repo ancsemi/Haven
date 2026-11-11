@@ -117,6 +117,21 @@ test('bot and webhook hardening', async t => {
   assert.equal(rowA.webhook_username, 'bAnn/b');
   assert.equal(db.prepare('SELECT webhook_avatar FROM messages WHERE id = ?').get(bId).webhook_avatar, 'https://cdn.example/b.png');
 
+  // A bot edits its own messages, not another bot's, and not into nothing.
+  const patch = (token, id, body) => fetch(`${base}/api/webhooks/${token}/messages/${id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  assert.equal((await patch(tokens.a, bId, { content: 'hijacked' })).status, 403);
+  assert.equal((await patch(tokens.a, aId, { content: '   ' })).status, 400);
+  assert.equal((await patch(tokens.a, 999999, { content: 'x' })).status, 404);
+  const edited = await patch(tokens.a, aId, { content: '  from a, edited  ' });
+  assert.equal(edited.status, 200);
+  assert.equal((await edited.json()).message_id, aId);
+  const rowEdited = db.prepare('SELECT content, edited_at FROM messages WHERE id = ?').get(aId);
+  assert.equal(rowEdited.content, 'from a, edited');
+  assert.ok(rowEdited.edited_at);
+  assert.equal(db.prepare('SELECT content FROM messages WHERE id = ?').get(bId).content, 'from b');
+
   // A bot without moderation deletes its own messages, not another bot's.
   const del = (token, id) => fetch(`${base}/api/webhooks/${token}/messages/${id}`, { method: 'DELETE' });
   assert.equal((await del(tokens.a, bId)).status, 403);
