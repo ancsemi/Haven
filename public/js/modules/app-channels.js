@@ -5,6 +5,47 @@ export default {
 
 // ── Channel Management ────────────────────────────────
 
+_updateComposerVisibility(channel) {
+  const msgInputArea = document.getElementById('message-input-area');
+  const _textOff = !!(channel && channel.text_enabled === 0);
+  const _mediaOff = !!(channel && channel.media_enabled === 0);
+  // Read-only: hide the composer unless this viewer may actually post here.
+  // canOverrideReadOnly is decided per channel by the server. _hasPerm reads a
+  // flat list that merges every channel-scoped grant together, so holding the
+  // override in one channel used to reveal the composer in all of them, and the
+  // send was then refused. (#5468)
+  const _isReadOnly = channel && channel.read_only === 1 && !this.user?.isAdmin && !channel.canOverrideReadOnly;
+  if (msgInputArea) {
+    msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
+    msgInputArea.toggleAttribute('data-text-off', _textOff);
+  }
+  this._updateReadOnlyNote(channel);
+  // Text-only elements; keep #send-btn visible when media is enabled so attachments can still be sent (#5880).
+  const _msgInput = document.getElementById('message-input');
+  const _sendBtn = document.getElementById('send-btn');
+  const _emojiBtn = document.getElementById('emoji-btn');
+  const _gifBtn = document.getElementById('gif-btn');
+  const _pollBtn = document.getElementById('poll-btn');
+  if (_msgInput) _msgInput.style.display = _textOff ? 'none' : '';
+  if (_sendBtn) _sendBtn.style.display = (_textOff && _mediaOff) ? 'none' : '';
+  if (_emojiBtn) _emojiBtn.style.display = _textOff ? 'none' : '';
+  if (_gifBtn) _gifBtn.style.display = _textOff ? 'none' : '';
+  if (_pollBtn) _pollBtn.style.display = _textOff ? 'none' : '';
+  const _timeBtn = document.getElementById('time-btn');
+  const _timeDivider = document.getElementById('time-divider');
+  if (_timeBtn) _timeBtn.style.display = _textOff ? 'none' : '';
+  if (_timeDivider) _timeDivider.style.display = _textOff ? 'none' : '';
+  // Upload button tied to media toggle
+  const _uploadBtn = document.getElementById('upload-btn');
+  if (_uploadBtn) _uploadBtn.style.display = _mediaOff ? 'none' : '';
+  this._applyReactionLock?.();
+  // Dividers: first one only if both upload and text buttons visible, rest if text is on
+  const _dividers = document.querySelectorAll('.input-actions-box .input-actions-divider');
+  if (_dividers[0]) _dividers[0].style.display = (!_textOff && !_mediaOff) ? '' : 'none';
+  if (_dividers[1]) _dividers[1].style.display = _textOff ? 'none' : '';
+  if (_dividers[2]) _dividers[2].style.display = _textOff ? 'none' : '';
+},
+
 async switchChannel(code) {
   if (this.currentChannel === code) return;
 
@@ -143,49 +184,16 @@ async switchChannel(code) {
   // surprised when history disappears.
   this._updateDmCleanupNotice(channel);
 
-  // Show/hide message input; keep upload button visible for media-only channels
-  const msgInputArea = document.getElementById('message-input-area');
-  const _textOff = channel && channel.text_enabled === 0;
-  const _mediaOff = channel && channel.media_enabled === 0;
-  // Read-only: hide the composer unless this viewer may actually post here.
-  // canOverrideReadOnly is decided per channel by the server. _hasPerm reads a
-  // flat list that merges every channel-scoped grant together, so holding the
-  // override in one channel used to reveal the composer in all of them, and the
-  // send was then refused. (#5468)
-  const _isReadOnly = channel && channel.read_only === 1 && !this.user?.isAdmin && !channel.canOverrideReadOnly;
-  if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
-  this._updateReadOnlyNote(channel);
-  // Text-only elements
-  const _msgInput = document.getElementById('message-input');
-  const _sendBtn = document.getElementById('send-btn');
-  const _emojiBtn = document.getElementById('emoji-btn');
-  const _gifBtn = document.getElementById('gif-btn');
-  const _pollBtn = document.getElementById('poll-btn');
-  if (_msgInput) _msgInput.style.display = _textOff ? 'none' : '';
-  if (_sendBtn) _sendBtn.style.display = _textOff ? 'none' : '';
-  if (_emojiBtn) _emojiBtn.style.display = _textOff ? 'none' : '';
-  if (_gifBtn) _gifBtn.style.display = _textOff ? 'none' : '';
-  if (_pollBtn) _pollBtn.style.display = _textOff ? 'none' : '';
+  // Show/hide message input; keep upload + send buttons visible for media-only channels
+  this._updateComposerVisibility(channel);
   // In a forum the composer starts topics, and says so. (#144)
+  const _msgInput = document.getElementById('message-input');
   if (_msgInput) {
     const _forumCh = this.channels && this.channels.find(c => c.code === code);
     _msgInput.placeholder = (_forumCh && _forumCh.is_forum)
       ? t('app.messages.placeholder_forum')
       : t(window.innerWidth <= 480 ? 'app.messages.placeholder_short' : 'header.message_placeholder_commands');
   }
-  const _timeBtn = document.getElementById('time-btn');
-  const _timeDivider = document.getElementById('time-divider');
-  if (_timeBtn) _timeBtn.style.display = _textOff ? 'none' : '';
-  if (_timeDivider) _timeDivider.style.display = _textOff ? 'none' : '';
-  // Upload button tied to media toggle
-  const _uploadBtn = document.getElementById('upload-btn');
-  if (_uploadBtn) _uploadBtn.style.display = _mediaOff ? 'none' : '';
-  this._applyReactionLock?.();
-  // Dividers: first one only if both upload and text buttons visible, rest if text is on
-  const _dividers = document.querySelectorAll('.input-actions-box .input-actions-divider');
-  if (_dividers[0]) _dividers[0].style.display = (!_textOff && !_mediaOff) ? '' : 'none';
-  if (_dividers[1]) _dividers[1].style.display = _textOff ? 'none' : '';
-  if (_dividers[2]) _dividers[2].style.display = _textOff ? 'none' : '';
 
   const messagesEl = document.getElementById('messages');
   messagesEl.innerHTML = '';

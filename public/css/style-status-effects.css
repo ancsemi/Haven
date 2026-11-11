@@ -97,8 +97,8 @@
 .schedule-file-remove { border: none; background: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; line-height: 1; padding: 0 0.25rem; }
 .schedule-file-remove:hover { color: var(--danger, #e74c3c); }
 
-/* User preference: no Send button, Enter sends (#5654) */
-[data-hide-send-btn] #send-btn { display: none !important; }
+/* User preference: no Send button, Enter sends (#5654). Keep #send-btn visible when text input is off (#5880). */
+[data-hide-send-btn] #message-input-area:not([data-text-off]) #send-btn { display: none !important; }
 /* One + button in place of the toolbar (#5654). The toolbar itself becomes
    the menu that opens above the +, with each button's title as its label. */
 .btn-composer-plus { display: none; }

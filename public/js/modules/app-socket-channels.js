@@ -128,14 +128,7 @@ _listenChannelsAndMessages() {
     if (this.currentChannel) {
       const curCh = this.channels.find(c => c.code === this.currentChannel);
       if (curCh) {
-        const msgInputArea = document.getElementById('message-input-area');
-        const _textOff = curCh.text_enabled === 0;
-        const _mediaOff = curCh.media_enabled === 0;
-        // Per-channel, same reasoning as the composer gate in app-channels.js (#5468)
-        const _isReadOnly = curCh.read_only === 1 && !this.user?.isAdmin && !curCh.canOverrideReadOnly;
-        if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
-        this._updateReadOnlyNote(curCh);
-        this._applyReactionLock?.();
+        this._updateComposerVisibility?.(curCh);
       }
     }
 

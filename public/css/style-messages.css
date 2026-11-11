@@ -807,6 +807,8 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
 
 .btn-send:hover { background: var(--accent-hover); }
 
+.message-input-area[data-text-off] .btn-send { margin-left: auto; }
+
 /* ── Right Sidebar ─────────────────────────────────────── */
 
 .right-sidebar {
