@@ -19,7 +19,7 @@ function buildDom() {
   const units = marks.map((m, i) => el({ id: m[2], classes: m[1].split(' '), inPanel: m.index > panelAt && m[1] === 'admin-settings', textContent: HTML.slice(m.index, marks[i + 1]?.index ?? HTML.indexOf('/settings-body-admin')).replace(/<[^>]+>/g, ' ') }));
   const adminGroupAt = HTML.indexOf('class="settings-nav-admin-group"');
   const navMarks = [...HTML.slice(0, HTML.indexOf('</nav>', adminGroupAt)).matchAll(/<div class="(settings-nav-item|settings-nav-group-label)[^"]*"(?:[^>]*data-target="([^"]+)")?/g)];
-  const navNodes = navMarks.map(m => el({ classes: [m[1]], target: m[2], admin: m.index > adminGroupAt }));
+  const navNodes = navMarks.map(m => el({ classes: [m[1]], target: m[2], admin: m.index > adminGroupAt, style: {} }));
   navNodes.forEach((n, i) => { n.nextElementSibling = navNodes[i + 1]?.admin === n.admin ? navNodes[i + 1] : null; });
   const bodies = [el({ id: 'settings-body-user' }), el({ id: 'settings-body-admin' })];
   const matchOne = (sel, u) => sel === '.settings-section:not(#admin-mod-panel)' ? u.classList.contains('settings-section') && u.id !== 'admin-mod-panel' : sel === '#admin-mod-panel > .admin-settings' ? u.inPanel : sel === '.settings-section' && u.classList.contains('settings-section');
