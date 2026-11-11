@@ -156,7 +156,10 @@ _restoreRefusedDraft(msg, always = false) {
   const d = this._lastSendDraft;
   const tooLong = typeof msg === 'string' && /^Message too long/.test(msg);
   const sdRefused = typeof msg === 'string' && /self-destructing messages$/.test(msg);
-  if (!d || (!tooLong && !sdRefused && !always)) return;
+  // In a timeout nothing was posted, so the text goes back in the box
+  // instead of being lost along with the notice.
+  const inTimeout = typeof msg === 'string' && /^You are in a timeout/.test(msg);
+  if (!d || (!tooLong && !sdRefused && !inTimeout && !always)) return;
   this._lastSendDraft = null;
   const inputId = d.inputId || 'message-input';
   const open = inputId === 'dm-pip-input' ? this._activeDMPip
