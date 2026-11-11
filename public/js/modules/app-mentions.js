@@ -38,7 +38,7 @@ _mentionsSeenUpTo(next) {
   try {
     if (next !== undefined) localStorage.setItem(SEEN_UPTO_KEY, String(next));
     return Number(localStorage.getItem(SEEN_UPTO_KEY)) || 0;
-  } catch { return next || 0; }
+  } catch { return next || 0; } // private mode: storage is unavailable, count from what this page saw
 },
 _mentionsMerge(channels) {
   const upTo = this._mentionsSeenUpTo();

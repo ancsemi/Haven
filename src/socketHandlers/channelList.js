@@ -149,6 +149,8 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
       if (shared) channelIds.forEach(id => { latestMap[id] = shared.latest.get(id) || 0; });
 
       const mentionQ = withMentions ? unreadMentionsQuery(userId, db.prepare('SELECT username FROM users WHERE id = ?').get(userId)?.username) : null;
+      // Prepared once, not once per unread channel.
+      const mentionStmt = mentionQ ? db.prepare(mentionQ.sql) : null;
       channels.forEach(ch => {
         // A group DM member's count starts where their history does.
         const lastRead = Math.max(readMap[ch.id] || 0, groupHistoryFloor(db, ch, userId));
@@ -173,7 +175,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
         } else {
           ch.unreadCount = 0;
         }
-        if (mentionQ && ch.unreadCount && !ch.is_dm) { const ids = mentionQ.pick(db.prepare(mentionQ.sql).all(...mentionQ.params(ch.id, lastRead))); if (ids.length) ch.unreadMentionIds = ids; }
+        if (mentionQ && ch.unreadCount && !ch.is_dm) { const ids = mentionQ.pick(mentionStmt.all(...mentionQ.params(ch.id, lastRead))); if (ids.length) ch.unreadMentionIds = ids; }
         // A forum's replies are not counted above, so it reports its unread
         // topics separately for the sidebar dot.
         if (ch.is_forum) {
