@@ -968,6 +968,9 @@ _armChannelDeliveryWatch(code) {
   this._channelDeliveryTimer = setTimeout(() => {
     this._channelDeliveryTimer = null;
     if (this._channelDeliverySeen || this.currentChannel !== code) return;
+    // A channel you are no longer in (removed or deleted while you were
+    // offline) never answers, and a reload would not change that.
+    if (!(this.channels || []).some(c => c.code === code)) return;
     // Socket down: the next connect arms this again. Reloading would race
     // socket.io's own reconnect.
     if (!this.socket?.connected) return;

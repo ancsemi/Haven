@@ -4,7 +4,7 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.29.22';
+import SocketMethods   from './modules/app-socket.js?v=4.29.23';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.24';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.30';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
@@ -108,7 +108,7 @@ import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
-import MentionsMethods from './modules/app-mentions.js?v=4.29.10';
+import MentionsMethods from './modules/app-mentions.js?v=4.29.11';
 import SettingsPageMethods from './modules/app-settings-pages.js?v=4.29.20';
 import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.29.12';
 import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';
@@ -389,20 +389,12 @@ class HavenApp {
     // Link policy for decrypted DM content (#5483). Requested once the socket
     // exists, below, since it travels over the authenticated connection.
 
-    // Stable for this tab, including across a reconnect, so the server can
-    // drop the socket this tab just replaced without touching another
-    // device. A new tab gets its own id. (#5875)
-    let tabId;
-    try {
-      const key = 'haven_tab_id';
-      tabId = sessionStorage.getItem(key);
-      if (!/^[A-Za-z0-9_-]{8,64}$/.test(tabId || '')) {
-        const bytes = new Uint8Array(16);
-        crypto.getRandomValues(bytes);
-        tabId = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-        sessionStorage.setItem(key, tabId);
-      }
-    } catch { tabId = undefined; }
+    // One id for this page, the same across its reconnects, so the server
+    // can drop the socket this page just replaced without touching another
+    // tab or device (#5875). It is kept in memory only: a duplicated tab
+    // copies sessionStorage, and two tabs sharing an id would keep closing
+    // each other's connection.
+    const tabId = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 
     this.socket = io({
       // presenceDeltas: this client merges member-list changes
