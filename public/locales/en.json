@@ -797,6 +797,12 @@
     "unmute_dm": "Unmute DM",
     "dm_muted": "DM muted",
     "dm_unmuted": "DM unmuted",
+    "pin_dm": "Pin to top",
+    "unpin_dm": "Unpin",
+    "dm_pinned": "DM pinned to the top",
+    "dm_unpinned": "DM unpinned",
+    "dm_pinned_mark": "Pinned",
+    "dm_pin_limit": "You can pin up to {{count}} DMs",
     "dm_delete_confirm": "Delete this DM?\nAll messages will be permanently deleted for both users.",
     "no_sub_channels": "No sub-channels on this server.",
     "subscribed": "Subscribed",
@@ -4006,7 +4012,16 @@
       "pick_in_channel_title": "Go to #{{name}} and pick a message to put them under",
       "pick_base": "{{n}} selected: pick a message in #{{name}} to put them under",
       "select": "Select",
-      "deselect": "Deselect"
+      "deselect": "Deselect",
+      "unthread_desc_one": "Take {{n}} reply out of this thread:",
+      "unthread_desc_many": "Take {{n}} replies out of this thread:",
+      "unthread_back": "Back to #{{name}}",
+      "unthread_hint": "They become normal messages in the channel, in the order they were written, and keep their authors, times, reactions and pins.",
+      "unthreaded_one": "Moved {{n}} reply back to #{{name}}",
+      "unthreaded_many": "Moved {{n}} replies back to #{{name}}",
+      "unthread_mixed": "Messages in the channel and replies in a thread are moved separately. Deselect the others first.",
+      "unthread_failed": "Could not move the replies",
+      "select_replies": "Select replies to move"
     },
     "hidden_channels": {
       "title": "Hidden Channels",
@@ -4049,6 +4064,7 @@
         "badge_revoke": "took a badge back from",
         "messages_move": "moved messages to",
         "messages_move_to_thread": "moved messages into a thread in",
+        "messages_move_out_of_thread": "moved messages out of a thread in",
         "message_nsfw_on": "marked a message NSFW in",
         "message_nsfw_off": "took the NSFW mark off a message in",
         "admin_password_reset": "reset the password of",
@@ -4600,6 +4616,7 @@
     "all_emojis_title": "All emojis",
     "customize_quick_title": "Customize Quick Reactions",
     "customize_quick_hint": "Click a slot, then pick an emoji to replace it.",
+    "favorites_hint": "Right-click an emoji, or press and hold it, to keep it here. On the keyboard, press Alt+Enter.",
     "skin_tone": "Skin tone",
     "skin_tones": {
       "default": "Default",
@@ -4622,7 +4639,8 @@
       "symbols": "Symbols",
       "platforms": "Platforms",
       "flags": "Flags",
-      "custom": "Custom"
+      "custom": "Custom",
+      "favorites": "Favorites"
     }
   },
   "gifs": {
@@ -4842,7 +4860,9 @@
     "pick_one_only": "Pick one",
     "pick_up_to": "Pick up to {{count}}",
     "join": "Get the {{name}} role",
-    "leave": "Drop the {{name}} role"
+    "leave": "Drop the {{name}} role",
+    "picked_by": "Picked by: {{names}}",
+    "picked_by_more": "Picked by: {{names}} and {{count}} more"
   },
   "forum": {
     "new_post": "New Post",

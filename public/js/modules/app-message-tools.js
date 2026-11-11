@@ -228,6 +228,7 @@ _exitMoveSelectionMode() {
   this._moveSelectedIds.clear();
   this._lastMoveSelectedEl = null;
   this._moveSourceChannel = null;
+  this._moveSourceThread = null;
   this._watchMoveSelection?.(false);
   this._endMoveThreadPick?.();
   document.body.classList.remove('move-selection-mode');
@@ -240,6 +241,8 @@ _toggleMoveSelect(msgEl) {
   if (!this._moveSelectionActive) return;
   const id = parseInt(msgEl.dataset.msgId);
   if (!id) return;
+  // Channel messages or replies in one thread (app-unthread.js).
+  if (this._moveScopeAllows && !this._moveScopeAllows(msgEl)) return;
   if (this._moveSelectedIds.has(id)) {
     this._moveSelectedIds.delete(id);
     msgEl.classList.remove('move-selected');
@@ -267,6 +270,8 @@ _updateMoveCount() {
 
 _showMoveChannelPicker() {
   if (this._moveSelectedIds.size === 0) return;
+  // Replies picked in a thread go back to its channel (app-unthread.js).
+  if (this._moveSourceThread && this._showUnthreadPicker) return this._showUnthreadPicker();
   const list = document.getElementById('move-msg-channel-list');
   const modal = document.getElementById('move-msg-modal');
   const desc = document.getElementById('move-msg-desc');

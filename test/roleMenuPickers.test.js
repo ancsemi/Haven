@@ -1,0 +1,84 @@
+'use strict';
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const test = require('node:test');
+const Database = require('better-sqlite3');
+const { pathToFileURL } = require('node:url');
+const { createHarness } = require('./socketServerHarness');
+const load = async (name) => (await import(pathToFileURL(path.join(__dirname, '..', 'public', 'js', 'modules', name)).href)).default;
+let app;
+let buttons = [];
+const roles = [{ id: 1, name: 'Gamer', color: '#f00', emoji: '🎮' }, { id: 2, name: 'Artist', color: '#0f0', emoji: '🎨' }];
+const pickers = { 1: { names: ['ann', 'bob'], total: 2 }, 2: { names: ['cy'], total: 1 } };
+const titleOf = (html, roleId) => new RegExp(`data-role-id="${roleId}"[^>]*title="([^"]*)"`).exec(html)[1];
+const fakeButton = (msgId, roleId, held) => ({ dataset: { msgId: String(msgId), roleId: String(roleId) }, classList: { contains: () => held, toggle() {} }, querySelector: () => null, title: '' });
+test.before(async () => {
+  globalThis.t = (key, p) => key + (p ? ' ' + Object.values(p).join('|') : '');
+  globalThis.document = { querySelectorAll: () => buttons };
+  app = { ...(await load('app-role-tools.js')), _escapeHtml: (s) => String(s), _safeColor: (c) => c, _roleFill: (r, c) => c, _emojiGlyphHtml: (e) => e };
+});
+test.beforeEach(() => { app._roleMenus = new Map(); buttons = []; });
+test('a role button lists the people who picked that role', () => {
+  const html = app._renderRoleMenu(7, { roles, held: [2], pickers });
+  assert.match(titleOf(html, 1), /role_menu\.join Gamer\nrole_menu\.picked_by ann, bob/);
+  assert.match(titleOf(html, 2), /role_menu\.leave Artist\nrole_menu\.picked_by cy/);
+});
+test('a long list says how many more there are', () => {
+  const html = app._renderRoleMenu(7, { roles, held: [], pickers: { 1: { names: ['ann', 'bob'], total: 9 } } });
+  assert.match(titleOf(html, 1), /role_menu\.picked_by_more ann, bob\|7/);
+});
+test('a role nobody picked keeps the plain Get/Drop title', () => {
+  assert.doesNotMatch(app._renderRoleMenu(7, { roles, held: [], pickers: { 1: { names: [], total: 0 } } }), /picked_by/);
+  assert.doesNotMatch(app._renderRoleMenu(8, { roles, held: [] }), /picked_by/);
+});
+test('a live update of the pickers rewrites the button titles', () => {
+  app._renderRoleMenu(7, { roles, held: [2], pickers: {} });
+  buttons = [fakeButton(7, 1, false), fakeButton(7, 2, true)];
+  app._refreshRoleMenuPickers(7, pickers);
+  assert.match(buttons[0].title, /ann, bob/);
+  assert.match(buttons[1].title, /role_menu\.leave Artist\nrole_menu\.picked_by cy/);
+  app._refreshRoleMenuPickers(7, { 1: { names: [], total: 0 }, 2: { names: [], total: 0 } });
+  assert.doesNotMatch(buttons[0].title + buttons[1].title, /picked_by/);
+});
+test('taking or dropping your own role keeps the picker names', () => {
+  app._renderRoleMenu(7, { roles, held: [], pickers });
+  buttons = [fakeButton(7, 1, false)];
+  app._markSelfRole(1, true);
+  assert.match(buttons[0].title, /role_menu\.leave Gamer\nrole_menu\.picked_by ann, bob/);
+});
+const h = createHarness(3593, 'role-menu-pickers');
+test.before(() => h.start());
+test.after(() => h.stop());
+test('the server lists who holds each role the menu hands out, live and on load', async (t) => {
+  const admin = await h.register('admin');
+  const bob = await h.register('bob');
+  const A = await h.connect(admin.token);
+  const B = await h.connect(bob.token);
+  const db = new Database(path.join(h.dataDir, 'haven.db'));
+  t.after(() => { db.close(); A.disconnect(); B.disconnect(); });
+  const fire = (await h.ask(A, 'create-role', { name: 'Fire', level: 2, permissions: [] })).roleId;
+  const water = (await h.ask(A, 'create-role', { name: 'Water', level: 2, permissions: [] })).roleId;
+  A.emit('create-channel', { name: 'roles' });
+  const ch = (await h.next(A, 'channels-list', (l) => l.some(c => c.name === 'roles'))).find(c => c.name === 'roles');
+  A.emit('join-channel', { code: ch.code });
+  B.emit('join-channel', { code: ch.code });
+  await h.next(B, 'channel-joined', (c) => c.code === ch.code);
+  const menu = await h.ask(A, 'create-role-menu', { code: ch.code, title: 'Elements', roles: [{ roleId: fire, emoji: '🔥' }, { roleId: water, emoji: '💧' }] });
+  assert.ok(menu.success, JSON.stringify(menu));
+  const live = h.next(A, 'role-menu-pickers', (d) => d.messageId === menu.messageId && d.pickers[fire].total === 1);
+  assert.ok((await h.ask(B, 'toggle-self-role', { messageId: menu.messageId, roleId: fire })).success);
+  const got = await live;
+  assert.deepEqual(got.pickers[fire], { names: ['bob'], total: 1 }, 'the picker is named, the poster who only seeded the chip is not');
+  assert.deepEqual(got.pickers[water], { names: [], total: 0 });
+  const viaReaction = h.next(A, 'role-menu-pickers', (d) => d.messageId === menu.messageId && d.pickers[water].total === 1);
+  B.emit('add-reaction', { messageId: menu.messageId, emoji: '💧' });
+  assert.deepEqual((await viaReaction).pickers[water].names, ['bob'], 'a reaction counts as a pick too');
+  const dropped = h.next(A, 'role-menu-pickers', (d) => d.messageId === menu.messageId && d.pickers[fire].total === 0);
+  await h.ask(B, 'toggle-self-role', { messageId: menu.messageId, roleId: fire, held: false });
+  assert.deepEqual((await dropped).pickers[fire], { names: [], total: 0 });
+  db.prepare('DELETE FROM user_roles WHERE user_id = ? AND role_id = ?').run(bob.id, water);
+  const history = h.next(A, 'message-history', (d) => d.channelCode === ch.code);
+  A.emit('get-messages', { code: ch.code });
+  const withMenu = (await history).messages.find(m => m.roleMenu);
+  assert.deepEqual(withMenu.roleMenu.pickers[water], { names: [], total: 0 }, 'a reaction left behind by a role someone no longer holds is not listed');
+});

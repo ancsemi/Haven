@@ -296,6 +296,7 @@ _setupDmDragDrop() {
     localStorage.setItem('haven_dm_sort_mode', 'manual');
     dragSrc.classList.remove('ch-dragging');
     dragSrc = null;
+    this._syncDmPinOrder?.(newOrder);
   });
 
   dmList.addEventListener('dragend', cleanUp);

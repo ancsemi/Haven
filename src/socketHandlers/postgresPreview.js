@@ -11,6 +11,7 @@ const { parseBorderTransform, utcStamp } = require('./helpers');
 const { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS } = require('./settingEffects');
 const { compatibleThemeFiles, validatedThemeDefault, themePreferenceAllowed } = require('../themeMetadata');
 const { cleanChannelOrder } = require('./users');
+const { cleanEmojiFavorites } = require('../builtinEmojis');
 const createEncryptionKeyReads = require('../db/encryptionKeys');
 const createReadPositions = require('../db/readPositions');
 const THEMES_DIR = path.join(__dirname, '..', '..', 'themes');
@@ -134,13 +135,14 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     });
     on('set-preference', async data => {
       const allowed = ['theme','hide_score_badge','hide_nsfw','effects','share_activity','share_game_activity','share_music_activity',
-        'promo_seen_desktop','promo_seen_android','recovery_notice_seen','android_banner_seen','timezone','time_format','channel_order','server_mute','muted_users','media_group_layout'];
+        'promo_seen_desktop','promo_seen_android','recovery_notice_seen','android_banner_seen','timezone','time_format','channel_order','server_mute','muted_users','media_group_layout','emoji_favorites'];
       const key = typeof data?.key === 'string' ? data.key.trim() : '';
       const value = typeof data?.value === 'string' ? data.value.trim() : '';
-      const max = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : key === 'theme' ? 200 : 50;
+      const max = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : key === 'emoji_favorites' ? 1700 : key === 'theme' ? 200 : 50;
       if (!allowed.includes(key) || !value || value.length > max) return;
       let stored = value;
       if (key === 'channel_order') { stored = cleanChannelOrder(value); if (!stored) return; }
+      if (key === 'emoji_favorites') { stored = cleanEmojiFavorites(value); if (!stored) return; }
       if (key === 'server_mute' && !['all','mentions'].includes(value)) return;
       if (key === 'media_group_layout' && !['grid','stacked'].includes(value)) return;
       if (key === 'theme' && value.startsWith('file:')) {

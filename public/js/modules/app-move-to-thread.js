@@ -103,6 +103,8 @@ _moveThreadPickingHere() {
 
 _moveThreadUsable(row) {
   if (!this._moveSelectionActive || !this._moveSelectedIds.size || !row) return false;
+  // Replies picked in a thread only go back to its channel (app-unthread.js).
+  if (this._moveSourceThread) return false;
   const id = parseInt(row.dataset.msgId, 10);
   return !!id && !this._moveSelectedIds.has(id);
 },
@@ -173,14 +175,15 @@ _watchMoveSelection(on) {
     return;
   }
   const box = document.getElementById('messages');
+  const thread = document.getElementById('thread-messages');
   if (this._moveSelObserver || !box || typeof MutationObserver === 'undefined') return;
   this._moveSelObserver = new MutationObserver((records) => {
     if (!this._moveSelectionActive || !this._moveSelectedIds.size) return;
     for (const rec of records) {
       for (const node of rec.addedNodes) {
         if (node.nodeType !== 1 || node === this._moveThreadBtn) continue;
-        const rows = node.matches('.message, .message-compact, .forum-topic') ? [node]
-          : [...node.querySelectorAll('.message, .message-compact, .forum-topic')];
+        const rows = node.matches('.message, .message-compact, .forum-topic, .thread-message') ? [node]
+          : [...node.querySelectorAll('.message, .message-compact, .forum-topic, .thread-message')];
         for (const row of rows) {
           if (this._moveSelectedIds.has(parseInt(row.dataset.msgId, 10))) row.classList.add('move-selected');
         }
@@ -188,6 +191,8 @@ _watchMoveSelection(on) {
     }
   });
   this._moveSelObserver.observe(box, { childList: true, subtree: true });
+  // The thread panel too, for replies picked there (app-unthread.js).
+  if (thread) this._moveSelObserver.observe(thread, { childList: true, subtree: true });
 },
 
 async _moveSelectedIntoThread(row) {

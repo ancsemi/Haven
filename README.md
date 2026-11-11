@@ -34,6 +34,12 @@ channel, share the code. The certificate warning on first load is expected, clic
 
 [One-click cloud deploy on Zeabur](https://zeabur.com/templates?repoURL=https://github.com/ancsemi/Haven) · [on RepoCloud](https://repocloud.io/details/Haven/) · [Full setup guide](GUIDE.md)
 
+**What does it need?** About 100 MB of memory and almost no processor time for a group of
+friends. In testing, 1,000 people online at once in a very busy channel used about an eighth
+of one desktop processor core. The measured numbers, and a
+one-command benchmark to check them on your own machine, are in
+[How much hardware does Haven need?](docs/hardware.md)
+
 **Prefer video?** Short [video tutorials](https://haven-app.com/tutorials.html) walk through installing and running a
 server. They are also on [YouTube](https://www.youtube.com/@Haven-App_Tutorials) and [Rumble](https://rumble.com/user/HavenApp).
 

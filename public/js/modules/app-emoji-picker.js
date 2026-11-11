@@ -70,6 +70,34 @@ _toneEmoji(emoji) {
   return this._applySkinTone(emoji, this._getEmojiSkinTone());
 },
 
+_getEmojiFavorites() {
+  // A malformed stored list reads as no favorites; the server cleans what it saves.
+  try { const list = JSON.parse(this._userPrefs?.emoji_favorites || '[]'); return Array.isArray(list) ? list : []; } catch { return []; }
+},
+_toggleEmojiFavorite(emoji) {
+  if (!this._prefsReceived) return;
+  const list = this._getEmojiFavorites();
+  const next = list.includes(emoji) ? list.filter(e => e !== emoji) : [emoji, ...list].slice(0, 40);
+  this._userPrefs = { ...this._userPrefs, emoji_favorites: JSON.stringify(next) };
+  this.socket?.emit('set-preference', { key: 'emoji_favorites', value: this._userPrefs.emoji_favorites });
+},
+_bindEmojiFavorite(btn, emoji, onChange) {
+  let timer = null, held = false;
+  // Kept on the app, not the button: a toggle rebuilds the grid, so a late
+  // contextmenu from the same long press lands on a new button and would
+  // flip the favorite straight back.
+  const toggle = () => {
+    const now = Date.now(), last = this._emojiFavLast;
+    if (last && last.emoji === emoji && now - last.at < 1000) return;
+    this._emojiFavLast = { emoji, at: now };
+    this._toggleEmojiFavorite(emoji);
+    onChange();
+  };
+  btn.addEventListener('contextmenu', (e) => { e.preventDefault(); toggle(); });
+  btn.addEventListener('touchstart', () => { held = false; timer = setTimeout(() => { held = true; toggle(); }, 500); }, { passive: true });
+  btn.addEventListener('touchend', (e) => { clearTimeout(timer); if (held && e.cancelable) e.preventDefault(); });
+  ['touchmove', 'touchcancel'].forEach(ev => btn.addEventListener(ev, () => clearTimeout(timer), { passive: true }));
+},
 // Where a picked emoji (or a formatting insert) goes: the box being edited,
 // or the thread / DM PiP box whose button opened the picker, else the main
 // message box. A target that has left the page or is hidden (a closed thread
@@ -283,7 +311,7 @@ _toggleEmojiPicker(anchorEl) {
 
   // Build combined categories, custom first so they sit front and centre,
   // then the standard sets.
-  const allCategories = {};
+  const allCategories = { Favorites: [] };
   const hasCustom = this.customEmojis && this.customEmojis.length > 0;
   if (hasCustom) {
     allCategories['Custom'] = this.customEmojis.map(e => `:${e.name}:`);
@@ -295,7 +323,7 @@ _toggleEmojiPicker(anchorEl) {
   // swapping it out, so every category is reachable by scrolling too.
   const tabRow = document.createElement('div');
   tabRow.className = 'emoji-tab-row';
-  const catIcons = { 'Smileys':'😀', 'People':'👋', 'Animals':'🐶', 'Food':'🍕', 'Activities':'🎮', 'Travel':'🚀', 'Objects':'💡', 'Symbols':'❤️', 'Platforms':'💻', 'Flags':'🚩', 'Custom':'⭐' };
+  const catIcons = { 'Smileys':'😀', 'People':'👋', 'Animals':'🐶', 'Food':'🍕', 'Activities':'🎮', 'Travel':'🚀', 'Objects':'💡', 'Symbols':'❤️', 'Platforms':'💻', 'Flags':'🚩', 'Custom':'⭐', 'Favorites':'🌟' };
   const catTabs = {};
   const catSections = {}; // cat -> non-sticky section wrapper, our stable scroll anchor
   const setActiveTab = (cat) => {
@@ -353,6 +381,9 @@ _toggleEmojiPicker(anchorEl) {
       const names = self.emojiNames && self.emojiNames[emoji];
       btn.title = names ? names.split(/\s+/)[0] : emoji;
     }
+    btn.dataset.emoji = emoji;
+    btn.classList.toggle('emoji-fav', self._getEmojiFavorites().includes(emoji));
+    self._bindEmojiFavorite(btn, emoji, refreshFavorites);
     btn.addEventListener('click', () => {
       const input = self._emojiInsertTarget();
       if (!input) return;
@@ -365,6 +396,29 @@ _toggleEmojiPicker(anchorEl) {
     parent.appendChild(btn);
   }
 
+  function favoriteList() {
+    return self._getEmojiFavorites().filter(e => !/^:[^:]+:$/.test(e) || self._findNamedEmoji(e.slice(1, -1)));
+  }
+  function refreshFavorites() {
+    const q = searchInput.value.trim() || null;
+    const top = grid.scrollTop;
+    const before = catSections.Favorites?.offsetHeight || 0;
+    // The keyboard highlight stays on the emoji it was on (Alt+Enter), not
+    // the first one, or the next Enter would insert a favorite instead.
+    const active = grid.querySelector('.emoji-item.kb-active');
+    const activeEmoji = active?.dataset.emoji;
+    const fromFavorites = !!active?.closest('.emoji-cat') && active.closest('.emoji-cat') === catSections.Favorites;
+    renderGrid(q);
+    grid.scrollTop = top + (q ? 0 : (catSections.Favorites?.offsetHeight || 0) - before);
+    if (activeEmoji) {
+      const same = [...grid.querySelectorAll('.emoji-item')].filter(el => el.dataset.emoji === activeEmoji);
+      const keep = (fromFavorites ? same[0] : same.find(el => el.closest('.emoji-cat') !== catSections.Favorites)) || same[0];
+      if (keep) {
+        grid.querySelectorAll('.emoji-item.kb-active').forEach(el => el.classList.remove('kb-active'));
+        keep.classList.add('kb-active');
+      }
+    }
+  }
   // Keyboard nav: highlight the first emoji so arrow keys + Enter work the
   // moment the picker opens (Discord-style). Re-run after every grid render.
   // Pass a section to highlight the first emoji within it (e.g. after a
@@ -420,9 +474,11 @@ _toggleEmojiPicker(anchorEl) {
       header.className = 'emoji-cat-header';
       header.textContent = t(`emoji.categories.${cat.toLowerCase()}`) || cat;
       section.appendChild(header);
-      const catGrid = document.createElement('div');
-      catGrid.className = 'emoji-cat-grid';
-      list.forEach(e => appendEmojiButton(catGrid, e));
+      const items = cat === 'Favorites' ? favoriteList() : list;
+      const catGrid = document.createElement(items.length ? 'div' : 'p');
+      catGrid.className = items.length ? 'emoji-cat-grid' : 'emoji-fav-hint muted-text';
+      if (!items.length) catGrid.textContent = t('emoji.favorites_hint');
+      items.forEach(e => appendEmojiButton(catGrid, e));
       section.appendChild(catGrid);
       grid.appendChild(section);
       catSections[cat] = section;
@@ -478,6 +534,9 @@ _toggleEmojiPicker(anchorEl) {
         if (e.key === 'ArrowRight') setActive(items[Math.min(idx + 1, items.length - 1)]);
         else if (e.key === 'ArrowLeft') setActive(items[Math.max(idx - 1, 0)]);
         else setActive(this._emojiGridVerticalNav(items, idx, e.key === 'ArrowDown' ? 1 : -1));
+      } else if (e.key === 'Enter' && e.altKey && active) {
+        e.preventDefault();
+        active.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
       } else if (e.key === 'Enter' && active) {
         e.preventDefault();
         active.click(); // insert the selected emoji (same as clicking it)
@@ -809,21 +868,13 @@ _showReactionPicker(msgEl, msgId) {
   // Toggle: if this message already has a picker open, close it and bail
   const existingPicker = msgEl.querySelector('.reaction-picker');
   if (existingPicker) {
-    existingPicker.remove();
-    msgEl.classList.remove('showing-picker');
-    document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
-    document.querySelectorAll('.quick-emoji-editor').forEach(el => el.remove());
-    this._detachReactionPickerClose();
+    this._closeReactionPickers();
     return;
   }
 
-  // Clean up previous close-on-click-outside handler so it can't
-  // interfere with the new picker (e.g. removing showing-picker class).
-  this._detachReactionPickerClose();
-  document.querySelectorAll('.showing-picker').forEach(el => el.classList.remove('showing-picker'));
-  document.querySelectorAll('.reaction-picker').forEach(el => el.remove());
-  document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
-  document.querySelectorAll('.quick-emoji-editor').forEach(el => el.remove());
+  // One reaction picker at a time: whatever was open goes, with its
+  // close-on-click-outside handler.
+  this._closeReactionPickers();
 
   // Disable content-visibility containment so the picker isn't clipped
   msgEl.classList.add('showing-picker');
@@ -852,9 +903,9 @@ _showReactionPicker(msgEl, msgId) {
     }
     btn.addEventListener('click', () => {
       this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
-      picker.remove();
-      msgEl.classList.remove('showing-picker');
-      this._detachReactionPickerClose();
+      // Everything goes, not only this row: the full panel opened from its
+      // "..." used to stay behind with nothing left to close it.
+      this._closeReactionPickers();
     });
     picker.appendChild(btn);
   });
@@ -931,10 +982,7 @@ _showReactionPicker(msgEl, msgId) {
                (msgEl.contains(e.target) && e.target.closest('[data-action="react"]'))) {
       return;
     }
-    picker.remove();
-    msgEl.classList.remove('showing-picker');
-    document.querySelectorAll('.reaction-full-picker').forEach(el => el.remove());
-    this._detachReactionPickerClose();
+    this._closeReactionPickers();
   };
   this._reactionPickerClose = close;
   setTimeout(() => {
@@ -942,6 +990,16 @@ _showReactionPicker(msgEl, msgId) {
     document.addEventListener('click', close, true);
     document.addEventListener('keydown', close, true);
   }, 0);
+},
+
+// Close every reaction picker: the quick row on a message, the full panel
+// and the quick-row editor (both live on <body>), and the listener that
+// closes them on an outside click. Also called when the view they were
+// opened in goes away (a thread or pop-out DM closing, a channel switch).
+_closeReactionPickers() {
+  document.querySelectorAll('.reaction-picker, .reaction-full-picker, .quick-emoji-editor').forEach(el => el.remove());
+  document.querySelectorAll('.showing-picker').forEach(el => el.classList.remove('showing-picker'));
+  this._detachReactionPickerClose();
 },
 
 _detachReactionPickerClose() {
@@ -973,69 +1031,48 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
   const grid = document.createElement('div');
   grid.className = 'reaction-full-grid';
 
+  const emojiBtn = (emoji) => {
+    const btn = document.createElement('button');
+    btn.className = 'reaction-full-btn';
+    const named = this._findNamedEmoji((typeof emoji === 'string' && (emoji.match(/^:([a-zA-Z0-9_-]+):$/) || [])[1]) || '');
+    const value = this._toneEmoji(emoji); // custom emoji pass through unchanged
+    if (named) { btn.innerHTML = `<img src="${this._escapeHtml(named.url)}" alt="${this._escapeHtml(emoji)}" title="${this._escapeHtml(emoji)}" class="custom-emoji">`; }
+    else { btn.textContent = value; btn.title = this.emojiNames[emoji] || ''; }
+    btn.classList.toggle('emoji-fav', this._getEmojiFavorites().includes(emoji));
+    this._bindEmojiFavorite(btn, emoji, () => { const top = grid.scrollTop; renderAll(searchInput.value.trim()); grid.scrollTop = top; });
+    btn.addEventListener('click', () => {
+      this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
+      this._closeReactionPickers();
+    });
+    return btn;
+  };
+  const addSection = (label, emojis) => {
+    const heading = document.createElement('div');
+    heading.className = 'reaction-full-category';
+    heading.textContent = label;
+    grid.appendChild(heading);
+    const row = document.createElement('div');
+    row.className = 'reaction-full-row';
+    emojis.forEach(emoji => row.appendChild(emojiBtn(emoji)));
+    grid.appendChild(row);
+  };
+
   const renderAll = (filter) => {
     grid.innerHTML = '';
     const lowerFilter = filter ? filter.toLowerCase() : '';
+    const favorites = lowerFilter ? [] : this._getEmojiFavorites().filter(e => !/^:[^:]+:$/.test(e) || this._findNamedEmoji(e.slice(1, -1)));
+    if (favorites.length) addSection(t('emoji.categories.favorites'), favorites);
     for (const [category, emojis] of Object.entries(this.emojiCategories)) {
       const matching = lowerFilter
         ? emojis.filter(e => this._emojiSearchScore(e, filter) >= 0 || category.toLowerCase().includes(lowerFilter))
         : emojis;
-      if (matching.length === 0) continue;
-
-      const label = document.createElement('div');
-      label.className = 'reaction-full-category';
-      label.textContent = t(`emoji.categories.${category.toLowerCase()}`) || category;
-      grid.appendChild(label);
-
-      const row = document.createElement('div');
-      row.className = 'reaction-full-row';
-      matching.forEach(emoji => {
-        const btn = document.createElement('button');
-        btn.className = 'reaction-full-btn';
-        const named = this._findNamedEmoji((typeof emoji === 'string' && (emoji.match(/^:([a-zA-Z0-9_-]+):$/) || [])[1]) || '');
-        const value = this._toneEmoji(emoji); // custom emoji pass through unchanged
-        if (named) { btn.innerHTML = `<img src="${this._escapeHtml(named.url)}" alt="${this._escapeHtml(emoji)}" title="${this._escapeHtml(emoji)}" class="custom-emoji">`; }
-        else { btn.textContent = value; btn.title = this.emojiNames[emoji] || ''; }
-        btn.addEventListener('click', () => {
-          this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
-          panel.remove();
-          quickPicker.remove();
-          msgEl.classList.remove('showing-picker');
-          this._detachReactionPickerClose();
-        });
-        row.appendChild(btn);
-      });
-      grid.appendChild(row);
+      if (matching.length) addSection(t(`emoji.categories.${category.toLowerCase()}`) || category, matching);
     }
-
-    // Custom emojis section
     if (this.customEmojis && this.customEmojis.length > 0) {
       const customMatching = lowerFilter
         ? this.customEmojis.filter(e => e.name.toLowerCase().includes(lowerFilter) || 'custom'.includes(lowerFilter))
         : this.customEmojis;
-      if (customMatching.length > 0) {
-        const label = document.createElement('div');
-        label.className = 'reaction-full-category';
-        label.textContent = t('emoji.categories.custom');
-        grid.appendChild(label);
-
-        const row = document.createElement('div');
-        row.className = 'reaction-full-row';
-        customMatching.forEach(ce => {
-          const btn = document.createElement('button');
-          btn.className = 'reaction-full-btn';
-          btn.innerHTML = `<img src="${this._escapeHtml(ce.url)}" alt=":${this._escapeHtml(ce.name)}:" title=":${this._escapeHtml(ce.name)}:" class="custom-emoji">`;
-          btn.addEventListener('click', () => {
-            this.socket.emit('add-reaction', { messageId: msgId, emoji: `:${ce.name}:` });
-            panel.remove();
-            quickPicker.remove();
-            msgEl.classList.remove('showing-picker');
-            this._detachReactionPickerClose();
-          });
-          row.appendChild(btn);
-        });
-        grid.appendChild(row);
-      }
+      if (customMatching.length > 0) addSection(t('emoji.categories.custom'), customMatching.map(ce => `:${ce.name}:`));
     }
   };
 

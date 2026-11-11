@@ -192,6 +192,7 @@ _listenChannelsAndMessages() {
     if (!data) return;
     this._markSelfRole(data.roleId, !!data.held);
   });
+  this.socket.on('role-menu-pickers', (data) => data && this._refreshRoleMenuPickers(data.messageId, data.pickers));
 
   // A role menu was edited: swap in the new buttons wherever that message is
   // on screen. The click handling is delegated, so fresh HTML just works (#5644).

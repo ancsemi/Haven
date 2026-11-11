@@ -1081,6 +1081,11 @@ _renderChannels() {
       sortedDms = [...dmChannels];
     }
 
+    // Pinned DMs sit above everything else, whatever the sort or tags, and
+    // the rest keep their order (app-dm-pins.js).
+    const { pinned: pinnedDms, rest: unpinnedDms } = this._splitPinnedDms(sortedDms);
+    sortedDms = unpinnedDms;
+
     // Collect active tag names from assigned DMs
     const activeTags = [...new Set(sortedDms.map(c => dmAssignments[c.code]).filter(Boolean))].sort();
     const hasDmTags = activeTags.length > 0;
@@ -1094,6 +1099,14 @@ _renderChannels() {
         <span class="channel-hash">${ch.is_group ? '👥' : '@'}</span>
         <span class="channel-name">${this._escapeHtml(dmName)}</span>
       `;
+      if (pinnedDms.includes(ch)) {
+        el.classList.add('dm-pinned');
+        const pin = document.createElement('span');
+        pin.className = 'dm-pin-mark';
+        pin.textContent = '📌';
+        pin.title = t('channels.dm_pinned_mark');
+        el.appendChild(pin);
+      }
       const count = (ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0);
       if (count > 0) {
         const bdg = document.createElement('span');
@@ -1145,6 +1158,8 @@ _renderChannels() {
       });
       return el;
     };
+
+    pinnedDms.forEach(ch => dmList.appendChild(renderDmItem(ch)));
 
     if (hasDmTags) {
       // Render by category groups

@@ -654,6 +654,8 @@ _openDMPiPBody(ch, code, panel) {
 
 _closeDMPiP() {
   this._activeDMPip = null;
+  // A reaction picker opened on one of its messages floats on <body>.
+  this._closeReactionPickers?.();
   this._dmPipReplyingTo = null;
   this._pipImageQueue = [];
   this._pipImageQueueTarget = null;
