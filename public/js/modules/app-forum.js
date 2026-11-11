@@ -918,9 +918,12 @@ _setupSettingsSearch() {
   const apply = () => {
     const q = input.value.trim().toLowerCase();
     modal.querySelectorAll('.settings-section:not(#admin-mod-panel), #admin-mod-panel > .admin-settings').forEach(sec => {
-      const hit = !q || sec.textContent.toLowerCase().includes(q);
-      sec.classList.toggle('settings-search-hidden', !hit);
       const navItem = sec.id ? nav.querySelector(`.settings-nav-item[data-target="${sec.id}"]`) : null;
+      // A section this person cannot use (desktop-only in a browser, for
+      // one) is not a result: search used to show it with dead buttons.
+      const usable = !q || !navItem || navItem.style.display !== 'none';
+      const hit = usable && (!q || sec.textContent.toLowerCase().includes(q));
+      sec.classList.toggle('settings-search-hidden', !hit);
       if (navItem) navItem.classList.toggle('settings-search-hidden', !hit);
     });
     nav.querySelectorAll('.settings-nav-group-label').forEach(label => {

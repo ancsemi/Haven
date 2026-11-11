@@ -7,7 +7,9 @@ const SETTINGS_PAGES = {
     ['security', '🔒', 'settings.pages.security', 'Account & security', ['section-password', 'section-e2e-passphrase', 'section-2fa', 'section-recovery', 'section-sessions', 'section-delete-account']],
     ['language', '🗣️', 'settings.pages.language', 'Language', ['section-language']],
     ['access', '♿', 'settings.pages.access', 'Accessibility', ['section-zoom']],
-    ['advanced', '🧩', 'settings.pages.advanced', 'Plugins & advanced', ['section-plugins', 'section-desktop-shortcuts', 'section-desktop-app', 'section-debug']]
+    // Only in Haven Desktop: both sections are hidden in a browser, and a page with nothing in it is not listed.
+    ['desktop', '🖥️', 'settings.pages.desktop', 'Shortcuts & desktop app', ['section-desktop-shortcuts', 'section-desktop-app']],
+    ['advanced', '🧩', 'settings.pages.advanced', 'Plugins & advanced', ['section-plugins', 'section-debug']]
   ],
   admin: [
     ['server', '🏠', 'settings.pages.server', 'Server', ['section-branding', 'section-channel-types', 'section-custom-tos', 'section-presence', 'section-update', 'section-extension-updates']],
