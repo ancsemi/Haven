@@ -521,13 +521,22 @@ _renderChannels() {
       arr.sort((a, b) => sortByMode(a, b, globalSortMode));
     }
 
-    // Secondary sort: subscribed (not muted) sub-channels appear before unsubscribed (muted)
-    const _subMuted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-    arr.sort((a, b) => {
-      const aMuted = _subMuted.includes(a.code) ? 1 : 0;
-      const bMuted = _subMuted.includes(b.code) ? 1 : 0;
-      return aMuted - bMuted; // stable sort preserves original order within same group
-    });
+    // Muted (unsubscribed) sub-channels go after the others, but inside
+    // their own category. Sinking them to the bottom of the whole list took
+    // them out of their category, which then showed twice: once for its
+    // channels and again further down for its muted ones.
+    const _subMuted = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+    const byCategory = new Map();
+    for (const c of arr) {
+      const key = (c.category || '').toLowerCase();
+      if (!byCategory.has(key)) byCategory.set(key, []);
+      byCategory.get(key).push(c);
+    }
+    const regrouped = [];
+    for (const group of byCategory.values()) {
+      regrouped.push(...group.filter(c => !_subMuted.has(c.code)), ...group.filter(c => _subMuted.has(c.code)));
+    }
+    arr.splice(0, arr.length, ...regrouped);
   });
 
   // Sort parent channels: respect server-level sort mode & per-tag overrides
