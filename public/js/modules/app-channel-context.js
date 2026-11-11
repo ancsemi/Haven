@@ -84,7 +84,9 @@ _openChannelCtxMenu(code, btnEl) {
   if (cfnArrow) cfnArrow.textContent = '▶';
   // Show/hide "Mark as Read" based on unread count
   const markReadBtn = menu.querySelector('[data-action="mark-read"]');
-  if (markReadBtn) markReadBtn.style.display = (this.unreadCounts[code] > 0) ? '' : 'none';
+  // A forum's dot comes from replies in its topics, which are counted apart
+  // from channel messages, so it needs the button too.
+  if (markReadBtn) markReadBtn.style.display = (this.unreadCounts[code] > 0 || (this.forumUnread?.[code] || 0) > 0) ? '' : 'none';
   const copyChannelLinkBtn = menu.querySelector('[data-action="copy-channel-link"]');
   if (copyChannelLinkBtn) {
     const canShare = !!(ch && !ch.is_dm && !ch.is_private && ch.code_visibility !== 'private');
@@ -505,6 +507,11 @@ _initDmContextMenu() {
         const codes = new Set([...Object.keys(this.unreadCounts || {}), ...(this.channels || []).map(c => c.code)]);
         codes.forEach(code => { this.unreadCounts[code] = 0; });
         (this.channels || []).forEach(c => { c.unreadCount = 0; });
+        // Forums keep their unread topics apart from channel messages, so
+        // each one with a dot is marked read as well.
+        Object.keys(this.forumUnread || {}).forEach(code => {
+          if ((this.forumUnread[code] || 0) > 0) this.socket.emit('mark-forum-read', { code });
+        });
         this._renderChannels();
         this._updateTabTitle();
         this._updateDesktopBadge();

@@ -123,6 +123,12 @@ _bindChannelMenu() {
     this.unreadCounts[code] = 0;
     this._updateBadge(code);
     this.socket.emit('mark-read-channel', { code });
+    // In a forum the unread things are replies in its topics, which have
+    // read positions of their own: this used to leave the forum's dot on.
+    if (this.channels?.find(c => c.code === code)?.is_forum) {
+      this.socket.emit('mark-forum-read', { code });
+      this._forumMarkAllRead?.(code);
+    }
   });
   // Mute channel toggle
   document.querySelector('#channel-ctx-menu [data-action="mute"]')?.addEventListener('click', () => {
