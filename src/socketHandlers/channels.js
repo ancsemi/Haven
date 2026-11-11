@@ -152,8 +152,8 @@ module.exports = function register(socket, ctx) {
       // SQLite answers right here with no await, so channels-list keeps its
       // place ahead of the other replies in the client's startup burst.
       const channels = db.async?.kind === 'sqlite' || !getEnrichedChannelsAsync
-        ? getEnrichedChannels(socket.user.id, socket.user.isAdmin, joinRoom)
-        : await getEnrichedChannelsAsync(socket.user.id, socket.user.isAdmin, joinRoom);
+        ? getEnrichedChannels(socket.user.id, socket.user.isAdmin, joinRoom, null, true)
+        : await getEnrichedChannelsAsync(socket.user.id, socket.user.isAdmin, joinRoom, null, true);
       socket.emit('channels-list', channels);
       // Now in every DM room: let partners know this user is here (#5574).
       if (emitDmPresence) emitDmPresence(socket.user.id);

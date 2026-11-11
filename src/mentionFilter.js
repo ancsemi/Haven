@@ -18,4 +18,15 @@ function mentionsMeCondition(userId, loginName) {
   };
 }
 
-module.exports = { mentionsMeCondition };
+function unreadMentionsQuery(userId, loginName, cap = 99) {
+  const name = String(loginName || '').toLowerCase();
+  if (!Number.isInteger(userId) || userId <= 0 || !/^[a-z0-9_]+$/.test(name)) return null;
+  const word = new RegExp(`(^|[^a-z0-9_@])@${name}([^a-z0-9_]|$)`);
+  const toMe = 'EXISTS (SELECT 1 FROM messages p WHERE p.id = m.reply_to AND p.user_id = ?)';
+  return {
+    sql: `SELECT m.id, m.content, ${toMe} AS to_me FROM (SELECT id, content, reply_to FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' ORDER BY id DESC LIMIT 1000) m WHERE lower(m.content) LIKE ? OR ${toMe}`,
+    params: (channelId, afterId) => [userId, channelId, afterId, userId, `%@${name}%`, userId],
+    pick: rows => rows.filter(r => r.to_me || word.test(String(r.content || '').toLowerCase())).map(r => Number(r.id)).sort((a, b) => a - b).slice(-cap),
+  };
+}
+module.exports = { mentionsMeCondition, unreadMentionsQuery };

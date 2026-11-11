@@ -6,7 +6,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const Database = require('better-sqlite3');
-const { mentionsMeCondition } = require('../src/mentionFilter');
+const { mentionsMeCondition, unreadMentionsQuery } = require('../src/mentionFilter');
 
 function matches(rows) {
   const db = new Database(':memory:');
@@ -49,4 +49,16 @@ test('refuses names that are not login names', () => {
   assert.equal(mentionsMeCondition(1, 'bob*'), null);
   assert.equal(mentionsMeCondition(1, ''), null);
   assert.equal(mentionsMeCondition(0, 'bob'), null);
+});
+test('lists unread mentions and replies after the read position, newest kept', () => {
+  const db = new Database(':memory:');
+  db.exec("CREATE TABLE messages (id INTEGER PRIMARY KEY, channel_id INTEGER, user_id INTEGER, content TEXT, reply_to INTEGER, thread_id INTEGER, type TEXT)");
+  const ins = db.prepare('INSERT INTO messages (id, channel_id, user_id, content, reply_to, thread_id, type) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  [[1, 7, 1, 'my question', null, null, null], [2, 7, 2, 'hey @bob', null, null, null], [3, 7, 2, 'an answer', 1, null, null], [4, 7, 2, 'hey @bobby or x@bob.com', null, null, null], [5, 7, 2, 'in a thread @bob', null, 9, null], [7, 7, 1, 'note to self @bob', null, null, null], [8, 8, 2, '@bob elsewhere', null, null, null], [9, 7, null, '@BOB, imported', null, null, null], [10, 7, 2, '@bob joined', null, null, 'notice']].forEach(r => ins.run(...r));
+  const q = unreadMentionsQuery(1, 'Bob');
+  const ids = after => q.pick(db.prepare(q.sql).all(...q.params(7, after)));
+  assert.deepEqual(ids(0), [2, 3, 9]);
+  assert.deepEqual(ids(2), [3, 9]);
+  assert.deepEqual(unreadMentionsQuery(1, 'bob', 2).pick([{ id: 3, to_me: 1 }, { id: 2, content: '@bob' }, { id: 1, content: '@bob' }]), [2, 3]);
+  assert.equal(unreadMentionsQuery(1, 'bob*'), null);
 });

@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.29.22';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.23';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.24';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.30';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
 import ComposerMethods from './modules/app-composer.js?v=4.29.11';
@@ -108,7 +108,7 @@ import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
-import MentionsMethods from './modules/app-mentions.js?v=4.29.9';
+import MentionsMethods from './modules/app-mentions.js?v=4.29.10';
 import SettingsPageMethods from './modules/app-settings-pages.js?v=4.29.20';
 import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.29.12';
 import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';

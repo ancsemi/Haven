@@ -8,6 +8,7 @@
 
 const UNSEEN_KEY = 'haven_unseen_mentions';
 const UNSEEN_CAP = 99;
+const SEEN_UPTO_KEY = 'haven_mentions_seen_upto';
 
 export default {
 
@@ -31,6 +32,25 @@ _mentionsRenderBadge() {
   const n = (this._unseenMentions || []).length;
   badge.textContent = n >= UNSEEN_CAP ? `${UNSEEN_CAP}+` : String(n);
   badge.style.display = n ? '' : 'none';
+  document.getElementById('mentions-btn')?.classList.toggle('mentions-btn-unseen', n > 0);
+},
+_mentionsSeenUpTo(next) {
+  try {
+    if (next !== undefined) localStorage.setItem(SEEN_UPTO_KEY, String(next));
+    return Number(localStorage.getItem(SEEN_UPTO_KEY)) || 0;
+  } catch { return next || 0; }
+},
+_mentionsMerge(channels) {
+  const upTo = this._mentionsSeenUpTo();
+  const list = this._unseenMentions || (this._unseenMentions = []);
+  const viewing = document.visibilityState === 'visible' ? this.currentChannel : null;
+  const fresh = (channels || []).filter(ch => !ch.is_dm && ch.code !== viewing && Array.isArray(ch.unreadMentionIds))
+    .flatMap(ch => ch.unreadMentionIds.filter(id => id > upTo && !list.some(m => m.id === id)).map(id => ({ c: ch.code, id })));
+  if (!fresh.length) return;
+  list.push(...fresh);
+  list.sort((a, b) => a.id - b.id);
+  if (list.length > UNSEEN_CAP) list.splice(0, list.length - UNSEEN_CAP);
+  this._mentionsPersist();
 },
 
 // Same test the list uses: @yourname as a whole word, or a reply to you.
@@ -64,6 +84,7 @@ _mentionsSeenInChannel(channelCode, upToId) {
 },
 
 async _mentionsOpen() {
+  this._mentionsSeenUpTo(Math.max(this._mentionsSeenUpTo(), ...(this.channels || []).map(c => Number(c.latestMessageId) || 0), ...(this._unseenMentions || []).map(m => m.id)));
   this._unseenMentions = [];
   this._mentionsPersist();
   // The list lives in the server-wide search panel, which DMs do not use, so
