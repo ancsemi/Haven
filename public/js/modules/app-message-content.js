@@ -487,6 +487,10 @@ _formatContent(str, opts) {
   // ## headings or message IDs (#1234) don't get linkified spuriously.
   if (Array.isArray(this.channels) && this.channels.length) {
     const chanByName = new Map();
+    // Two channels can differ only in capitals (#Bug-Reports in one place,
+    // #bug-reports in another). The name as typed is tried first, so each
+    // link goes to its own channel; any other casing still finds one.
+    const chanByExactName = new Map();
     const nameByCode = new Map();
     // Names a channel used to have, so a #old-name typed before a rename
     // still points at it and reads as the name it has now (#5602). A current
@@ -495,6 +499,7 @@ _formatContent(str, opts) {
     for (const c of this.channels) {
       if (c && c.name && c.code && !c.is_dm) {
         chanByName.set(String(c.name).toLowerCase(), c.code);
+        chanByExactName.set(String(c.name), c.code);
         nameByCode.set(c.code, String(c.name));
         let former = [];
         try { former = typeof c.former_names === 'string' ? JSON.parse(c.former_names) : (c.former_names || []); } catch { former = []; }
@@ -524,7 +529,7 @@ _formatContent(str, opts) {
         for (let k = cuts.length - 1; k >= 0; k--) {
           const name = unescape(run.slice(0, cuts[k]));
           const lower = name.toLowerCase();
-          let code = lookup(chanByName, lower);
+          let code = lookup(chanByExactName, name) || lookup(chanByName, lower);
           let label = name;
           if (!code) {
             code = lookup(formerByName, lower);
