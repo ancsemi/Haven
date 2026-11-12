@@ -289,6 +289,99 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     assert.match(refusals[0], /Slow mode/);
     assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM messages WHERE content LIKE 'slow mode %'").get()).n, 1);
   });
+  await t.test('room edits persist and reject other authors, protection, permission overrides and filtered content', async st => {
+    const { socket } = await connect(alice.token);
+    const other = (await connect(peerAccount.token)).socket;
+    st.after(() => { socket.disconnect(); other.disconnect(); });
+    await Promise.all([socket, other].map(client => emit(client, 'get-channels', 'channels-list')));
+    await emit(socket, 'enter-channel', 'online-users', { code: room.code });
+
+    const original = await db.prepare("INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, 'original') RETURNING id")
+      .get(room.id, alice.user.id);
+    st.after(() => db.prepare('DELETE FROM messages WHERE id = ?').run(original.id));
+    const edit = { messageId: original.id, content: 'corrected text' };
+    const observer = packet(other, 'message-edited');
+    const edited = await emit(socket, 'edit-message', 'message-edited', edit);
+    assert.deepEqual(await observer, edited);
+    assert.equal(edited.content, edit.content);
+    assert.equal(edited.userId, alice.user.id);
+    const history = await emit(other, 'get-messages', 'message-history', { code: room.code });
+    const row = history.messages.find(message => message.id === original.id);
+    assert.equal(row.content, edit.content);
+    assert.equal(row.edited_at, edited.editedAt);
+
+    const change = { ...edit, channelCode: room.code, content: 'forbidden change' };
+    const attempt = (client, content = change.content) => emit(client, 'edit-message', 'error-msg', { ...change, content });
+    assert.match(await attempt(other), /only edit your own/);
+    await db.prepare('UPDATE messages SET is_archived = 1 WHERE id = ?').run(original.id);
+    assert.match(await attempt(socket), /protected/);
+    await db.prepare('UPDATE messages SET is_archived = 0 WHERE id = ?').run(original.id);
+
+    const role = await db.prepare("INSERT INTO roles (name) VALUES ('Preview edit override') RETURNING id").get();
+    st.after(() => db.prepare('DELETE FROM roles WHERE id = ?').run(role.id));
+    await db.prepare("INSERT INTO user_role_perms (user_id, role_id, channel_id, permission, allowed) VALUES (?, ?, ?, 'edit_own_messages', 0)")
+      .run(alice.user.id, role.id, room.id);
+    assert.match(await attempt(socket), /permission to edit/);
+    await db.prepare('DELETE FROM user_role_perms WHERE role_id = ?').run(role.id);
+
+    const key = 'automod_words';
+    const oldWords = await db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key);
+    st.after(async () => {
+      if (oldWords) await setting(key, oldWords.value);
+      else await db.prepare('DELETE FROM server_settings WHERE key = ?').run(key);
+    });
+    await setting(key, JSON.stringify([{ name: 'edit test', words: ['filterededit'], strikes: 1 }]));
+    assert.match(await attempt(socket, 'filterededit'), /word this server does not allow/);
+    assert.match(await attempt(socket, '/uploads/image.png'), /Cannot change a text message into an image/);
+    assert.equal((await db.prepare('SELECT content FROM messages WHERE id = ?').get(original.id)).content, edit.content);
+  });
+  await t.test('reaction changes preserve concurrent picks, ignore unknown emoji and obey channel settings', async st => {
+    const { socket } = await connect(alice.token);
+    const other = (await connect(peerAccount.token)).socket;
+    const peer = (await connect(alice.token)).socket;
+    st.after(() => { socket.disconnect(); other.disconnect(); peer.disconnect(); });
+    await Promise.all([socket, other, peer].map(client => emit(client, 'get-channels', 'channels-list')));
+    const original = await db.prepare("INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, 'react here') RETURNING id")
+      .get(room.id, alice.user.id);
+    const custom = ':preview_party:';
+    await db.prepare("INSERT INTO custom_emojis (name, filename) VALUES ('preview_party', 'preview-party.png')").run();
+    st.after(async () => {
+      await db.prepare('DELETE FROM messages WHERE id = ?').run(original.id);
+      await db.prepare("DELETE FROM custom_emojis WHERE name = 'preview_party'").run();
+      await db.prepare('UPDATE channels SET reactions_enabled = 1 WHERE id = ?').run(room.id);
+    });
+
+    const updates = [];
+    other.on('reactions-updated', update => updates.push(update));
+    const react = (client, event, emoji) => client.emit(event, { messageId: original.id, emoji });
+    react(socket, 'add-reaction', custom);
+    react(peer, 'add-reaction', custom);
+    react(other, 'add-reaction', '👍');
+    await Promise.all([socket, other, peer].map(client => emit(client, 'get-preferences', 'preferences')));
+    assert.equal(updates.length, 3);
+    assert.ok(updates.every(update => update.channelCode === room.code && update.messageId === original.id));
+    const sizes = updates.map(update => update.reactions.length);
+    assert.equal(sizes[0], 1);
+    assert.equal(sizes.at(-1), 2);
+    assert.deepEqual(sizes, [...sizes].sort((a, b) => a - b));
+    assert.equal(updates.at(-1).reactions.filter(reaction => reaction.emoji === custom).length, 1);
+    assert.ok(updates.at(-1).reactions.some(reaction => reaction.user_id === peerAccount.user.id && reaction.emoji === '👍'));
+
+    react(socket, 'add-reaction', ':unknown_preview_emoji:');
+    await emit(socket, 'get-preferences', 'preferences');
+    await emit(other, 'get-preferences', 'preferences');
+    assert.equal(updates.length, 3);
+
+    await db.prepare('UPDATE channels SET reactions_enabled = 0 WHERE id = ?').run(room.id);
+    const payload = { messageId: original.id, emoji: custom };
+    assert.match(await emit(socket, 'remove-reaction', 'error-msg', payload), /Reactions are disabled/);
+    assert.match(await emit(socket, 'add-reaction', 'error-msg', payload), /Reactions are disabled/);
+    await db.prepare('UPDATE channels SET reactions_enabled = 1 WHERE id = ?').run(room.id);
+    await emit(socket, 'remove-reaction', 'reactions-updated', payload);
+    const history = await emit(other, 'get-messages', 'message-history', { code: room.code });
+    const message = history.messages.find(row => row.id === original.id);
+    assert.deepEqual(message.reactions.map(row => [row.user_id, row.emoji]), [[peerAccount.user.id, '👍']]);
+  });
   await t.test('PostgreSQL preview refuses restricted posts and filters message and status text', async st => {
     const { socket } = await connect(alice.token);
     st.after(() => socket.disconnect());
@@ -346,6 +439,16 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     assert.equal(history.messages.at(-1).id, sent.message.id);
     assert.equal(history.messages.at(-1).content, ciphertext);
     assert.match(await emit(socket, 'send-message', 'error-msg', { code: dm.code, content: 'plaintext' }), /end-to-end encrypted/);
+    const replacement = JSON.stringify({ v: 1, iv: 'edited-iv', ct: 'edited-ciphertext' });
+    const dmEdit = { messageId: sent.message.id, channelCode: dm.code, content: replacement };
+    const receivedEdit = packet(other, 'message-edited');
+    assert.equal((await emit(socket, 'edit-message', 'message-edited', dmEdit)).content, replacement);
+    assert.equal((await receivedEdit).content, replacement);
+    assert.match(await emit(socket, 'edit-message', 'error-msg', { ...dmEdit, content: 'plaintext' }), /end-to-end encrypted/);
+    const dmReaction = { messageId: sent.message.id, emoji: ':flag_ca:' };
+    const observed = packet(socket, 'reactions-updated');
+    await emit(other, 'add-reaction', 'reactions-updated', dmReaction);
+    assert.deepEqual((await observed).reactions.map(row => row.user_id), [bob.user.id]);
     const typing = packet(other, 'user-typing');
     socket.emit('typing', { code: dm.code });
     assert.equal((await typing).userId, alice.user.id);
@@ -367,6 +470,9 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     st.after(() => outsider.disconnect());
     assert.match(await emit(outsider, 'get-messages', 'error-msg', { code: dm.code }), /not a member/i);
     assert.match(await emit(outsider, 'send-message', 'error-msg', { code: dm.code, content: ciphertext }), /not a member/i);
+    assert.match(await emit(outsider, 'add-reaction', 'error-msg', dmReaction), /not a member/i);
+    assert.match(await emit(outsider, 'remove-reaction', 'error-msg', dmReaction), /not a member/i);
+    assert.match(await emit(outsider, 'edit-message', 'error-msg', dmEdit), /not a member/i);
 
     await db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(dm.id, bob.user.id);
     let leaked = false;
@@ -375,6 +481,9 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     await emit(other, 'get-preferences', 'preferences');
     assert.equal(leaked, false, 'a removed member still in the Socket.IO room receives no message');
     assert.match(await emit(other, 'get-messages', 'error-msg', { code: dm.code }), /not a member/i);
+    assert.match(await emit(other, 'remove-reaction', 'error-msg', dmReaction), /not a member/i);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM reactions WHERE message_id = ?').get(sent.message.id)).n, 1);
+    assert.equal((await db.prepare('SELECT content FROM messages WHERE id = ?').get(sent.message.id)).content, replacement);
 
     const notes = await emit(other, 'start-dm', 'dm-opened', { targetUserId: bob.user.id });
     assert.equal(notes.is_self_dm, 1);

@@ -33,4 +33,14 @@ function insertMessage(db, {
   return db.prepare(sql).run(...params);
 }
 
-module.exports = { REPLY_CONTEXT_SELECT, getActiveMute, muteNotice, insertMessage };
+function updateMessageContent(db, messageId, content) {
+  if (db.kind === 'postgres') {
+    return db.prepare(`
+      UPDATE messages SET content = ?, edited_at = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      WHERE id = ? RETURNING edited_at
+    `).get(content, messageId);
+  }
+  return db.prepare("UPDATE messages SET content = ?, edited_at = datetime('now') WHERE id = ?").run(content, messageId);
+}
+
+module.exports = { REPLY_CONTEXT_SELECT, getActiveMute, muteNotice, insertMessage, updateMessageContent };

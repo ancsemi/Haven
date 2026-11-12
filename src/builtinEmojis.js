@@ -20,12 +20,14 @@ const NAMED_EMOJI_RE = /^:([a-zA-Z0-9_-]{1,30}):$/;
 const UNICODE_EMOJI_RE = /^[\p{Emoji}\p{Emoji_Component}️‍]+$/u;
 
 // True for :name: when it is one of Haven's own or the server's custom emoji.
+// The lookup returns a row on SQLite and a promise on the async adapters.
 function isKnownNamedEmoji(db, text) {
   const m = NAMED_EMOJI_RE.exec(String(text || ''));
   if (!m) return false;
   const name = m[1].toLowerCase();
   if (BUILTIN_EMOJI_NAMES.has(name)) return true;
-  return !!db.prepare('SELECT 1 FROM custom_emojis WHERE name = ?').get(name);
+  const row = db.prepare('SELECT 1 FROM custom_emojis WHERE name = ?').get(name);
+  return row && typeof row.then === 'function' ? row.then(Boolean) : !!row;
 }
 
 // An emoji someone may react with or put on a role menu: a Unicode emoji, or

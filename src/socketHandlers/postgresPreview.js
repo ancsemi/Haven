@@ -9,7 +9,9 @@ const createPermissions = require('./asyncPermissions');
 const createChannelLists = require('./channelList');
 const { parseBorderTransform, utcStamp, toReplyContext } = require('./helpers');
 const { REPLY_CONTEXT_SELECT } = require('../db/messagePosting');
+const { listReactions } = require('../db/messageReactions');
 const { createPostgresPosting } = require('./postgresPosting');
+const { createPostgresMessageActions } = require('./postgresMessageActions');
 const { createPostgresPresence, channelMembers } = require('./postgresPresence');
 const { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS } = require('./settingEffects');
 const { compatibleThemeFiles, validatedThemeDefault, themePreferenceAllowed } = require('../themeMetadata');
@@ -25,6 +27,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
   const readPositions = createReadPositions(db);
   const presence = createPostgresPresence(io, db, permissions);
   const posting = createPostgresPosting(io, db, readPositions, channelMembers);
+  const messageActions = createPostgresMessageActions(io, db, channelMembers);
   const lists = createChannelLists({
     db, userHasPermission: permissions.userHasPermission, roleGateAllows: permissions.roleGateAllows,
     getUserEffectiveLevel: permissions.getUserEffectiveLevel,
@@ -220,6 +223,9 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     on('set-status', data => presence.setStatus(socket, data));
     on('start-dm', data => posting.startDm(socket, data));
     on('send-message', data => posting.send(socket, data));
+    on('edit-message', data => messageActions.edit(socket, data));
+    on('add-reaction', data => messageActions.react(socket, data, true));
+    on('remove-reaction', data => messageActions.react(socket, data, false));
     on('typing', async data => {
       const code = data?.code;
       if (typeof code !== 'string' || !/^[a-f0-9]{8}$/i.test(code)) return;
@@ -263,8 +269,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       }
       for (const m of messages) {
         m.replyContext = replies.get(m.reply_to) || null;
-        m.reactions = await db.prepare(`SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) AS username
-          FROM reactions r JOIN users u ON u.id = r.user_id WHERE r.message_id = ? ORDER BY r.id`).all(m.id);
+        m.reactions = await listReactions(db, m.id);
         m.pinned = !!await db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(m.id);
         m.borderTransform = parseBorderTransform(m.border_transform);
         delete m.border_transform;

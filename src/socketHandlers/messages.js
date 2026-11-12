@@ -1,7 +1,7 @@
 'use strict';
 
 const bcrypt = require('bcryptjs');
-const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
+const { utcStamp, editChannelCode, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const selfDestruct = require('../selfDestruct');
 const { isUsableEmoji } = require('../builtinEmojis');
@@ -15,8 +15,9 @@ const forumUnread = require('../forumUnread');
 const threadNotify = require('../threadNotify');
 const protectedMessages = require('../protectedMessages');
 const mediaGroup = require('../mediaGroup');
-const { sizeCeiling, sizeRefusal, isGroupEnvelope } = require('../messageLimits');
-const { REPLY_CONTEXT_SELECT, insertMessage, getActiveMute, muteNotice } = require('../db/messagePosting');
+const { sizeCeiling, sizeRefusal, isGroupEnvelope, editNeedsOriginalImage } = require('../messageLimits');
+const { REPLY_CONTEXT_SELECT, insertMessage, getActiveMute, muteNotice, updateMessageContent } = require('../db/messagePosting');
+const { addReaction, removeReaction } = require('../db/messageReactions');
 const { takeSilent } = require('../silentMessages');
 const { parseSlash } = require('../slashParse');
 const { tagAccess } = require('../uploadTagRoles');
@@ -2146,8 +2147,7 @@ module.exports = function register(socket, ctx) {
     // Accept an explicit channelCode from the client (e.g. DM PiP, where
     // socket.currentChannel is a different server channel). Fall back to
     // socket.currentChannel for backwards compatibility.
-    const rawCode = typeof data.channelCode === 'string' ? data.channelCode.trim() : null;
-    const code = (rawCode && /^[a-f0-9]{8}$/i.test(rawCode)) ? rawCode : socket.currentChannel;
+    const code = editChannelCode(data.channelCode, socket.currentChannel);
     if (!code) return;
 
     const channel = db.prepare('SELECT id, is_dm, is_group, is_forum FROM channels WHERE code = ?').get(code);
@@ -2185,7 +2185,7 @@ module.exports = function register(socket, ctx) {
     // trivially bypassed: post something harmless, then edit the payload in.
     if (enforceAutomod(newContent, { surface: 'edit', channelId: channel.id, markdown: true })) return;
 
-    if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(newContent)) {
+    if (editNeedsOriginalImage(newContent)) {
       const origMsg = db.prepare('SELECT original_name FROM messages WHERE id = ?').get(data.messageId);
       if (!origMsg || !origMsg.original_name) {
         return socket.emit('error-msg', 'Cannot change a text message into an image');
@@ -2193,9 +2193,7 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      db.prepare(
-        'UPDATE messages SET content = ?, edited_at = datetime(\'now\') WHERE id = ?'
-      ).run(newContent, data.messageId);
+      updateMessageContent(db, data.messageId, newContent);
     } catch (err) {
       console.error('Edit message error:', err);
       return socket.emit('error-msg', 'Failed to edit message');
@@ -2644,9 +2642,7 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
       }
 
-      db.prepare(
-        'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
-      ).run(data.messageId, socket.user.id, data.emoji);
+      addReaction(db, data.messageId, socket.user.id, data.emoji);
       ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, true);
       // On a message Ferry carried, the Discord copy gets the bot's reaction.
       ctx.ferryReactionChanged?.({ messageId: data.messageId, channelId: msg.channel_id, emoji: data.emoji, added: true });
@@ -2691,9 +2687,7 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
       }
 
-      db.prepare(
-        'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
-      ).run(data.messageId, socket.user.id, data.emoji);
+      removeReaction(db, data.messageId, socket.user.id, data.emoji);
       ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, false);
       ctx.ferryReactionChanged?.({ messageId: data.messageId, channelId: msgRow.channel_id, emoji: data.emoji, added: false });
 

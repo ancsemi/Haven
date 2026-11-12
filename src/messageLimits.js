@@ -36,4 +36,10 @@ function sizeRefusal(content, channel, { maxChars, maxAttachments, forumTopic = 
   return mediaGroup.refusal(content, { maxChars, maxAttachments, forumTopic });
 }
 
-module.exports = { sizeCeiling, sizeRefusal, looksEncrypted, isGroupEnvelope };
+// Older image messages keep their original_name alongside the upload path.
+// An edit cannot turn a text message into one of those image messages.
+function editNeedsOriginalImage(content) {
+  return /^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(content);
+}
+
+module.exports = { sizeCeiling, sizeRefusal, looksEncrypted, isGroupEnvelope, editNeedsOriginalImage };
