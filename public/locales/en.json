@@ -416,6 +416,8 @@
   },
   "toasts": {
     "roles_updated": "Your roles have been updated",
+    "timeout_notice_one": "You are in a timeout for 1 more minute. Messages, edits and reactions are paused.",
+    "timeout_notice_other": "You are in a timeout for {{count}} more minutes. Messages, edits and reactions are paused.",
     "role_server_no_response": "No response from the server. It may be running an older Haven version. Update the server files and fully restart it, then try again.",
     "status_pending_reconnect": "Status will update when reconnected",
     "channel_created": "Channel \"#{{name}}\" created!\nCode: {{code}}",

@@ -174,6 +174,16 @@ _restoreRefusedDraft(msg, always = false) {
   if (tooLong && d.selfDestruct && inputId === 'message-input') this._setSelfDestructArmed?.(true);
   input.focus();
 },
+_showTimeoutNotice(msg) {
+  const bar = document.getElementById('timeout-notice');
+  const m = typeof msg === 'string' && /^You are in a timeout for (\d+) more minute/.exec(msg);
+  if (!bar || !m) return;
+  const n = Number(m[1]);
+  clearTimeout(this._timeoutNoticeTimer);
+  bar.textContent = t(n === 1 ? 'toasts.timeout_notice_one' : 'toasts.timeout_notice_other', { count: n });
+  bar.style.display = 'flex';
+  this._timeoutNoticeTimer = setTimeout(() => { bar.style.display = 'none'; }, n * 60000);
+},
 
 _setupSocketListeners() {
   // Each area wires its own part, in this order.

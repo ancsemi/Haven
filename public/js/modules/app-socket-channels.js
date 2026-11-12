@@ -890,6 +890,7 @@ _listenPresenceAndVoice() {
     // this is the only chance to put the row back where it was.
     this._revertPendingChannelToggle();
     this._restoreRefusedDraft(msg);
+    /^You are in a timeout/.test(msg) && (this._forumRestoreDraft?.(), this._showTimeoutNotice(msg));
     this._showToast(msg, 'error');
   });
 
