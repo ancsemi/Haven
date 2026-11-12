@@ -13,6 +13,12 @@
 //
 // In a browser the side buttons would otherwise leave Haven for the page
 // before it, dropping any call you are in; inside the app they never do.
+//
+// Settings > Chat has the switch. Off, the side buttons do nothing in Haven
+// at all, for people who use them as push to talk or a hotkey in another
+// program that Haven cannot know about (#5886).
+
+const NAV_OFF_KEY = 'haven_mouse_nav_off';
 
 const NAV_MAX = 50;
 // Changes that belong to one step (a channel switch closes the open thread)
@@ -54,6 +60,18 @@ _setupNavHistory() {
       }
       return out;
     };
+  }
+
+  try { this._navOff = localStorage.getItem(NAV_OFF_KEY) === '1'; }
+  catch { this._navOff = false; } // private mode: storage is unavailable, keep the default (on)
+  const toggle = document.getElementById('mouse-nav-toggle');
+  if (toggle) {
+    toggle.checked = !this._navOff;
+    toggle.addEventListener('change', () => {
+      this._navOff = !toggle.checked;
+      try { localStorage.setItem(NAV_OFF_KEY, this._navOff ? '1' : '0'); }
+      catch { /* private mode: the choice lasts until the page closes */ }
+    });
   }
 
   // The side buttons are buttons 3 and 4 to the browser. Their default is
@@ -132,6 +150,7 @@ _navForgetDm(code) {
 },
 
 async _navFromMouse(button) {
+  if (this._navOff) return;
   // In the desktop app a side button can be the push-to-talk, push-to-mute
   // or another shortcut. Then it is that, and not back or forward.
   const shortcuts = window.havenDesktop && window.havenDesktop.shortcuts;

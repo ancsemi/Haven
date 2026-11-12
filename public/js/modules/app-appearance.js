@@ -622,7 +622,8 @@ _setupEmbedSizePicker() {
   fold.checked = this._previewsStartFolded();
   fold.addEventListener('change', () => {
     this._startFolded = fold.checked;
-    try { localStorage.setItem('haven-previews-folded', String(fold.checked)); } catch {}
+    try { localStorage.setItem('haven-previews-folded', String(fold.checked)); }
+    catch { /* private mode: the choice lasts until the page closes */ }
     this.currentChannel && this.socket?.connected && this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
   });
 },

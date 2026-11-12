@@ -2092,6 +2092,11 @@
           <input type="checkbox" id="hover-profile-card" checked>
         </label>
         <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.hover_profile_card_hint">Hovering over a name or avatar shows a quick profile preview. Clicking opens the full card either way.</small>
+        <label class="toggle-row">
+          <span data-i18n="settings.chat_behavior.mouse_nav">Mouse side buttons go back and forward</span>
+          <input type="checkbox" id="mouse-nav-toggle" checked>
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.mouse_nav_hint">Back closes the thread or pop-out DM you opened, or returns to the channel you came from. Turn this off if a side button is your push to talk or a hotkey in another program: the side buttons then do nothing in Haven.</small>
         <label class="select-row">
           <span data-i18n="settings.chat_behavior.official_style">Official messages</span>
           <select id="official-style-select" style="max-width:160px">
@@ -5561,7 +5566,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.58"></script>
+  <script type="module" src="/js/app.js?v=4.29.59"></script>
   <script src="/js/plugin-loader.js?v=4.27.52"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
