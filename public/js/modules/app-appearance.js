@@ -617,6 +617,19 @@ _setupEmbedSizePicker() {
     const btn = e.target.closest('[data-embed-size]');
     if (btn) this._applyEmbedSize(btn.dataset.embedSize);
   });
+  const fold = document.getElementById('previews-folded-toggle');
+  if (!fold) return;
+  fold.checked = this._previewsStartFolded();
+  fold.addEventListener('change', () => {
+    this._startFolded = fold.checked;
+    try { localStorage.setItem('haven-previews-folded', String(fold.checked)); } catch {}
+    this.currentChannel && this.socket?.connected && this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
+  });
+},
+
+_previewsStartFolded() {
+  this._startFolded === undefined && (this._startFolded = localStorage.getItem('haven-previews-folded') === 'true');
+  return this._startFolded;
 },
 
 // Embed size is the single source of truth shared by the Settings picker and

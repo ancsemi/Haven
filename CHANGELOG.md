@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.29.0] - Unreleased
 
 ### Added
+- Link previews fold themselves after the second one in a message, so a message with many links no longer fills the chat; the chevron on a folded card opens it (#5882). The Link Previews settings also have "Start link previews folded", which folds every card until you open it, on this device (#5883).
 - Call controls in fullscreen (thanks Roolk, #5849): mute, deafen, camera, screen share, call settings and leave stay on screen over a fullscreen camera or screen share, and a picker switches which stream is shown without leaving fullscreen.
 - Video players in chat have Theater (as wide as the chat) and Fullscreen buttons: YouTube cards, uploaded videos and videos in link previews.
 - Platform emoji built into Haven: Windows, Mac, iPhone, Android and Linux, under Platforms in the emoji picker. They work in messages, reactions and role menus.

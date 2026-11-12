@@ -2025,6 +2025,11 @@
           <input type="checkbox" id="pause-offscreen-media">
         </label>
         <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.embed_display.pause_offscreen_hint">A video, sound file or YouTube card in chat stops when you scroll past it.</small>
+        <label class="toggle-row" style="margin-top:10px">
+          <span data-i18n="settings.embed_display.start_folded">Start link previews folded</span>
+          <input type="checkbox" id="previews-folded-toggle">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.embed_display.start_folded_hint">Link previews show as a small bar you click to open. Only changes this device. A message with more than two links always folds the ones after the second.</small>
       </div>
 
       <!-- Banner Display (client-side) -->
@@ -5556,7 +5561,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.57"></script>
+  <script type="module" src="/js/app.js?v=4.29.58"></script>
   <script src="/js/plugin-loader.js?v=4.27.52"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

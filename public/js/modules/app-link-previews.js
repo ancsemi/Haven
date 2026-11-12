@@ -233,6 +233,7 @@ _fetchLinkPreviews(containerEl) {
   // preview card was ever drawn there (#5620).
   const links = containerEl.querySelectorAll('.message-content a[href], .thread-msg-content a[href]');
   const seen = new Set();
+  const slots = new Map();
   links.forEach(link => {
     const url = link.href;
     if (seen.has(url)) return;
@@ -248,6 +249,9 @@ _fetchLinkPreviews(containerEl) {
     if (/^https:\/\/(media|c)\.tenor\.com\//i.test(url)) return;
     if (url.startsWith(window.location.origin)) return;
 
+    const host = link.closest('.message-content, .thread-msg-content');
+    const slot = host ? (slots.get(host) ?? host.querySelectorAll('.link-preview').length) : 0;
+    host && slots.set(host, slot + 1);
     // ── Inline YouTube embed (wrapped in the shared embed chrome) ──
     const ytVideoId = this._extractYouTubeVideoId(url);
     if (ytVideoId) {
@@ -256,7 +260,7 @@ _fetchLinkPreviews(containerEl) {
       const msgContent = link.closest('.message-content, .thread-msg-content');
       if (!msgContent) return;
       if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
-      const ytCollapsed = this._embedFolded(url);
+      const ytCollapsed = this._embedFolded(url, slot);
       const wrapper = document.createElement('div');
       wrapper.className = 'link-preview link-preview--yt' + (ytCollapsed ? ' lp-collapsed' : '');
       wrapper.dataset.url = url;
@@ -294,7 +298,7 @@ _fetchLinkPreviews(containerEl) {
         // Unified rich embed card: social posts (Bluesky / X) gain an author
         // row, avatar and engagement stats; everything else renders the same
         // chrome (accent header, size toggle, collapse) with title/text/media.
-        const collapsed = this._embedFolded(url);
+        const collapsed = this._embedFolded(url, slot);
         const accent = (typeof data.accentColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(data.accentColor)) ? data.accentColor : null;
         const isSocial = !!(data.author || data.handle);
         const hasGallery = Array.isArray(data.images) && data.images.length >= 2;
@@ -498,9 +502,8 @@ _embedHeaderHtml(siteName, collapsed, playHtml = '', viewHtml = '') {
     + '</span></div>';
 },
 
-// Folded by hand, or, with Hide media on, folded until it is opened.
-_embedFolded(url) {
-  return this._collapsedEmbeds.has(url) || (!!this._hideMediaOn?.() && !this._openedEmbeds?.has(url));
+_embedFolded(url, slot = 0) {
+  return this._collapsedEmbeds.has(url) || (!this._openedEmbeds?.has(url) && (!!this._hideMediaOn?.() || !!this._previewsStartFolded?.() || slot >= 2));
 },
 
 /** Wire the size + collapse buttons on a freshly-built embed card. */
