@@ -1898,7 +1898,9 @@
       "full": "Large",
       "full_hint": "Large: big media, author, and post stats",
       "pause_offscreen": "Pause videos and audio scrolled out of view",
-      "pause_offscreen_hint": "A video, sound file or YouTube card in chat stops when you scroll past it."
+      "pause_offscreen_hint": "A video, sound file or YouTube card in chat stops when you scroll past it.",
+      "start_folded": "Start link previews folded",
+      "start_folded_hint": "Link previews show as a small bar you click to open. Only changes this device. A message with more than two links always folds the ones after the second."
     },
     "banner_display": {
       "title": "Banner Display",
