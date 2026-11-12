@@ -8,9 +8,9 @@ export default {
 _setupMasterVolume() {
   const voice = document.getElementById('voice-master-volume');
   if (voice && this.voice) {
-    voice.value = String(Math.round(this.voice._voiceMasterLevel() * 100));
+    voice.value = String(Math.round(this.callSettings.get('voiceVolume') * 100));
     voice.addEventListener('input', () => {
-      this.voice.setVoiceMasterVolume(voice.value / 100);
+      this.callSettings.set('voiceVolume', voice.value / 100);
       this._syncFullscreenCallVolume?.();
     });
   }

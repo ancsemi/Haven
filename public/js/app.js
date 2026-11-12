@@ -8,13 +8,13 @@ import SocketMethods   from './modules/app-socket.js?v=4.29.55';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.25';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.30';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
-import ComposerMethods from './modules/app-composer.js?v=4.29.11';
+import ComposerMethods from './modules/app-composer.js?v=4.29.57';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
 import DraftMethods from './modules/app-drafts.js?v=4.29.11';
 import WhatsNewMethods from './modules/app-whats-new.js?v=4.27.25';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.29.56';
-import VoiceControlMethods from './modules/app-voice-controls.js?v=4.27.57';
+import VoiceControlMethods from './modules/app-voice-controls.js?v=4.29.57';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.27.52';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.29.40';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.29.50';
@@ -51,10 +51,10 @@ import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.29.40';
 import UnthreadMethods from './modules/app-unthread.js?v=4.29.40';
 import UserMethods     from './modules/app-users.js?v=4.27.52';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
-import VoiceMethods    from './modules/app-voice.js?v=4.29.11';
+import VoiceMethods    from './modules/app-voice.js?v=4.29.57';
 import ThemePickerMethods from './modules/app-theme-picker.js?v=4.25.30';
 import PushToMuteMethods from './modules/app-push-to-mute.js?v=4.24.5';
-import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.27.56';
+import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.29.57';
 import StreamTileMethods from './modules/app-stream-tiles.js?v=4.27.56';
 import MusicMethods from './modules/app-music.js?v=4.27.17';
 import MusicFileMethods from './modules/app-music-file.js?v=4.27.49';
@@ -93,7 +93,7 @@ import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.
 import MessageGroupingMethods from './modules/message-grouping.js?v=4.25.1';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
 import BlockedNameMethods from './modules/app-blocked-names.js?v=4.29.15';
-import MasterVolumeMethods from './modules/app-master-volume.js?v=4.27.56';
+import MasterVolumeMethods from './modules/app-master-volume.js?v=4.29.57';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.24.24';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.27.20';
@@ -112,6 +112,7 @@ import MentionsMethods from './modules/app-mentions.js?v=4.29.11';
 import SettingsPageMethods from './modules/app-settings-pages.js?v=4.29.55';
 import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.29.12';
 import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';
+import { createCallSettings } from './modules/call-settings.js?v=4.29.57';
 import { startTooltips } from './modules/tooltips.js?v=4.27.51';
 
 class HavenApp {
@@ -408,6 +409,8 @@ class HavenApp {
     // when the user activates a published file theme (#5359)
     window.havenSocket = this.socket;
     this.voice = new VoiceManager(this.socket);
+    // Every call setting is read and changed through this (see call-settings.js).
+    this.callSettings = createCallSettings({ getVoice: () => this.voice });
     if (this.user && this.user.id) this.voice.localUserId = this.user.id;
     
     // CRITICAL FIX: Run avatar setup first and use delegation to ensure listeners work

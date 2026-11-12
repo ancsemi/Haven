@@ -87,7 +87,7 @@ _createFullscreenCallToolbar(tile) {
   volume.addEventListener('input', (event) => {
     event.stopPropagation();
     const value = Number(volume.value) / 100;
-    this.voice?.setVoiceMasterVolume?.(value);
+    this.callSettings.set('voiceVolume', value);
     const mainSlider = document.getElementById('voice-master-volume');
     if (mainSlider) mainSlider.value = volume.value;
     this._syncFullscreenCallVolume();
@@ -272,7 +272,7 @@ async _populateFullscreenAudioPopover(popover) {
 
 _syncFullscreenCallVolume() {
   const mainSlider = document.getElementById('voice-master-volume');
-  const volume = this.voice?._voiceMasterLevel?.() ??
+  const volume = this.callSettings?.get('voiceVolume') ??
     (mainSlider ? Number(mainSlider.value) / 100 : 1);
   for (const toolbar of this._fullscreenCallToolbars || []) {
     const slider = toolbar.querySelector('.fullscreen-call-volume');

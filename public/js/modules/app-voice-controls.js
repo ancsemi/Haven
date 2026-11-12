@@ -5,17 +5,10 @@
 export default {
 
 _applyVoiceDeviceSelection(kind, deviceId) {
-  const keys = {
-    input: 'haven_input_device',
-    output: 'haven_output_device',
-    camera: 'haven_cam_device',
-  };
-  const key = keys[kind];
-  if (!key) return;
-  localStorage.setItem(key, deviceId);
-  if (kind === 'input' && this.voice?.inVoice) this.voice.switchInputDevice(deviceId);
-  else if (kind === 'output' && this.voice) this.voice.switchOutputDevice(deviceId);
-  else if (kind === 'camera' && this.voice?.isWebcamActive) this.voice.switchCamera(deviceId);
+  const ids = { input: 'inputDevice', output: 'outputDevice', camera: 'cameraDevice' };
+  const id = ids[kind];
+  if (!id) return;
+  this.callSettings.set(id, deviceId);
 },
 
 _bindVoiceControls() {
@@ -143,15 +136,10 @@ _bindVoiceControls() {
   }
   const camQualitySelect = document.getElementById('voice-cam-quality');
   if (camQualitySelect) {
-    try { camQualitySelect.value = localStorage.getItem('haven_cam_quality') || '480'; } catch { /* private mode: the default stays picked */ }
+    camQualitySelect.value = this.callSettings.get('cameraQuality');
     camQualitySelect.addEventListener('change', (e) => {
-      try { localStorage.setItem('haven_cam_quality', e.target.value); } catch { /* private mode: applies for this visit only */ }
-      // A camera that is on picks the new size up straight away.
-      if (this.voice && this.voice.isWebcamActive) {
-        let deviceId = '';
-        try { deviceId = localStorage.getItem('haven_cam_device') || ''; } catch { /* private mode: the default camera */ }
-        this.voice.switchCamera(deviceId);
-      }
+      // A camera that is on picks the new size up straight away (the layer does that).
+      this.callSettings.set('cameraQuality', e.target.value);
     });
   }
   if (camDeviceSelect) {
@@ -278,14 +266,14 @@ _bindVoiceControls() {
   const nsSlider = document.getElementById('voice-ns-slider');
 
   // Restore saved mode
-  const savedNoiseMode = localStorage.getItem('haven_noise_mode') || 'gate';
+  const savedNoiseMode = this.callSettings.get('noiseMode');
   noiseModeSelect.value = savedNoiseMode;
   noiseGateRow.style.display = savedNoiseMode === 'gate' ? '' : 'none';
 
   noiseModeSelect.addEventListener('change', (e) => {
     const mode = e.target.value;
     noiseGateRow.style.display = mode === 'gate' ? '' : 'none';
-    if (this.voice) this.voice.setNoiseMode(mode);
+    this.callSettings.set('noiseMode', mode);
     // Update mic meter threshold visibility
     if (mode === 'gate') {
       this._updateMicMeterThreshold(parseInt(nsSlider.value, 10));
@@ -296,16 +284,12 @@ _bindVoiceControls() {
 
   nsSlider.addEventListener('input', (e) => {
     const val = parseInt(e.target.value, 10);
-    if (this.voice && this.voice.inVoice) {
-      this.voice.setNoiseSensitivity(val);
-    }
-    localStorage.setItem('haven_ns_value', val);
+    this.callSettings.set('noiseSensitivity', val);
     this._updateMicMeterThreshold(val);
   });
 
   // Restore saved gate sensitivity
-  const savedNsVal = localStorage.getItem('haven_ns_value');
-  if (savedNsVal !== null) nsSlider.value = savedNsVal;
+  nsSlider.value = String(this.callSettings.get('noiseSensitivity'));
 
   // ── Mic level meter ──
   this._micMeterFill = document.getElementById('mic-meter-fill');
@@ -319,11 +303,11 @@ _bindVoiceControls() {
   const screenFpsSelect = document.getElementById('screen-fps-select');
   if (screenResSelect) {
     // Restore saved value (0 = "source")
-    const savedRes = localStorage.getItem('haven_screen_res') || '1080';
-    screenResSelect.value = savedRes === '0' ? 'source' : savedRes;
+    const savedRes = this.callSettings.get('screenResolution');
+    screenResSelect.value = savedRes === 0 ? 'source' : String(savedRes);
     screenResSelect.addEventListener('change', (e) => {
       const val = e.target.value === 'source' ? 0 : parseInt(e.target.value, 10);
-      this.voice.setScreenResolution(val);
+      this.callSettings.set('screenResolution', val);
     });
   }
   // ── Screen share bitrate stepper (300 to 10000 Kbps + unlimited) ──
@@ -373,10 +357,10 @@ _bindVoiceControls() {
   const commitBitrateInput = () => {
     const parsed = parseBitrateInput();
     if (parsed === null) {
-      renderBitrate(this.voice.screenBitrate);
+      renderBitrate(this.callSettings.get('screenBitrate'));
       return;
     }
-    this.voice.setScreenBitrate(parsed);
+    this.callSettings.set('screenBitrate', parsed);
     // The programmatic blur below re-fires the blur listener: suppress that
     // second commit (Enter confirmed once already). The flag wraps a
     // synchronous blur() dispatch.
@@ -384,10 +368,10 @@ _bindVoiceControls() {
       bitrateBlurSuppressed = true;
       try { bitrateValue.blur?.(); } finally { bitrateBlurSuppressed = false; }
     }
-    renderBitrate(this.voice.screenBitrate);
+    renderBitrate(this.callSettings.get('screenBitrate'));
   };
   const stepBitrate = (dir) => {
-    const cur = this.voice.screenBitrate || 0;
+    const cur = this.callSettings.get('screenBitrate') || 0;
     let next;
     if (dir < 0) {
       // From unlimited, step down into the top of the range.
@@ -396,8 +380,8 @@ _bindVoiceControls() {
       // Past the top of the range wraps to unlimited.
       next = cur === 0 ? 300 : cur + 100;
     }
-    this.voice.setScreenBitrate(next);
-    writeBitrateField(this.voice.screenBitrate);
+    this.callSettings.set('screenBitrate', next);
+    writeBitrateField(this.callSettings.get('screenBitrate'));
   };
   // Press-and-hold auto-repeat: first repeat after 400 ms, then every 80 ms
   // with the step doubling every ~10 repeats so long holds move fast.
@@ -415,7 +399,7 @@ _bindVoiceControls() {
     const tick = () => {
       repeats++;
       const magnitude = repeats > 20 ? 400 : repeats > 10 ? 200 : 100;
-      const cur = this.voice.screenBitrate || 0;
+      const cur = this.callSettings.get('screenBitrate') || 0;
       let next;
       if (dir < 0) {
         // From unlimited, step down into the top of the range; from a capped
@@ -427,8 +411,8 @@ _bindVoiceControls() {
       } else {
         next = cur === 0 ? 300 : cur + magnitude;
       }
-      this.voice.setScreenBitrate(next);
-      writeBitrateField(this.voice.screenBitrate);
+      this.callSettings.set('screenBitrate', next);
+      writeBitrateField(this.callSettings.get('screenBitrate'));
     };
     let pressed = false;
     // Active pointer for the current press: a second finger's pointerdown is
@@ -503,7 +487,7 @@ _bindVoiceControls() {
     });
   };
   if (bitrateMinus && bitratePlus && bitrateValue) {
-    renderBitrate(this.voice.screenBitrate);
+    renderBitrate(this.callSettings.get('screenBitrate'));
     holdRepeat(bitrateMinus, -1);
     holdRepeat(bitratePlus, +1);
     // Escape discards the typed text instead of confirming it: without the
@@ -511,7 +495,7 @@ _bindVoiceControls() {
     // very value the user was cancelling (renderBitrate skips focused inputs).
     // (Flags declared above, next to the other bitrate state.)
     const restoreBitrateDisplay = () => {
-      const kbps = this.voice.screenBitrate;
+      const kbps = this.callSettings.get('screenBitrate');
       if ('value' in bitrateValue) {
         bitrateValue.value = kbps > 0 ? `${kbps} Kbps` : t('voice_settings.bitrate_unlimited');
       } else {
@@ -543,10 +527,9 @@ _bindVoiceControls() {
     });
   }
   if (screenFpsSelect) {
-    const savedFps = localStorage.getItem('haven_screen_fps') || '30';
-    screenFpsSelect.value = savedFps;
+    screenFpsSelect.value = String(this.callSettings.get('screenFrameRate'));
     screenFpsSelect.addEventListener('change', (e) => {
-      this.voice.setScreenFrameRate(parseInt(e.target.value, 10));
+      this.callSettings.set('screenFrameRate', parseInt(e.target.value, 10));
     });
   }
   // Wire up the voice manager's video callback

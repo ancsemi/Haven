@@ -396,7 +396,7 @@ _updateVoiceButtons(inVoice) {
     document.getElementById('voice-cam-btn').disabled = false;
     const _ltnBtn = document.getElementById('voice-listen-together-btn');
     if (_ltnBtn) { _ltnBtn.disabled = false; _ltnBtn.title = t('voice.panel.listen_together'); }
-    document.getElementById('voice-ns-slider').value = localStorage.getItem('haven_ns_value') || 10;
+    document.getElementById('voice-ns-slider').value = String(this.callSettings.get('noiseSensitivity'));
     // Hide voice settings sub-panel
     const vsPanel = document.getElementById('voice-settings-panel');
     if (vsPanel) vsPanel.style.display = 'none';
@@ -529,9 +529,9 @@ async _populateAudioDevices() {
   const outputs = devices.filter(d => d.kind === 'audiooutput');
   const cameras = devices.filter(d => d.kind === 'videoinput');
 
-  const savedInput  = localStorage.getItem('haven_input_device') || '';
-  const savedOutput = localStorage.getItem('haven_output_device') || '';
-  const savedCam    = localStorage.getItem('haven_cam_device') || '';
+  const savedInput  = this.callSettings.get('inputDevice');
+  const savedOutput = this.callSettings.get('outputDevice');
+  const savedCam    = this.callSettings.get('cameraDevice');
 
   // Populate input
   inputSelect.innerHTML = `<option value="">${t('voice_settings.default_mic')}</option>`;

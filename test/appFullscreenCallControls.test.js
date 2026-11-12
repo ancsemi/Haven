@@ -184,6 +184,21 @@ function loadVoiceControlMethods(document, localStorage) {
   return context.module.exports;
 }
 
+// The real call settings layer, loaded the same way as the app modules.
+const callSettingsSource = fs.readFileSync(
+  path.join(__dirname, '..', 'public/js/modules/call-settings.js'),
+  'utf8'
+);
+function loadCallSettings(localStorage, getVoice) {
+  const context = vm.createContext({ module: { exports: {} }, console });
+  vm.runInContext(
+    `${callSettingsSource.replace(/^export /gm, '')}\nmodule.exports = { createCallSettings };`,
+    context,
+    { filename: 'call-settings.js' }
+  );
+  return context.module.exports.createCallSettings({ storage: localStorage, getVoice });
+}
+
 function loadMasterVolumeMethods(document, localStorage) {
   const context = vm.createContext({ module: { exports: {} }, document, localStorage, t: key => key });
   vm.runInContext(masterVolumeSource.replace(/^export default/m, 'module.exports ='), context, {
@@ -262,6 +277,7 @@ function renderWebcamTile(globals = {}) {
     _showToast() {},
     _updateWebcamVisibility: methods._updateWebcamVisibility,
   }, methods, voiceMethods, voiceControlMethods);
+  app.callSettings = loadCallSettings(localStorage, () => app.voice);
   app._populateAudioDevices = async () => {};
   const stream = { id: 'camera-stream' };
   app._handleWebcamStream('peer-1', stream);
@@ -811,6 +827,7 @@ test('fullscreen device selectors reuse Haven input, output, and camera switch p
       switchCamera: id => switched.push(['camera', id]),
     },
   }, methods);
+  app.callSettings = loadCallSettings(localStorage, () => app.voice);
 
   app._applyVoiceDeviceSelection('input', 'mic-2');
   app._applyVoiceDeviceSelection('output', 'speaker-3');
@@ -883,10 +900,13 @@ test('fullscreen tile cleanup closes popovers and resets their accessible state'
 
 test('the fullscreen master-volume control follows changes from voice settings', async () => {
   const { app, document, masterVolume, tile } = renderWebcamTile();
-  let level = 1;
   const updates = [];
-  app.voice._voiceMasterLevel = () => level;
-  app.voice.setVoiceMasterVolume = value => { level = value; updates.push(value); };
+  const saved = {};
+  app.voice.setVoiceMasterVolume = value => { updates.push(value); };
+  app.callSettings = loadCallSettings({
+    getItem: k => (k in saved ? saved[k] : null),
+    setItem: (k, v) => { saved[k] = String(v); },
+  }, () => app.voice);
   app._setupMasterVolume = loadMasterVolumeMethods(document, { getItem: () => null })._setupMasterVolume;
   app._setupMasterVolume();
   tile.querySelector('.fullscreen-call-audio').listeners.click[0]({ stopPropagation() {} });
