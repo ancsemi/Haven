@@ -30,6 +30,9 @@ const files = {
   'page.html': '<script>alert(1)</script>',
   'clip.mp4': Buffer.alloc(1000, 7),
   'song.mp3': Buffer.alloc(300, 3),
+  'tune.aac': Buffer.alloc(200, 5),
+  'tune.flac': Buffer.alloc(200, 5),
+  'tune.opus': Buffer.alloc(200, 5),
   'notes.txt': 'plain words',
   '1-ab.my file': 'odd extension',
   'stickers/s.webp': 'RIFF0000WEBP',
@@ -154,6 +157,10 @@ test('the safety headers are the ones that keep uploads from running', async () 
   assert.equal(mp4.headers['content-range'], 'bytes 100-199/1000');
   assert.equal(mp4.body.length, 100);
   assert.equal(mp4.headers['content-type'], 'video/mp4');
+  // Audio goes out under the type players know, not an old alias.
+  for (const [file, type] of [['tune.aac', 'audio/aac'], ['tune.flac', 'audio/flac'], ['tune.opus', 'audio/ogg'], ['song.mp3', 'audio/mpeg']]) {
+    assert.equal((await request(newSrv, '/uploads/' + file)).headers['content-type'], type, file);
+  }
   for (const p of ['/uploads/deleted-attachments/gone.png', '/uploads/deleted%2Dattachments/gone.png',
     '/uploads//deleted-attachments/gone.png', '/uploads/deleted-attachments%2Fgone.png']) {
     assert.equal((await request(newSrv, p)).status, 404, p);
