@@ -16,6 +16,11 @@ const UPLOAD_MEDIA_EXTS = new Set([
   '.mp4', '.webm', '.mov', '.m4v', '.ogv',
 ]);
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+// The standard name for these, where the built-in list has an old one
+// (audio/x-aac, audio/x-flac) or none at all (.opus). Players decide from
+// the type whether they can play a file: Chrome answers "no" for
+// audio/x-aac and "probably" for audio/aac.
+const MEDIA_TYPES = { '.aac': 'audio/aac', '.flac': 'audio/flac', '.opus': 'audio/ogg' };
 const MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 // ── Block access to internal upload folders ─────────────
@@ -89,6 +94,7 @@ function setSafetyHeaders(res, ext) {
     // players; everything else is opaque bytes, which nosniff refuses to
     // run as script.
     if (!UPLOAD_MEDIA_EXTS.has(ext)) res.setHeader('Content-Type', 'application/octet-stream');
+    else if (MEDIA_TYPES[ext]) res.setHeader('Content-Type', MEDIA_TYPES[ext]);
   }
 }
 
