@@ -1526,3 +1526,17 @@ html.reduce-motion .forum-unread-dot { animation: none; }
 @keyframes call-ring-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(35, 165, 90, .55); } 50% { box-shadow: 0 0 0 10px transparent; } }
 @keyframes call-ring-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 html.reduce-motion :is(.call-ring, .call-ring-pulse) { animation: none; }
+
+/* ── Merge Channel (app-channel-merge.js) ───────────────── */
+.merge-channel-modal { width: 520px; max-width: 94vw; }
+.merge-channel-scroll { max-height: 55vh; overflow-y: auto; }
+.merge-channel-scroll p { margin: 0 0 8px; font-size: .85rem; }
+.merge-channel-scroll h4 { margin: 14px 0 4px; font-size: .9rem; }
+.merge-channel-dim { opacity: .6; font-size: .78rem; }
+.merge-channel-empty { text-align: center; opacity: .5; padding: 16px; font-size: .85rem; }
+.merge-channel-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.merge-channel-ticks { display: flex; gap: 6px; margin: 6px 0; }
+.merge-repost { display: flex; gap: 8px; align-items: flex-start; padding: 6px 4px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; }
+.merge-repost input { margin-top: 3px; flex-shrink: 0; }
+.merge-repost-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.merge-repost-text { font-size: .85rem; white-space: pre-wrap; overflow-wrap: anywhere; }

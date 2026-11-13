@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.29.57">
+  <link rel="stylesheet" href="/css/style.css?v=4.29.60">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.27.19"></script>
 </head>
@@ -4729,6 +4729,7 @@
     <hr class="channel-ctx-sep admin-only">
     <button class="channel-ctx-item admin-only" data-action="organize" style="display:none">📋 <span data-i18n="context_menu.channel.organize">Organize</span></button>
     <button class="channel-ctx-item admin-only" data-action="move-to-parent" style="display:none">📦 <span data-i18n="context_menu.channel.move_to">Move to…</span></button>
+    <button class="channel-ctx-item admin-only" data-action="merge-channel" style="display:none">🔀 <span data-i18n="context_menu.channel.merge">Merge into…</span></button>
     <button class="channel-ctx-item admin-only" data-action="promote-channel" style="display:none">⬆️ <span data-i18n="context_menu.channel.promote">Promote to Channel</span></button>
     <button class="channel-ctx-item" data-action="channel-type" style="display:none">🏷️ <span data-i18n="context_menu.channel.type">Channel Type</span> <span class="ct-ctx-current"></span></button>
     <button class="channel-ctx-item admin-only" data-action="channel-functions">⚙️ <span data-i18n="context_menu.channel.functions">Channel Functions</span> <span class="cfn-arrow">▶</span></button>
@@ -4925,6 +4926,21 @@
       <div id="reparent-channel-list" class="organize-list" style="max-height:300px;overflow-y:auto"></div>
       <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button class="btn-sm" id="reparent-cancel-btn" data-i18n="modals.common.cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Merge Channel Modal (app-channel-merge.js) -->
+  <div class="modal-overlay" id="merge-channel-modal" style="display:none">
+    <div class="modal merge-channel-modal">
+      <h3>🔀 <span data-i18n="modals.merge_channel.title">Merge Channel</span></h3>
+      <p class="modal-desc" id="merge-channel-desc"></p>
+      <div id="merge-channel-targets" class="organize-list merge-channel-scroll"></div>
+      <div id="merge-channel-preview" class="merge-channel-scroll" style="display:none"></div>
+      <div class="modal-actions merge-channel-actions">
+        <button class="btn-sm" id="merge-channel-back" style="display:none" data-i18n="modals.merge_channel.back">Back</button>
+        <button class="btn-sm" id="merge-channel-cancel" data-i18n="modals.common.cancel">Cancel</button>
+        <button class="btn-sm btn-danger-fill" id="merge-channel-go" style="display:none" data-i18n="modals.merge_channel.merge_btn">Merge</button>
       </div>
     </div>
   </div>
@@ -5566,7 +5582,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.59"></script>
+  <script type="module" src="/js/app.js?v=4.29.60"></script>
   <script src="/js/plugin-loader.js?v=4.27.52"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

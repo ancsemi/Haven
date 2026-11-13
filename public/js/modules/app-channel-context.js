@@ -149,6 +149,13 @@ _openChannelCtxMenu(code, btnEl) {
     const hasTarget = this._reparentTargets(ch).length > 0;
     moveToBtn.style.display = (sourceOk && hasTarget && !ch.is_dm && !hasChildren) ? '' : 'none';
   }
+  // "Merge into…": the admin folds a duplicate into another channel
+  // (app-channel-merge.js). One with sub-channels has them moved first.
+  const mergeBtn = menu.querySelector('[data-action="merge-channel"]');
+  if (mergeBtn && ch) {
+    const hasChildren = this.channels.some(c => c.parent_channel_id === ch.id);
+    mergeBtn.style.display = (isAdmin && !ch.is_dm && !hasChildren && this._mergeTargets(ch).length > 0) ? '' : 'none';
+  }
   // "Add members": pick people, roles or everyone (app-channel-add-members.js).
   const addMembersBtn = menu.querySelector('[data-action="add-members"]');
   if (addMembersBtn) addMembersBtn.style.display = this._canAddChannelMembers(ch) ? '' : 'none';
