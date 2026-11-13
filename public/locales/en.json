@@ -3585,6 +3585,30 @@
     "move_channel": {
       "title": "Move Channel"
     },
+    "merge_channel": {
+      "title": "Merge Channel",
+      "desc": "Pick the channel #{{name}} merges into. That channel keeps its name, settings, permissions and members; every message of #{{name}} moves into it and #{{name}} is deleted.",
+      "no_targets": "No other channel of the same kind to merge into.",
+      "loading": "Working out the merge…",
+      "back": "Back",
+      "merge_btn": "Merge",
+      "summary_one": "1 message moves from #{{from}} into #{{to}}.",
+      "summary_many": "{{n}} messages move from #{{from}} into #{{to}}.",
+      "duplicates_one": "1 message is in both channels (the same Discord message) and is kept once.",
+      "duplicates_many": "{{n}} messages are in both channels (the same Discord message) and are kept once.",
+      "carried": "Also moving: {{webhooks}} webhooks, {{scheduled}} scheduled messages, {{menus}} role menus, {{links}} Ferry links.",
+      "reposts_title": "Probably re-posted by hand ({{n}})",
+      "reposts_desc": "These Haven messages have the same text as an older Discord message in the other channel. Ticked ones are removed and the Discord copy, with its real author and time, stays.",
+      "reposts_more": "Only the first {{shown}} of {{n}} are listed; the rest are kept.",
+      "repost_drop": "Remove",
+      "repost_keep": "Keeps",
+      "select_all": "Tick all",
+      "select_none": "Untick all",
+      "confirm": "Merge #{{from}} into #{{to}}? #{{from}} is deleted and this cannot be undone.",
+      "done": "Merged into #{{name}}. Messages moved: {{moved}}. Duplicates removed: {{dupes}}.",
+      "merged_away": "This channel was merged into #{{name}}",
+      "failed": "Could not merge the channels"
+    },
     "rename_channel": {
       "title": "Rename Channel",
       "prompt": "Rename #{{name}}:\nEnter new name:"
@@ -4163,7 +4187,8 @@
         "webhook_update": "changed bot",
         "whitelist_add": "added to the whitelist:",
         "whitelist_remove": "removed from the whitelist:",
-        "server_shutdown": "shut the server down"
+        "server_shutdown": "shut the server down",
+        "channel_merge": "merged channel"
       },
       "exporting": "Exporting...",
       "on": "on",
@@ -4274,6 +4299,7 @@
       "create_sub": "Create Sub-channel",
       "organize": "Organize",
       "move_to": "Move to…",
+      "merge": "Merge into…",
       "promote": "Promote to Channel",
       "functions": "Channel Functions",
       "roles": "Roles",

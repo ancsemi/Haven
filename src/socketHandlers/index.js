@@ -81,6 +81,7 @@ const registerForumPictureVotes = require('./forumPictureVotes');
 const registerBadges = require('./badges');
 const registerMoveToThread = require('./moveToThread');
 const registerChannelAddAll = require('./channelAddAll');
+const registerChannelMerge = require('./channelMerge');
 const registerMessageNsfw = require('./messageNsfw');
 const registerBlockedNames = require('./blockedNames');
 const createLiveAccess = require('./liveAccess');
@@ -2783,6 +2784,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);
     registerChannelAddAll(socket, ctx);
+    registerChannelMerge(socket, ctx);
     registerMessageNsfw(socket, ctx);
     registerBlockedNames(socket, ctx);
 

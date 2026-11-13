@@ -39,9 +39,10 @@ import EmojiSearchMethods from './modules/app-emoji-search.js?v=4.29.12';
 import BotMethods from './modules/app-bots.js?v=4.27.52';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
 import ChannelMethods  from './modules/app-channels.js?v=4.29.56';
-import ChannelContextMethods from './modules/app-channel-context.js?v=4.29.56';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.29.60';
 import ChannelTypeMethods from './modules/app-channel-types.js?v=4.27.42';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.27.52';
+import ChannelMergeMethods from './modules/app-channel-merge.js?v=4.29.60';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.29.30';
 import DmPinMethods from './modules/app-dm-pins.js?v=4.29.30';
 import MessageMethods  from './modules/app-messages.js?v=4.29.13';
@@ -496,6 +497,7 @@ class HavenApp {
     this._initWelcomePopups();
     this._initMoveMessages();
     this._initMoveToThread();
+    this._initChannelMerge();
     this._initUnthread();
 
     // CSP-safe image error handling (no inline onerror attributes)
@@ -628,6 +630,7 @@ Object.assign(HavenApp.prototype,
   ChannelMethods,
   ChannelContextMethods,
   ChannelOrganizeMethods,
+  ChannelMergeMethods,
   ChannelUnreadMethods,
   MessageMethods,
   LinkPreviewMethods,
