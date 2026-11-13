@@ -226,6 +226,12 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     on('edit-message', data => messageActions.edit(socket, data));
     on('add-reaction', data => messageActions.react(socket, data, true));
     on('remove-reaction', data => messageActions.react(socket, data, false));
+    on('delete-message', data => messageActions.remove(socket, data));
+    on('pin-message', data => messageActions.pin(socket, data, true));
+    on('unpin-message', data => messageActions.pin(socket, data, false));
+    on('archive-message', data => messageActions.protect(socket, data, true));
+    on('unarchive-message', data => messageActions.protect(socket, data, false));
+    on('get-pinned-messages', data => messageActions.getPins(socket, data));
     on('typing', async data => {
       const code = data?.code;
       if (typeof code !== 'string' || !/^[a-f0-9]{8}$/i.test(code)) return;

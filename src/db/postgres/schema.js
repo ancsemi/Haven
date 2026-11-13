@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = 3;
+const VERSION = 4;
 
 async function initializePostgres(db) {
   await db.withTransaction(async tx => {
@@ -52,7 +52,11 @@ async function initializePostgres(db) {
       await tx.exec('ALTER TABLE channels ADD COLUMN type_id BIGINT DEFAULT NULL');
       await tx.prepare('INSERT INTO haven_schema_migrations (version) VALUES (?)').run(2);
     }
-    await tx.exec(fs.readFileSync(path.join(__dirname, '003-signing-key-order.sql'), 'utf8'));
+    if (current < 3) {
+      await tx.exec(fs.readFileSync(path.join(__dirname, '003-signing-key-order.sql'), 'utf8'));
+      await tx.prepare('INSERT INTO haven_schema_migrations (version) VALUES (?)').run(3);
+    }
+    await tx.exec(fs.readFileSync(path.join(__dirname, '004-protected-messages.sql'), 'utf8'));
     await tx.prepare('INSERT INTO haven_schema_migrations (version) VALUES (?)').run(VERSION);
   });
 }

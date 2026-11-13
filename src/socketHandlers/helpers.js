@@ -8,7 +8,7 @@ function utcStamp(s) {
   return s.replace(' ', 'T') + 'Z';
 }
 
-// PiP DMs can edit a different channel from the one the socket has open.
+// PiP DMs can edit or delete in a different channel from the one the socket has open.
 function editChannelCode(raw, currentChannel) {
   const code = typeof raw === 'string' ? raw.trim() : '';
   return /^[a-f0-9]{8}$/i.test(code) ? code : currentChannel;
