@@ -51,7 +51,7 @@ test.before(async () => {
   }
   throw new Error('server did not start');
 });
-test.after(() => { server?.kill(); try { fs.rmSync(DATA, { recursive: true, force: true }); } catch {} });
+test.after(() => { server?.kill(); try { fs.rmSync(DATA, { recursive: true, force: true }); } catch { /* Windows can still hold the folder; it is in the temp dir */ } });
 
 test('several forum topics move to another forum and are deleted in one go, replies included', async () => {
   const admin = await post('/api/auth/register', { username: 'admin', password: 'forumtest123', eulaVersion: '2.0', ageVerified: true });
