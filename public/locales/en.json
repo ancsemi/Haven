@@ -1011,6 +1011,8 @@
     "pinned_count": "Pinned Messages",
     "uploading": "Uploading...",
     "cancel_reply": "Cancel reply",
+    "reply_ping_on": "A push notification will be sent to this user if applicable",
+    "reply_ping_off": "User will be notified within Haven, but no push notification will be sent",
     "message_placeholder_commands": "Type a message... (/ for commands)",
     "gif_search_placeholder": "Search GIFs...",
     "powered_by_giphy": "Powered by GIPHY",

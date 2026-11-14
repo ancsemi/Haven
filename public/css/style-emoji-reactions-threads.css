@@ -1106,6 +1106,8 @@ html:not([data-toolbaricons="emoji"]):not([data-toolbaricons="color"]) .tb-icon-
 }
 
 .reply-bar-close:hover { color: var(--text-primary); background: var(--bg-secondary); }
+.reply-ping-btn { flex-shrink: 0; }
+.reply-ping-btn.active { color: var(--accent); }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    THREAD PREVIEW (under messages)
@@ -1550,6 +1552,7 @@ body:has(#thread-panel.thread-panel-forum:not(.pip)) :is(#sidebar-toggle-btn, #s
   color: var(--text-muted);
 }
 #thread-reply-preview-text {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
