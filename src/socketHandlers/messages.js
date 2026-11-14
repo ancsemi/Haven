@@ -1,7 +1,7 @@
 'use strict';
 
 const bcrypt = require('bcryptjs');
-const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
+const { utcStamp, editChannelCode, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const selfDestruct = require('../selfDestruct');
 const { isUsableEmoji } = require('../builtinEmojis');
@@ -15,6 +15,12 @@ const forumUnread = require('../forumUnread');
 const threadNotify = require('../threadNotify');
 const protectedMessages = require('../protectedMessages');
 const mediaGroup = require('../mediaGroup');
+const { sizeCeiling, sizeRefusal, isGroupEnvelope, editNeedsOriginalImage } = require('../messageLimits');
+const { REPLY_CONTEXT_SELECT, insertMessage, getActiveMute, muteNotice, updateMessageContent } = require('../db/messagePosting');
+const { addReaction, removeReaction } = require('../db/messageReactions');
+const { messageChannel, messageChannelMember, messageForAction, messageAuthor,
+        ownDeleteOverride, deleteMessage, findPin, countPins, insertPin, deletePin, clearDestructAt,
+        setProtection, listPins, formatPins } = require('../db/messageManagement');
 const { takeSilent } = require('../silentMessages');
 const { parseSlash } = require('../slashParse');
 const { tagAccess } = require('../uploadTagRoles');
@@ -23,41 +29,8 @@ const storage = require('../storage');
 const { groupHistoryFloor } = require('../groupHistory');
 const { isSafeUploadRelPath } = storage;
 const createReadPositions = require('../db/readPositions');
+const emitChannelRead = require('./channelReadEvents');
 const { mentionsMeCondition } = require('../mentionFilter');
-
-// The length limit is on what people type. An encrypted DM reaches the
-// server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
-// up to about four times the typed length (a character can take three bytes
-// as UTF-8 and base64 adds a third). A DM near the limit was refused after
-// the message box had already cleared (#5691), so ciphertext gets that room.
-function encryptedDmCap(maxChars) {
-  return maxChars * 4 + 256;
-}
-function looksEncrypted(content) {
-  if (typeof content !== 'string' || content.charCodeAt(0) !== 123) return false;
-  try {
-    const o = JSON.parse(content);
-    return !!(o && (o.v === 1 || o.v === 2 || (o.v === 3 && Number.isInteger(o.e) && typeof o.sig === 'string')) && typeof o.iv === 'string' && typeof o.ct === 'string');
-  } catch { return false; }
-}
-function isGroupEnvelope(content) {
-  return looksEncrypted(content) && JSON.parse(content).v === 3;
-}
-// The longest a message can be before its channel is known: ciphertext room
-// for a DM, or text at the limit with a full set of upload lines.
-function sizeCeiling(maxChars) {
-  return Math.max(encryptedDmCap(maxChars), mediaGroup.ceiling(maxChars));
-}
-// Why a message cannot go out for its size, or null. An encrypted DM gets
-// ciphertext room; anything else is held to the typed limit, with room for
-// the upload lines of pictures sent together, and to the number of files one
-// message carries (src/mediaGroup.js, #5799).
-function sizeRefusal(content, channel, { maxChars, maxAttachments, forumTopic = false }) {
-  if (channel && channel.is_dm && looksEncrypted(content)) {
-    return content.length > encryptedDmCap(maxChars) ? `Message too long (max ${maxChars} characters)` : null;
-  }
-  return mediaGroup.refusal(content, { maxChars, maxAttachments, forumTopic });
-}
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
@@ -188,12 +161,6 @@ module.exports = function register(socket, ctx) {
     }
   }
 
-  // Reply banners must match message rendering: bots live in webhook_* with
-  // user_id NULL, so a users-table COALESCE alone becomes "[Deleted User]".
-  const REPLY_CONTEXT_SELECT = `
-    SELECT m.id, m.content, m.user_id, m.is_webhook, m.webhook_username, m.imported_from, m.persona_username,
-           COALESCE(u.display_name, u.username, '[Deleted User]') as username
-    FROM messages m LEFT JOIN users u ON m.user_id = u.id`;
 
   // ── Get message history ─────────────────────────────────
   // ── Forum channels (#144) ──────────────────────────────
@@ -1586,9 +1553,11 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, nsfw, e2e_files, destruct_at, silent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicNsfw, e2eFiles, destructAt, silent);
+      const result = insertMessage(db, {
+        channelId: channel.id, userId: socket.user.id, content: finalContent, replyTo, burnSeconds,
+        personaId, personaUsername, personaAvatar, breakChain, ferryLabel,
+        topicTitle, topicTags, topicNsfw, e2eFiles, destructAt, silent,
+      });
       if (destructAt) selfDestruct.schedule(destructAt);
 
       // Attachment tags (#tagging): the composer sends `attachmentTags` alongside
@@ -2169,12 +2138,7 @@ module.exports = function register(socket, ctx) {
   // mute. Sends, edits and reactions in the server's channels all go through
   // it; DMs are exempt (#5640).
   function activeMuteNotice(userId) {
-    const row = db.prepare(
-      'SELECT expires_at FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') ORDER BY expires_at DESC LIMIT 1'
-    ).get(userId);
-    if (!row) return null;
-    const remaining = Math.ceil((new Date(row.expires_at + 'Z') - Date.now()) / 60000);
-    return `You are in a timeout for ${remaining} more minute${remaining !== 1 ? 's' : ''}`;
+    return muteNotice(getActiveMute(db, userId));
   }
 
   socket.on('edit-message', (data) => {
@@ -2186,8 +2150,7 @@ module.exports = function register(socket, ctx) {
     // Accept an explicit channelCode from the client (e.g. DM PiP, where
     // socket.currentChannel is a different server channel). Fall back to
     // socket.currentChannel for backwards compatibility.
-    const rawCode = typeof data.channelCode === 'string' ? data.channelCode.trim() : null;
-    const code = (rawCode && /^[a-f0-9]{8}$/i.test(rawCode)) ? rawCode : socket.currentChannel;
+    const code = editChannelCode(data.channelCode, socket.currentChannel);
     if (!code) return;
 
     const channel = db.prepare('SELECT id, is_dm, is_group, is_forum FROM channels WHERE code = ?').get(code);
@@ -2225,7 +2188,7 @@ module.exports = function register(socket, ctx) {
     // trivially bypassed: post something harmless, then edit the payload in.
     if (enforceAutomod(newContent, { surface: 'edit', channelId: channel.id, markdown: true })) return;
 
-    if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(newContent)) {
+    if (editNeedsOriginalImage(newContent)) {
       const origMsg = db.prepare('SELECT original_name FROM messages WHERE id = ?').get(data.messageId);
       if (!origMsg || !origMsg.original_name) {
         return socket.emit('error-msg', 'Cannot change a text message into an image');
@@ -2233,9 +2196,7 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      db.prepare(
-        'UPDATE messages SET content = ?, edited_at = datetime(\'now\') WHERE id = ?'
-      ).run(newContent, data.messageId);
+      updateMessageContent(db, data.messageId, newContent);
     } catch (err) {
       console.error('Edit message error:', err);
       return socket.emit('error-msg', 'Failed to edit message');
@@ -2258,23 +2219,20 @@ module.exports = function register(socket, ctx) {
     // Allow the PiP DM overlay (and similar cases where the socket is joined to
     // a different channel) to pass the target channel explicitly so the lookup
     // isn't blocked by socket.currentChannel pointing at a server channel.
-    const rawCode = typeof data.channelCode === 'string' ? data.channelCode.trim() : null;
-    const code = (rawCode && /^[a-f0-9]{8}$/i.test(rawCode)) ? rawCode : socket.currentChannel;
+    const code = editChannelCode(data.channelCode, socket.currentChannel);
     if (!code) return;
 
-    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    const channel = messageChannel(db, code);
     if (!channel) return;
     // Deleting starts with being there. A DM belongs to its two people, so
     // only they can delete in it, whatever server-wide delete permission
     // someone else holds; anywhere else, a non-admin must be in the channel.
-    const _inChannel = !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+    const _inChannel = !!messageChannelMember(db, channel.id, socket.user.id);
     if (channel.is_dm ? !_inChannel : (!_inChannel && !socket.user.isAdmin)) return;
     // A role-gated channel is out of reach for people its gate keeps out.
     if (!channel.is_dm && !socket.user.isAdmin && !hasChannelAccess(channel.id)) return;
 
-    const msg = db.prepare(
-      'SELECT id, user_id, content, destruct_at FROM messages WHERE id = ? AND channel_id = ?'
-    ).get(data.messageId, channel.id);
+    const msg = messageForAction(db, channel.id, data.messageId);
     // Already gone (a scrub or another delete got there first, and this
     // screen was never told): take it off this screen instead of doing nothing.
     if (!msg) return socket.emit('message-deleted', { channelCode: code, messageId: data.messageId });
@@ -2286,11 +2244,7 @@ module.exports = function register(socket, ctx) {
       if (!socket.user.isAdmin) {
         try {
           // (#5433) Channel-scoped override rows only apply in their channel.
-          const chain = getChannelRoleChain(channel.id);
-          const ph = chain.map(() => '?').join(',');
-          const deny = db.prepare(
-            `SELECT allowed FROM user_role_perms WHERE user_id = ? AND permission = 'delete_own_messages' AND (channel_id IS NULL OR channel_id IN (${ph})) ORDER BY allowed ASC LIMIT 1`
-          ).get(socket.user.id, ...chain);
+          const deny = ownDeleteOverride(db, socket.user.id, getChannelRoleChain(channel.id));
           if (deny && deny.allowed === 0) {
             return socket.emit('error-msg', 'You don\'t have permission to delete messages');
           }
@@ -2319,18 +2273,18 @@ module.exports = function register(socket, ctx) {
     // Looked up before the row goes, for the audit entry.
     const othersMessage = msg.user_id !== socket.user.id && !channel.is_dm;
     const authorName = othersMessage
-      ? db.prepare('SELECT COALESCE(display_name, username) AS name FROM users WHERE id = ?').get(msg.user_id)?.name || null
+      ? messageAuthor(db, msg.user_id)?.name || null
       : null;
     try {
-      db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(data.messageId);
+      deletePin(db, data.messageId);
       db.prepare('DELETE FROM reactions WHERE message_id = ?').run(data.messageId);
-      db.prepare('DELETE FROM messages WHERE id = ?').run(data.messageId);
+      deleteMessage(db, data.messageId);
     } catch (err) {
       console.error('Delete message error:', err);
       return socket.emit('error-msg', 'Failed to delete message');
     }
     if (othersMessage && typeof logAudit === 'function') {
-      const chName = db.prepare('SELECT name FROM channels WHERE id = ?').get(channel.id)?.name || null;
+      const chName = channel.name || null;
       logAudit({ actor: socket.user, action: 'message_delete',
         target_type: 'message', target_id: msg.id, target_name: authorName, details: { channel: chName } });
     }
@@ -2442,47 +2396,35 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
-    const pinCode = socket.currentChannel;
-    const pinCh = pinCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(pinCode) : null;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'pin_message', pinCh ? pinCh.id : null)) {
+    const code = socket.currentChannel;
+    const channel = code ? messageChannel(db, code) : null;
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'pin_message', channel ? channel.id : null)) {
       return socket.emit('error-msg', 'You don\'t have permission to pin messages');
     }
 
-    const code = socket.currentChannel;
-    if (!code) return;
-
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
     // currentChannel is where the person last was, not proof they still
     // reach it: a gate, a role or going private can have taken it away.
     if (!canTouchChannel(channel.id)) return;
 
-    const msg = db.prepare(
-      'SELECT id, destruct_at FROM messages WHERE id = ? AND channel_id = ?'
-    ).get(data.messageId, channel.id);
+    const msg = messageForAction(db, channel.id, data.messageId);
     if (!msg) return socket.emit('error-msg', 'Message not found');
 
-    const existing = db.prepare(
-      'SELECT id FROM pinned_messages WHERE message_id = ?'
-    ).get(data.messageId);
+    const existing = findPin(db, data.messageId);
     if (existing) return socket.emit('error-msg', 'Message is already pinned');
 
-    const pinCount = db.prepare(
-      'SELECT COUNT(*) as cnt FROM pinned_messages WHERE channel_id = ?'
-    ).get(channel.id);
+    const pinCount = countPins(db, channel.id);
     if (pinCount.cnt >= 50) {
       return socket.emit('error-msg', 'Channel has reached the 50-pin limit');
     }
 
     try {
-      db.prepare(
-        'INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)'
-      ).run(data.messageId, channel.id, socket.user.id);
+      insertPin(db, data.messageId, channel.id, socket.user.id);
       auditMessage('message_pin', data.messageId, channel.id);
       // Pinning keeps a self-destructing message, as it keeps one from
       // auto-cleanup: the timer is dropped.
       if (msg.destruct_at) {
-        db.prepare('UPDATE messages SET destruct_at = NULL WHERE id = ?').run(msg.id);
+        clearDestructAt(db, msg.id);
         selfDestruct.forget(msg.destruct_at);
       }
     } catch (err) {
@@ -2501,28 +2443,22 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
-    const unpinCode = socket.currentChannel;
-    const unpinCh = unpinCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(unpinCode) : null;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'pin_message', unpinCh ? unpinCh.id : null)) {
+    const code = socket.currentChannel;
+    const channel = code ? messageChannel(db, code) : null;
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'pin_message', channel ? channel.id : null)) {
       return socket.emit('error-msg', 'You don\'t have permission to unpin messages');
     }
 
-    const code = socket.currentChannel;
-    if (!code) return;
-
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
     // currentChannel is where the person last was, not proof they still
     // reach it: a gate, a role or going private can have taken it away.
     if (!canTouchChannel(channel.id)) return;
 
-    const pin = db.prepare(
-      'SELECT id FROM pinned_messages WHERE message_id = ? AND channel_id = ?'
-    ).get(data.messageId, channel.id);
-    if (!pin) return socket.emit('error-msg', 'Message is not pinned');
+    const pin = findPin(db, data.messageId);
+    if (!pin || pin.channel_id !== channel.id) return socket.emit('error-msg', 'Message is not pinned');
 
     try {
-      db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(data.messageId);
+      deletePin(db, data.messageId);
       auditMessage('message_unpin', data.messageId, channel.id);
     } catch (err) {
       console.error('Unpin message error:', err);
@@ -2540,29 +2476,25 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
-    const archCode = socket.currentChannel;
-    const archCh = archCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(archCode) : null;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'archive_messages', archCh ? archCh.id : null)) {
+    const code = socket.currentChannel;
+    const channel = code ? messageChannel(db, code) : null;
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'archive_messages', channel ? channel.id : null)) {
       return socket.emit('error-msg', 'You don\'t have permission to archive messages');
     }
 
-    const code = socket.currentChannel;
-    if (!code) return;
-
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
     // currentChannel is where the person last was, not proof they still
     // reach it: a gate, a role or going private can have taken it away.
     if (!canTouchChannel(channel.id)) return;
 
-    const msg = db.prepare('SELECT id, is_archived, destruct_at FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
+    const msg = messageForAction(db, channel.id, data.messageId);
     if (!msg) return socket.emit('error-msg', 'Message not found');
     if (msg.is_archived) return socket.emit('error-msg', 'Message is already archived');
 
     try {
       // A protected message is kept: its self-destruct and burn-after-read
       // timers stop, the same as auto-cleanup and self-purge leave it alone.
-      db.prepare('UPDATE messages SET is_archived = 1, destruct_at = NULL, burn_seconds = 0, burning_started_at = NULL WHERE id = ?').run(data.messageId);
+      setProtection(db, data.messageId, true);
       auditMessage('message_protect', data.messageId, channel.id);
       if (msg.destruct_at) selfDestruct.forget(msg.destruct_at);
     } catch (err) {
@@ -2581,27 +2513,23 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
-    const unarchCode = socket.currentChannel;
-    const unarchCh = unarchCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(unarchCode) : null;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'archive_messages', unarchCh ? unarchCh.id : null)) {
+    const code = socket.currentChannel;
+    const channel = code ? messageChannel(db, code) : null;
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'archive_messages', channel ? channel.id : null)) {
       return socket.emit('error-msg', 'You don\'t have permission to unarchive messages');
     }
 
-    const code = socket.currentChannel;
-    if (!code) return;
-
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
     // currentChannel is where the person last was, not proof they still
     // reach it: a gate, a role or going private can have taken it away.
     if (!canTouchChannel(channel.id)) return;
 
-    const msg = db.prepare('SELECT id, is_archived FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
+    const msg = messageForAction(db, channel.id, data.messageId);
     if (!msg) return socket.emit('error-msg', 'Message not found');
     if (!msg.is_archived) return socket.emit('error-msg', 'Message is not archived');
 
     try {
-      db.prepare('UPDATE messages SET is_archived = 0 WHERE id = ?').run(data.messageId);
+      setProtection(db, data.messageId, false);
       auditMessage('message_unprotect', data.messageId, channel.id);
     } catch (err) {
       console.error('Unarchive message error:', err);
@@ -2620,34 +2548,14 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id, is_group FROM channels WHERE code = ?').get(code);
+    const channel = messageChannel(db, code);
     if (!channel) return;
 
     const member = hasChannelAccess(channel.id);
     if (!member) return;
 
-    const pins = db.prepare(`
-      SELECT m.id, m.content, m.created_at, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar,
-             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id,
-             pm.pinned_at, COALESCE(pb.display_name, pb.username, '[Deleted User]') as pinned_by
-      FROM pinned_messages pm
-      JOIN messages m ON pm.message_id = m.id
-      LEFT JOIN users u ON m.user_id = u.id
-      LEFT JOIN users pb ON pm.pinned_by = pb.id
-      WHERE pm.channel_id = ? AND m.id > ?
-      ORDER BY pm.pinned_at DESC
-    `).all(channel.id, groupHistoryFloor(db, channel, socket.user.id));
-
-    pins.forEach(p => {
-      p.created_at = utcStamp(p.created_at);
-      p.edited_at = utcStamp(p.edited_at);
-      p.pinned_at = utcStamp(p.pinned_at);
-      if (p.is_webhook) {
-        p.username = `[BOT] ${p.webhook_username || 'Bot'}`;
-      }
-    });
-
-    socket.emit('pinned-messages', { channelCode: code, pins });
+    const pins = listPins(db, channel.id, groupHistoryFloor(db, channel, socket.user.id));
+    socket.emit('pinned-messages', { channelCode: code, pins: formatPins(pins) });
   });
 
   // ── Reactions ───────────────────────────────────────────
@@ -2684,9 +2592,7 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
       }
 
-      db.prepare(
-        'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
-      ).run(data.messageId, socket.user.id, data.emoji);
+      addReaction(db, data.messageId, socket.user.id, data.emoji);
       ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, true);
       // On a message Ferry carried, the Discord copy gets the bot's reaction.
       ctx.ferryReactionChanged?.({ messageId: data.messageId, channelId: msg.channel_id, emoji: data.emoji, added: true });
@@ -2731,9 +2637,7 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
       }
 
-      db.prepare(
-        'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
-      ).run(data.messageId, socket.user.id, data.emoji);
+      removeReaction(db, data.messageId, socket.user.id, data.emoji);
       ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, false);
       ctx.ferryReactionChanged?.({ messageId: data.messageId, channelId: msgRow.channel_id, emoji: data.emoji, added: false });
 
@@ -2924,20 +2828,6 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Read positions ──────────────────────────────────────
-  // Tell every connected device of one account that channels were read, so
-  // each can drop its own notification for them. Looks at the sockets once
-  // however many channels there are. Other accounts never see it.
-  function emitChannelRead(userId, reads) {
-    if (!reads.length) return;
-    const devices = [];
-    for (const [, connected] of io.sockets.sockets) {
-      if (connected.user && connected.user.id === userId) devices.push(connected);
-    }
-    for (const connected of devices) {
-      for (const read of reads) connected.emit('channel-read', read);
-    }
-  }
-
   socket.on('mark-read', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
@@ -2948,7 +2838,7 @@ module.exports = function register(socket, ctx) {
       const result = await readPositions.markRead(socket.user.id, code, data.messageId);
       // Only a receipt that was actually stored (the account is a member)
       // is worth telling the account's other devices about.
-      if (result?.changes) emitChannelRead(socket.user.id, [{ channelCode: code, messageId: data.messageId }]);
+      if (result?.changes) emitChannelRead(io, socket.user.id, [{ channelCode: code, messageId: data.messageId }]);
     } catch (err) {
       console.error('Mark read error:', err);
     }
@@ -2966,11 +2856,11 @@ module.exports = function register(socket, ctx) {
       const result = await readPositions.markChannelRead(socket.user.id, code);
       if (result?.changes) {
         const latest = await (db.async || db).prepare(`
-          SELECT MAX(m.id) AS messageId
+          SELECT MAX(m.id) AS "messageId"
           FROM channels c JOIN messages m ON m.channel_id = c.id AND m.thread_id IS NULL
           WHERE c.code = ?
         `).get(code);
-        emitChannelRead(socket.user.id, [{ channelCode: code, messageId: latest?.messageId || null }]);
+        emitChannelRead(io, socket.user.id, [{ channelCode: code, messageId: latest?.messageId || null }]);
       }
     } catch (err) {
       console.error('Mark read channel error:', err);
@@ -2986,13 +2876,13 @@ module.exports = function register(socket, ctx) {
       const channels = await readPositions.markAllRead(socket.user.id);
       const driver = db.async || db;
       const readChannels = await driver.prepare(`
-        SELECT c.code, MAX(m.id) AS messageId
+        SELECT c.code, MAX(m.id) AS "messageId"
         FROM channels c
         JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
         LEFT JOIN messages m ON m.channel_id = c.id AND m.thread_id IS NULL
         GROUP BY c.id, c.code
       `).all(socket.user.id);
-      emitChannelRead(socket.user.id, readChannels
+      emitChannelRead(io, socket.user.id, readChannels
         .filter(channel => channel.messageId)
         .map(channel => ({ channelCode: channel.code, messageId: channel.messageId })));
       cb({ ok: true, channels });

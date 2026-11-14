@@ -48,13 +48,21 @@ test('PostgreSQL preview installs a real constrained schema and rolls transactio
   // Recreate the previous preview schema, with an existing account, and
   // upgrade it without resetting identities, settings or the default room.
   const fingerprint = await db.prepare("SELECT value FROM server_settings WHERE key = 'server_fingerprint'").get();
-  await db.exec('ALTER TABLE channels DROP COLUMN type_id; ALTER TABLE user_signing_keys DROP COLUMN insertion_id; DELETE FROM haven_schema_migrations WHERE version >= 2');
+  await db.exec(`
+    DROP TRIGGER messages_keep_protected ON messages;
+    DROP FUNCTION keep_protected_message();
+    ALTER TABLE channels DROP COLUMN type_id;
+    ALTER TABLE user_signing_keys DROP COLUMN insertion_id;
+    DELETE FROM haven_schema_migrations WHERE version >= 2;
+  `);
   for (const fp of ['a-legacy', 'z-legacy']) {
     await db.prepare('INSERT INTO user_signing_keys (user_id, fp, jwk, created_at) VALUES (?, ?, ?, ?)')
       .run(user.id, fp, JSON.stringify({ x: fp }), '2026-01-01 00:00:00');
   }
   await require('../src/db/postgres/schema').initializePostgres(db);
-  assert.deepEqual(await db.prepare('SELECT version FROM haven_schema_migrations ORDER BY version').all(), [{ version: 1 }, { version: 2 }, { version: 3 }]);
+  assert.deepEqual(await db.prepare('SELECT version FROM haven_schema_migrations ORDER BY version').all(), [
+    { version: 1 }, { version: 2 }, { version: 3 }, { version: 4 },
+  ]);
   assert.deepEqual(await db.prepare('SELECT type_id FROM channels').all(), [{ type_id: null }]);
   assert.deepEqual(await db.prepare("SELECT value FROM server_settings WHERE key = 'server_fingerprint'").get(), fingerprint);
   assert.equal((await db.prepare('SELECT username FROM users WHERE id = ?').get(user.id)).username, 'Alice');
@@ -64,7 +72,12 @@ test('PostgreSQL preview installs a real constrained schema and rolls transactio
     .run(user.id, '0-latest', '{"x":"newest"}', '2000-01-01 00:00:00');
   assert.equal((await db.prepare('SELECT fp FROM user_signing_keys WHERE user_id = ? ORDER BY insertion_id DESC LIMIT 1').get(user.id)).fp, '0-latest');
   // A version-2 preview already has type_id; only the key sequence is added.
-  await db.exec('ALTER TABLE user_signing_keys DROP COLUMN insertion_id; DELETE FROM haven_schema_migrations WHERE version = 3');
+  await db.exec(`
+    DROP TRIGGER messages_keep_protected ON messages;
+    DROP FUNCTION keep_protected_message();
+    ALTER TABLE user_signing_keys DROP COLUMN insertion_id;
+    DELETE FROM haven_schema_migrations WHERE version >= 3;
+  `);
   await require('../src/db/postgres/schema').initializePostgres(db);
   assert.deepEqual(await db.prepare('SELECT type_id FROM channels').all(), [{ type_id: null }]);
   await db.prepare('INSERT INTO user_signing_keys (user_id, fp, jwk, created_at) VALUES (?, ?, ?, ?)')
@@ -72,6 +85,20 @@ test('PostgreSQL preview installs a real constrained schema and rolls transactio
   const ordered = await db.prepare('SELECT fp FROM user_signing_keys WHERE user_id = ? ORDER BY insertion_id DESC').all(user.id);
   assert.deepEqual(ordered.map(row => row.fp), ['00-current', 'z-legacy', 'a-legacy', '0-latest']);
   await require('../src/db/postgres/schema').initializePostgres(db);
+  assert.deepEqual(await db.prepare('SELECT fp FROM user_signing_keys WHERE user_id = ? ORDER BY insertion_id DESC').all(user.id), ordered);
+  // The previous preview schema already has signing key order. Its protected
+  // messages gain the delete guard without changing either the rows or keys.
+  const channel = await db.prepare('SELECT id FROM channels').get();
+  const kept = await db.prepare("INSERT INTO messages (channel_id, content, is_archived) VALUES (?, 'kept', 1) RETURNING id")
+    .get(channel.id);
+  await db.exec(`
+    DROP TRIGGER messages_keep_protected ON messages;
+    DROP FUNCTION keep_protected_message();
+    DELETE FROM haven_schema_migrations WHERE version = 4;
+  `);
+  await require('../src/db/postgres/schema').initializePostgres(db);
+  await assert.rejects(db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id), /protected message/);
+  assert.deepEqual(await db.prepare('SELECT is_archived FROM messages WHERE id = ?').get(kept.id), { is_archived: 1 });
   assert.deepEqual(await db.prepare('SELECT fp FROM user_signing_keys WHERE user_id = ? ORDER BY insertion_id DESC').all(user.id), ordered);
   assert.match(user.created_at, /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
   await assert.rejects(db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run('aLiCe', 'fixture'), err => err.code === '23505');

@@ -17,13 +17,13 @@ const { spawn } = require('node:child_process');
 const { setTimeout: wait } = require('node:timers/promises');
 const { io } = require('socket.io-client');
 
-function packet(socket, event) {
+function packet(socket, event, matches = () => true) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { cleanup(); reject(new Error('Timed out waiting for ' + event)); }, 10000);
-    const done = data => { cleanup(); resolve(data); };
+    const done = data => { if (matches(data)) { cleanup(); resolve(data); } };
     const failed = error => { cleanup(); reject(new Error(String(error))); };
     function cleanup() { clearTimeout(timer); socket.off(event, done); socket.off('error-msg', failed); }
-    socket.once(event, done);
+    socket.on(event, done);
     socket.once('error-msg', failed);
   });
 }
@@ -111,18 +111,22 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     socket.emit(event, data);
     return result;
   }
-  let alice, room;
+  // The server processes events in order per socket. An acknowledgement
+  // drains the queue without treating a deliberately refused action as an error.
+  const drain = socket => socket.timeout(10000).emitWithAck('get-thread-read-state', { parentIds: [] });
+  let alice, room, adminAccount, peerAccount;
   await start();
   await t.test('serves the page, public configuration and one versioned schema without SQLite', async () => {
     assert.equal((await fetch(base)).status, 200);
     assert.equal((await request('/api/public-config')).status, 200);
     assert.equal((await request('/api/auth/registration-info')).status, 200);
     assert.equal(fs.existsSync(path.join(data, 'haven.db')), false);
-    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM haven_schema_migrations').get()).n, 3);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM haven_schema_migrations').get()).n, 4);
   });
   await t.test('case-folded concurrent signups allocate one admin and one identity', async () => {
     const admins = await Promise.all([signup('admin'), signup('ADMIN')]);
     assert.deepEqual(admins.map(r => r.status).sort(), [200, 400]);
+    adminAccount = admins.find(r => r.status === 200).body;
     assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1').get()).n, 1);
     assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM user_roles ur JOIN users u ON ur.user_id = u.id WHERE u.is_admin = 1').get()).n, 2);
     const names = await Promise.all([signup('Alice'), signup('aLiCe')]);
@@ -235,19 +239,396 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
       const result = await ack(socket, 'mark-all-read');
       assert.deepEqual(result, { ok: true, channels: 2 });
       assert.equal((await db.prepare('SELECT last_read_message_id FROM read_positions WHERE user_id = ? AND channel_id = ?').get(alice.user.id, forum.id)).last_read_message_id, empty.id);
-      const outsider = (await signup('ReceiptOutsider')).body;
-      const outside = await connect(outsider.token);
+      peerAccount = (await signup('ReceiptOutsider')).body;
+      const outside = await connect(peerAccount.token);
       try {
         outside.socket.emit('mark-thread-read', { parentId: parent.id });
         outside.socket.emit('mark-forum-read', { code: 'e3333333' });
         await emit(outside.socket, 'get-preferences', 'preferences');
-        assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM thread_reads WHERE user_id = ?').get(outsider.user.id)).n, 0);
+        assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM thread_reads WHERE user_id = ?').get(peerAccount.user.id)).n, 0);
         assert.deepEqual(await ack(outside.socket, 'get-thread-read-state', { parentIds: [parent.id] }), { reads: {} });
       } finally { outside.socket.disconnect(); }
     } finally {
       socket.disconnect(); peer.socket.disconnect();
       await db.prepare('DELETE FROM channels WHERE id = ?').run(forum.id);
     }
+  });
+  await t.test('members send room text and replies with live delivery, history and read receipts', async st => {
+    const bob = peerAccount;
+    const { socket } = await connect(alice.token);
+    const other = (await connect(bob.token)).socket;
+    const peer = (await connect(alice.token)).socket;
+    st.after(() => { socket.disconnect(); other.disconnect(); peer.disconnect(); });
+    await Promise.all([socket, other, peer].map(client => emit(client, 'get-channels', 'channels-list')));
+
+    const received = packet(other, 'new-message');
+    const own = await emit(socket, 'send-message', 'new-message', { code: room.code, content: '@silent /break hello from a socket' });
+    assert.deepEqual(await received, own);
+    assert.equal(own.message.content, 'hello from a socket');
+    assert.equal(own.message.silent, true);
+    assert.equal(own.message.break_chain, 1);
+
+    const reply = await emit(other, 'send-message', 'new-message', { code: room.code, content: 'a reply', replyTo: own.message.id });
+    assert.equal(reply.message.replyContext.content, own.message.content);
+    const history = await emit(other, 'get-messages', 'message-history', { code: room.code });
+    assert.equal(history.messages.at(-1).id, reply.message.id);
+    assert.equal(history.messages.at(-1).created_at, reply.message.created_at);
+    assert.deepEqual(history.messages.at(-1).replyContext, reply.message.replyContext);
+    assert.equal(history.lastReadMessageId, reply.message.id);
+    const receipt = packet(peer, 'channel-read', data => data.channelCode === room.code && data.messageId === reply.message.id);
+    socket.emit('mark-read-channel', { code: room.code });
+    await receipt;
+
+    await db.prepare('UPDATE channels SET slow_mode_interval = 30 WHERE id = ?').run(room.id);
+    st.after(() => db.prepare('UPDATE channels SET slow_mode_interval = 0 WHERE id = ?').run(room.id));
+    // Use a fresh room so neither device has used the first slow-mode slot.
+    const limited = await db.prepare(`
+      INSERT INTO channels (name, code, slow_mode_interval) VALUES ('Slow mode', 'e5555555', 30) RETURNING id, code
+    `).get();
+    st.after(() => db.prepare('DELETE FROM channels WHERE id = ?').run(limited.id));
+    await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?), (?, ?)')
+      .run(limited.id, alice.user.id, limited.id, bob.user.id);
+    const refusals = [];
+    for (const client of [socket, peer]) client.on('error-msg', error => refusals.push(error));
+    socket.emit('send-message', { code: limited.code, content: 'slow mode first device' });
+    peer.emit('send-message', { code: limited.code, content: 'slow mode second device' });
+    await Promise.all([socket, peer].map(drain));
+    assert.equal(refusals.length, 1);
+    assert.match(refusals[0], /Slow mode/);
+    assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM messages WHERE content LIKE 'slow mode %'").get()).n, 1);
+  });
+  await t.test('room edits persist and reject other authors, protection, permission overrides and filtered content', async st => {
+    const { socket } = await connect(alice.token);
+    const other = (await connect(peerAccount.token)).socket;
+    st.after(() => { socket.disconnect(); other.disconnect(); });
+    await Promise.all([socket, other].map(client => emit(client, 'get-channels', 'channels-list')));
+    await emit(socket, 'enter-channel', 'online-users', { code: room.code });
+
+    const original = await db.prepare("INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, 'original') RETURNING id")
+      .get(room.id, alice.user.id);
+    st.after(() => db.prepare('DELETE FROM messages WHERE id = ?').run(original.id));
+    const edit = { messageId: original.id, content: 'corrected text' };
+    const observer = packet(other, 'message-edited');
+    const edited = await emit(socket, 'edit-message', 'message-edited', edit);
+    assert.deepEqual(await observer, edited);
+    assert.equal(edited.content, edit.content);
+    assert.equal(edited.userId, alice.user.id);
+    const history = await emit(other, 'get-messages', 'message-history', { code: room.code });
+    const row = history.messages.find(message => message.id === original.id);
+    assert.equal(row.content, edit.content);
+    assert.equal(row.edited_at, edited.editedAt);
+
+    const change = { ...edit, channelCode: room.code, content: 'forbidden change' };
+    const attempt = (client, content = change.content) => emit(client, 'edit-message', 'error-msg', { ...change, content });
+    assert.match(await attempt(other), /only edit your own/);
+    await db.prepare('UPDATE messages SET is_archived = 1 WHERE id = ?').run(original.id);
+    assert.match(await attempt(socket), /protected/);
+    await db.prepare('UPDATE messages SET is_archived = 0 WHERE id = ?').run(original.id);
+
+    const role = await db.prepare("INSERT INTO roles (name) VALUES ('Preview edit override') RETURNING id").get();
+    st.after(() => db.prepare('DELETE FROM roles WHERE id = ?').run(role.id));
+    await db.prepare("INSERT INTO user_role_perms (user_id, role_id, channel_id, permission, allowed) VALUES (?, ?, ?, 'edit_own_messages', 0)")
+      .run(alice.user.id, role.id, room.id);
+    assert.match(await attempt(socket), /permission to edit/);
+    await db.prepare('DELETE FROM user_role_perms WHERE role_id = ?').run(role.id);
+
+    const key = 'automod_words';
+    const oldWords = await db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key);
+    st.after(async () => {
+      if (oldWords) await setting(key, oldWords.value);
+      else await db.prepare('DELETE FROM server_settings WHERE key = ?').run(key);
+    });
+    await setting(key, JSON.stringify([{ name: 'edit test', words: ['filterededit'], strikes: 1 }]));
+    assert.match(await attempt(socket, 'filterededit'), /word this server does not allow/);
+    assert.match(await attempt(socket, '/uploads/image.png'), /Cannot change a text message into an image/);
+    assert.equal((await db.prepare('SELECT content FROM messages WHERE id = ?').get(original.id)).content, edit.content);
+  });
+  await t.test('reaction changes preserve concurrent picks, ignore unknown emoji and obey channel settings', async st => {
+    const { socket } = await connect(alice.token);
+    const other = (await connect(peerAccount.token)).socket;
+    const peer = (await connect(alice.token)).socket;
+    st.after(() => { socket.disconnect(); other.disconnect(); peer.disconnect(); });
+    await Promise.all([socket, other, peer].map(client => emit(client, 'get-channels', 'channels-list')));
+    const original = await db.prepare("INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, 'react here') RETURNING id")
+      .get(room.id, alice.user.id);
+    const custom = ':preview_party:';
+    await db.prepare("INSERT INTO custom_emojis (name, filename) VALUES ('preview_party', 'preview-party.png')").run();
+    st.after(async () => {
+      await db.prepare('DELETE FROM messages WHERE id = ?').run(original.id);
+      await db.prepare("DELETE FROM custom_emojis WHERE name = 'preview_party'").run();
+      await db.prepare('UPDATE channels SET reactions_enabled = 1 WHERE id = ?').run(room.id);
+    });
+
+    const updates = [];
+    other.on('reactions-updated', update => updates.push(update));
+    const react = (client, event, emoji) => client.emit(event, { messageId: original.id, emoji });
+    react(socket, 'add-reaction', custom);
+    react(peer, 'add-reaction', custom);
+    react(other, 'add-reaction', '👍');
+    await Promise.all([socket, other, peer].map(client => emit(client, 'get-preferences', 'preferences')));
+    assert.equal(updates.length, 3);
+    assert.ok(updates.every(update => update.channelCode === room.code && update.messageId === original.id));
+    const sizes = updates.map(update => update.reactions.length);
+    assert.equal(sizes[0], 1);
+    assert.equal(sizes.at(-1), 2);
+    assert.deepEqual(sizes, [...sizes].sort((a, b) => a - b));
+    assert.equal(updates.at(-1).reactions.filter(reaction => reaction.emoji === custom).length, 1);
+    assert.ok(updates.at(-1).reactions.some(reaction => reaction.user_id === peerAccount.user.id && reaction.emoji === '👍'));
+
+    react(socket, 'add-reaction', ':unknown_preview_emoji:');
+    await emit(socket, 'get-preferences', 'preferences');
+    await emit(other, 'get-preferences', 'preferences');
+    assert.equal(updates.length, 3);
+
+    await db.prepare('UPDATE channels SET reactions_enabled = 0 WHERE id = ?').run(room.id);
+    const payload = { messageId: original.id, emoji: custom };
+    assert.match(await emit(socket, 'remove-reaction', 'error-msg', payload), /Reactions are disabled/);
+    assert.match(await emit(socket, 'add-reaction', 'error-msg', payload), /Reactions are disabled/);
+    await db.prepare('UPDATE channels SET reactions_enabled = 1 WHERE id = ?').run(room.id);
+    await emit(socket, 'remove-reaction', 'reactions-updated', payload);
+    const history = await emit(other, 'get-messages', 'message-history', { code: room.code });
+    const message = history.messages.find(row => row.id === original.id);
+    assert.deepEqual(message.reactions.map(row => [row.user_id, row.emoji]), [[peerAccount.user.id, '👍']]);
+  });
+  await t.test('room messages can be pinned, protected, unprotected and deleted', async st => {
+    const author = (await connect(alice.token)).socket;
+    const moderator = (await connect(adminAccount.token)).socket;
+    st.after(() => { author.disconnect(); moderator.disconnect(); });
+    for (const client of [author, moderator]) await emit(client, 'enter-channel', 'online-users', { code: room.code });
+    const message = await db.prepare("INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, 'room message to manage') RETURNING id, content")
+      .get(room.id, alice.user.id);
+    st.after(async () => {
+      await db.prepare('UPDATE messages SET is_archived = 0 WHERE id = ?').run(message.id);
+      await db.prepare('DELETE FROM messages WHERE id = ?').run(message.id);
+    });
+    const action = { messageId: message.id };
+    const list = () => emit(author, 'get-pinned-messages', 'pinned-messages', { code: room.code });
+    assert.match(await emit(author, 'pin-message', 'error-msg', action), /permission to pin/);
+    assert.match(await emit(author, 'archive-message', 'error-msg', action), /permission to archive/);
+
+    const peerPin = packet(author, 'message-pinned');
+    assert.deepEqual(await emit(moderator, 'pin-message', 'message-pinned', action), await peerPin);
+    const pin = (await list()).pins.find(row => row.id === message.id);
+    assert.equal(pin.content, message.content);
+    assert.equal(pin.user_id, alice.user.id);
+    assert.equal(pin.pinned_by.toLowerCase(), 'admin');
+    assert.match(pin.pinned_at, /T.*Z$/);
+    assert.match(await emit(moderator, 'pin-message', 'error-msg', action), /already pinned/);
+    await emit(moderator, 'unpin-message', 'message-unpinned', action);
+    assert.equal((await list()).pins.some(row => row.id === message.id), false);
+    assert.match(await emit(moderator, 'unpin-message', 'error-msg', action), /not pinned/);
+    await emit(moderator, 'pin-message', 'message-pinned', action);
+    await emit(author, 'add-reaction', 'reactions-updated', { ...action, emoji: '👍' });
+
+    await emit(moderator, 'archive-message', 'message-archived', action);
+    assert.match(await emit(author, 'delete-message', 'error-msg', action), /message is protected/);
+    assert.match(await emit(moderator, 'delete-message', 'error-msg', action), /message is protected/);
+    assert.match(await emit(moderator, 'archive-message', 'error-msg', action), /already archived/);
+    await emit(moderator, 'unarchive-message', 'message-unarchived', action);
+    assert.match(await emit(moderator, 'unarchive-message', 'error-msg', action), /not archived/);
+
+    const role = await db.prepare("SELECT id FROM roles WHERE name = 'Member'").get();
+    const override = await db.prepare(`
+      INSERT INTO user_role_perms (user_id, role_id, channel_id, permission, allowed)
+      VALUES (?, ?, ?, 'delete_own_messages', 0) RETURNING id
+    `).get(alice.user.id, role.id, room.id);
+    st.after(() => db.prepare('DELETE FROM user_role_perms WHERE id = ?').run(override.id));
+    assert.match(await emit(author, 'delete-message', 'error-msg', action), /permission to delete/);
+
+    const peerDelete = packet(author, 'message-deleted');
+    assert.deepEqual(await emit(moderator, 'delete-message', 'message-deleted', action), await peerDelete);
+    assert.deepEqual(await emit(author, 'delete-message', 'message-deleted', action), { channelCode: room.code, ...action });
+    assert.equal(await db.prepare('SELECT 1 FROM messages WHERE id = ?').get(message.id), undefined);
+    assert.equal(await db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(message.id), undefined);
+    assert.equal(await db.prepare('SELECT 1 FROM reactions WHERE message_id = ?').get(message.id), undefined);
+    const audit = await db.prepare('SELECT action, target_name, details FROM audit_log WHERE target_id = ? ORDER BY id').all(message.id);
+    assert.deepEqual(audit.map(row => row.action), ['message_pin', 'message_unpin', 'message_pin', 'message_protect', 'message_unprotect', 'message_delete']);
+    assert.ok(audit.every(row => row.target_name.toLowerCase() === 'alice' && JSON.parse(row.details).channel === room.name));
+  });
+  await t.test('concurrent pins respect the last slot and pinning clears the self-destruct time', async st => {
+    const channel = await db.prepare("INSERT INTO channels (name, code) VALUES ('Pin limit', 'e4444444') RETURNING id, code").get();
+    st.after(() => db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id));
+    await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channel.id, adminAccount.user.id);
+    await db.prepare(`
+      WITH inserted AS (
+        INSERT INTO messages (channel_id, user_id, content)
+        SELECT ?, ?, 'pinned ' || n FROM generate_series(1, 49) AS n RETURNING id, channel_id, user_id
+      )
+      INSERT INTO pinned_messages (message_id, channel_id, pinned_by)
+      SELECT id, channel_id, user_id FROM inserted
+    `).run(channel.id, adminAccount.user.id);
+    const messages = await db.prepare(`
+      INSERT INTO messages (channel_id, user_id, content, destruct_at)
+      SELECT ?, ?, 'last slot ' || n, '2099-01-01T00:00:00Z' FROM generate_series(1, 2) AS n RETURNING id
+    `).all(channel.id, adminAccount.user.id);
+    const clients = await Promise.all([connect(adminAccount.token), connect(adminAccount.token)]);
+    st.after(() => clients.forEach(({ socket }) => socket.disconnect()));
+    for (const { socket } of clients) await emit(socket, 'enter-channel', 'online-users', { code: channel.code });
+    const refusals = [], updates = [];
+    clients[0].socket.on('message-pinned', data => updates.push(data));
+    await Promise.all(clients.map(({ socket }, i) => {
+      socket.on('error-msg', error => refusals.push(error));
+      socket.emit('pin-message', { messageId: messages[i].id });
+      return drain(socket);
+    }));
+    assert.deepEqual(refusals, ['Channel has reached the 50-pin limit']);
+    await emit(clients[0].socket, 'get-preferences', 'preferences');
+    assert.equal(updates.length, 1);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM pinned_messages WHERE channel_id = ?').get(channel.id)).n, 50);
+    assert.equal((await db.prepare('SELECT destruct_at FROM messages WHERE id = ?').get(updates[0].messageId)).destruct_at, null);
+  });
+  await t.test('DM members can manage messages and only the author can delete them', async st => {
+    const account = peerAccount;
+    const author = (await connect(account.token)).socket;
+    const peer = (await connect(alice.token)).socket;
+    const outsider = (await connect(adminAccount.token)).socket;
+    st.after(() => { author.disconnect(); peer.disconnect(); outsider.disconnect(); });
+    const dm = await emit(author, 'start-dm', 'dm-opened', { targetUserId: alice.user.id });
+    st.after(async () => {
+      await db.prepare('UPDATE messages SET is_archived = 0 WHERE channel_id = ?').run(dm.id);
+      await db.prepare('DELETE FROM channels WHERE id = ?').run(dm.id);
+    });
+    const role = await db.prepare("SELECT id FROM roles WHERE name = 'Member'").get();
+    for (const permission of ['pin_message', 'archive_messages']) {
+      await db.prepare('INSERT INTO user_role_perms (user_id, role_id, channel_id, permission, allowed) VALUES (?, ?, ?, ?, 1)')
+        .run(account.user.id, role.id, dm.id, permission);
+    }
+    await emit(author, 'enter-channel', 'online-users', { code: dm.code });
+    const content = JSON.stringify({ v: 1, iv: 'opaque-iv', ct: 'opaque-ciphertext' });
+    const { message } = await emit(author, 'send-message', 'new-message', { code: dm.code, content });
+    const action = { messageId: message.id, channelCode: dm.code };
+    await emit(author, 'pin-message', 'message-pinned', action);
+    const pins = await emit(peer, 'get-pinned-messages', 'pinned-messages', { code: dm.code });
+    assert.deepEqual(pins.pins.map(pin => [pin.id, pin.content]), [[message.id, content]]);
+    assert.match(await emit(outsider, 'get-pinned-messages', 'error-msg', { code: dm.code }), /not a member/i);
+    assert.match(await emit(outsider, 'delete-message', 'error-msg', action), /not a member/i);
+    assert.match(await emit(peer, 'delete-message', 'error-msg', action), /only delete your own/);
+    await emit(author, 'unpin-message', 'message-unpinned', action);
+    await emit(author, 'archive-message', 'message-archived', action);
+    assert.match(await emit(author, 'delete-message', 'error-msg', action), /message is protected/);
+    await emit(author, 'unarchive-message', 'message-unarchived', action);
+
+    await emit(author, 'enter-channel', 'online-users', { code: room.code });
+    const peerDelete = packet(peer, 'message-deleted');
+    assert.deepEqual(await emit(author, 'delete-message', 'message-deleted', { ...action, attachments: [] }), await peerDelete);
+    assert.equal(await db.prepare('SELECT 1 FROM messages WHERE id = ?').get(message.id), undefined);
+    assert.equal(await db.prepare("SELECT 1 FROM audit_log WHERE target_type = 'message' AND target_id = ?").get(message.id), undefined);
+  });
+  await t.test('PostgreSQL preview refuses restricted posts and filters message and status text', async st => {
+    const { socket } = await connect(alice.token);
+    st.after(() => socket.disconnect());
+    const send = content => emit(socket, 'send-message', 'error-msg', { code: room.code, content });
+    const patch = await db.prepare("SELECT value FROM server_settings WHERE key = 'automod_words'").get();
+    st.after(async () => {
+      if (patch) await setting('automod_words', patch.value);
+      else await db.prepare("DELETE FROM server_settings WHERE key = 'automod_words'").run();
+      await db.prepare('UPDATE channels SET read_only = 0 WHERE id = ?').run(room.id);
+      await db.prepare('DELETE FROM mutes WHERE user_id = ?').run(alice.user.id);
+    });
+    const before = await db.prepare('SELECT COUNT(*) AS n FROM messages WHERE channel_id = ?').get(room.id);
+    await setting('automod_words', JSON.stringify([{ name: 'preview test', words: ['filteredword'], strikes: 1 }]));
+    assert.match(await send('filteredword'), /word this server does not allow/);
+    assert.match(await emit(socket, 'set-status', 'error-msg', { status: 'dnd', statusText: 'filteredword' }), /word this server does not allow/);
+    await db.prepare('UPDATE channels SET read_only = 1 WHERE id = ?').run(room.id);
+    assert.match(await send('read only'), /read-only/);
+    await db.prepare('UPDATE channels SET read_only = 0 WHERE id = ?').run(room.id);
+    await db.prepare("INSERT INTO mutes (user_id, muted_by, expires_at) VALUES (?, ?, (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '5 minutes')")
+      .run(alice.user.id, alice.user.id);
+    assert.match(await send('timed out'), /timeout/);
+    assert.deepEqual(await db.prepare('SELECT COUNT(*) AS n FROM messages WHERE channel_id = ?').get(room.id), before);
+    assert.equal((await db.prepare('SELECT status_text FROM users WHERE id = ?').get(alice.user.id)).status_text, '');
+  });
+  await t.test('DM opens are unique, ciphertext stays opaque, and status respects membership and invisibility', async st => {
+    const bob = peerAccount;
+    const { socket } = await connect(alice.token);
+    const other = (await connect(bob.token)).socket;
+    const peer = (await connect(alice.token)).socket;
+    const oldVisibility = await db.prepare("SELECT value FROM server_settings WHERE key = 'member_visibility'").get();
+    st.after(async () => {
+      socket.disconnect(); other.disconnect(); peer.disconnect();
+      await db.prepare('DELETE FROM channels WHERE is_dm = 1 AND created_by IN (?, ?)').run(alice.user.id, bob.user.id);
+      await db.prepare("UPDATE users SET status = 'online', status_text = '' WHERE id = ?").run(alice.user.id);
+      if (oldVisibility) await setting('member_visibility', oldVisibility.value);
+      else await db.prepare("DELETE FROM server_settings WHERE key = 'member_visibility'").run();
+    });
+    await setting('member_visibility', 'online');
+    const a = packet(socket, 'dm-opened'), b = packet(other, 'dm-opened');
+    socket.emit('start-dm', { targetUserId: bob.user.id });
+    other.emit('start-dm', { targetUserId: alice.user.id });
+    const [dm, reverse] = await Promise.all([a, b]);
+    assert.equal(dm.id, reverse.id);
+    assert.equal(dm.dm_target.id, bob.user.id);
+    assert.equal(reverse.dm_target.id, alice.user.id);
+    await Promise.all([socket, other].map(client => emit(client, 'get-preferences', 'preferences')));
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM channels WHERE is_dm = 1').get()).n, 1);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM channel_members WHERE channel_id = ?').get(dm.id)).n, 2);
+
+    const ciphertext = JSON.stringify({ v: 1, iv: 'opaque-iv', ct: 'opaque-ciphertext' });
+    const delivered = packet(other, 'new-message');
+    const sent = await emit(socket, 'send-message', 'new-message', { code: dm.code, content: ciphertext, encrypted: true });
+    assert.equal((await delivered).message.content, ciphertext);
+    const history = await emit(other, 'get-messages', 'message-history', { code: dm.code });
+    assert.equal(history.messages.at(-1).id, sent.message.id);
+    assert.equal(history.messages.at(-1).content, ciphertext);
+    assert.match(await emit(socket, 'send-message', 'error-msg', { code: dm.code, content: 'plaintext' }), /end-to-end encrypted/);
+    const replacement = JSON.stringify({ v: 1, iv: 'edited-iv', ct: 'edited-ciphertext' });
+    const dmEdit = { messageId: sent.message.id, channelCode: dm.code, content: replacement };
+    const receivedEdit = packet(other, 'message-edited');
+    assert.equal((await emit(socket, 'edit-message', 'message-edited', dmEdit)).content, replacement);
+    assert.equal((await receivedEdit).content, replacement);
+    assert.match(await emit(socket, 'edit-message', 'error-msg', { ...dmEdit, content: 'plaintext' }), /end-to-end encrypted/);
+    const dmReaction = { messageId: sent.message.id, emoji: ':flag_ca:' };
+    const observed = packet(socket, 'reactions-updated');
+    await emit(other, 'add-reaction', 'reactions-updated', dmReaction);
+    assert.deepEqual((await observed).reactions.map(row => row.user_id), [bob.user.id]);
+    const typing = packet(other, 'user-typing');
+    socket.emit('typing', { code: dm.code });
+    assert.equal((await typing).userId, alice.user.id);
+
+    const dmPresence = packet(other, 'online-users', value => value.channelCode === dm.code &&
+      value.users.some(user => user.id === alice.user.id && user.status === 'dnd'));
+    const update = packet(peer, 'status-updated');
+    const status = await emit(socket, 'set-status', 'status-updated', { status: 'dnd', statusText: '  working  ' });
+    assert.deepEqual(status, { status: 'dnd', statusText: 'working' });
+    assert.deepEqual(await update, status);
+    assert.equal((await dmPresence).users.find(user => user.id === alice.user.id).statusText, 'working');
+    assert.deepEqual(await db.prepare('SELECT status, status_text FROM users WHERE id = ?').get(alice.user.id), { status: 'dnd', status_text: 'working' });
+
+    const hidden = packet(other, 'online-users', value => value.channelCode === dm.code &&
+      !value.users.some(user => user.id === alice.user.id));
+    await emit(socket, 'set-status', 'status-updated', { status: 'invisible', statusText: 'working' });
+    await hidden;
+    const outsider = (await connect(adminAccount.token)).socket;
+    st.after(() => outsider.disconnect());
+    assert.match(await emit(outsider, 'get-messages', 'error-msg', { code: dm.code }), /not a member/i);
+    assert.match(await emit(outsider, 'send-message', 'error-msg', { code: dm.code, content: ciphertext }), /not a member/i);
+    assert.match(await emit(outsider, 'add-reaction', 'error-msg', dmReaction), /not a member/i);
+    assert.match(await emit(outsider, 'remove-reaction', 'error-msg', dmReaction), /not a member/i);
+    assert.match(await emit(outsider, 'edit-message', 'error-msg', dmEdit), /not a member/i);
+
+    await db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(dm.id, bob.user.id);
+    let leaked = false;
+    other.on('new-message', () => { leaked = true; });
+    await emit(socket, 'send-message', 'new-message', { code: dm.code, content: ciphertext });
+    await emit(other, 'get-preferences', 'preferences');
+    assert.equal(leaked, false, 'a removed member still in the Socket.IO room receives no message');
+    assert.match(await emit(other, 'get-messages', 'error-msg', { code: dm.code }), /not a member/i);
+    assert.match(await emit(other, 'remove-reaction', 'error-msg', dmReaction), /not a member/i);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM reactions WHERE message_id = ?').get(sent.message.id)).n, 1);
+    assert.equal((await db.prepare('SELECT content FROM messages WHERE id = ?').get(sent.message.id)).content, replacement);
+
+    const notes = await emit(other, 'start-dm', 'dm-opened', { targetUserId: bob.user.id });
+    assert.equal(notes.is_self_dm, 1);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM channel_members WHERE channel_id = ?').get(notes.id)).n, 1);
+    const savedNote = await emit(other, 'send-message', 'new-message', { code: notes.code, content: ciphertext });
+    assert.equal(savedNote.message.content, ciphertext);
+
+    await emit(socket, 'set-status', 'status-updated', { status: 'away', statusText: 'working' });
+    const active = packet(peer, 'status-updated', value => value.status === 'online');
+    const reconnected = await connect(alice.token);
+    st.after(() => reconnected.socket.disconnect());
+    assert.equal(reconnected.session.status, 'online');
+    assert.deepEqual(await active, { status: 'online', statusText: 'working' });
   });
   await t.test('the initial browser burst includes roles, notices and scoped admin reads', async () => {
     const { socket } = await connect(alice.token);
