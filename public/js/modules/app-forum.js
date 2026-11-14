@@ -56,6 +56,7 @@ _forumPrefs(code) {
 },
 
 _forumParseView(v) { return v === 'gallery' || v === 'feed' ? v : 'list'; },
+_forumCanSelect() { return !!(this.user?.isAdmin || this._canModerate?.()); },
 // Whoever can change the channel's settings can set and lock its layout.
 _forumCanManage() {
   return !!(this.user?.isAdmin || (this._hasPerm && this._hasPerm('manage_channel_settings')));
@@ -223,6 +224,7 @@ _renderForum(messages) {
   const topics = this._forumSortTopics((messages || []).filter(m => m && !m.thread_id && (m.type || 'user') === 'user' && !this._forumTopicHidden(m)));
   for (const m of topics) { this._forumTopics.set(m.id, m); grid.appendChild(this._createForumTopicEl(m)); }
   container.appendChild(grid);
+  if (this._moveSelectionActive && !this._moveSourceThread) { for (const id of [...this._moveSelectedIds]) this._forumTopics.has(id) || this._moveSelectedIds.delete(id); this._updateMoveCount(); }
   if (!topics.length) {
     const hint = document.createElement('div');
     hint.className = 'forum-empty-hint';
@@ -284,6 +286,7 @@ _forumToolbarEl(code) {
           <select id="forum-shape" class="forum-select forum-select-small" aria-label="${t('forum.shape')}">${this._tileShapeOptionsHtml(p.shape)}</select>
         </label>` : ''}
         <button type="button" class="btn-sm forum-mark-read" id="forum-mark-read" title="${t('forum.mark_all_read_title')}">${t('forum.mark_all_read')}</button>
+        ${this._forumCanSelect() ? `<button type="button" class="btn-sm forum-select-btn" id="forum-select-btn" title="${t('forum.select_title')}">☑️ ${t('forum.select')}</button>` : ''}
         ${canSetDefault ? `<button type="button" class="btn-sm forum-set-default" id="forum-set-default" title="${t('forum.set_default_title')}">${t('forum.set_default')}</button>
         <button type="button" class="btn-sm forum-lock-layout" id="forum-lock-layout" title="${t(layoutLocked ? 'forum.unlock_layout_title' : 'forum.lock_layout_title')}">${layoutLocked ? '🔒' : '🔓'}</button>` : ''}
       </div>
@@ -308,6 +311,7 @@ _forumToolbarEl(code) {
     this.socket.emit('mark-forum-read', { code });
     this._forumMarkAllRead(code);
   });
+  bar.querySelector('#forum-select-btn')?.addEventListener('click', () => this._moveSelectionActive ? this._exitMoveSelectionMode() : this._enterMoveSelectionMode());
   bar.querySelector('#forum-set-default')?.addEventListener('click', () => {
     const cur = this._forumPrefs(code);
     this.socket.emit('set-forum-layout', { code, view: cur.view, tile: cur.tile, shape: cur.shape, locked: layoutLocked }, (r) => {
@@ -350,7 +354,7 @@ _createForumTopicEl(msg) {
   // Someone who has switched the blur off in Settings gets the card plain,
   // with the 🔞 tag still on it (#5633).
   const blurred = !!msg.nsfw && this._blurNsfw();
-  el.className = 'forum-topic' + (msg.pinned ? ' forum-topic-pinned' : '') + (msg.closed ? ' forum-topic-closed' : '') + (unread ? ' forum-topic-unread' : '') + (msg.nsfw ? ' forum-topic-nsfw' : '') + (msg.nsfw && !blurred ? ' revealed' : '');
+  el.className = 'forum-topic' + (this._moveSelectionActive && this._moveSelectedIds.has(msg.id) ? ' move-selected' : '') + (msg.pinned ? ' forum-topic-pinned' : '') + (msg.closed ? ' forum-topic-closed' : '') + (unread ? ' forum-topic-unread' : '') + (msg.nsfw ? ' forum-topic-nsfw' : '') + (msg.nsfw && !blurred ? ' revealed' : '');
   el.dataset.msgId = msg.id;
   el.dataset.userId = msg.user_id;
   el.dataset.time = msg.created_at;
@@ -430,6 +434,7 @@ _showForumTopicContextMenu(e, msg) {
   if (canEdit) items.push(msg.closed ? item('reopen', '🔓', t('forum.reopen_topic')) : item('close', '✔', t('forum.close_topic')));
   if (canEdit) items.push(msg.nsfw ? item('unnsfw', '🔞', t('forum.unmark_nsfw')) : item('nsfw', '🔞', t('forum.mark_nsfw_menu')));
   if (this._forumMoveTargets().length && (this.user?.isAdmin || this._hasPerm('delete_message'))) items.push(item('move', '📦', t('forum.move_topic')));
+  if (this._forumCanSelect()) items.push(item('select', '☑️', t('forum.select')));
   const more = [];
   if (canShareLink) more.push(item('copy-link', '🔗', t('msg_toolbar.copy_link')));
   if (canArchive) more.push(msg.is_archived ? item('unarchive', '🛡️', t('app.messages.unprotect_btn')) : item('archive', '🛡️', t('app.messages.protect_btn')));
@@ -467,7 +472,12 @@ _showForumTopicContextMenu(e, msg) {
     } else if (action === 'nsfw' || action === 'unnsfw') {
       this.socket.emit('set-topic-meta', { messageId: msgId, title: msg.title || '', tags: Array.isArray(msg.tags) ? msg.tags : [], nsfw: action === 'nsfw' });
     } else if (action === 'move') {
-      this._forumShowMovePicker(msg);
+      this._forumShowMovePicker([msg.id]);
+    } else if (action === 'select') {
+      const card = document.querySelector(`#forum-topics [data-msg-id="${msgId}"]`);
+      this._enterMoveSelectionMode();
+      card && this._toggleMoveSelect(card);
+      this._lastMoveSelectedEl = card;
     } else if (action === 'copy-link') {
       this._copyChannelLink(this.currentChannel, msgId);
     } else if (action === 'archive') {
@@ -503,16 +513,14 @@ _forumMoveTargets() {
   return (this.channels || []).filter(c => c.is_forum && !c.is_dm && c.code !== this.currentChannel);
 },
 
-// Picks the forum to move a topic to, in the Move Messages window. The topic
-// brings its replies and keeps the tags the new forum also has.
-_forumShowMovePicker(msg) {
+_forumShowMovePicker(ids, done) {
   const modal = document.getElementById('move-msg-modal');
   const list = document.getElementById('move-msg-channel-list');
   if (!modal || !list) return;
   const heading = modal.querySelector('h3');
   if (heading) heading.textContent = t('forum.move_topic_title');
   const desc = document.getElementById('move-msg-desc');
-  if (desc) desc.textContent = t('forum.move_topic_desc', { title: this._forumTitleOf(msg) });
+  if (desc) desc.textContent = ids.length === 1 ? t('forum.move_topic_desc', { title: this._forumTitleOf(this._forumTopics.get(ids[0]) || {}) }) : t('forum.move_topics_desc', { n: ids.length });
   list.innerHTML = '';
   const fromCode = this.currentChannel;
   for (const ch of this._forumMoveTargets()) {
@@ -521,14 +529,35 @@ _forumShowMovePicker(msg) {
     btn.textContent = `🗂️ ${ch.name}`;
     btn.addEventListener('click', () => {
       modal.style.display = 'none';
-      this.socket.emit('move-messages', { messageIds: [msg.id], fromChannel: fromCode, toChannel: ch.code }, (resp) => {
+      this.socket.emit('move-messages', { messageIds: ids, fromChannel: fromCode, toChannel: ch.code }, (resp) => {
         if (resp && resp.error) this._showToast(resp.error, 'error');
-        else if (resp && resp.success) this._showToast(t('forum.move_topic_done', { name: ch.name }), 'success');
+        else if (resp && resp.success) this._showToast(ids.length === 1 ? t('forum.move_topic_done', { name: ch.name }) : t('forum.move_topics_done', { n: resp.moved, name: ch.name }), 'success');
+        done?.();
       });
     });
     list.appendChild(btn);
   }
   modal.style.display = 'flex';
+},
+
+_forumSelectAll() {
+  const all = this._forumAllSelected();
+  for (const el of document.querySelectorAll('#forum-topics .forum-topic')) {
+    if (!all && this._moveSelectedIds.size >= 200) return this._showToast(t('modals.move_messages.max_messages', { max: 200 }), 'error');
+    if (this._moveSelectedIds.has(parseInt(el.dataset.msgId)) === all) this._toggleMoveSelect(el);
+  }
+},
+
+_forumAllSelected() {
+  const cards = [...document.querySelectorAll('#forum-topics .forum-topic')];
+  return cards.length > 0 && cards.every(el => this._moveSelectedIds.has(parseInt(el.dataset.msgId)));
+},
+
+_forumSyncSelectAll() {
+  const btn = document.getElementById('move-msg-all-btn');
+  if (!btn) return;
+  btn.style.display = this._forumActive && !this._moveSourceThread && this._isForumChannel(this._moveSourceChannel || this.currentChannel) ? '' : 'none';
+  btn.textContent = t(this._forumAllSelected() ? 'forum.select_none' : 'forum.select_all');
 },
 
 // The body of a topic changed, from the composer or the ordinary edit path:

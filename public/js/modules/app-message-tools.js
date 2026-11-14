@@ -266,12 +266,14 @@ _updateMoveCount() {
   if (moveBtn) moveBtn.disabled = n === 0;
   if (deleteBtn) deleteBtn.disabled = n === 0;
   this._syncMoveThreadUi?.();
+  this._forumSyncSelectAll?.();
 },
 
 _showMoveChannelPicker() {
   if (this._moveSelectedIds.size === 0) return;
   // Replies picked in a thread go back to its channel (app-unthread.js).
   if (this._moveSourceThread && this._showUnthreadPicker) return this._showUnthreadPicker();
+  if (this._isForumChannel?.(this._moveSourceChannel || this.currentChannel)) return this._forumShowMovePicker([...this._moveSelectedIds], () => this._exitMoveSelectionMode());
   const list = document.getElementById('move-msg-channel-list');
   const modal = document.getElementById('move-msg-modal');
   const desc = document.getElementById('move-msg-desc');
@@ -383,6 +385,7 @@ _initMoveMessages() {
     else this._enterMoveSelectionMode();
   });
 
+  document.getElementById('move-msg-all-btn')?.addEventListener('click', () => this._forumSelectAll());
   // "Move to..." button in toolbar
   const moveBtn = document.getElementById('move-msg-move-btn');
   if (moveBtn) moveBtn.addEventListener('click', () => this._showMoveChannelPicker());
