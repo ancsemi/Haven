@@ -690,7 +690,7 @@ _moveCategoryInOrder(direction) {
 
 _openDmOrganizeModal() {
   const dmChannels = this.channels.filter(c => c.is_dm);
-  const order = JSON.parse(localStorage.getItem('haven_dm_order') || '[]');
+  const order = this._dmManualOrder();
   const assignments = JSON.parse(localStorage.getItem('haven_dm_assignments') || '{}');
 
   // Build list sorted by saved order, then alphabetical for unknowns
@@ -706,14 +706,14 @@ _openDmOrganizeModal() {
   this._dmOrganizeSelected = null;
 
   const sortSel = document.getElementById('dm-organize-sort');
-  sortSel.value = localStorage.getItem('haven_dm_sort_mode') || 'manual';
+  sortSel.value = this._dmSortMode();
   document.getElementById('dm-organize-tag-input').value = '';
   this._renderDmOrganizeList();
   document.getElementById('dm-organize-modal').style.display = 'flex';
 },
 
 _saveDmOrder() {
-  localStorage.setItem('haven_dm_order', JSON.stringify(this._dmOrganizeList.map(c => c.code)));
+  this._saveDmManualOrder(this._dmOrganizeList.map(c => c.code));
 },
 
 _renderDmOrganizeList() {
@@ -730,15 +730,8 @@ _renderDmOrganizeList() {
 
   const getDmName = (ch) => ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
 
-  const sortGroup = (arr, mode) => {
-    if (mode === 'alpha') {
-      arr.sort((a, b) => getDmName(a).localeCompare(getDmName(b)));
-    } else if (mode === 'recent') {
-      arr.sort((a, b) => (b.last_activity || 0) - (a.last_activity || 0));
-    }
-    // manual = keep current order
-    return arr;
-  };
+  // manual = keep current order
+  const sortGroup = (arr, mode) => this._orderDms(arr, getDmName, mode, []);
 
   let grouped = [];
   if (hasTags) {

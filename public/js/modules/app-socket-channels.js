@@ -590,11 +590,13 @@ _listenChannelsAndMessages() {
     const msgChannel = this.channels.find(c => c.code === data.channelCode);
     if (msgChannel && data.message.id > (msgChannel.latestMessageId || 0)) {
       msgChannel.latestMessageId = data.message.id;
-      // Re-sort sidebar if this channel's parent uses dynamic sort
+      // Re-sort sidebar if this channel's parent uses dynamic sort, or it
+      // is a DM and your DMs show the latest message first (app-dm-sort.js)
       const parent = msgChannel.parent_channel_id
         ? this.channels.find(c => c.id === msgChannel.parent_channel_id)
         : null;
-      if ((parent && parent.sort_alphabetical === 4) ||
+      if ((msgChannel.is_dm && this._dmSortMode() === 'recent') ||
+          (parent && parent.sort_alphabetical === 4) ||
           (!msgChannel.parent_channel_id && (localStorage.getItem('haven_server_sort_mode') === 'dynamic' ||
             (!localStorage.getItem('haven_server_sort_mode') && this.serverSettings?.channel_sort_mode === 'dynamic')))) {
         this._renderChannels();

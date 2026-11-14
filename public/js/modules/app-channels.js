@@ -1023,7 +1023,7 @@ _renderChannels() {
     if (!this._dmToggleBound) {
       this._dmToggleBound = true;
       document.getElementById('dm-toggle-header')?.addEventListener('click', (e) => {
-        if (e.target.closest('#organize-dms-btn')) return;
+        if (e.target.closest('#organize-dms-btn, #dm-sort-btn')) return;
         const nowCollapsed = dmList.style.display !== 'none';
         dmList.style.display = nowCollapsed ? 'none' : '';
         const arrow = document.getElementById('dm-toggle-arrow');
@@ -1071,28 +1071,12 @@ _renderChannels() {
     // ── DM categorization (client-side localStorage) ──
     const dmAssignments = JSON.parse(localStorage.getItem('haven_dm_assignments') || '{}');
     const dmCategories = JSON.parse(localStorage.getItem('haven_dm_categories') || '{}');
-    const dmSortMode = localStorage.getItem('haven_dm_sort_mode') || 'manual';
-    const dmOrder = JSON.parse(localStorage.getItem('haven_dm_order') || '[]');
 
     const getDmName = (ch) => ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
 
-    // Sort DMs by saved order first, then append any new ones
-    let sortedDms = [];
-    if (dmSortMode === 'manual' && dmOrder.length) {
-      for (const code of dmOrder) {
-        const ch = dmChannels.find(c => c.code === code);
-        if (ch) sortedDms.push(ch);
-      }
-      for (const ch of dmChannels) {
-        if (!sortedDms.includes(ch)) sortedDms.push(ch);
-      }
-    } else if (dmSortMode === 'alpha') {
-      sortedDms = [...dmChannels].sort((a, b) => getDmName(a).localeCompare(getDmName(b)));
-    } else if (dmSortMode === 'recent') {
-      sortedDms = [...dmChannels].sort((a, b) => (b.last_activity || 0) - (a.last_activity || 0));
-    } else {
-      sortedDms = [...dmChannels];
-    }
+    // Latest message first, by name, or the order you dragged them into
+    // (app-dm-sort.js).
+    let sortedDms = this._orderDms(dmChannels, getDmName);
 
     // Pinned DMs sit above everything else, whatever the sort or tags, and
     // the rest keep their order (app-dm-pins.js).

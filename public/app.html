@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.29.62">
+  <link rel="stylesheet" href="/css/style.css?v=4.29.63">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.27.19"></script>
 </head>
@@ -173,7 +173,7 @@
           </div>
           <div class="sidebar-split-handle" id="sidebar-split-handle" data-i18n-title="app.actions.drag_to_resize" title="Drag to resize"></div>
           <div class="sidebar-section dm-section-pane" id="dm-pane" data-haven-region="direct-messages">
-            <h5 class="section-label dm-section-label dm-toggle" id="dm-toggle-header" style="cursor:pointer;user-select:none"><span class="dm-toggle-arrow" id="dm-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.direct_messages">Direct Messages</span><span style="display:flex;align-items:center;gap:4px;position:relative;z-index:2"><span class="dm-unread-count" id="dm-unread-badge" style="display:none"></span><button class="icon-btn small" id="new-group-dm-btn" data-i18n-title="groups.new_group" title="New group DM" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">👥</button><button class="icon-btn small" id="organize-dms-btn" data-i18n-title="app.actions.organize_dms" title="Organize DMs" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">📋</button></span></h5>
+            <h5 class="section-label dm-section-label dm-toggle" id="dm-toggle-header" style="cursor:pointer;user-select:none"><span class="dm-toggle-arrow" id="dm-toggle-arrow">▾</span><span class="section-label-text" style="flex:1" data-i18n="app.sidebar.direct_messages">Direct Messages</span><span style="display:flex;align-items:center;gap:4px;position:relative;z-index:2"><span class="dm-unread-count" id="dm-unread-badge" style="display:none"></span><button class="icon-btn small" id="new-group-dm-btn" data-i18n-title="groups.new_group" title="New group DM" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">👥</button><button class="icon-btn small" id="dm-sort-btn" data-i18n-title="channels.dm_sort" title="Sort DMs" aria-haspopup="menu" aria-expanded="false" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">⇅</button><button class="icon-btn small" id="organize-dms-btn" data-i18n-title="app.actions.organize_dms" title="Organize DMs" style="font-size:0.85rem;padding:2px 6px;opacity:0.6">📋</button></span></h5>
             <div class="dm-list-scroll" id="dm-list"></div>
           </div>
         </div>
@@ -4856,6 +4856,13 @@
     <button class="channel-ctx-item admin-only danger" data-action="delete">🗑️ <span data-i18n="context_menu.channel.delete">Delete Channel</span></button>
   </div>
 
+  <!-- DM sort menu (app-dm-sort.js) -->
+  <div id="dm-sort-menu" class="channel-ctx-menu dm-sort-menu" role="menu" style="display:none">
+    <button class="channel-ctx-item" role="menuitemradio" aria-checked="false" data-dm-sort="recent"><span data-i18n="channels.dm_sort_recent">Latest message</span><span class="dm-sort-check" aria-hidden="true">✓</span></button>
+    <button class="channel-ctx-item" role="menuitemradio" aria-checked="false" data-dm-sort="alpha"><span data-i18n="channels.dm_sort_alpha">Alphabetical</span><span class="dm-sort-check" aria-hidden="true">✓</span></button>
+    <button class="channel-ctx-item" role="menuitemradio" aria-checked="false" data-dm-sort="manual"><span data-i18n="channels.dm_sort_manual">Manual order</span><span class="dm-sort-check" aria-hidden="true">✓</span></button>
+  </div>
+
   <!-- DM context menu -->
   <div id="dm-ctx-menu" class="channel-ctx-menu" style="display:none">
     <button class="channel-ctx-item" data-action="dm-mark-read">✅ <span data-i18n="context_menu.dm.mark_read">Mark as Read</span></button>
@@ -5586,7 +5593,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.62"></script>
+  <script type="module" src="/js/app.js?v=4.29.63"></script>
   <script src="/js/plugin-loader.js?v=4.27.52"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
