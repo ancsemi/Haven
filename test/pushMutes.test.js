@@ -40,6 +40,9 @@ test('a muted server is quiet except for DMs; mentions get through "except @ment
   assert.ok(!everyone.has(3));
   const dm = quietRecipients(db, { channelId: 20, senderUserId: 1, messageContent: 'just you' });
   assert.ok(!dm.has(2) && !dm.has(3), 'DMs come through a muted server');
+  const reply = quietRecipients(db, { channelId: 10, senderUserId: 1, messageContent: 'sounds good', replyToUserId: 3 });
+  assert.ok(!reply.has(3), 'except @mentions lets a reply to you through');
+  assert.ok(quietRecipients(db, { channelId: 10, senderUserId: 1, messageContent: 'sounds good', replyToUserId: 2 }).has(2), 'Mute all stays quiet for a reply');
 });
 
 test('a member you muted sends you no push, even in a DM or a mention', () => {

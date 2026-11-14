@@ -365,6 +365,7 @@ _listenSession() {
 
     // Re-join channel after reconnect (server lost our room membership)
     this.socket.emit('visibility-change', { visible: !document.hidden });
+    this.socket.emit('reply-ping', { on: this._replyPingOn?.() !== false });
     this.voice?.deferChannelGone?.(6000);
     this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');

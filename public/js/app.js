@@ -4,7 +4,7 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.29.57';
+import SocketMethods   from './modules/app-socket.js?v=4.29.61';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.57';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.30';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
@@ -109,6 +109,7 @@ import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
+import ReplyPingMethods from './modules/app-reply-ping.js?v=4.29.61';
 import MentionsMethods from './modules/app-mentions.js?v=4.29.11';
 import SettingsPageMethods from './modules/app-settings-pages.js?v=4.29.55';
 import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.29.12';
@@ -484,6 +485,7 @@ class HavenApp {
     this._setupMediaPlayback();
     this._setupMusicListenButtons();
     this._setupSilentToggle();
+    this._setupReplyPing();
     this._setupCategoryLayoutPicker();
     this._setupDebugSection();
     this._setupLightbox();
@@ -699,6 +701,7 @@ Object.assign(HavenApp.prototype,
   BadgeMethods,
   ThemePickerMethods,
   SilentMethods,
+  ReplyPingMethods,
   SettingsPageMethods,
   ChannelTypeMethods,
   MentionsMethods,
