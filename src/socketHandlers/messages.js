@@ -17,7 +17,9 @@ const protectedMessages = require('../protectedMessages');
 const mediaGroup = require('../mediaGroup');
 const { sizeCeiling, sizeRefusal, isGroupEnvelope, editNeedsOriginalImage } = require('../messageLimits');
 const { REPLY_CONTEXT_SELECT, insertMessage, getActiveMute, muteNotice, updateMessageContent } = require('../db/messagePosting');
-const { addReaction, removeReaction } = require('../db/messageReactions');
+const { addReaction, removeReaction, reactionsForMessages, reactionsByMessage } = require('../db/messageReactions');
+const { threadParent, threadMessages, threadReplyContexts, insertThreadReply, threadSummaries,
+        channelThreads, formatChannelThreads, formatThreadParent, formatThreadMessage } = require('../db/messageThreads');
 const { messageChannel, messageChannelMember, messageForAction, messageAuthor,
         ownDeleteOverride, deleteMessage, findPin, countPins, insertPin, deletePin, clearDestructAt,
         setProtection, listPins, formatPins } = require('../db/messageManagement');
@@ -29,6 +31,7 @@ const storage = require('../storage');
 const { groupHistoryFloor } = require('../groupHistory');
 const { isSafeUploadRelPath } = storage;
 const createReadPositions = require('../db/readPositions');
+const { advanceThreadRead, openThreadRead } = createReadPositions;
 const emitChannelRead = require('./channelReadEvents');
 const { mentionsMeCondition } = require('../mentionFilter');
 
@@ -408,40 +411,7 @@ module.exports = function register(socket, ctx) {
     }
 
     // ── Thread metadata enrichment ─────────────────────────
-    const threadMap = new Map();
-    if (msgIds.length > 0) {
-      const ph = msgIds.map(() => '?').join(',');
-      // Get thread counts and last activity for messages that are thread parents
-      db.prepare(`
-        SELECT thread_id,
-               COUNT(*) as reply_count,
-               MAX(created_at) as last_reply_at,
-               MAX(id) as last_reply_id
-        FROM messages WHERE thread_id IN (${ph})
-        GROUP BY thread_id
-      `).all(...msgIds).forEach(t => {
-        threadMap.set(t.thread_id, { count: t.reply_count, lastReplyAt: utcStamp(t.last_reply_at), lastReplyId: t.last_reply_id, participants: [] });
-      });
-      // Get participants for threads (up to 5 unique usernames)
-      if (threadMap.size > 0) {
-        const threadIds = [...threadMap.keys()];
-        const tph = threadIds.map(() => '?').join(',');
-        db.prepare(`
-          SELECT tm.thread_id, COALESCE(u.display_name, u.username) as username, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
-          FROM (
-            SELECT thread_id, user_id, MAX(created_at) as latest
-            FROM messages WHERE thread_id IN (${tph})
-            GROUP BY thread_id, user_id
-          ) tm JOIN users u ON tm.user_id = u.id
-          ORDER BY tm.latest DESC
-        `).all(...threadIds).forEach(p => {
-          const info = threadMap.get(p.thread_id);
-          if (info && info.participants.length < 5) {
-            info.participants.push({ username: p.username, avatar: p.avatar, avatarShape: p.avatar_shape });
-          }
-        });
-      }
-    }
+    const threadMap = threadSummaries(db, msgIds);
 
     // Which reply this account last saw in each topic, for the unread dot on
     // forum cards (#5641).
@@ -953,7 +923,7 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    const channel = messageChannel(db, code);
     if (!channel) return;
 
     const member = hasChannelAccess(channel.id);
@@ -966,32 +936,12 @@ module.exports = function register(socket, ctx) {
     // the media gallery so a long-lived channel cannot produce an unbounded
     // payload. Ordered by last reply, because "which thread is alive" is the
     // question people open this to answer.
-    const threads = db.prepare(`
-      SELECT p.id,
-             p.content,
-             p.created_at,
-             COALESCE(p.persona_username, p.webhook_username, u.display_name, u.username, '[Deleted User]') AS username,
-             u.id AS user_id,
-             COUNT(t.id) AS reply_count,
-             MAX(t.created_at) AS last_reply_at
-      FROM messages p
-      JOIN messages t ON t.thread_id = p.id
-      LEFT JOIN users u ON p.user_id = u.id
-      WHERE p.channel_id = ? AND p.thread_id IS NULL
-      GROUP BY p.id
-      ORDER BY last_reply_at DESC, p.id DESC
-      LIMIT 500
-    `).all(channel.id);
+    const threads = channelThreads(db, channel.id);
 
     const threadNew = threadNotify.newCounts(db, socket.user.id, threads.map(t => ({ id: t.id, userId: t.user_id })));
     socket.emit('channel-threads', {
       channelCode: code,
-      threads: threads.map(t => ({
-        ...t,
-        ...(threadNew.has(t.id) ? { new_count: threadNew.get(t.id) } : {}),
-        created_at: utcStamp(t.created_at),
-        last_reply_at: utcStamp(t.last_reply_at),
-      })),
+      threads: formatChannelThreads(threads, threadNew),
     });
   });
 
@@ -2939,24 +2889,13 @@ module.exports = function register(socket, ctx) {
     // socket.currentChannel: the thread panel can persist across channel
     // switches, and a stale currentChannel would silently empty the thread
     // (issue: web users seeing 28 replies but no messages, mobile fine).
-    const parentRow = db.prepare(
-      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, m.closed, c.is_forum, c.code as channel_code, c.is_dm as is_dm, m.is_webhook, m.webhook_username, m.imported_from,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
-    ).get(parentId);
-    if (!parentRow) return;
-    if (parentRow.is_dm) return; // Threads are not available in DMs
-    const channel = { id: parentRow.channel_id };
-    const parent = parentRow;
-    // A relayed or bot author is marked the same way channel history marks
-    // it, so a Discord nickname cannot pass for a Haven member's name.
-    if (parent.is_webhook && !parent.imported_from) {
-      parent.username = `[BOT] ${parent.webhook_username || 'Bot'}`;
-      parent.avatar_shape = 'square';
-    }
+    const parent = threadParent(db, parentId);
+    if (!parent) return;
+    if (parent.is_dm) return; // Threads are not available in DMs
+    const channel = { id: parent.channel_id };
 
     // Verify the user is a member of the channel (admins exempt).
-    const member = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
+    const member = messageChannelMember(db, channel.id, socket.user.id);
     if (!member && !socket.user.isAdmin) return;
     // A role gate on the channel covers its threads too (#5597).
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
@@ -2964,50 +2903,23 @@ module.exports = function register(socket, ctx) {
     // Opening a thread marks every reply in it seen for this account, and the
     // person's other devices drop the unread dot too (#5641).
     try {
-      db.prepare(`
-        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
-        VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
-        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
-      `).run(socket.user.id, parentId, parentId);
+      openThreadRead(db, socket.user.id, parentId);
       for (const [, s] of io.sockets.sockets) {
-        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parentRow.channel_code, parentId });
+        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parent.channel_code, parentId });
       }
     } catch (err) {
       console.error('Thread read error:', err);
     }
 
-    const messages = db.prepare(`
-      SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.silent, m.nsfw,
-             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, COALESCE(m.webhook_avatar, u.avatar) as avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
-      FROM messages m LEFT JOIN users u ON m.user_id = u.id
-      WHERE m.thread_id = ?
-      ORDER BY m.created_at ASC, m.id ASC
-    `).all(parentId);
+    const messages = threadMessages(db, parentId);
 
     // Enrich with reactions and reply context
     const msgIds = messages.map(m => m.id);
     const replyIds = [...new Set(messages.filter(m => m.reply_to).map(m => m.reply_to))];
 
-    const replyMap = new Map();
-    if (replyIds.length > 0) {
-      const ph = replyIds.map(() => '?').join(',');
-      db.prepare(`${REPLY_CONTEXT_SELECT}
-        WHERE m.id IN (${ph})
-      `).all(...replyIds).forEach(r => replyMap.set(r.id, toReplyContext(r)));
-    }
-
-    const reactionMap = new Map();
-    if (msgIds.length > 0) {
-      const ph = msgIds.map(() => '?').join(',');
-      db.prepare(`
-        SELECT r.message_id, r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username
-        FROM reactions r JOIN users u ON r.user_id = u.id WHERE r.message_id IN (${ph}) ORDER BY r.id
-      `).all(...msgIds).forEach(r => {
-        if (!reactionMap.has(r.message_id)) reactionMap.set(r.message_id, []);
-        reactionMap.get(r.message_id).push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
-      });
-      ferryReactions.mergeInto(db, msgIds, reactionMap);
-    }
+    const replyMap = new Map(threadReplyContexts(db, replyIds).map(row => [row.id, row]));
+    const reactionMap = reactionsByMessage(reactionsForMessages(db, msgIds));
+    if (msgIds.length > 0) ferryReactions.mergeInto(db, msgIds, reactionMap);
 
     // Attachment tags on the replies' pictures, for their footers and the
     // Edit tags entry on the image menu (#5682).
@@ -3029,32 +2941,9 @@ module.exports = function register(socket, ctx) {
     const blogParts = forumBlog.blogOn(db, channel.id) ? forumBlog.partIdsOf(db, parentId) : null;
 
     const enriched = messages.map(m => {
-      const obj = { ...m };
-      if (m.silent) obj.silent = true; else delete obj.silent;
-      if (m.nsfw) obj.nsfw = true; else delete obj.nsfw;
+      const obj = formatThreadMessage(m, replyMap.get(m.reply_to), reactionMap.get(m.id));
       const atags = threadTagMap.get(m.id);
       if (atags && atags.length) obj.attachmentTags = atags;
-      // Border fit travels with the message (like avatar) so it renders even when
-      // the author is offline. Parse the stored JSON into the op array the client folds.
-      obj.borderTransform = parseBorderTransform(m.border_transform);
-      delete obj.border_transform;
-      // Animation policy travels with the message too (offline-safe, like the border).
-      obj.animateProfile = m.animate_profile || 'trigger';
-      delete obj.animate_profile;
-      if (obj.created_at && !obj.created_at.endsWith('Z')) obj.created_at = utcStamp(obj.created_at);
-      if (obj.edited_at && !obj.edited_at.endsWith('Z')) obj.edited_at = utcStamp(obj.edited_at);
-      obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
-      obj.reactions = reactionMap.get(m.id) || [];
-      // Same marking as channel history: a relayed or bot author gets the
-      // [BOT] prefix, so a Discord nickname cannot pass for a Haven member.
-      // webhook_username stays the bare name, so the prefix is added once.
-      // Imported history keeps its original author's name, as it does there.
-      if (m.is_webhook && !m.imported_from) {
-        obj.is_webhook = true;
-        obj.username = `[BOT] ${m.webhook_username || 'Bot'}`;
-        obj.avatar_shape = 'square';
-        obj.border = null; obj.borderTransform = null; obj.animateProfile = 'trigger';
-      }
       if (blogParts) obj.post_part = blogParts.has(m.id);
       return obj;
     });
@@ -3069,12 +2958,7 @@ module.exports = function register(socket, ctx) {
       pieceVotes: blogParts ? pieceVotesFor(db, socket.user.id, [parentId, ...blogParts]) : undefined,
       // A closed forum topic: only moderators and admins may still reply.
       closed: !!(parent.is_forum && parent.closed),
-      parentContent: parent.content,
-      parentUserId: parent.user_id || null,
-      parentUsername: parent.username || '[Deleted User]',
-      parentAvatar: parent.avatar || null,
-      parentAvatarShape: parent.avatar_shape || 'circle',
-      parentCreatedAt: utcStamp(parent.created_at),
+      ...formatThreadParent(parent),
       messages: enriched
     });
   });
@@ -3094,18 +2978,14 @@ module.exports = function register(socket, ctx) {
     // Resolve channel via the parent message (not socket.currentChannel) so
     // sending from a thread panel still works after the user has navigated
     // away from the parent's channel. (#thread-blank-web)
-    const parent = db.prepare(
-      'SELECT m.id, m.thread_id, m.channel_id, m.closed, c.code as code, c.is_dm, c.is_forum FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
-    ).get(parentId);
+    const parent = threadParent(db, parentId);
     if (!parent || parent.thread_id) return; // Can't create sub-threads
     if (parent.is_dm) return socket.emit('error-msg', 'Threads are not available in DMs');
-    const code = parent.code;
+    const code = parent.channel_code;
     const channel = { id: parent.channel_id, is_dm: parent.is_dm };
 
     // Verify the user is a member of the channel (admins exempt).
-    const tMember = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
+    const tMember = messageChannelMember(db, channel.id, socket.user.id);
     if (!tMember && !socket.user.isAdmin) return;
     // A role gate on the channel covers its threads too (#5597).
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
@@ -3129,13 +3009,8 @@ module.exports = function register(socket, ctx) {
     const tSizeWhy = mediaGroup.refusal(content, { maxChars: tMax, maxAttachments: maxAttachmentsSetting() });
     if (tSizeWhy) return socket.emit('error-msg', tSizeWhy);
 
-    const tMute = db.prepare(
-      'SELECT expires_at FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') ORDER BY expires_at DESC LIMIT 1'
-    ).get(socket.user.id);
-    if (tMute) {
-      const remaining = Math.ceil((new Date(tMute.expires_at + 'Z') - Date.now()) / 60000);
-      return socket.emit('error-msg', `You are in a timeout for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
-    }
+    const tMute = muteNotice(getActiveMute(db, socket.user.id));
+    if (tMute) return socket.emit('error-msg', tMute);
 
     const tChannelRow = db.prepare('SELECT read_only, text_enabled, media_enabled FROM channels WHERE id = ?').get(channel.id);
     if (tChannelRow && tChannelRow.read_only === 1 && !socket.user.isAdmin &&
@@ -3175,14 +3050,12 @@ module.exports = function register(socket, ctx) {
     const blogComment = forumBlog.authorComment(db, { parentId, userId: socket.user.id, replyTo, asComment: data.asComment });
 
     try {
-      const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to, silent, blog_comment) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, safeContent, parentId, replyTo, tSilent.silent ? 1 : 0, blogComment);
+      const result = insertThreadReply(db, {
+        channelId: channel.id, userId: socket.user.id, content: safeContent, parentId, replyTo,
+        silent: tSilent.silent ? 1 : 0, blogComment,
+      });
       // Your own reply is not news to you (#5641).
-      db.prepare(`
-        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id) VALUES (?, ?, ?)
-        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
-      `).run(socket.user.id, parentId, result.lastInsertRowid);
+      advanceThreadRead(db, socket.user.id, parentId, result.lastInsertRowid);
 
       const message = {
         id: result.lastInsertRowid,
@@ -3203,11 +3076,7 @@ module.exports = function register(socket, ctx) {
         silent: tSilent.silent ? true : undefined
       };
 
-      if (replyTo) {
-        message.replyContext = toReplyContext(db.prepare(`${REPLY_CONTEXT_SELECT}
-          WHERE m.id = ?
-        `).get(replyTo));
-      }
+      if (replyTo) message.replyContext = toReplyContext(threadReplyContexts(db, [replyTo])[0]);
       // Blog mode (#5742): the server, not the sender, says whether this is
       // part of the post or a comment.
       const blogMode = forumBlog.blogOn(db, channel.id);

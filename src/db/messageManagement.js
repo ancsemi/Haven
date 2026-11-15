@@ -5,7 +5,8 @@ const { utcStamp } = require('../socketHandlers/helpers');
 function messageChannel(db, code, { messageId = null, pinning = false } = {}) {
   const lock = db.kind === 'postgres' ? (pinning ? 'FOR NO KEY UPDATE OF c' : 'FOR SHARE OF c') : '';
   return db.prepare(`
-    SELECT c.id, c.code, c.name, c.is_dm, c.is_group, c.is_forum, c.role_gate, c.reactions_enabled
+    SELECT c.id, c.code, c.name, c.is_dm, c.is_group, c.is_forum, c.role_gate, c.reactions_enabled,
+           c.read_only, c.text_enabled, c.slow_mode_interval
     FROM channels c
     ${code === null ? 'JOIN messages m ON m.channel_id = c.id WHERE m.id = ?' : 'WHERE c.code = ?'}
     ${lock}

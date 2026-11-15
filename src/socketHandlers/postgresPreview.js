@@ -12,6 +12,7 @@ const { REPLY_CONTEXT_SELECT } = require('../db/messagePosting');
 const { listReactions } = require('../db/messageReactions');
 const { createPostgresPosting } = require('./postgresPosting');
 const { createPostgresMessageActions } = require('./postgresMessageActions');
+const { createPostgresThreads, emitThreadRead, historyThreads } = require('./postgresThreads');
 const { createPostgresPresence, channelMembers } = require('./postgresPresence');
 const { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS } = require('./settingEffects');
 const { compatibleThemeFiles, validatedThemeDefault, themePreferenceAllowed } = require('../themeMetadata');
@@ -28,6 +29,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
   const presence = createPostgresPresence(io, db, permissions);
   const posting = createPostgresPosting(io, db, readPositions, channelMembers);
   const messageActions = createPostgresMessageActions(io, db, channelMembers);
+  const threads = createPostgresThreads(io, db, posting, channelMembers);
   const lists = createChannelLists({
     db, userHasPermission: permissions.userHasPermission, roleGateAllows: permissions.roleGateAllows,
     getUserEffectiveLevel: permissions.getUserEffectiveLevel,
@@ -223,6 +225,9 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     on('set-status', data => presence.setStatus(socket, data));
     on('start-dm', data => posting.startDm(socket, data));
     on('send-message', data => posting.send(socket, data));
+    on('get-channel-threads', data => threads.list(socket, data));
+    on('get-thread-messages', data => threads.load(socket, data));
+    on('send-thread-message', (data, callback) => threads.send(socket, data, callback));
     on('edit-message', data => messageActions.edit(socket, data));
     on('add-reaction', data => messageActions.react(socket, data, true));
     on('remove-reaction', data => messageActions.react(socket, data, false));
@@ -273,8 +278,10 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
         `).all(ch.id, ...replyIds);
         for (const row of rows) replies.set(row.id, toReplyContext(row));
       }
+      const threadMap = await historyThreads(db, ch, socket.user.id, messages);
       for (const m of messages) {
         m.replyContext = replies.get(m.reply_to) || null;
+        m.thread = threadMap.get(m.id) || null;
         m.reactions = await listReactions(db, m.id);
         m.pinned = !!await db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(m.id);
         m.borderTransform = parseBorderTransform(m.border_transform);
@@ -326,9 +333,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       if (!Number.isInteger(data?.parentId)) return;
       const parent = await readPositions.markThreadRead(socket.user.id, data.parentId, socket.user.isAdmin);
       if (!parent) return;
-      for (const s of io.sockets.sockets.values()) {
-        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parent.channel_code, parentId: data.parentId });
-      }
+      emitThreadRead(io, socket, parent.channel_code, data.parentId);
     });
     on('get-thread-read-state', async (data, callback) => {
       if (typeof callback !== 'function') return;

@@ -15,7 +15,9 @@ const crypto = require('node:crypto');
 const net = require('node:net');
 const { spawn } = require('node:child_process');
 const { setTimeout: wait } = require('node:timers/promises');
+const jwt = require('jsonwebtoken');
 const { io } = require('socket.io-client');
+const JWT_SECRET = 'postgres-app-test-secret';
 
 function packet(socket, event, matches = () => true) {
   return new Promise((resolve, reject) => {
@@ -71,7 +73,7 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     server = spawn(process.execPath, ['server.js'], {
       cwd: path.join(__dirname, '..'), env: {
         ...process.env, HAVEN_DATA_DIR: data, HAVEN_DATABASE_URL: url.href, HAVEN_POSTGRES_PREVIEW: '1',
-        JWT_SECRET: 'postgres-app-test-secret', ADMIN_USERNAME: 'admin', ADMIN_RESET_PASSWORD: '',
+        JWT_SECRET, ADMIN_USERNAME: 'admin', ADMIN_RESET_PASSWORD: '',
         FORCE_HTTP: 'true', HOST: '127.0.0.1', PORT: String(port),
       }, stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -97,6 +99,12 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
   const password = 'safe-preview-password-45';
   const signup = (username, extra = {}) => request('/api/auth/register', 'POST', { username, password, eulaVersion: '2.0', ageVerified: true, ...extra });
   const setting = (key, value) => db.prepare('INSERT INTO server_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+  // Give the thread tests their own send budgets and explicit memberships.
+  // Signup and login are exercised separately through the HTTP routes.
+  async function fixtureAccount(username) {
+    const user = await db.prepare("INSERT INTO users (username, password_hash) VALUES (?, 'fixture') RETURNING id, username").get(username);
+    return { ...user, token: jwt.sign({ id: user.id, username, pwv: 1 }, JWT_SECRET) };
+  }
   async function connect(token) {
     const socket = io(base, { autoConnect: false, auth: { token }, transports: ['websocket'], forceNew: true, reconnection: false });
     sockets.push(socket);
@@ -296,6 +304,131 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     assert.equal(refusals.length, 1);
     assert.match(refusals[0], /Slow mode/);
     assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM messages WHERE content LIKE 'slow mode %'").get()).n, 1);
+  });
+  await t.test('room threads open, deliver replies and restore their previews and read counts', async st => {
+    const channel = await db.prepare("INSERT INTO channels (name, code) VALUES ('Room threads', 'e6666666') RETURNING id, code").get();
+    st.after(() => db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id));
+    const aliceThread = await fixtureAccount('RoomThreadWriter');
+    const otherThread = await fixtureAccount('RoomThreadPeer');
+    await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?), (?, ?), (?, ?), (?, ?)')
+      .run(channel.id, adminAccount.user.id, channel.id, aliceThread.id, channel.id, otherThread.id, room.id, aliceThread.id);
+    const [owner, secondDevice, first, second] = (await Promise.all([
+      connect(adminAccount.token), connect(adminAccount.token), connect(aliceThread.token), connect(otherThread.token),
+    ])).map(client => client.socket);
+    st.after(() => [owner, secondDevice, first, second].forEach(client => client.disconnect()));
+    for (const client of [owner, first, second]) await emit(client, 'enter-channel', 'online-users', { code: channel.code });
+    const { message: root } = await emit(owner, 'send-message', 'new-message', { code: channel.code, content: 'Thread root' });
+    const parentId = root.id;
+    const loaded = await emit(first, 'get-thread-messages', 'thread-messages', { parentId });
+    assert.equal(loaded.parentContent, root.content);
+    assert.deepEqual(loaded.messages, []);
+    const sendReply = (client, content, replyTo) => client.timeout(10000)
+      .emitWithAck('send-thread-message', { parentId, content, replyTo });
+
+    const delivered = [];
+    const counts = [];
+    owner.on('new-thread-message', value => delivered.push(value));
+    owner.on('thread-updated', value => counts.push(value.thread.count));
+    assert.deepEqual(await Promise.all([
+      sendReply(first, '@silent first reply', parentId), sendReply(second, 'second reply'),
+    ]), [{ success: true }, { success: true }]);
+    await drain(owner);
+    assert.equal(delivered.length, 2);
+    assert.deepEqual(counts, [1, 2]);
+    assert.deepEqual(delivered.map(value => value.threadStartedFor).filter(Boolean), [adminAccount.user.id]);
+    const firstReply = delivered.find(value => value.message.content === 'first reply').message;
+    assert.equal(firstReply.silent, true);
+    assert.equal(firstReply.reply_to, null);
+    assert.equal(firstReply.replyContext, null);
+    assert.equal((await first.timeout(10000).emitWithAck('get-thread-read-state', { parentIds: [parentId] })).reads[parentId], firstReply.id);
+
+    const history = await emit(owner, 'get-messages', 'message-history', { code: channel.code });
+    assert.deepEqual(history.messages.map(message => message.id), [parentId]);
+    assert.equal(history.messages[0].thread.count, 2);
+    assert.equal(history.messages[0].thread.newCount, 2);
+    assert.equal(history.messages[0].thread.participants.length, 2);
+    const list = () => emit(owner, 'get-channel-threads', 'channel-threads', { code: channel.code });
+    assert.deepEqual((await list()).threads.map(row => [row.id, row.reply_count, row.new_count]), [[parentId, 2, 2]]);
+
+    // Resolve the room from the parent after the viewer switches channels.
+    await emit(first, 'enter-channel', 'online-users', { code: room.code });
+    const [observed, updated, ack] = await Promise.all([
+      packet(owner, 'new-thread-message', value => value.message.content === 'reply with context'),
+      packet(owner, 'thread-updated', value => value.thread.count === 3),
+      sendReply(first, 'reply with context', firstReply.id),
+    ]);
+    assert.deepEqual(ack, { success: true });
+    const third = observed.message;
+    assert.equal(third.replyContext.content, firstReply.content);
+    assert.equal(updated.thread.lastReplyId, third.id);
+    await db.prepare("INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, '👍')").run(firstReply.id, aliceThread.id);
+    // A stale room subscription must no longer receive thread replies.
+    await db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(channel.id, otherThread.id);
+    const leaked = [];
+    second.on('new-thread-message', value => leaked.push(value));
+    assert.deepEqual(await sendReply(first, 'after removal'), { success: true });
+    await Promise.all([drain(owner), drain(second)]);
+    assert.deepEqual(leaked, []);
+    const otherRead = packet(secondDevice, 'thread-read', value => value.parentId === parentId);
+    const thread = await emit(owner, 'get-thread-messages', 'thread-messages', { parentId });
+    assert.deepEqual(await otherRead, { channelCode: channel.code, parentId });
+    assert.deepEqual(thread.messages.map(row => row.id), delivered.map(value => value.message.id).sort((a, b) => a - b));
+    assert.equal(thread.messages.find(row => row.id === firstReply.id).reactions[0].emoji, '👍');
+    assert.deepEqual(thread.messages.find(row => row.id === third.id).replyContext, third.replyContext);
+    assert.deepEqual((await list()).threads.map(row => [row.reply_count, row.new_count]), [[4, 0]]);
+  });
+  await t.test('room threads enforce channel access and posting rules', async st => {
+    const role = await db.prepare("INSERT INTO roles (name) VALUES ('Thread gate') RETURNING id").get();
+    st.after(() => db.prepare('DELETE FROM roles WHERE id = ?').run(role.id));
+    const channel = await db.prepare("INSERT INTO channels (name, code) VALUES ('Restricted threads', 'e7777777') RETURNING id, code").get();
+    st.after(() => db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id));
+    const reader = await fixtureAccount('RestrictedThreadUser');
+    const outside = await fixtureAccount('OutsideThreadUser');
+    await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channel.id, reader.id);
+    const parent = await db.prepare("INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, 'restricted root') RETURNING id")
+      .get(channel.id, reader.id);
+    const [member, outsider] = (await Promise.all([connect(reader.token), connect(outside.token)])).map(client => client.socket);
+    st.after(() => { member.disconnect(); outsider.disconnect(); });
+    const sendReply = (client, content, replyTo, parentId = parent.id) => client.timeout(10000)
+      .emitWithAck('send-thread-message', { parentId, content, replyTo });
+    const load = (client, event) => emit(client, 'get-thread-messages', event, { parentId: parent.id });
+    assert.match(await load(outsider, 'error-msg'), /not a member/i);
+    assert.match((await sendReply(outsider, 'outside')).error, /not a member/i);
+    await db.prepare('UPDATE channels SET role_gate = ? WHERE id = ?').run(JSON.stringify({ mode: 'all', roles: [role.id] }), channel.id);
+    assert.match(await load(member, 'error-msg'), /role/);
+    assert.match((await sendReply(member, 'no role')).error, /role/);
+    assert.equal(await db.prepare('SELECT 1 FROM thread_reads WHERE thread_id = ?').get(parent.id), undefined);
+    await db.prepare('UPDATE channels SET role_gate = NULL, read_only = 1 WHERE id = ?').run(channel.id);
+    assert.deepEqual((await load(member, 'thread-messages')).messages, []);
+    assert.match((await sendReply(member, 'read-only')).error, /read-only/);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM messages WHERE thread_id = ?').get(parent.id)).n, 0);
+
+    // Top-level posts and thread replies share the room's slow-mode clock.
+    await db.prepare('UPDATE channels SET read_only = 0, slow_mode_interval = 30 WHERE id = ?').run(channel.id);
+    await emit(member, 'send-message', 'new-message', { code: channel.code, content: 'uses the slow-mode slot' });
+    assert.match((await sendReply(member, 'too soon')).error, /Slow mode/);
+    await db.prepare('UPDATE channels SET slow_mode_interval = 0 WHERE id = ?').run(channel.id);
+
+    // A failed read-position write rolls back the reply before any broadcast.
+    await db.exec(`
+      CREATE FUNCTION refuse_thread_read() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.thread_id = ${parent.id} THEN RAISE EXCEPTION 'test thread receipt failure'; END IF;
+        RETURN NEW;
+      END
+      $$;
+      CREATE TRIGGER refuse_thread_read BEFORE UPDATE ON thread_reads FOR EACH ROW EXECUTE FUNCTION refuse_thread_read();
+    `);
+    try {
+      assert.match((await sendReply(member, 'rolled back')).error, /Failed to send thread message/);
+      assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM messages WHERE thread_id = ?').get(parent.id)).n, 0);
+    } finally {
+      await db.exec('DROP TRIGGER refuse_thread_read ON thread_reads; DROP FUNCTION refuse_thread_read()');
+    }
+    assert.deepEqual(await sendReply(member, 'stored'), { success: true });
+    const [reply] = (await load(member, 'thread-messages')).messages;
+    assert.equal(reply.content, 'stored');
+    assert.match((await sendReply(member, 'nested', null, reply.id)).error, /Could not send thread reply/);
   });
   await t.test('room edits persist and reject other authors, protection, permission overrides and filtered content', async st => {
     const { socket } = await connect(alice.token);

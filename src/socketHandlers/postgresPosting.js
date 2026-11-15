@@ -69,6 +69,60 @@ function createPostgresPosting(io, db, readPositions, channelMembers) {
   const floodTimes = new Map();
   const slowTimes = new Map();
 
+  function checkFlood(user) {
+    if (user.isAdmin) return;
+    const now = Date.now();
+    const times = (floodTimes.get(user.id) || []).filter(at => now - at < 10000);
+    if (times.length >= 10) throw new Error("Slow down, you're sending messages too fast");
+    times.push(now);
+    floodTimes.set(user.id, times);
+  }
+
+  function checkSlowMode(user, channel, level) {
+    if (user.isAdmin || !(channel.slow_mode_interval > 0) || level >= 25) return;
+    const key = String(user.id) + ':' + channel.id;
+    const now = Date.now();
+    const remaining = Math.ceil(((slowTimes.get(key) || 0) + channel.slow_mode_interval * 1000 - now) / 1000);
+    if (remaining > 0) throw new Error(`Slow mode: wait ${remaining}s before sending another message`);
+    slowTimes.set(key, now);
+  }
+
+  async function checkChannelPosting(tx, socket, channel, permissions, saved) {
+    const user = socket.user;
+    if (!channel.is_dm) {
+      const mute = muteNotice(await getActiveMute(tx, user.id));
+      if (mute) throw new Error(mute);
+    }
+    if (!user.isAdmin && !await permissions.roleGateAllows(user.id, channel)) {
+      throw new Error('This channel needs a role you do not hold');
+    }
+    let level = 0;
+    if (!user.isAdmin && (saved.automod_enabled === 'true' || channel.slow_mode_interval > 0)) {
+      level = await permissions.getUserEffectiveLevel(user.id, channel.id);
+    }
+    if (!channel.is_self_dm && refuseYoungAccount(socket, saved, level)) return null;
+    if (channel.read_only === 1 && !user.isAdmin &&
+        !await permissions.userHasPermission(user.id, 'read_only_override', channel.id)) {
+      throw new Error('This channel is read-only');
+    }
+    if (channel.text_enabled === 0) throw new Error('Text messages are disabled in this channel');
+    return level;
+  }
+
+  async function cleanRoomText(tx, data, content, user, channel, permissions, saved, level, { thread = false } = {}) {
+    // Thread composers send text directly. The main composer also parses
+    // slash commands before a message can reach the database.
+    if ((!thread && parseSlash(content)) || needsUnmigratedSend(data, content)) throw new Error(unavailable);
+    if (content.includes('@') && !user.isAdmin &&
+        !await permissions.userHasPermission(user.id, 'mention_everyone', channel.id)) {
+      const roles = await tx.prepare('SELECT name FROM roles').all();
+      content = stripRoleMentions(content.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1'), roles.map(role => role.name));
+    }
+    const cleaned = sanitizeText(content.trim());
+    await checkText(tx, cleaned, user, saved, { surface: 'message', effectiveLevel: level, markdown: true });
+    return cleaned;
+  }
+
   async function startDm(socket, data) {
     const targetId = data?.targetUserId;
     if (!Number.isSafeInteger(targetId) || targetId <= 0) return;
@@ -125,13 +179,7 @@ function createPostgresPosting(io, db, readPositions, channelMembers) {
     const code = typeof data?.code === 'string' ? data.code.trim() : '';
     if (!/^[a-f0-9]{8}$/i.test(code) || typeof data.content !== 'string' || !data.content.trim()) return;
     const user = socket.user;
-    if (!user.isAdmin) {
-      const now = Date.now();
-      const times = (floodTimes.get(user.id) || []).filter(at => now - at < 10000);
-      if (times.length >= 10) throw new Error("Slow down, you're sending messages too fast");
-      times.push(now);
-      floodTimes.set(user.id, times);
-    }
+    checkFlood(user);
     const picked = takeSilent(data.content, data.silent);
     const result = await db.withTransaction(async tx => {
       // Lock both rows through the insert. A removal or a change to the
@@ -155,25 +203,11 @@ function createPostgresPosting(io, db, readPositions, channelMembers) {
       if (channel.is_dm) {
         if (user.isGuest) throw new Error('Guests cannot send direct messages');
         if (!looksEncrypted(content) || isGroupEnvelope(content)) throw new Error('Direct messages must be end-to-end encrypted');
-      } else {
-        const mute = muteNotice(await getActiveMute(tx, user.id));
-        if (mute) throw new Error(mute);
       }
 
       const permissions = createPermissions(tx);
-      if (!user.isAdmin && !await permissions.roleGateAllows(user.id, channel)) {
-        throw new Error('This channel needs a role you do not hold');
-      }
-      let level = 0;
-      if (!user.isAdmin && (saved.automod_enabled === 'true' || channel.slow_mode_interval > 0)) {
-        level = await permissions.getUserEffectiveLevel(user.id, channel.id);
-      }
-      if (!channel.is_self_dm && refuseYoungAccount(socket, saved, level)) return null;
-      if (channel.read_only === 1 && !user.isAdmin &&
-          !await permissions.userHasPermission(user.id, 'read_only_override', channel.id)) {
-        throw new Error('This channel is read-only');
-      }
-      if (channel.text_enabled === 0) throw new Error('Text messages are disabled in this channel');
+      const level = await checkChannelPosting(tx, socket, channel, permissions, saved);
+      if (level === null) return null;
 
       let breakChain = 0;
       if (!channel.is_dm) {
@@ -182,14 +216,7 @@ function createPostgresPosting(io, db, readPositions, channelMembers) {
           content = split[1];
           breakChain = 1;
         }
-        if (parseSlash(content) || needsUnmigratedSend(data, content)) throw new Error(unavailable);
-        if (content.includes('@') && !user.isAdmin &&
-            !await permissions.userHasPermission(user.id, 'mention_everyone', channel.id)) {
-          const roles = await tx.prepare('SELECT name FROM roles').all();
-          content = stripRoleMentions(content.replace(/(?<![\w@])@(everyone|here)\b/gi, '@\u200B$1'), roles.map(role => role.name));
-        }
-        content = sanitizeText(content.trim());
-        await checkText(tx, content, user, saved, { surface: 'message', effectiveLevel: level, markdown: true });
+        content = await cleanRoomText(tx, data, content, user, channel, permissions, saved, level);
       } else if (needsUnmigratedSend(data, content)) {
         throw new Error(unavailable);
       }
@@ -205,13 +232,7 @@ function createPostgresPosting(io, db, readPositions, channelMembers) {
           FOR SHARE OF m
         `).get(data.replyTo, channel.id);
       }
-      if (channel.slow_mode_interval > 0 && !user.isAdmin && level < 25) {
-        const key = String(user.id) + ':' + channel.id;
-        const now = Date.now();
-        const remaining = Math.ceil(((slowTimes.get(key) || 0) + channel.slow_mode_interval * 1000 - now) / 1000);
-        if (remaining > 0) throw new Error(`Slow mode: wait ${remaining}s before sending another message`);
-        slowTimes.set(key, now);
-      }
+      checkSlowMode(user, channel, level);
       const row = await insertMessage(tx, {
         channelId: channel.id, userId: user.id, content, replyTo: reply?.id ?? null,
         silent: picked.silent ? 1 : 0, breakChain,
@@ -243,7 +264,10 @@ function createPostgresPosting(io, db, readPositions, channelMembers) {
       .catch(() => { /* only the sender's own unread marker; it catches up on their next read */ });
   }
 
-  return { send, startDm, close: () => { floodTimes.clear(); slowTimes.clear(); } };
+  return {
+    send, startDm, checkFlood, checkSlowMode, checkChannelPosting, cleanRoomText,
+    close: () => { floodTimes.clear(); slowTimes.clear(); },
+  };
 }
 
 module.exports = { createPostgresPosting, postingSettings, checkText };

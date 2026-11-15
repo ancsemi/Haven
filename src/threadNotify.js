@@ -13,42 +13,52 @@
 // counted only for threads you follow, the ones you started, opened or
 // replied in; a thread you never looked at has no position to count from.
 
-function followerIds(db, parentId) {
+const { threadHistoryVisible } = require('./db/messageThreads');
+
+function followerIds(db, parentId, channelId) {
+  const scope = channelId === undefined ? '' : `AND m.channel_id = ? AND ${threadHistoryVisible('m')}`;
   const rows = db.prepare(`
-    SELECT user_id FROM messages WHERE id = @p AND user_id IS NOT NULL
-    UNION
-    SELECT user_id FROM messages WHERE thread_id = @p AND user_id IS NOT NULL
-  `).all({ p: parentId });
-  const muted = new Set(db.prepare('SELECT user_id FROM forum_topic_mutes WHERE topic_id = ?')
-    .all(parentId).map(r => r.user_id));
-  return rows.map(r => r.user_id).filter(id => !muted.has(id));
+    WITH people AS (
+      SELECT user_id FROM messages m WHERE id = ? AND user_id IS NOT NULL
+      UNION
+      SELECT user_id FROM messages m WHERE thread_id = ? AND user_id IS NOT NULL ${scope}
+    )
+    SELECT user_id FROM people
+    WHERE NOT EXISTS (
+      SELECT 1 FROM forum_topic_mutes f WHERE f.topic_id = ? AND f.user_id = people.user_id
+    )
+    ORDER BY user_id
+  `).all(parentId, parentId, ...(channelId === undefined ? [] : [channelId]), parentId);
+  const ids = people => people.map(row => row.user_id);
+  return db.kind === 'postgres' ? rows.then(ids) : ids(rows);
 }
 
 // For each of the given threads you follow, how many replies you have not
 // seen; threads you do not follow are left out, so the client keeps its own
 // count for those. `threads` is [{ id, userId }] with userId the author of
 // the message the thread hangs from.
-function newCounts(db, userId, threads) {
+function newCounts(db, userId, threads, channelId) {
   const out = new Map();
   if (!userId || !Array.isArray(threads) || threads.length === 0) return out;
   const ids = threads.map(t => t.id);
   const ph = ids.map(() => '?').join(',');
-  const seen = new Map(db.prepare(`SELECT thread_id, last_read_reply_id FROM thread_reads WHERE user_id = ? AND thread_id IN (${ph})`)
-    .all(userId, ...ids).map(r => [r.thread_id, r.last_read_reply_id]));
-  const followed = threads.filter(t => seen.has(t.id) || t.userId === userId).map(t => t.id);
-  if (followed.length === 0) return out;
-  for (const id of followed) out.set(id, 0);
-  const fph = followed.map(() => '?').join(',');
-  db.prepare(`
-    SELECT m.thread_id AS id, COUNT(*) AS n
-    FROM messages m
-    LEFT JOIN thread_reads tr ON tr.thread_id = m.thread_id AND tr.user_id = ?
-    WHERE m.thread_id IN (${fph})
-      AND (m.user_id IS NULL OR m.user_id != ?)
-      AND m.id > COALESCE(tr.last_read_reply_id, 0)
-    GROUP BY m.thread_id
-  `).all(userId, ...followed, userId).forEach(r => out.set(r.id, r.n));
-  return out;
+  const scope = channelId === undefined ? '' : `AND m.channel_id = ? AND ${threadHistoryVisible('m')}`;
+  const counts = db.prepare(`
+    SELECT p.id, tr.thread_id AS seen, COUNT(m.id) AS n
+    FROM messages p
+    LEFT JOIN thread_reads tr ON tr.thread_id = p.id AND tr.user_id = ?
+    LEFT JOIN messages m ON m.thread_id = p.id
+        AND (m.user_id IS NULL OR m.user_id != ?)
+        AND m.id > COALESCE(tr.last_read_reply_id, 0) ${scope}
+    WHERE p.id IN (${ph})
+    GROUP BY p.id, tr.thread_id
+  `).all(userId, userId, ...(channelId === undefined ? [] : [channelId]), ...ids);
+  function withCounts(rows) {
+    for (const thread of threads) if (thread.userId === userId) out.set(thread.id, 0);
+    for (const row of rows) if (row.seen != null || out.has(row.id)) out.set(row.id, row.n);
+    return out;
+  }
+  return db.kind === 'postgres' ? counts.then(withCounts) : withCounts(counts);
 }
 
 // The first reply under a message starts its thread, and that reaches the
@@ -59,8 +69,12 @@ function startedFor(db, parentId, replierId, followers) {
   const n = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE thread_id = ?').get(parentId).n;
   if (n !== 1) return null;
   const parent = db.prepare('SELECT user_id FROM messages WHERE id = ?').get(parentId);
-  if (!parent || parent.user_id == null || parent.user_id === replierId) return null;
-  return followers.includes(parent.user_id) ? parent.user_id : null;
+  return firstReplyRecipient(n, parent?.user_id, replierId, followers);
 }
 
-module.exports = { followerIds, newCounts, startedFor };
+function firstReplyRecipient(count, parentAuthor, replierId, followers) {
+  if (count !== 1 || parentAuthor == null || parentAuthor === replierId) return null;
+  return followers.includes(parentAuthor) ? parentAuthor : null;
+}
+
+module.exports = { followerIds, newCounts, startedFor, firstReplyRecipient };
