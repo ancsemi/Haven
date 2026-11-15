@@ -1,0 +1,116 @@
+// Microphone and camera previews for changing call settings outside a call
+// (no UI). Each preview opens its own stream and closes it on stop(), so
+// nothing stays open after the settings page is left.
+//
+//   const mic = createMicPreview();
+//   const { fellBack } = await mic.start(deviceId);   // level() 0 to 100
+//   mic.stop();
+//
+// A saved device that is not plugged in any more falls back to the default
+// one; start() says so (`fellBack`) so the page can tell the user. Any other
+// failure (permission refused, device busy) is thrown for the page to show.
+
+const AUDIO = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+// What browsers throw when an exact deviceId is not there.
+const MISSING_DEVICE = new Set(['OverconstrainedError', 'NotFoundError']);
+
+async function openDevice(mediaDevices, kind, deviceId, constraintsFor) {
+  const open = (id) => mediaDevices.getUserMedia({ [kind]: constraintsFor(id) });
+  try {
+    return { stream: await open(deviceId), fellBack: false };
+  } catch (err) {
+    if (!deviceId || !MISSING_DEVICE.has(err?.name)) throw err;
+    return { stream: await open(''), fellBack: true };
+  }
+}
+
+// Shared start/stop bookkeeping: a start that is overtaken by a newer start or
+// by stop() closes the stream it opened instead of leaving it running.
+function createPreview({ kind, mediaDevices, constraintsFor, onOpen, onClose }) {
+  const media = () => mediaDevices || (typeof navigator !== 'undefined' ? navigator.mediaDevices : null);
+  let generation = 0;
+  let stream = null;
+
+  const close = () => {
+    if (!stream) return;
+    stream.getTracks().forEach((track) => track.stop());
+    stream = null;
+    onClose?.();
+  };
+
+  return {
+    get active() { return !!stream; },
+    get stream() { return stream; },
+    async start(deviceId = '') {
+      const mine = ++generation;
+      close();
+      const md = media();
+      if (!md?.getUserMedia) throw Object.assign(new Error('Media devices are not available'), { name: 'NotSupportedError' });
+      const opened = await openDevice(md, kind, deviceId, constraintsFor);
+      if (mine !== generation) {
+        opened.stream.getTracks().forEach((track) => track.stop());
+        return { fellBack: opened.fellBack, superseded: true };
+      }
+      stream = opened.stream;
+      onOpen?.(stream);
+      return { fellBack: opened.fellBack };
+    },
+    stop() {
+      generation++;
+      close();
+    },
+  };
+}
+
+/**
+ * @param {object} [options]
+ * @param {MediaDevices} [options.mediaDevices]
+ * @param {typeof AudioContext} [options.AudioContext]
+ */
+export function createMicPreview(options = {}) {
+  const AudioCtx = options.AudioContext || globalThis.AudioContext || globalThis.webkitAudioContext;
+  let ctx = null;
+  let analyser = null;
+  let data = null;
+  const preview = createPreview({
+    kind: 'audio',
+    mediaDevices: options.mediaDevices,
+    constraintsFor: (id) => (id ? { ...AUDIO, deviceId: { exact: id } } : { ...AUDIO }),
+    onOpen(stream) {
+      if (!AudioCtx) return;
+      ctx = new AudioCtx();
+      analyser = ctx.createAnalyser();
+      analyser.smoothingTimeConstant = 0.3; // as the call's noise gate analyser
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      data = new Uint8Array(analyser.frequencyBinCount);
+    },
+    onClose() {
+      try { ctx?.close(); } catch { /* already closed */ }
+      ctx = analyser = data = null;
+    },
+  });
+  return {
+    get active() { return preview.active; },
+    start: preview.start,
+    stop: preview.stop,
+    // Same scale as VoiceManager.currentMicLevel, so the meter and the gate
+    // marker read the same before and during a call.
+    level() {
+      if (!analyser) return 0;
+      analyser.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      return Math.min(100, (sum / data.length / 50) * 100);
+    },
+  };
+}
+
+/**
+ * @param {object} options
+ * @param {(deviceId: string) => object} options.constraintsFor  video constraints for a camera (size and frame rate from Camera Quality)
+ * @param {MediaDevices} [options.mediaDevices]
+ */
+export function createCameraPreview(options = {}) {
+  const constraintsFor = options.constraintsFor || ((id) => (id ? { deviceId: { exact: id } } : true));
+  return createPreview({ kind: 'video', mediaDevices: options.mediaDevices, constraintsFor });
+}

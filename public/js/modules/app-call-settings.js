@@ -2,9 +2,11 @@
 // described and built in call-settings-panel.js and driven by the call
 // settings layer, so other places (the fullscreen popup, a pre-call page) can
 // show the same controls. The sidebar copy keeps the element ids that themes,
-// plugins and user CSS rely on. The fullscreen call popup mounts its own copy.
+// plugins and user CSS rely on. The fullscreen call popup and the Voice & video
+// settings page mount their own copies.
 
 import { createDeviceList, createCallSettingsPanel } from './call-settings-panel.js?v=4.29.57';
+import { createMicPreview, createCameraPreview } from './call-settings-preview.js?v=4.29.57';
 
 export default {
 
@@ -38,6 +40,118 @@ _mountFullscreenCallSettings(host) {
 
 _callSettingsMicLevel() {
   return this.voice && this.voice.inVoice ? this.voice.currentMicLevel : 0;
+},
+
+// Settings, Voice & video: the same controls, usable without joining a call,
+// plus a microphone and camera test. Tests start only from their buttons and
+// stop when the page is no longer on screen (settings closed, or another page
+// picked), so no device stays open behind the user's back.
+_mountCallSettingsPage() {
+  const section = document.getElementById('section-call-settings');
+  const host = document.getElementById('call-settings-page-panel');
+  if (!section || !host) return;
+  if (!this.callSettingsDevices) this.callSettingsDevices = createDeviceList();
+  const micButton = document.getElementById('call-preview-mic');
+  const camButton = document.getElementById('call-preview-camera');
+  const video = document.getElementById('call-preview-video');
+  const status = document.getElementById('call-preview-status');
+  const mic = createMicPreview();
+  const camera = createCameraPreview({
+    constraintsFor: (id) => this.voice?._webcamConstraints?.(id) ?? (id ? { deviceId: { exact: id } } : true),
+  });
+  this.callSettingsPreview = { mic, camera };
+
+  this.callSettingsPage?.destroy();
+  this.callSettingsPage = createCallSettingsPanel(host, {
+    settings: this.callSettings,
+    devices: this.callSettingsDevices,
+    include: ['voiceVolume'],
+    getMicLevel: () => (mic.active ? mic.level() : this._callSettingsMicLevel()),
+  });
+
+  const label = (button, key) => {
+    const span = button?.querySelector('span');
+    if (!span) return;
+    span.setAttribute('data-i18n', key);
+    span.textContent = t(key);
+  };
+  const say = (key, params) => {
+    if (!status) return;
+    status.textContent = key ? t(key, params) : '';
+    status.hidden = !key;
+  };
+  const failure = (err) => (err?.name === 'NotAllowedError' || err?.name === 'SecurityError'
+    ? 'settings.call.permission_denied' : 'settings.call.preview_failed');
+  const sync = () => {
+    label(micButton, mic.active ? 'settings.call.stop_mic' : 'settings.call.test_mic');
+    label(camButton, camera.active ? 'settings.call.stop_camera' : 'settings.call.test_camera');
+    micButton?.setAttribute('aria-pressed', String(mic.active));
+    camButton?.setAttribute('aria-pressed', String(camera.active));
+    if (video) {
+      video.hidden = !camera.active;
+      if (!camera.active) video.srcObject = null;
+    }
+  };
+
+  const startMic = async () => {
+    say(null);
+    try {
+      const { fellBack, superseded } = await mic.start(this.callSettings.get('inputDevice'));
+      if (superseded) return;
+      if (fellBack) say('settings.call.mic_missing');
+      // Names show once the microphone has been allowed.
+      this.callSettingsDevices.refresh();
+    } catch (err) {
+      console.warn('[CallSettings] microphone test failed', err);
+      say(failure(err));
+    }
+    sync();
+  };
+  const startCamera = async () => {
+    say(null);
+    if (this.voice?.isWebcamActive) { say('settings.call.camera_in_call'); sync(); return; }
+    try {
+      const { fellBack, superseded } = await camera.start(this.callSettings.get('cameraDevice'));
+      if (superseded) return;
+      if (fellBack) say('settings.call.camera_missing');
+      if (video) {
+        video.srcObject = camera.stream;
+        video.play?.()?.catch?.(() => { /* muted autoplay; the frame still shows */ });
+      }
+      this.callSettingsDevices.refresh();
+    } catch (err) {
+      console.warn('[CallSettings] camera test failed', err);
+      say(failure(err));
+    }
+    sync();
+  };
+  const stopAll = () => {
+    if (!mic.active && !camera.active) return;
+    mic.stop();
+    camera.stop();
+    sync();
+  };
+
+  micButton?.addEventListener('click', () => {
+    if (mic.active) { mic.stop(); say(null); sync(); } else startMic();
+  });
+  camButton?.addEventListener('click', () => {
+    if (camera.active) { camera.stop(); say(null); sync(); } else startCamera();
+  });
+  // Picking another device or camera quality during a test switches to it.
+  this.callSettings.subscribe('inputDevice', () => { if (mic.active) startMic(); });
+  this.callSettings.subscribe('cameraDevice', () => { if (camera.active) startCamera(); });
+  this.callSettings.subscribe('cameraQuality', () => { if (camera.active) startCamera(); });
+
+  // Shown: list the devices. Hidden (whichever way settings closed): stop.
+  if (typeof IntersectionObserver === 'function') {
+    new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) this.callSettingsDevices.refresh();
+      else stopAll();
+    }).observe(section);
+  }
+  sync();
+  say(null);
 },
 
 };

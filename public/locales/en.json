@@ -1583,6 +1583,7 @@
       "localization": "Localization",
       "layout": "Layout",
       "sounds": "Sounds",
+      "call_settings": "Voice & Video",
       "push": "Push",
       "password": "Password",
       "e2e_passphrase": "Encryption",
@@ -1656,6 +1657,7 @@
     "pages": {
       "look": "Appearance",
       "chat": "Chat & media",
+      "voice": "Voice & video",
       "alerts": "Notifications",
       "profile": "Profile & activity",
       "security": "Account & security",
@@ -3258,6 +3260,19 @@
       "off": "Never",
       "hint": "A version number has three parts: a big update changes the first, new features the second, and fixes the third. When an underlined part changes, you get a popup with the release notes. Saved on this device.",
       "show_now": "See what's new in this version"
+    },
+    "call": {
+      "title": "Voice & Video",
+      "hint": "Saved on this device. Changes apply to your next call, or straight away if you are in one.",
+      "test_mic": "Test microphone",
+      "stop_mic": "Stop microphone test",
+      "test_camera": "Test camera",
+      "stop_camera": "Stop camera test",
+      "mic_missing": "Your chosen microphone was not found, so the default one is being tested.",
+      "camera_missing": "Your chosen camera was not found, so the default one is being shown.",
+      "camera_in_call": "Your camera is already on in the call. Turn it off there to test it here.",
+      "permission_denied": "The browser was not allowed to use this device. Allow it in the site settings and try again.",
+      "preview_failed": "This device could not be opened. It may be in use by another app."
     }
   },
   "modals": {

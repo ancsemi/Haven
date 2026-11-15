@@ -115,6 +115,8 @@ _bindVoiceControls() {
 
   // The settings panel itself (devices, camera, noise, screen share).
   this._mountVoiceSettingsPanel();
+  // The same settings as a Settings page, usable outside a call.
+  this._mountCallSettingsPage?.();
 
   // Stream size slider
   const streamSizeSlider = document.getElementById('stream-size-slider');

@@ -615,6 +615,56 @@
   border-color: var(--accent);
 }
 
+/* Settings, Voice & video: the same controls as the sidebar panel, with room
+   to breathe, and the microphone/camera test above them. */
+.call-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+.call-preview-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.call-preview-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.call-preview-video {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transform: scaleX(-1); /* like your own camera tile: a mirror */
+}
+.call-settings-page-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 34rem;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.call-settings-page-panel .voice-settings-row { min-height: 28px; flex-wrap: wrap; }
+.call-settings-page-panel .voice-settings-select {
+  max-width: none;
+  margin-bottom: 0;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+.call-settings-page-panel .ns-slider {
+  flex: 1;
+  width: auto;
+  min-width: 60px;
+}
+.call-settings-page-panel .settings-hint { flex-basis: 100%; }
+
 /* ═══════════════════════════════════════════════════════════
    PERSISTENT VOICE BAR (sidebar bottom)
    ═══════════════════════════════════════════════════════════ */

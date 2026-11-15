@@ -1476,6 +1476,7 @@
           <div class="settings-nav-item" data-target="section-chat-behavior">💬 <span data-i18n="settings.nav.chat_behavior">Chat Behavior</span></div>
           <div class="settings-nav-item" data-target="section-whats-new">🆕 <span data-i18n="settings.nav.whats_new">What's New</span></div>
           <div class="settings-nav-item" data-target="section-soundboard-mode">🎛️ <span data-i18n="settings.nav.soundboard">Soundboard</span></div>
+          <div class="settings-nav-item" data-target="section-call-settings">🎧 <span data-i18n="settings.nav.call_settings">Voice &amp; Video</span></div>
           <div class="settings-nav-item" data-target="section-sounds">🔔 <span data-i18n="settings.nav.sounds">Sounds</span></div>
           <div class="settings-nav-item" data-target="section-push">📲 <span data-i18n="settings.nav.push">Push</span></div>
 
@@ -2056,6 +2057,24 @@
       </div>
 
       <!-- Sounds Section -->
+      <!-- Voice & video: the call settings, usable outside a call, with a
+           microphone and camera test. The controls are built by
+           createCallSettingsPanel (js/modules/call-settings-panel.js) and the
+           tests are wired in js/modules/app-call-settings.js. -->
+      <div class="settings-section" id="section-call-settings">
+        <h5 class="settings-section-title">🎧 <span data-i18n="settings.call.title">Voice &amp; Video</span></h5>
+        <small class="settings-hint" style="display:block" data-i18n="settings.call.hint">Saved on this device. Changes apply to your next call, or straight away if you are in one.</small>
+        <div class="call-preview">
+          <div class="call-preview-buttons">
+            <button type="button" class="btn-sm call-preview-btn" id="call-preview-mic" aria-pressed="false">🎙️ <span data-i18n="settings.call.test_mic">Test microphone</span></button>
+            <button type="button" class="btn-sm call-preview-btn" id="call-preview-camera" aria-pressed="false">📷 <span data-i18n="settings.call.test_camera">Test camera</span></button>
+          </div>
+          <small class="settings-hint call-preview-status" id="call-preview-status" role="status" aria-live="polite" hidden></small>
+          <video class="call-preview-video" id="call-preview-video" muted playsinline autoplay hidden></video>
+        </div>
+        <div class="voice-settings-panel call-settings-page-panel" id="call-settings-page-panel"></div>
+      </div>
+
       <div class="settings-section" id="section-sounds">
         <h5 class="settings-section-title">🔔 <span data-i18n="settings.sounds_section.title">Sounds</span></h5>
         <div class="notif-settings">
