@@ -93,6 +93,7 @@ import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.
 import MessageGroupingMethods from './modules/message-grouping.js?v=4.25.1';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
 import BlockedNameMethods from './modules/app-blocked-names.js?v=4.29.15';
+import CallSettingsMethods from './modules/app-call-settings.js?v=4.29.57';
 import MasterVolumeMethods from './modules/app-master-volume.js?v=4.29.57';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.24.24';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
@@ -682,6 +683,7 @@ Object.assign(HavenApp.prototype,
   DmPinMethods,
   AdminReauthMethods,
   MasterVolumeMethods,
+  CallSettingsMethods,
   ForumUnreadMethods,
   ThreadUnreadMethods,
   ThreadDockMethods,

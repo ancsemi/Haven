@@ -303,7 +303,7 @@ test('voice.js and the layer use the same storage keys', () => {
 
 test('app modules go through the layer instead of reading call-setting keys', () => {
   const fs = require('node:fs');
-  for (const file of ['app-voice-controls.js', 'app-voice.js', 'app-master-volume.js', 'app-screen-webcam.js', 'app-composer.js']) {
+  for (const file of ['app-voice-controls.js', 'app-voice.js', 'app-master-volume.js', 'app-screen-webcam.js', 'app-composer.js', 'app-call-settings.js']) {
     const src = fs.readFileSync(path.join(__dirname, '..', 'public/js/modules', file), 'utf8');
     for (const key of Object.values(CALL_SETTING_KEYS)) {
       assert.ok(!src.includes(`'${key}'`), `${file} still touches ${key} directly`);
