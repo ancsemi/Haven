@@ -123,13 +123,14 @@ body.pause-offscreen-off .media-keep { display: none; }
 .lp-collapsed .lp-collapse .media-icon { transform: rotate(-90deg); }
 .lp-size-menu {
   position: fixed;
-  z-index: 10000;
+  /* Above the thread panel and the pop-out DM, which show previews too. */
+  z-index: 100020;
   display: flex;
   flex-direction: column;
   width: 11rem;
   padding: 0.25rem;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
   box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.35);
   font-size: 0.8125rem;
