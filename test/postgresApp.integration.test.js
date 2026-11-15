@@ -882,6 +882,197 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     assert.equal(result.body.code, 'postgres_preview_unsupported');
     await db.prepare('UPDATE users SET totp_enabled = 0 WHERE id = ?').run(alice.user.id);
   });
+  await t.test('profiles show scoped roles and badges and refresh avatar and border fit in the room', async st => {
+    const actor = await fixtureAccount('profile_owner');
+    const viewer = await fixtureAccount('profile_viewer');
+    const role = await db.prepare("INSERT INTO roles (name, level, show_on_profile) VALUES ('Hidden profile role', 5, 0) RETURNING id").get();
+    const scoped = await db.prepare("INSERT INTO roles (name, level, scope) VALUES ('Room profile role', 10, 'channel') RETURNING id").get();
+    await db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)').run(actor.id, role.id);
+    await db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id, custom_level) VALUES (?, ?, ?, ?)').run(actor.id, scoped.id, room.id, 14);
+    const badge = await db.prepare("INSERT INTO badges (name, kind, icon_type, icon, role_id) VALUES ('Role badge', 'role', 'emoji', '⭐', ?) RETURNING id").get(role.id);
+    const manual = await db.prepare("INSERT INTO badges (name, kind, icon_type, icon) VALUES ('Manual badge', 'manual', 'emoji', '🏅') RETURNING id").get();
+    await db.prepare('INSERT INTO user_badges (user_id, badge_id) VALUES (?, ?)').run(actor.id, manual.id);
+    for (const userId of [actor.id, viewer.id]) await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(room.id, userId);
+    const own = (await connect(actor.token)).socket;
+    const other = (await connect(viewer.token)).socket;
+    const adminSocket = (await connect(adminAccount.token)).socket;
+    st.after(() => { own.disconnect(); other.disconnect(); adminSocket.disconnect(); });
+
+    const card = client => emit(client, 'get-user-profile', 'user-profile', { userId: actor.id });
+    assert.deepEqual((await card(other)).roles, []);
+    assert.equal((await card(adminSocket)).roles.find(r => r.id === role.id).hiddenOnProfile, true);
+    for (const client of [own, other]) client.emit('enter-channel', { code: room.code });
+    await Promise.all([drain(own), drain(other)]);
+    assert.equal((await card(other)).roles.find(r => r.id === scoped.id).level, 14);
+    assert.deepEqual((await card(other)).badges.map(b => b.name), ['Role badge', 'Manual badge']);
+    const hide = hidden => own.timeout(10000).emitWithAck('set-badge-hidden', { badgeId: badge.id, hidden });
+    assert.deepEqual(await hide(true), { ok: true, hidden: true });
+    assert.deepEqual(await hide(true), { ok: true, hidden: true });
+    assert.equal((await card(own)).badges.find(b => b.id === badge.id).hidden, true);
+    assert.deepEqual((await card(other)).badges.map(b => b.id), [manual.id]);
+    assert.deepEqual(await hide(false), { ok: true, hidden: false });
+    assert.equal((await card(other)).badges.length, 2);
+
+    const write = (route, value) => request('/api/' + route, 'POST', value, actor.token);
+    const live = predicate => packet(other, 'online-users', value => value.channelCode === room.code &&
+      value.users.some(user => user.id === actor.id && predicate(user)));
+    assert.deepEqual(await write('set-avatar-shape', { shape: 'hex' }), { status: 200, body: { shape: 'hex' } });
+    const shape = live(user => user.avatarShape === 'hex');
+    await emit(own, 'set-avatar-shape', 'avatar-shape-updated', { shape: 'hex' });
+    await shape;
+    assert.equal((await write('set-animate-profile', { mode: 'disabled' })).status, 200);
+    const mode = live(user => user.animateProfile === 'disabled');
+    await emit(own, 'set-animate-profile', 'animate-profile-updated', { mode: 'disabled' });
+    await mode;
+    const transform = [{ type: 'rotate', deg: 360 }];
+    const malformed = await write('set-border-transform', { transform: [{ type: 'rotate', deg: { toString: null } }] });
+    assert.deepEqual(malformed, { status: 500, body: { error: 'Failed to save border fit' } });
+    assert.deepEqual(await write('set-border-transform', { transform: [{ type: 'rotate', deg: 500 }] }), { status: 200, body: { transform } });
+    const fitted = live(user => user.borderTransform?.[0]?.deg === 360);
+    own.emit('set-border-transform', { transform: [{ type: 'rotate', deg: 8 }] });
+    await fitted;
+    assert.deepEqual(await emit(own, 'set-bio', 'bio-updated', { bio: '  About me  ' }), { bio: 'About me' });
+    const updated = await card(other);
+    assert.equal(updated.avatarShape, 'hex');
+    assert.equal(updated.animateProfile, 'disabled');
+    assert.deepEqual(updated.borderTransform, transform);
+    assert.equal(updated.bio, 'About me');
+  });
+  await t.test('concurrent birthday writes save a single date and respect visibility on profile cards', async st => {
+    const actor = await fixtureAccount('profile_birthday');
+    const viewer = await fixtureAccount('birthday_viewer');
+    const own = (await connect(actor.token)).socket;
+    const peer = (await connect(actor.token)).socket;
+    const other = (await connect(viewer.token)).socket;
+    st.after(() => { own.disconnect(); peer.disconnect(); other.disconnect(); });
+    const set = (socket, birthday) => emit(socket, 'set-birthday', 'birthday-updated', { birthday });
+    const outcomes = await Promise.allSettled([set(own, '1994-02-15'), set(peer, '1995-03-20')]);
+    assert.deepEqual(outcomes.map(r => r.status).sort(), ['fulfilled', 'rejected']);
+    const saved = outcomes.find(result => result.status === 'fulfilled').value;
+    assert.match(outcomes.find(result => result.status === 'rejected').reason.message, /can only be set once/);
+    const card = () => emit(other, 'get-user-profile', 'user-profile', { userId: actor.id });
+    assert.equal((await card()).birthday, saved.birthday.slice(5));
+    await emit(own, 'set-birthday', 'birthday-updated', { hideYear: false });
+    assert.equal((await card()).birthday, saved.birthday);
+    assert.equal((await set(peer, null)).birthdayHidden, true);
+    assert.equal((await card()).birthday, null);
+    assert.equal((await db.prepare('SELECT birthday FROM users WHERE id = ?').get(actor.id)).birthday, saved.birthday);
+  });
+  await t.test('display names update rooms and DM labels and concurrent case-insensitive claims have one winner', async st => {
+    const actor = await fixtureAccount('profile_rename');
+    const peer = await fixtureAccount('profile_peer');
+    await db.prepare('UPDATE users SET password_version = 2, display_name_locked = 1 WHERE id = ?').run(actor.id);
+    actor.token = jwt.sign({ id: actor.id, username: actor.username, pwv: 2 }, JWT_SECRET);
+    const own = (await connect(actor.token)).socket;
+    const other = (await connect(peer.token)).socket;
+    st.after(async () => {
+      own.disconnect(); other.disconnect();
+      await db.prepare('DELETE FROM channels WHERE is_dm = 1 AND created_by = ?').run(actor.id);
+    });
+    const dm = await emit(own, 'start-dm', 'dm-opened', { targetUserId: peer.id });
+    for (const [userId, client] of [[actor.id, own], [peer.id, other]]) {
+      await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(room.id, userId);
+      client.emit('enter-channel', { code: room.code });
+    }
+    await Promise.all([drain(own), drain(other)]);
+    assert.match(await emit(own, 'rename-user', 'error-msg', { username: 'Blocked By Lock' }), /moderator set/);
+    await db.prepare('UPDATE users SET display_name_locked = 0 WHERE id = ?').run(actor.id);
+    const label = packet(other, 'dm-name-updated', data => data.userId === actor.id);
+    const announcement = packet(other, 'user-renamed', data => data.channelCode === room.code);
+    const rename = (socket, username) => emit(socket, 'rename-user', 'renamed', { username });
+    const renamed = await rename(own, '  Profile   Display  ');
+    assert.equal(renamed.oldName, actor.username);
+    assert.equal(renamed.user.displayName, 'Profile Display');
+    assert.deepEqual(await label, { userId: actor.id, newName: 'Profile Display' });
+    assert.deepEqual(await announcement, { channelCode: room.code, oldName: actor.username, newName: 'Profile Display' });
+    assert.equal(jwt.decode(renamed.token).pwv, 2);
+    assert.equal((await request('/api/auth/validate', 'GET', undefined, renamed.token)).status, 200);
+    const channels = await emit(other, 'get-channels', 'channels-list');
+    assert.equal(channels.find(ch => ch.id === dm.id).dm_target.username, 'Profile Display');
+
+    const results = await Promise.allSettled([rename(own, 'Shared Display'), rename(other, 'sHared display')]);
+    assert.deepEqual(results.map(r => r.status).sort(), ['fulfilled', 'rejected']);
+    assert.match(results.find(r => r.status === 'rejected').reason.message, /already taken/);
+    assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM users WHERE LOWER(display_name) = 'shared display'").get()).n, 1);
+    await Promise.all([drain(own), drain(other)]);
+    assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'user_rename' AND actor_id IN (?, ?)").get(actor.id, peer.id)).n, 2);
+  });
+  await t.test('nicknames and DM pins are private preferences that can be imported or cleared', async st => {
+    const actor = await fixtureAccount('profile_nicknames');
+    const recipient = await fixtureAccount('nickname_recipient');
+    const own = (await connect(actor.token)).socket;
+    const other = (await connect(recipient.token)).socket;
+    st.after(async () => {
+      own.disconnect(); other.disconnect();
+      await db.prepare('DELETE FROM channels WHERE is_dm = 1 AND created_by = ?').run(actor.id);
+    });
+    const dm = await emit(own, 'start-dm', 'dm-opened', { targetUserId: recipient.id });
+    const pins = JSON.stringify([room.code, dm.code, dm.code]);
+    assert.deepEqual(await emit(own, 'set-preference', 'preference-saved', { key: 'pinned_dms', value: pins }),
+      { key: 'pinned_dms', value: JSON.stringify([dm.code]) });
+    assert.equal((await emit(other, 'get-preferences', 'preferences')).pinned_dms, undefined);
+    assert.deepEqual(await emit(own, 'delete-preference', 'preference-deleted', { key: 'pinned_dms' }), { key: 'pinned_dms' });
+    assert.equal((await emit(own, 'get-preferences', 'preferences')).pinned_dms, undefined);
+
+    own.emit('set-nicknames-bulk', { nicknames: { [recipient.id]: '  A nickname  ', [adminAccount.user.id]: 'Another nickname' } });
+    await drain(own);
+    const imported = await db.prepare('SELECT target_id, nickname FROM user_nicknames WHERE owner_id = ?').all(actor.id);
+    assert.deepEqual(Object.fromEntries(imported.map(row => [row.target_id, row.nickname])),
+      { [recipient.id]: 'A nickname', [adminAccount.user.id]: 'Another nickname' });
+    own.emit('set-nickname', { targetId: adminAccount.user.id, nickname: '' });
+    own.emit('set-nickname', { targetId: recipient.id, nickname: '  Renamed locally  ' });
+    await drain(own);
+    const reopened = await connect(actor.token);
+    st.after(() => reopened.socket.disconnect());
+    assert.deepEqual(reopened.session.nicknames, { [recipient.id]: 'Renamed locally' });
+    const otherSession = await connect(recipient.token);
+    st.after(() => otherSession.socket.disconnect());
+    assert.equal(otherSession.session.nicknames[actor.id], undefined);
+  });
+  await t.test('muted-room replacements are atomic and sound preferences and volume retain their permissions', async st => {
+    const actor = await fixtureAccount('profile_sounds');
+    const listener = (await connect(actor.token)).socket;
+    st.after(() => listener.disconnect());
+    const privateRequest = (route, method = 'GET', body) => request(route, method, body, actor.token);
+    const prefs = '/api/user/channel-prefs';
+    const replace = codes => privateRequest(prefs + '/muted', 'PUT', { codes });
+    await privateRequest(prefs + '/mute', 'POST', { code: 'keep-unmuted', muted: false });
+    assert.deepEqual(await replace(['previous']), { status: 200, body: { ok: true, count: 1 } });
+    const batches = await Promise.all([replace(['first-a', 'first-b']), replace(['second-a', 'second-b'])]);
+    assert.deepEqual(batches.map(result => result.status), [200, 200]);
+    const muted = (await privateRequest(prefs)).body.muted.sort();
+    assert.ok(['first-a,first-b', 'second-a,second-b'].includes(muted.join(',')));
+    assert.equal((await db.prepare("SELECT muted FROM user_channel_prefs WHERE user_id = ? AND channel_code = 'keep-unmuted'").get(actor.id)).muted, 0);
+
+    const soundPrefs = '/api/user-sound-prefs';
+    const name = 'AOL - Door Open';
+    const saved = { [name]: { hidden: true, customOrder: 2 } };
+    assert.deepEqual(await privateRequest(soundPrefs, 'POST', { prefs: saved }), { status: 200, body: { ok: true } });
+    const refused = await privateRequest(soundPrefs, 'POST', { prefs: { [name]: { hidden: false }, broken: null } });
+    assert.equal(refused.status, 500);
+    assert.deepEqual((await privateRequest(soundPrefs)).body.prefs, saved);
+    assert.deepEqual(await request(soundPrefs, 'GET', undefined, adminAccount.token), { status: 200, body: { prefs: {} } });
+    const volumeUrl = '/api/sounds/' + encodeURIComponent(name) + '/volume';
+    assert.equal((await privateRequest(volumeUrl, 'PUT', { volume: 35 })).status, 403);
+    const library = packet(listener, 'library-updated', data => data.kind === 'sounds');
+    const setVolume = volume => request(volumeUrl, 'PUT', { volume }, adminAccount.token);
+    assert.deepEqual(await setVolume(35), { status: 200, body: { ok: true, name, volume: 35 } });
+    await library;
+    const sounds = async () => (await privateRequest('/api/sounds')).body.sounds;
+    assert.equal((await sounds()).find(sound => sound.name === name).volume, 35);
+    assert.equal((await setVolume(100)).status, 200);
+    assert.equal((await sounds()).find(sound => sound.name === name).volume, undefined);
+    assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'sound_volume' AND target_name = ?").get(name)).n, 2);
+
+    const custom = '/api/sounds/Profile%20sound/volume';
+    assert.equal((await request(custom, 'PUT', { volume: 0 }, adminAccount.token)).status, 404);
+    await db.prepare("INSERT INTO custom_sounds (name, filename) VALUES ('Profile sound', 'profile.wav')").run();
+    const role = await db.prepare("INSERT INTO roles (name) VALUES ('Soundboard manager') RETURNING id").get();
+    await db.prepare("INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, 'manage_soundboard', 1)").run(role.id);
+    await db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)').run(actor.id, role.id);
+    assert.deepEqual(await privateRequest(custom, 'PUT', { volume: 0 }), { status: 200, body: { ok: true, name: 'Profile sound', volume: 0 } });
+    assert.equal((await sounds()).find(sound => sound.name === 'Profile sound').volume, 0);
+  });
   await t.test('a restart preserves identities, settings and the default room', async () => {
     const before = await db.prepare('SELECT value FROM server_settings WHERE key = ?').get('server_fingerprint');
     await stop();

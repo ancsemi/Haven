@@ -19,13 +19,19 @@ function cleanPinnedDms(db, userId, raw) {
   if (!Array.isArray(list)) return null;
   const wanted = [...new Set(list.filter(c => typeof c === 'string' && CODE_RE.test(c)))].slice(0, MAX_PINNED_DMS * 2);
   if (!wanted.length) return null;
-  const mine = new Set(db.prepare(`
+  const postgres = db.kind === 'postgres';
+  const rows = db.prepare(`
     SELECT c.code FROM channels c
     JOIN channel_members cm ON cm.channel_id = c.id
     WHERE cm.user_id = ? AND c.is_dm = 1
-  `).all(userId).map(r => r.code));
-  const kept = wanted.filter(c => mine.has(c)).slice(0, MAX_PINNED_DMS);
-  return kept.length ? JSON.stringify(kept) : null;
+    ${postgres ? 'AND c.code = ANY(?::text[]) FOR SHARE OF c, cm' : ''}
+  `).all(userId, ...(postgres ? [wanted] : []));
+  const filter = memberships => {
+    const mine = new Set(memberships.map(row => row.code));
+    const kept = wanted.filter(code => mine.has(code)).slice(0, MAX_PINNED_DMS);
+    return kept.length ? JSON.stringify(kept) : null;
+  };
+  return postgres ? rows.then(filter) : filter(rows);
 }
 
 module.exports = { cleanPinnedDms, MAX_PINNED_DMS };

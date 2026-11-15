@@ -11,7 +11,23 @@ const { auditHttp } = require('../httpAudit');
 const { DATA_DIR, STAGING_DIR } = require('../paths');
 const { verifyToken } = require('../auth');
 const { sanitizeSoundName } = require('../socketHandlers');
+const createPermissions = require('../socketHandlers/asyncPermissions');
+const { lockUserPreferences } = require('../db/userPreferences');
 const ROOT = path.join(__dirname, '..', '..');
+
+function customSound(db, name) {
+  const lock = db.kind === 'postgres' ? ' FOR SHARE' : '';
+  return db.prepare('SELECT 1 FROM custom_sounds WHERE name = ?' + lock).get(name);
+}
+
+function saveSoundVolume(db, name, volume) {
+  if (volume === 100) return db.prepare('DELETE FROM sound_volumes WHERE sound_name = ?').run(name);
+  return db.prepare('INSERT INTO sound_volumes (sound_name, volume) VALUES (?, ?) ON CONFLICT(sound_name) DO UPDATE SET volume = excluded.volume').run(name, volume);
+}
+
+function soundPreferenceUpsert(db) {
+  return db.prepare('INSERT INTO sound_preferences (user_id, sound_name, hidden, custom_order) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, sound_name) DO UPDATE SET hidden = excluded.hidden, custom_order = excluded.custom_order');
+}
 
 module.exports = function registerMediaLibrary(deps) {
   const { uploadDiskGuard, app, verifyAdminFromDb, userHasPermission, uploadDir, uploadStorage, uploadLimiter } = deps;
@@ -146,21 +162,34 @@ module.exports = function registerMediaLibrary(deps) {
   // How loud one sound plays on the soundboard, for everyone (#5804): the
   // person playing it sends it at this level, so turning a loud sound down
   // here quiets it in every call. 0 to 100 percent; 100 removes the row.
-  app.put('/api/sounds/:name/volume', (req, res) => {
+  app.put('/api/sounds/:name/volume', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_soundboard')) return res.status(403).json({ error: 'Requires admin or Manage Soundboard permission' });
     const name = req.params.name;
-    const volume = Number(req.body && req.body.volume);
-    if (!Number.isInteger(volume) || volume < 0 || volume > 100) return res.status(400).json({ error: 'Volume must be a whole number from 0 to 100' });
     const { getDb } = require('../database');
     try {
-      const known = BUILTIN_SOUNDS.some(s => s.name === name) || !!getDb().prepare('SELECT 1 FROM custom_sounds WHERE name = ?').get(name);
-      if (!known) return res.status(404).json({ error: 'Sound not found' });
-      if (volume === 100) getDb().prepare('DELETE FROM sound_volumes WHERE sound_name = ?').run(name);
-      else getDb().prepare('INSERT INTO sound_volumes (sound_name, volume) VALUES (?, ?) ON CONFLICT(sound_name) DO UPDATE SET volume = excluded.volume').run(name, volume);
-      auditHttp(user, 'sound_volume', { target_name: name, details: { volume } });
+      const db = getDb();
+      const allowed = req.postgresUser
+        ? user.isAdmin || await createPermissions(db).userHasPermission(user.id, 'manage_soundboard')
+        : verifyAdminFromDb(user) || userHasPermission(user.id, 'manage_soundboard');
+      if (!allowed) return res.status(403).json({ error: 'Requires admin or Manage Soundboard permission' });
+      const volume = Number(req.body && req.body.volume);
+      if (!Number.isInteger(volume) || volume < 0 || volume > 100) return res.status(400).json({ error: 'Volume must be a whole number from 0 to 100' });
+      const builtin = BUILTIN_SOUNDS.some(s => s.name === name);
+      if (req.postgresUser) {
+        const saved = await db.withTransaction(async tx => {
+          if (!builtin && !await customSound(tx, name)) return false;
+          await saveSoundVolume(tx, name, volume);
+          return true;
+        });
+        if (!saved) return res.status(404).json({ error: 'Sound not found' });
+      } else {
+        if (!builtin && !customSound(db, name)) return res.status(404).json({ error: 'Sound not found' });
+        saveSoundVolume(db, name, volume);
+      }
+      const audit = auditHttp(user, 'sound_volume', { target_name: name, details: { volume } });
+      if (req.postgresUser) await audit;
       broadcastLibraryUpdate(req, 'sounds');
       res.json({ ok: true, name, volume });
     } catch (err) {
@@ -183,18 +212,31 @@ module.exports = function registerMediaLibrary(deps) {
     } catch { res.json({ prefs: {} }); }
   });
 
-  app.post('/api/user-sound-prefs', (req, res) => {
+  app.post('/api/user-sound-prefs', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     const { prefs } = req.body || {};
     if (!prefs || typeof prefs !== 'object') return res.status(400).json({ error: 'Invalid prefs' });
     const { getDb } = require('../database');
     try {
       const db = getDb();
-      const upsert = db.prepare('INSERT INTO sound_preferences (user_id, sound_name, hidden, custom_order) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, sound_name) DO UPDATE SET hidden = excluded.hidden, custom_order = excluded.custom_order');
-      const runMany = db.transaction(() => { Object.entries(prefs).forEach(([name, pref]) => { upsert.run(user.id, name, pref.hidden ? 1 : 0, pref.customOrder ?? null); }); });
-      runMany();
+      if (req.postgresUser) {
+        await db.withTransaction(async tx => {
+          await lockUserPreferences(tx, user.id);
+          const upsert = soundPreferenceUpsert(tx);
+          for (const [name, pref] of Object.entries(prefs)) {
+            await upsert.run(user.id, name, pref.hidden ? 1 : 0, pref.customOrder ?? null);
+          }
+        });
+      } else {
+        const upsert = soundPreferenceUpsert(db);
+        db.transaction(() => {
+          for (const [name, pref] of Object.entries(prefs)) {
+            upsert.run(user.id, name, pref.hidden ? 1 : 0, pref.customOrder ?? null);
+          }
+        })();
+      }
       res.json({ ok: true });
     } catch { res.status(500).json({ error: 'Failed to save prefs' }); }
   });

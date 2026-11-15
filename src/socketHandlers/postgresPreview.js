@@ -14,10 +14,14 @@ const { createPostgresPosting } = require('./postgresPosting');
 const { createPostgresMessageActions } = require('./postgresMessageActions');
 const { createPostgresThreads, emitThreadRead, historyThreads } = require('./postgresThreads');
 const { createPostgresPresence, channelMembers } = require('./postgresPresence');
+const { createPostgresProfiles } = require('./postgresProfiles');
 const { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS } = require('./settingEffects');
 const { compatibleThemeFiles, validatedThemeDefault, themePreferenceAllowed } = require('../themeMetadata');
-const { cleanChannelOrder } = require('./users');
+const { cleanChannelOrder, deletableKeys } = require('./users');
 const { cleanEmojiFavorites } = require('../builtinEmojis');
+const { cleanPinnedDms } = require('../pinnedDms');
+const { savePreference, deletePreference } = require('../db/userPreferences');
+const writeAudit = require('../db/postgres/audit');
 const createEncryptionKeyReads = require('../db/encryptionKeys');
 const createReadPositions = require('../db/readPositions');
 const emitChannelRead = require('./channelReadEvents');
@@ -27,6 +31,8 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
   const permissions = createPermissions(db);
   const readPositions = createReadPositions(db);
   const presence = createPostgresPresence(io, db, permissions);
+  const logAudit = entry => writeAudit(db, entry);
+  const registerProfiles = createPostgresProfiles({ io, db, permissions, presence, channelMembers, logAudit });
   const posting = createPostgresPosting(io, db, readPositions, channelMembers);
   const messageActions = createPostgresMessageActions(io, db, channelMembers);
   const threads = createPostgresThreads(io, db, posting, channelMembers);
@@ -147,11 +153,20 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     });
     on('set-preference', async data => {
       const allowed = ['theme','hide_score_badge','hide_nsfw','effects','share_activity','share_game_activity','share_music_activity',
-        'promo_seen_desktop','promo_seen_android','recovery_notice_seen','android_banner_seen','timezone','time_format','channel_order','server_mute','muted_users','media_group_layout','emoji_favorites'];
+        'promo_seen_desktop','promo_seen_android','recovery_notice_seen','android_banner_seen','timezone','time_format','channel_order','server_mute','muted_users','media_group_layout','emoji_favorites','pinned_dms'];
       const key = typeof data?.key === 'string' ? data.key.trim() : '';
       const value = typeof data?.value === 'string' ? data.value.trim() : '';
-      const max = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : key === 'emoji_favorites' ? 1700 : key === 'theme' ? 200 : 50;
+      const max = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : key === 'emoji_favorites' ? 1700 : key === 'pinned_dms' ? 4000 : key === 'theme' ? 200 : 50;
       if (!allowed.includes(key) || !value || value.length > max) return;
+      if (key === 'pinned_dms') {
+        const stored = await db.withTransaction(async tx => {
+          const clean = await cleanPinnedDms(tx, socket.user.id, value);
+          if (clean) await savePreference(tx, socket.user.id, key, clean);
+          return clean;
+        });
+        if (stored) socket.emit('preference-saved', { key, value: stored });
+        return;
+      }
       let stored = value;
       if (key === 'channel_order') { stored = cleanChannelOrder(value); if (!stored) return; }
       if (key === 'emoji_favorites') { stored = cleanEmojiFavorites(value); if (!stored) return; }
@@ -172,8 +187,14 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
         if (!Array.isArray(ids)) return;
         stored = JSON.stringify([...new Set(ids.map(Number).filter(n => Number.isInteger(n) && n > 0 && n !== socket.user.id))].slice(0, 500));
       }
-      await db.prepare('INSERT INTO user_preferences (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value').run(socket.user.id, key, stored);
+      await savePreference(db, socket.user.id, key, stored);
       socket.emit('preference-saved', { key, value: stored });
+    });
+    on('delete-preference', async data => {
+      const key = typeof data?.key === 'string' ? data.key.trim() : '';
+      if (!deletableKeys.includes(key)) return;
+      await deletePreference(db, socket.user.id, key);
+      socket.emit('preference-deleted', { key });
     });
     on('get-high-scores', async data => {
       const game = typeof data?.game === 'string' ? data.game.trim() : 'flappy';
@@ -344,6 +365,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       callback({ reads });
     });
 
+    registerProfiles(socket, on, accessible);
     registerBootstrapReads(socket, on, db, permissions, accessible);
     registerKeys(socket, on, db, io);
     // Cosmetic presence pings do not write anything until their full feature
@@ -373,7 +395,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
   });
   return {
     state: { channelUsers: viewers }, activity: null,
-    logAudit: () => {}, broadcastChannelLists: () => {},
+    logAudit, broadcastChannelLists: () => {},
     close: () => { viewers.clear(); floods.clear(); posting.close(); },
   };
 }

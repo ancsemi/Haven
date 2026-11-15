@@ -6,7 +6,7 @@ const path = require('path');
 const express = require('express');
 const { verifyToken } = require('../auth');
 const storage = require('../storage');
-const { sanitizeBorderTransform } = require('../socketHandlers');
+const { avatarShape, animationMode, borderFit, setAvatarShape, setAnimationMode, setBorderFit } = require('../db/userProfiles');
 
 module.exports = function registerProfile(deps) {
   const { uploadDiskGuard, app, recordUploadOwnership, releaseOwnUploads, verifyAdminFromDb, userHasPermission, upload, uploadLimiter } = deps;
@@ -210,16 +210,15 @@ module.exports = function registerProfile(deps) {
 
   // ── Border fit (op log) endpoint ──
   // Stores the pfp-overlay transform as sanitized JSON, mirroring set-avatar-shape.
-  app.post('/api/set-border-transform', express.json(), (req, res) => {
+  app.post('/api/set-border-transform', express.json(), async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    const clean = sanitizeBorderTransform(req.body.transform);
-    const toStore = (clean && clean.length) ? JSON.stringify(clean) : null;
     try {
-      const { getDb } = require('../database');
-      getDb().prepare('UPDATE users SET border_transform = ? WHERE id = ?').run(toStore, user.id);
-      res.json({ transform: toStore ? clean : null });
+      const { getAsyncDb } = require('../database');
+      const transform = borderFit(req.body?.transform);
+      await setBorderFit(getAsyncDb(), user.id, transform);
+      res.json({ transform });
     } catch (err) {
       console.error('Border transform error:', err);
       res.status(500).json({ error: 'Failed to save border fit' });
@@ -227,15 +226,14 @@ module.exports = function registerProfile(deps) {
   });
 
   // ── Avatar shape endpoint ──
-  app.post('/api/set-avatar-shape', express.json(), (req, res) => {
+  app.post('/api/set-avatar-shape', express.json(), async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    const validShapes = ['circle', 'rounded', 'squircle', 'hex', 'diamond'];
-    const shape = validShapes.includes(req.body.shape) ? req.body.shape : 'circle';
     try {
-      const { getDb } = require('../database');
-      getDb().prepare('UPDATE users SET avatar_shape = ? WHERE id = ?').run(shape, user.id);
+      const { getAsyncDb } = require('../database');
+      const shape = avatarShape(req.body?.shape);
+      await setAvatarShape(getAsyncDb(), user.id, shape);
       res.json({ shape });
     } catch (err) {
       console.error('Avatar shape error:', err);
@@ -245,15 +243,14 @@ module.exports = function registerProfile(deps) {
 
   // ── Animated-profile policy endpoint ──
   // How this user's animated avatar/border play for everyone, mirroring set-avatar-shape.
-  app.post('/api/set-animate-profile', express.json(), (req, res) => {
+  app.post('/api/set-animate-profile', express.json(), async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    const valid = ['trigger', 'disabled'];
-    const mode = valid.includes(req.body.mode) ? req.body.mode : 'trigger';
     try {
-      const { getDb } = require('../database');
-      getDb().prepare('UPDATE users SET animate_profile = ? WHERE id = ?').run(mode, user.id);
+      const { getAsyncDb } = require('../database');
+      const mode = animationMode(req.body?.mode);
+      await setAnimationMode(getAsyncDb(), user.id, mode);
       res.json({ mode });
     } catch (err) {
       console.error('Animate profile error:', err);

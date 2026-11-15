@@ -6,6 +6,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { parseBlockedNames, blockedWordIn, REFUSAL } = require('../../blockedNames');
+const { lockAccountNames } = require('../userProfiles');
 
 const unavailable = { error: 'Registration could not be completed: invalid username', code: 'username_unavailable' };
 function refuse(status, body) { throw Object.assign(new Error(body.error), { status, body }); }
@@ -113,7 +114,7 @@ async function registerPostgres(req, res, options) {
       catch (err) { console.warn('[SSO] Avatar download failed:', err.message); }
     }
     const result = await db.withTransaction(async tx => {
-      await tx.prepare("SELECT pg_advisory_xact_lock(hashtext(current_schema() || ':haven_registration'))").get();
+      await lockAccountNames(tx);
       const current = await gates(tx, input, checked.secret);
       if (await tx.prepare(`SELECT id FROM users WHERE ${tx.sql.caseInsensitiveEqual('username')}`).get(username)) refuse(400, unavailable);
       const anyAdmin = await tx.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();

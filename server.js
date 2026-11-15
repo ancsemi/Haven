@@ -3104,6 +3104,7 @@ if (postgresPreview) {
   app.set('io', io);
   setFcmAdminEnabled(false);
   socketRuntime = require('./src/socketHandlers/postgresPreview').setupPostgresPreview(io, db, { isIpBanned });
+  require('./src/httpAudit').setAuditSink(socketRuntime.logAudit);
 } else {
 // ── Admin password reset (one-time, from .env) ───────────
 // Set ADMIN_RESET_PASSWORD in .env, restart, and it resets the admin's password.

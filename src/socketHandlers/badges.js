@@ -269,8 +269,7 @@ module.exports = function register(socket, ctx) {
     try {
       const badge = badges.getBadge(db, data.badgeId);
       if (!badge) return cb({ error: 'Badge not found' });
-      if (data.hidden) db.prepare('INSERT OR IGNORE INTO badge_hidden (user_id, badge_id) VALUES (?, ?)').run(socket.user.id, badge.id);
-      else db.prepare('DELETE FROM badge_hidden WHERE user_id = ? AND badge_id = ?').run(socket.user.id, badge.id);
+      badges.setBadgeHidden(db, socket.user.id, badge.id, data.hidden);
       cb({ ok: true, hidden: data.hidden });
     } catch (err) {
       console.error('[badges] hide failed:', err.message);
