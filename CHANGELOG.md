@@ -46,6 +46,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
+- The size menu on a link preview opened behind a thread, a forum topic or a pop-out DM, so the button seemed to do nothing there. It opens on top now, and has its border back.
 - The emoji picker for reactions could stay on screen with no way to close it: open it on a message, open the full list with its "...", then pick one of the quick emoji instead. It also goes away now when the thread or pop-out DM it was opened in closes.
 - When the server turned a reconnect away (too many connections from one address in a minute, or a passing server error), the app never tried again and stayed offline until it was reloaded. It now tries again after a few seconds, waiting longer each time (#5875).
 - On a phone, chat could go quiet after about a minute and stay that way until the page was reloaded, even though Haven still said it was connected (#5875). The link drops, the socket connects again, and the handshake succeeds, but the channel that was open never starts delivering messages. Haven now asks for that channel again and reloads the page if it stays silent. A reconnect from the same tab also closes the socket it replaced, so those do not pile up.
