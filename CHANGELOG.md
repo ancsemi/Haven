@@ -76,6 +76,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Opening a picture from an encrypted DM on a phone, in an installed app window or in the Android app showed a white page. It opens in Haven's own picture viewer there now (#5853).
 
 ### Security
+- Add all members (new in this version) could be used by a member with Invite Users on a hidden-code channel, or on a sub-channel of a private one, which put everyone on the server into it. Both are refused now, as inviting one person there already was, and guests are only added when the admin does it.
 - The libraries the backup zip writer leans on (glob and minimatch) are moved to their fixed versions. Haven never handed them anything a user typed, so this closes two Dependabot alerts rather than a hole anyone could use.
 
 ## [4.28.0] - 2026-11-06
