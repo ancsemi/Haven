@@ -401,6 +401,22 @@ test('device options fill in every copy when the list arrives, and keep the save
   assert.deepEqual(byId(host, 'voice-output-device').options.map((o) => o.textContent), ['Default Speaker', 'Headset']);
 });
 
+test('a saved device that is not plugged in shows the default entry, not a blank picker', async () => {
+  const storage = makeStorage({ haven_input_device: 'mic-gone', haven_cam_device: 'cam-a' });
+  const { host, devices, settings } = setup({ storage });
+  const input = byId(host, 'voice-input-device');
+  const camera = byId(host, 'voice-cam-device');
+  // Before the list arrives only the default entry exists.
+  assert.equal(input.selectedIndex, 0);
+  assert.equal(camera.selectedIndex, 0);
+  await devices.refresh();
+  assert.equal(input.selectedIndex, 0, 'the unplugged mic falls back to the default entry');
+  assert.equal(camera.value, 'cam-a');
+  assert.equal(settings.get('inputDevice'), 'mic-gone', 'the saved choice is kept for when it comes back');
+  settings.set('cameraDevice', 'cam-gone');
+  assert.equal(camera.selectedIndex, 0);
+});
+
 test('a refused microphone still lists devices, without names', async () => {
   const media = fakeMediaDevices();
   media.getUserMedia = async () => { throw new Error('denied'); };

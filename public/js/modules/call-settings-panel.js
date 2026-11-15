@@ -216,6 +216,14 @@ export function createCallSettingsPanel(host, options = {}) {
     addTitle(select, control.titleKey);
     const toControl = control.toControl || String;
     const fromControl = control.fromControl || String;
+    // A saved device that is not in the list (unplugged, or the list is not
+    // loaded yet) shows the default entry. Setting a value with no matching
+    // option would leave the picker blank in the browser.
+    const show = (value) => {
+      const wanted = toControl(value);
+      const options = Array.from(select.options || []);
+      select.value = options.some((o) => o.value === wanted) ? wanted : (options[0]?.value ?? '');
+    };
 
     const render = () => {
       const chosen = settings.get(control.setting);
@@ -227,7 +235,7 @@ export function createCallSettingsPanel(host, options = {}) {
         });
         select.replaceChildren(...options);
       }
-      select.value = toControl(chosen);
+      show(chosen);
     };
     if (!control.devices) {
       select.replaceChildren(...control.options.map((o) => optionNode(o.value, o.labelKey ? tr(o.labelKey) : o.label, o.labelKey)));
@@ -239,7 +247,7 @@ export function createCallSettingsPanel(host, options = {}) {
     };
     select.addEventListener('change', onChange);
     onDestroy(() => select.removeEventListener('change', onChange));
-    onDestroy(settings.subscribe(control.setting, (value) => { select.value = toControl(value); }));
+    onDestroy(settings.subscribe(control.setting, show));
     if (control.devices) onDestroy(devices.subscribe(render));
 
     row.appendChild(select);

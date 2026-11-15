@@ -59,13 +59,22 @@ class FakeElement {
   get value() {
     if (this.tagName === 'select') {
       const opts = this.options;
-      if (this._value !== undefined && opts.some((o) => o.value === this._value)) return this._value;
+      if (this._value !== undefined) {
+        // As in browsers: a value with no matching option selects nothing.
+        return opts.some((o) => o.value === this._value) ? this._value : '';
+      }
       return opts.length ? opts[0].value : '';
     }
     if (this._value !== undefined) return this._value;
     return this.attributes.value !== undefined ? this.attributes.value : '';
   }
   set value(v) { this._value = String(v); }
+  // -1 when a value with no matching option was set: the browser shows a blank picker.
+  get selectedIndex() {
+    const opts = this.options;
+    if (this._value === undefined) return opts.length ? 0 : -1;
+    return opts.findIndex((o) => o.value === this._value);
+  }
 
   appendChild(child) {
     if (child.parentNode) child.parentNode.removeChild(child);

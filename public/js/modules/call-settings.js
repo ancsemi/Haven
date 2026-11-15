@@ -95,10 +95,14 @@ export function createCallSettings({ storage, getVoice } = {}) {
   // The one place that touches storage, so a profile key (per mic or
   // camera) can be added here later.
   const read = (id) => {
+    // A value that could not be saved wins over what storage still holds:
+    // some browsers (a full quota, older Safari private mode) allow reads but
+    // refuse writes.
+    if (Object.prototype.hasOwnProperty.call(session, id)) return String(session[id]);
     try {
       return store ? store.getItem(CALL_SETTING_KEYS[id]) : null;
     } catch {
-      return Object.prototype.hasOwnProperty.call(session, id) ? String(session[id]) : null;
+      return null;
     }
   };
   const write = (id, value) => {
@@ -123,24 +127,21 @@ export function createCallSettings({ storage, getVoice } = {}) {
   };
 
   // Hands a saved value to the voice engine. Without a call it only reaches
-  // state the engine reads at the next join.
+  // state the engine reads at the next join. Returns the engine's promise for
+  // the device switches, which are async.
   const apply = (id, value) => {
     const voice = voiceNow();
-    if (!voice) return;
+    if (!voice) return undefined;
     switch (id) {
       case 'inputDevice':
-        if (voice.inVoice) voice.switchInputDevice(value);
-        break;
+        return voice.inVoice ? voice.switchInputDevice(value) : undefined;
       case 'outputDevice':
-        voice.switchOutputDevice(value);
-        break;
+        return voice.switchOutputDevice(value);
       case 'cameraDevice':
-        if (voice.isWebcamActive) voice.switchCamera(value);
-        break;
+        return voice.isWebcamActive ? voice.switchCamera(value) : undefined;
       case 'cameraQuality':
         // A camera that is on picks the new size up straight away.
-        if (voice.isWebcamActive) voice.switchCamera(get('cameraDevice'));
-        break;
+        return voice.isWebcamActive ? voice.switchCamera(get('cameraDevice')) : undefined;
       case 'voiceVolume':
         voice.setVoiceMasterVolume(value);
         break;
@@ -163,6 +164,7 @@ export function createCallSettings({ storage, getVoice } = {}) {
       default:
         break;
     }
+    return undefined;
   };
 
   const set = (id, value) => {
@@ -174,7 +176,16 @@ export function createCallSettings({ storage, getVoice } = {}) {
     if ((id === 'noiseMode' || id === 'cameraQuality') && next !== String(raw)) return get(id);
     if (notifying.has(id) && next === get(id)) return next; // a subscriber echoing the value back
     write(id, next);
-    apply(id, next);
+    // The value is saved either way, so a failure in the engine must not keep
+    // the other copies of the control from showing it.
+    try {
+      const pending = apply(id, next);
+      if (pending && typeof pending.catch === 'function') {
+        pending.catch((err) => console.error(`[CallSettings] applying ${id} failed`, err));
+      }
+    } catch (err) {
+      console.error(`[CallSettings] applying ${id} failed`, err);
+    }
     // The engine may normalize further (and saves for itself); the layer's
     // value is the one it was given.
     notifying.add(id);

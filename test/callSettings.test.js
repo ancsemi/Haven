@@ -131,6 +131,41 @@ test('get still works when storage throws (private mode)', () => {
   assert.equal(settings.get('noiseMode'), 'off', 'the value holds for this visit');
 });
 
+test('a value that could not be saved holds even when storage still reads (full quota)', () => {
+  const storage = makeStorage({ haven_screen_fps: '30' });
+  storage.setItem = () => { throw new Error('QuotaExceededError'); };
+  const { settings } = setup({ storage });
+  settings.set('screenFrameRate', 60);
+  assert.equal(settings.get('screenFrameRate'), 60);
+  settings.set('noiseMode', 'off');
+  assert.equal(settings.get('noiseMode'), 'off');
+});
+
+test('an engine that fails still leaves the value saved and every copy told', async () => {
+  const errors = [];
+  const original = console.error;
+  console.error = (...args) => errors.push(args);
+  try {
+    const voice = makeVoice({
+      inVoice: true,
+      setScreenResolution: () => { throw new Error('engine threw'); },
+      switchInputDevice: () => Promise.reject(new Error('device busy')),
+    });
+    const { settings } = setup({ voice });
+    const heard = [];
+    settings.subscribe('screenResolution', (v) => heard.push(v));
+    settings.subscribe('inputDevice', (v) => heard.push(v));
+    assert.doesNotThrow(() => settings.set('screenResolution', 720));
+    settings.set('inputDevice', 'mic-b');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settings.get('screenResolution'), 720);
+    assert.deepEqual(heard, [720, 'mic-b']);
+    assert.equal(errors.filter((e) => String(e[0]).startsWith('[CallSettings]')).length, 2, 'both failures are logged, the rejection is not left unhandled');
+  } finally {
+    console.error = original;
+  }
+});
+
 test('set clamps and normalizes before saving', () => {
   const { settings, storage } = setup();
   assert.equal(settings.set('voiceVolume', 5), 2);
