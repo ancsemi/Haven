@@ -82,6 +82,8 @@ const SCREEN_RESOLUTION_OPTIONS = [
 ];
 
 // Order is the order on screen. `id` is the legacy element id (sidebar only).
+// An `optional` control is built only in copies that list its setting in
+// `include` (the sidebar never had the voice volume; it lives in Settings).
 export const CONTROLS = [
   { kind: 'section', icon: '🎧', labelKey: 'voice_settings.audio_devices' },
   { kind: 'select', setting: 'inputDevice', id: 'voice-input-device', labelKey: 'voice_settings.input',
@@ -89,6 +91,10 @@ export const CONTROLS = [
   { kind: 'select', setting: 'outputDevice', id: 'voice-output-device', labelKey: 'voice_settings.output',
     devices: 'outputs', defaultKey: 'voice_settings.default_speaker', fallbackKey: 'voice_settings.speaker_fallback',
     isOutput: true },
+  { kind: 'range', setting: 'voiceVolume', labelKey: 'settings.sounds_section.volume', optional: true,
+    className: 'ns-slider call-volume-slider', min: 0, max: 200,
+    toControl: (v) => String(Math.round(v * 100)),
+    fromControl: (v) => parseInt(v, 10) / 100 },
   { kind: 'select', setting: 'cameraDevice', id: 'voice-cam-device', labelKey: 'voice_settings.camera',
     devices: 'cameras', defaultKey: 'voice_settings.default_camera', fallbackKey: 'voice_settings.camera_fallback' },
   { kind: 'select', setting: 'cameraQuality', id: 'voice-cam-quality', labelKey: 'voice_settings.camera_quality',
@@ -138,6 +144,7 @@ export const CONTROLS = [
  * @param {object} options.settings   the call settings layer
  * @param {object} options.devices    a createDeviceList()
  * @param {boolean} [options.legacyIds]  keep the sidebar's element ids
+ * @param {string[]} [options.include]  optional controls to build, by setting
  * @param {() => number} [options.getMicLevel]  0 to 100, for the level meter
  * @param {boolean} [options.supportsOutputSelection]  default: the browser can
  * @param {(key: string, params?: object) => string} [options.t]
@@ -168,6 +175,9 @@ export function createCallSettingsPanel(host, options = {}) {
     return node;
   };
   const withId = (node, id) => { if (legacyIds && id) node.setAttribute('id', id); };
+  // Labels are not tied to their controls, so copies other than the sidebar
+  // (whose markup stays as it was) name each control for screen readers.
+  const nameControl = (node, key) => { if (!legacyIds && key) node.setAttribute('aria-label', tr(key)); };
   const i18nText = (node, key) => {
     node.setAttribute('data-i18n', key);
     node.textContent = tr(key);
@@ -214,6 +224,7 @@ export function createCallSettingsPanel(host, options = {}) {
     const select = el('select', 'voice-settings-select', { 'data-setting': control.setting });
     withId(select, control.id);
     addTitle(select, control.titleKey);
+    nameControl(select, control.labelKey);
     const toControl = control.toControl || String;
     const fromControl = control.fromControl || String;
     // A saved device that is not in the list (unplugged, or the list is not
@@ -274,12 +285,15 @@ export function createCallSettingsPanel(host, options = {}) {
     });
     withId(input, control.id);
     addTitle(input, control.titleKey);
+    nameControl(input, control.labelKey);
+    const toControl = control.toControl || String;
+    const fromControl = control.fromControl || ((v) => parseInt(v, 10));
     const onInput = (event) => {
-      settings.set(control.setting, parseInt(event.target.value, 10));
+      settings.set(control.setting, fromControl(event.target.value));
     };
     input.addEventListener('input', onInput);
     onDestroy(() => input.removeEventListener('input', onInput));
-    follow(control.setting, (value) => { input.value = String(value); });
+    follow(control.setting, (value) => { input.value = toControl(value); });
     if (control.onlyWhen) {
       const { setting, equals } = control.onlyWhen;
       follow(setting, (value) => { row.style.display = value === equals ? '' : 'none'; });
@@ -366,6 +380,7 @@ export function createCallSettingsPanel(host, options = {}) {
       inputmode: 'numeric', autocomplete: 'off', spellcheck: 'false', 'data-setting': setting,
     });
     withId(field, 'screen-bitrate-value');
+    nameControl(field, control.labelKey);
     const plus = el('button', 'bitrate-step-btn', { 'aria-label': '+', 'data-bitrate-step': '1' });
     plus.textContent = '+';
     withId(plus, 'screen-bitrate-plus');
@@ -521,7 +536,9 @@ export function createCallSettingsPanel(host, options = {}) {
     return row;
   };
 
+  const include = new Set(options.include || []);
   for (const control of CONTROLS) {
+    if (control.optional && !include.has(control.setting)) continue;
     let node;
     switch (control.kind) {
       case 'section': {

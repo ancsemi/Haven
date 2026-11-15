@@ -493,11 +493,4 @@ _updateVoiceBar() {
   }
 },
 
-// ── Audio Device Enumeration ─────────────────────────────
-
-async _populateAudioDevices() {
-  // One shared list for every copy of the call settings panel.
-  try { await this.callSettingsDevices?.refresh(); } catch (err) { console.warn('[Haven] Could not enumerate audio devices:', err); }
-},
-
 };

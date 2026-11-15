@@ -11,7 +11,6 @@ _setupMasterVolume() {
     voice.value = String(Math.round(this.callSettings.get('voiceVolume') * 100));
     voice.addEventListener('input', () => {
       this.callSettings.set('voiceVolume', voice.value / 100);
-      this._syncFullscreenCallVolume?.();
     });
   }
   const notif = document.getElementById('notif-master-volume');
@@ -43,6 +42,7 @@ _setupMasterVolume() {
     const db = (input.dataset.curve === 'linear' ? 20 : 40) * Math.log10(pct / 100);
     return `${db > 0.05 ? '+' : ''}${db.toFixed(1)} dB`;
   };
+  const readouts = new Map();
   const updates = [...document.querySelectorAll('#section-sounds input[type="range"]')].map((input) => {
     const out = document.createElement('output');
     out.className = 'vol-readout';
@@ -50,8 +50,16 @@ _setupMasterVolume() {
     const update = () => { out.textContent = format(input); };
     input.addEventListener('input', update);
     update();
+    readouts.set(input, update);
     return update;
   });
+  // The fullscreen call popup changes the same voice level: follow it here.
+  if (voice && this.voice) {
+    this.callSettings.subscribe('voiceVolume', (level) => {
+      voice.value = String(Math.round(level * 100));
+      readouts.get(voice)?.();
+    });
+  }
   const toggle = document.getElementById('volume-show-db');
   if (toggle) {
     toggle.checked = showDb;

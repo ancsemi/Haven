@@ -55,45 +55,6 @@ _createFullscreenCallToolbar(tile) {
     this._toggleFullscreenAudioPopover(tile, audioPopover, audioTrigger);
   });
   audioTrigger.setAttribute('aria-expanded', 'false');
-  const addDeviceSelect = (kind, labelKey, id) => {
-    const label = document.createElement('label');
-    label.textContent = t(labelKey);
-    const select = document.createElement('select');
-    select.id = `${tile.id || 'fullscreen'}-${kind}-device`;
-    select.className = `fullscreen-device-select fullscreen-device-${kind}`;
-    select.dataset.deviceKind = kind;
-    select.setAttribute('aria-label', t(labelKey));
-    select.addEventListener('click', event => event.stopPropagation());
-    select.addEventListener('change', (event) => {
-      event.stopPropagation();
-      this._applyVoiceDeviceSelection?.(kind, select.value);
-    });
-    label.appendChild(select);
-    audioPopover.appendChild(label);
-    select.dataset.sourceId = id;
-  };
-  addDeviceSelect('input', 'voice_settings.input', 'voice-input-device');
-  addDeviceSelect('camera', 'voice_settings.camera', 'voice-cam-device');
-  addDeviceSelect('output', 'voice_settings.output', 'voice-output-device');
-  const volumeLabel = document.createElement('label');
-  volumeLabel.textContent = t('settings.sounds_section.volume');
-  const volume = document.createElement('input');
-  volume.type = 'range';
-  volume.min = '0';
-  volume.max = '200';
-  volume.className = 'fullscreen-call-volume';
-  volume.setAttribute('aria-label', t('settings.sounds_section.volume'));
-  volume.addEventListener('click', event => event.stopPropagation());
-  volume.addEventListener('input', (event) => {
-    event.stopPropagation();
-    const value = Number(volume.value) / 100;
-    this.callSettings.set('voiceVolume', value);
-    const mainSlider = document.getElementById('voice-master-volume');
-    if (mainSlider) mainSlider.value = volume.value;
-    this._syncFullscreenCallVolume();
-  });
-  volumeLabel.appendChild(volume);
-  audioPopover.appendChild(volumeLabel);
   audioPopover.addEventListener('click', event => event.stopPropagation());
   audioPopover.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
@@ -247,37 +208,20 @@ _toggleFullscreenAudioPopover(tile, popover, trigger) {
   popover.hidden = false;
   tile.classList.add('fullscreen-popup-open');
   trigger.setAttribute('aria-expanded', 'true');
-  this._populateFullscreenAudioPopover(popover);
+  // The same controls as the voice sidebar, built fresh for each opening and
+  // destroyed on close so no meter loop or subscription outlives the popup.
+  popover._callSettingsPanel?.destroy();
+  popover._callSettingsPanel = this._mountFullscreenCallSettings?.(popover) || null;
 },
 
+// Every way out (the button, Escape, leaving fullscreen, the tile going away)
+// comes through here.
 _closeFullscreenAudioPopover(tile, popover, trigger) {
   popover.hidden = true;
   tile.classList.remove('fullscreen-popup-open');
   trigger.setAttribute('aria-expanded', 'false');
-},
-
-async _populateFullscreenAudioPopover(popover) {
-  try { await this._populateAudioDevices?.(); } catch { /* existing device panel owns enumeration errors */ }
-  for (const select of popover.querySelectorAll('select[data-device-kind]')) {
-    const source = document.getElementById(select.dataset.sourceId);
-    if (!source) continue;
-    const options = Array.from(source.options || []).map(option => option.cloneNode(true));
-    select.replaceChildren(...options);
-    select.value = source.value;
-    select.disabled = !!source.disabled;
-    select.title = source.title || '';
-  }
-  this._syncFullscreenCallVolume();
-},
-
-_syncFullscreenCallVolume() {
-  const mainSlider = document.getElementById('voice-master-volume');
-  const volume = this.callSettings?.get('voiceVolume') ??
-    (mainSlider ? Number(mainSlider.value) / 100 : 1);
-  for (const toolbar of this._fullscreenCallToolbars || []) {
-    const slider = toolbar.querySelector('.fullscreen-call-volume');
-    if (slider) slider.value = String(Math.round(volume * 100));
-  }
+  popover._callSettingsPanel?.destroy();
+  popover._callSettingsPanel = null;
 },
 
 _syncFullscreenCallControls() {

@@ -4,13 +4,6 @@
 
 export default {
 
-_applyVoiceDeviceSelection(kind, deviceId) {
-  const ids = { input: 'inputDevice', output: 'outputDevice', camera: 'cameraDevice' };
-  const id = ids[kind];
-  if (!id) return;
-  this.callSettings.set(id, deviceId);
-},
-
 _bindVoiceControls() {
   // Voice buttons
   document.getElementById('voice-join-btn').addEventListener('click', () => this._joinVoice());

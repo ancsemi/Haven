@@ -160,8 +160,21 @@ test('a secondary copy has no ids at all, so ids stay unique', () => {
 test('every control carries a data-setting naming its setting', () => {
   const { host } = setup({ legacyIds: false });
   const found = new Set(host.querySelectorAll('[data-setting]').map((n) => n.attributes['data-setting']));
-  const expected = CONTROLS.filter((c) => c.setting).map((c) => c.setting);
+  const expected = CONTROLS.filter((c) => c.setting && !c.optional).map((c) => c.setting);
   assert.deepEqual([...found].sort(), expected.sort());
+});
+
+test('optional controls are built only where asked for, so the sidebar keeps its layout', () => {
+  assert.deepEqual(CONTROLS.filter((c) => c.optional).map((c) => c.setting), ['voiceVolume']);
+  const sidebar = setup();
+  assert.equal(sidebar.host.querySelector('[data-setting="voiceVolume"]'), null);
+  const popup = setup({ legacyIds: false, extra: { include: ['voiceVolume'] } });
+  const slider = popup.host.querySelector('[data-setting="voiceVolume"]');
+  assert.equal(slider.getAttribute('min'), '0');
+  assert.equal(slider.getAttribute('max'), '200');
+  assert.equal(slider.value, '100', '1.0 shows as 100%');
+  popup.settings.set('voiceVolume', 0.4);
+  assert.equal(slider.value, '40');
 });
 
 test('every label key used by the panel exists in en.json', () => {
@@ -530,6 +543,124 @@ test('the app mounts the sidebar panel into #voice-settings-panel and keeps the 
     delete globalThis.document;
     delete globalThis.t;
   }
+});
+
+// ── The fullscreen call popup ───────────────────────────────────────────
+
+// The popup's open and close methods from app-screen-webcam.js, loaded the
+// way the app's own tests load it (that file cannot use import).
+function loadScreenWebcamMethods(document) {
+  const vm = require('node:vm');
+  const src = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-screen-webcam.js'), 'utf8');
+  const context = vm.createContext({ module: { exports: {} }, document, t: tr, setTimeout, clearTimeout });
+  vm.runInContext(src.replace(/^export default/m, 'module.exports ='), context, { filename: 'app-screen-webcam.js' });
+  return context.module.exports;
+}
+
+async function setupSidebarAndPopup() {
+  const Methods = (await load('public/js/modules/app-call-settings.js')).default;
+  const doc = makeDocument();
+  const sidebar = doc.createElement('div');
+  sidebar.setAttribute('id', 'voice-settings-panel');
+  doc.body.appendChild(sidebar);
+  const tile = doc.createElement('div');
+  const popover = doc.createElement('div');
+  popover.className = 'fullscreen-audio-popover';
+  popover.hidden = true;
+  const trigger = doc.createElement('button');
+  tile.append(trigger, popover);
+  doc.body.appendChild(tile);
+  const storage = makeStorage();
+  const voice = makeVoice();
+  const screen = loadScreenWebcamMethods(doc);
+  const app = Object.assign({ voice }, Methods, {
+    _toggleFullscreenAudioPopover: screen._toggleFullscreenAudioPopover,
+    _closeFullscreenAudioPopover: screen._closeFullscreenAudioPopover,
+  });
+  app.callSettings = createCallSettings({ storage, getVoice: () => voice });
+  globalThis.document = doc;
+  globalThis.t = tr;
+  app._mountVoiceSettingsPanel();
+  const open = () => app._toggleFullscreenAudioPopover(tile, popover, trigger);
+  const close = () => app._closeFullscreenAudioPopover(tile, popover, trigger);
+  const done = () => { app.voiceSettingsPanel.destroy(); delete globalThis.document; delete globalThis.t; };
+  return { app, doc, sidebar, popover, tile, trigger, storage, voice, open, close, done };
+}
+
+const inPopup = (popover, setting) => popover.querySelector(`[data-setting="${setting}"]`);
+
+test('the popup holds every call setting plus the voice volume, with no element ids', async () => {
+  const { doc, popover, open, done } = await setupSidebarAndPopup();
+  try {
+    open();
+    const shown = new Set(popover.querySelectorAll('[data-setting]').map((n) => n.getAttribute('data-setting')));
+    const { CALL_SETTING_KEYS } = await load('public/js/modules/call-settings.js');
+    assert.deepEqual([...shown].sort(), Object.keys(CALL_SETTING_KEYS).sort());
+    assert.equal(popover.querySelectorAll('[id]').length, 0);
+    const ids = [doc.body, ...doc.body.querySelectorAll('*')].map((n) => n.getAttribute('id')).filter(Boolean);
+    assert.equal(new Set(ids).size, ids.length, 'no id appears twice with both copies mounted');
+    for (const control of popover.querySelectorAll('select, input')) {
+      assert.ok(control.getAttribute('aria-label'), `${control.getAttribute('data-setting')} has a name`);
+    }
+  } finally { done(); }
+});
+
+test('the sidebar and the popup stay in step in both directions', async () => {
+  const { doc, popover, open, storage, voice, done } = await setupSidebarAndPopup();
+  try {
+    open();
+    const popupMode = inPopup(popover, 'noiseMode');
+    popupMode.value = 'off';
+    popupMode.dispatch('change');
+    assert.equal(doc.getElementById('voice-noise-mode').value, 'off');
+    assert.equal(doc.getElementById('noise-gate-row').style.display, 'none');
+
+    const sidebarFps = doc.getElementById('screen-fps-select');
+    sidebarFps.value = '60';
+    sidebarFps.dispatch('change');
+    assert.equal(inPopup(popover, 'screenFrameRate').value, '60');
+    assert.equal(voice.calls.filter(([name]) => name === 'setScreenFrameRate').length, 1, 'applied once, no loop');
+
+    const volume = inPopup(popover, 'voiceVolume');
+    assert.equal(volume.value, '100');
+    volume.value = '150';
+    volume.dispatch('input');
+    assert.equal(storage.data.haven_voice_master_volume, '1.5');
+    assert.deepEqual(voice.calls.at(-1), ['setVoiceMasterVolume', 1.5]);
+  } finally { done(); }
+});
+
+test('closing the popup leaves no listeners, subscriptions or meter loop behind', async () => {
+  const frames = new Set();
+  let nextFrame = 1;
+  globalThis.requestAnimationFrame = () => { const id = nextFrame++; frames.add(id); return id; };
+  globalThis.cancelAnimationFrame = (id) => frames.delete(id);
+  const { app, popover, open, close, done } = await setupSidebarAndPopup();
+  try {
+    const sidebarFrames = frames.size;
+    open();
+    assert.equal(frames.size, sidebarFrames + 1, 'the popup meter runs while open');
+    const nodes = popover.querySelectorAll('*');
+    close();
+    assert.equal(frames.size, sidebarFrames, 'its loop is cancelled on close');
+    assert.equal(popover.childNodes.length, 0);
+    assert.equal(nodes.reduce((sum, n) => sum + n.listenerCount(), 0), 0);
+    assert.equal(popover._callSettingsPanel, null);
+    assert.doesNotThrow(() => app.callSettings.set('noiseMode', 'suppress'));
+    assert.doesNotThrow(close, 'closing twice is fine');
+  } finally {
+    done();
+    delete globalThis.requestAnimationFrame;
+    delete globalThis.cancelAnimationFrame;
+  }
+});
+
+test('reopening the popup builds one copy, not a second one on top', async () => {
+  const { popover, open, close, done } = await setupSidebarAndPopup();
+  try {
+    open(); close(); open();
+    assert.equal(popover.querySelectorAll('[data-setting="noiseMode"]').length, 1);
+  } finally { done(); }
 });
 
 test('the sidebar markup is an empty host: the builder is the only source of the controls', () => {
