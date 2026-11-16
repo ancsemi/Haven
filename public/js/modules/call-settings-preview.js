@@ -65,12 +65,19 @@ function createPreview({ kind, mediaDevices, constraintsFor, onOpen, onClose }) 
 /**
  * @param {object} [options]
  * @param {MediaDevices} [options.mediaDevices]
- * @param {typeof AudioContext} [options.AudioContext]
+ * @param {(stream: MediaStream) => object} [options.createChain]  the call's
+ *   own mic processing (voice.js MicChain): { stream, currentMicLevel,
+ *   ready(), setNoiseMode(), setNoiseSensitivity(), destroy() }. With it the
+ *   test plays and measures what a call would send.
+ * @param {typeof AudioContext} [options.AudioContext]  level meter without a chain
  * @param {() => HTMLAudioElement} [options.createAudio]  for playing the mic back
+ * @param {() => void} [options.onOutputMissing]  the chosen output is not there
  */
 export function createMicPreview(options = {}) {
   const AudioCtx = options.AudioContext || globalThis.AudioContext || globalThis.webkitAudioContext;
   const createAudio = options.createAudio || (() => (typeof Audio === 'function' ? new Audio() : null));
+  let chain = null;
+  // Without a chain: a plain analyser, for the meter only.
   let ctx = null;
   let analyser = null;
   let data = null;
@@ -82,7 +89,16 @@ export function createMicPreview(options = {}) {
 
   const routeOutput = () => {
     if (!audio || typeof audio.setSinkId !== 'function') return;
-    audio.setSinkId(outputId || '').catch((err) => console.warn('[CallSettings] could not use that output for the test', err));
+    const target = audio;
+    target.setSinkId(outputId || '').catch((err) => {
+      if (!outputId || err?.name !== 'NotFoundError' || audio !== target) {
+        console.warn('[CallSettings] could not use that output for the test', err);
+        return;
+      }
+      // The chosen speaker is not plugged in: play on the default one.
+      target.setSinkId('').catch(() => { /* the browser's default stays */ });
+      options.onOutputMissing?.();
+    });
   };
   const applyPlayback = () => {
     if (!audio) return;
@@ -96,7 +112,17 @@ export function createMicPreview(options = {}) {
     mediaDevices: options.mediaDevices,
     constraintsFor: (id) => (id ? { ...AUDIO, deviceId: { exact: id } } : { ...AUDIO }),
     onOpen(stream) {
-      if (AudioCtx) {
+      let heard = stream;
+      try {
+        chain = options.createChain ? options.createChain(stream) : null;
+      } catch (err) {
+        console.warn('[CallSettings] the call\'s noise processing could not start; testing the raw microphone', err);
+        chain = null;
+      }
+      if (chain) {
+        heard = chain.stream;
+        chain.ready?.()?.catch?.((err) => console.warn('[CallSettings] AI suppression could not load for the test', err));
+      } else if (AudioCtx) {
         ctx = new AudioCtx();
         analyser = ctx.createAnalyser();
         analyser.smoothingTimeConstant = 0.3; // as the call's noise gate analyser
@@ -106,12 +132,14 @@ export function createMicPreview(options = {}) {
       audio = createAudio();
       if (audio) {
         audio.autoplay = true;
-        audio.srcObject = stream;
+        audio.srcObject = heard;
         routeOutput();
         applyPlayback();
       }
     },
     onClose() {
+      try { chain?.destroy(); } catch (err) { console.warn('[CallSettings] closing the test chain failed', err); }
+      chain = null;
       try { ctx?.close(); } catch { /* already closed */ }
       ctx = analyser = data = null;
       if (audio) {
@@ -136,9 +164,13 @@ export function createMicPreview(options = {}) {
       outputId = deviceId || '';
       routeOutput();
     },
+    // A noise setting changed during the test: hear it straight away.
+    setNoiseMode(mode) { chain?.setNoiseMode(mode); },
+    setNoiseSensitivity(value) { chain?.setNoiseSensitivity(value); },
     // Same scale as VoiceManager.currentMicLevel, so the meter and the gate
     // marker read the same before and during a call.
     level() {
+      if (chain) return chain.currentMicLevel || 0;
       if (!analyser) return 0;
       analyser.getByteFrequencyData(data);
       let sum = 0;

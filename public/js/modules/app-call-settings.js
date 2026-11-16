@@ -56,12 +56,24 @@ _mountCallSettingsPage() {
   const video = document.getElementById('call-preview-video');
   const status = document.getElementById('call-preview-status');
   const loopback = document.getElementById('call-preview-loopback');
-  const mic = createMicPreview();
-  // The test plays the mic back on the output picked on this page.
+  const mic = createMicPreview({
+    // The call's own noise gate and AI suppression (voice.js), so the test
+    // sounds like a call. A test never touches a running call's chain.
+    createChain: typeof MicChain === 'function'
+      ? (stream) => new MicChain(stream, { noiseMode: this.callSettings.get('noiseMode') })
+      : undefined,
+    onOutputMissing: () => say('settings.call.output_missing'),
+  });
+  // The test plays the mic back on the output picked on this page, unless
+  // the user is deafened in a call.
+  const hearing = () => !!loopback?.checked && !this.voice?.isDeafened;
   mic.setOutput(this.callSettings.get('outputDevice'));
-  mic.setPlayback(loopback ? loopback.checked : false);
-  loopback?.addEventListener('change', () => mic.setPlayback(loopback.checked));
+  mic.setPlayback(hearing());
+  loopback?.addEventListener('change', () => mic.setPlayback(hearing()));
+  this._syncCallSettingsPlayback = () => mic.setPlayback(hearing());
   this.callSettings.subscribe('outputDevice', (id) => mic.setOutput(id));
+  this.callSettings.subscribe('noiseMode', (mode) => mic.setNoiseMode(mode));
+  this.callSettings.subscribe('noiseSensitivity', (value) => mic.setNoiseSensitivity(value));
   const camera = createCameraPreview({
     constraintsFor: (id) => this.voice?._webcamConstraints?.(id) ?? (id ? { deviceId: { exact: id } } : true),
   });

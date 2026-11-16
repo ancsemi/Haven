@@ -3275,11 +3275,12 @@
       "test_mic": "Test microphone",
       "stop_mic": "Stop microphone test",
       "hear_myself": "Hear myself during the microphone test",
-      "hear_myself_hint": "Use headphones, or your speakers may squeal. You hear your microphone with the browser's echo and noise cleanup, but not Haven's noise gate or AI suppression, which only run in a call.",
+      "hear_myself_hint": "Use headphones, or your speakers may squeal. You hear yourself as a call would send you, with your noise reduction setting. Nothing plays while you are deafened in a call.",
       "test_camera": "Test camera",
       "stop_camera": "Stop camera test",
       "mic_missing": "Your chosen microphone was not found, so the default one is being tested.",
       "camera_missing": "Your chosen camera was not found, so the default one is being shown.",
+      "output_missing": "Your chosen speaker was not found, so the test plays on the default one.",
       "camera_in_call": "Your camera is already on in the call. Turn it off there to test it here.",
       "permission_denied": "The browser was not allowed to use this device. Allow it in the site settings and try again.",
       "preview_failed": "This device could not be opened. It may be in use by another app."

@@ -118,6 +118,71 @@ test('playback works where the browser cannot pick an output', async () => {
   assert.equal(audio.playing, true);
 });
 
+function fakeChain() {
+  const chain = {
+    stream: { id: 'processed' }, currentMicLevel: 42, modes: [], sensitivities: [], destroyed: 0, readied: 0,
+    ready: async () => { chain.readied += 1; },
+    setNoiseMode: (m) => chain.modes.push(m),
+    setNoiseSensitivity: (v) => chain.sensitivities.push(v),
+    destroy: () => { chain.destroyed += 1; },
+  };
+  return chain;
+}
+
+test('with the call\'s chain, the test plays and measures what a call would send', async () => {
+  const audio = fakeAudioElement();
+  const chain = fakeChain();
+  let given = null;
+  const mic = createMicPreview({
+    mediaDevices: fakeMedia(), createAudio: () => audio,
+    createChain: (stream) => { given = stream; return chain; },
+  });
+  mic.setPlayback(true);
+  await mic.start('mic-a');
+  assert.equal(given.track.kind, 'audio', 'the chain gets the raw mic');
+  assert.equal(audio.srcObject, chain.stream, 'you hear the processed sound');
+  assert.equal(chain.readied, 1, 'AI suppression is loaded');
+  assert.equal(mic.level(), 42, 'the meter reads the chain, as in a call');
+  mic.setNoiseMode('suppress');
+  mic.setNoiseSensitivity(55);
+  assert.deepEqual(chain.modes, ['suppress']);
+  assert.deepEqual(chain.sensitivities, [55]);
+  mic.stop();
+  assert.equal(chain.destroyed, 1);
+  assert.doesNotThrow(() => mic.setNoiseMode('off'), 'no chain after stop');
+});
+
+test('if the chain cannot start, the raw microphone is tested instead', async () => {
+  const audio = fakeAudioElement();
+  const mic = createMicPreview({
+    mediaDevices: fakeMedia(), AudioContext: fakeAudioContext(), createAudio: () => audio,
+    createChain: () => { throw new Error('no AudioContext'); },
+  });
+  const warn = console.warn;
+  console.warn = () => {};
+  try { await mic.start(''); } finally { console.warn = warn; }
+  assert.equal(audio.srcObject.track.kind, 'audio');
+  assert.ok(mic.level() > 0);
+});
+
+test('a chosen speaker that is unplugged plays the test on the default one and says so', async () => {
+  const audio = fakeAudioElement();
+  audio.setSinkId = (id) => {
+    audio.sinks.push(id);
+    return id === 'spk-gone' ? Promise.reject(Object.assign(new Error('gone'), { name: 'NotFoundError' })) : Promise.resolve();
+  };
+  let missing = 0;
+  const mic = createMicPreview({
+    mediaDevices: fakeMedia(), AudioContext: fakeAudioContext(), createAudio: () => audio,
+    onOutputMissing: () => { missing += 1; },
+  });
+  mic.setOutput('spk-gone');
+  await mic.start('');
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(audio.sinks, ['spk-gone', '']);
+  assert.equal(missing, 1);
+});
+
 test('the mic level uses the same scale as the call meter', async () => {
   // Average 50 out of 255 is full scale on the call meter.
   const mic = createMicPreview({ mediaDevices: fakeMedia(), AudioContext: fakeAudioContext([50, 50, 50, 50]) });
@@ -325,6 +390,43 @@ test('the mic test plays back by default, follows the checkbox and the chosen ou
   } finally { done(); }
 });
 
+test('nothing plays back while deafened in a call, and it comes back on undeafen', async () => {
+  const { app, micButton, audios, flush, done } = await setupPage({ voice: { inVoice: true, isDeafened: true } });
+  try {
+    micButton.dispatch('click');
+    await flush();
+    const audio = audios.at(-1);
+    assert.equal(audio.muted, true);
+    app.voice.isDeafened = false;
+    app._syncCallSettingsPlayback();
+    assert.equal(audio.muted, false);
+  } finally { done(); }
+});
+
+test('noise changes on the page reach a running test through the call\'s chain', async () => {
+  const chains = [];
+  globalThis.MicChain = class {
+    constructor(stream, opts) { Object.assign(this, fakeChain(), { opts }); chains.push(this); }
+  };
+  try {
+    const { app, micButton, audios, flush, done } = await setupPage();
+    try {
+      app.callSettings.set('noiseMode', 'off');
+      micButton.dispatch('click');
+      await flush();
+      assert.equal(chains.length, 1);
+      assert.equal(chains[0].opts.noiseMode, 'off', 'starts with the saved mode');
+      assert.equal(audios.at(-1).srcObject, chains[0].stream);
+      app.callSettings.set('noiseMode', 'suppress');
+      app.callSettings.set('noiseSensitivity', 70);
+      assert.deepEqual(chains[0].modes, ['suppress']);
+      assert.deepEqual(chains[0].sensitivities, [70]);
+    } finally { done(); }
+  } finally {
+    delete globalThis.MicChain;
+  }
+});
+
 test('picking another device during a test switches the test to it', async () => {
   const { app, camButton, media, flush, done } = await setupPage({ present: ['cam-a', 'cam-b'] });
   try {
@@ -370,7 +472,7 @@ test('the page is listed in Settings and every new label exists in English', () 
   const html = fs.readFileSync(path.join(ROOT, 'public/app.html'), 'utf8');
   assert.match(html, /data-target="section-call-settings"/);
   assert.equal((html.match(/id="section-call-settings"/g) || []).length, 1);
-  for (const key of ['title', 'hint', 'test_mic', 'stop_mic', 'hear_myself', 'hear_myself_hint', 'test_camera', 'stop_camera', 'mic_missing',
+  for (const key of ['title', 'hint', 'test_mic', 'stop_mic', 'hear_myself', 'hear_myself_hint', 'output_missing', 'test_camera', 'stop_camera', 'mic_missing',
     'camera_missing', 'camera_in_call', 'permission_denied', 'preview_failed']) {
     assert.ok(en.settings.call[key], `settings.call.${key}`);
   }

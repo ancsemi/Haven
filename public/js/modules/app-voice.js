@@ -287,6 +287,8 @@ _startVoiceUiReconciler() {
 _syncMuteDeafenButtons() {
   const isMuted = this.voice.isMuted;
   const isDeafened = this.voice.isDeafened;
+  // Deafened means hearing nothing, the settings mic test included.
+  this._syncCallSettingsPlayback?.();
   const ptmHeld = !!this._pushToMuteHeld?.();
   ['voice-mute-btn', 'voice-mute-btn-header'].forEach(id => {
     const btn = document.getElementById(id);
