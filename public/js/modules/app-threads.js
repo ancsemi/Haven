@@ -369,7 +369,7 @@ _closeThread() {
 _sendThreadMessage() {
   const input = document.getElementById('thread-input');
   if (!input) return;
-  const content = input.value.trim();
+  const content = this._autoEmoteWords(input.value.trim());
   const parentId = this._activeThreadParent;
   if (!parentId) return;
   if (this._channelBlocksPosting?.()) return this._showToast?.(t('thread_runtime.read_only_no_replies'), 'error');

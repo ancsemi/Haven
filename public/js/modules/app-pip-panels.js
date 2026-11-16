@@ -961,6 +961,7 @@ _sendDMPiPMessage() {
       }
     }
 
+    content = this._autoEmoteWords(content);
     const payload = { code, content };
     if (replyTo) payload.replyTo = replyTo;
     const quoteOf = this._takePendingQuote('_dmPipPendingQuote', code, typed);

@@ -1922,6 +1922,8 @@
       "title": "Chat",
       "up_arrow_edit": "Up Arrow Edits Last Message",
       "up_arrow_edit_hint": "Press the Up arrow key on an empty input to quickly edit your last message.",
+      "emote_words": "Turn emote names into emotes when I send",
+      "emote_words_hint": "A word that is exactly a custom emote's name, capitals included, is sent as that emote, with no colons. Code, links and mentions are left alone. Only changes this device.",
       "dm_fullscreen": "Open DMs in fullscreen on single click",
       "dm_fullscreen_hint": "Single-click a DM to open it in the full pane instead of a floating PiP. Double-click opens the PiP.",
       "mouse_nav": "Mouse side buttons go back and forward",

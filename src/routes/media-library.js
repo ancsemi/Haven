@@ -223,7 +223,7 @@ module.exports = function registerMediaLibrary(deps) {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-      let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+      let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
       if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
       if (name.length > 30) name = name.slice(0, 30);
 
@@ -259,7 +259,7 @@ module.exports = function registerMediaLibrary(deps) {
 
       for (const file of req.files) {
         let name = path.basename(file.originalname, path.extname(file.originalname))
-          .replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+          .replace(/[^a-zA-Z0-9_-]/g, '');
         if (!name) name = path.basename(file.filename, path.extname(file.filename));
         if (name.length > 30) name = name.slice(0, 30);
         try { await storage.admitUpload(file); } catch (e) { errors.push({ name, error: 'Failed to store the upload' }); continue; }

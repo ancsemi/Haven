@@ -2087,6 +2087,11 @@
         </label>
         <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.up_arrow_edit_hint">Press the Up arrow key on an empty input to quickly edit your last message.</small>
         <label class="toggle-row">
+          <span data-i18n="settings.chat_behavior.emote_words">Turn emote names into emotes when I send</span>
+          <input type="checkbox" id="emote-words-toggle">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:6px" data-i18n="settings.chat_behavior.emote_words_hint">A word that is exactly a custom emote's name, capitals included, is sent as that emote, with no colons. Code, links and mentions are left alone. Only changes this device.</small>
+        <label class="toggle-row">
           <span data-i18n="settings.chat_behavior.dm_fullscreen">Open DMs in fullscreen on single click</span>
           <input type="checkbox" id="dm-fullscreen-default">
         </label>
@@ -5586,7 +5591,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.63"></script>
+  <script type="module" src="/js/app.js?v=4.29.64"></script>
   <script src="/js/plugin-loader.js?v=4.29.63"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
