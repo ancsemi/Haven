@@ -632,6 +632,20 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+.call-preview-loopback {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.call-preview-loopback-hint {
+  display: block;
+  margin-top: -4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
 .call-preview-video {
   width: 100%;
   max-width: 320px;

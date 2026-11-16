@@ -55,7 +55,13 @@ _mountCallSettingsPage() {
   const camButton = document.getElementById('call-preview-camera');
   const video = document.getElementById('call-preview-video');
   const status = document.getElementById('call-preview-status');
+  const loopback = document.getElementById('call-preview-loopback');
   const mic = createMicPreview();
+  // The test plays the mic back on the output picked on this page.
+  mic.setOutput(this.callSettings.get('outputDevice'));
+  mic.setPlayback(loopback ? loopback.checked : false);
+  loopback?.addEventListener('change', () => mic.setPlayback(loopback.checked));
+  this.callSettings.subscribe('outputDevice', (id) => mic.setOutput(id));
   const camera = createCameraPreview({
     constraintsFor: (id) => this.voice?._webcamConstraints?.(id) ?? (id ? { deviceId: { exact: id } } : true),
   });

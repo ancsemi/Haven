@@ -3274,6 +3274,8 @@
       "hint": "Saved on this device. Changes apply to your next call, or straight away if you are in one.",
       "test_mic": "Test microphone",
       "stop_mic": "Stop microphone test",
+      "hear_myself": "Hear myself during the microphone test",
+      "hear_myself_hint": "Use headphones, or your speakers may squeal. You hear your microphone with the browser's echo and noise cleanup, but not Haven's noise gate or AI suppression, which only run in a call.",
       "test_camera": "Test camera",
       "stop_camera": "Stop camera test",
       "mic_missing": "Your chosen microphone was not found, so the default one is being tested.",

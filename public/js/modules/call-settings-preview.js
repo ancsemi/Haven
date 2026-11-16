@@ -66,33 +66,76 @@ function createPreview({ kind, mediaDevices, constraintsFor, onOpen, onClose }) 
  * @param {object} [options]
  * @param {MediaDevices} [options.mediaDevices]
  * @param {typeof AudioContext} [options.AudioContext]
+ * @param {() => HTMLAudioElement} [options.createAudio]  for playing the mic back
  */
 export function createMicPreview(options = {}) {
   const AudioCtx = options.AudioContext || globalThis.AudioContext || globalThis.webkitAudioContext;
+  const createAudio = options.createAudio || (() => (typeof Audio === 'function' ? new Audio() : null));
   let ctx = null;
   let analyser = null;
   let data = null;
+  // Hearing yourself: the mic plays on an <audio> element, which can be sent
+  // to the chosen output device (setSinkId) where the browser allows it.
+  let audio = null;
+  let playback = false;
+  let outputId = '';
+
+  const routeOutput = () => {
+    if (!audio || typeof audio.setSinkId !== 'function') return;
+    audio.setSinkId(outputId || '').catch((err) => console.warn('[CallSettings] could not use that output for the test', err));
+  };
+  const applyPlayback = () => {
+    if (!audio) return;
+    audio.muted = !playback;
+    if (playback) audio.play?.()?.catch?.(() => { /* starts with the next user action */ });
+    else audio.pause?.();
+  };
+
   const preview = createPreview({
     kind: 'audio',
     mediaDevices: options.mediaDevices,
     constraintsFor: (id) => (id ? { ...AUDIO, deviceId: { exact: id } } : { ...AUDIO }),
     onOpen(stream) {
-      if (!AudioCtx) return;
-      ctx = new AudioCtx();
-      analyser = ctx.createAnalyser();
-      analyser.smoothingTimeConstant = 0.3; // as the call's noise gate analyser
-      ctx.createMediaStreamSource(stream).connect(analyser);
-      data = new Uint8Array(analyser.frequencyBinCount);
+      if (AudioCtx) {
+        ctx = new AudioCtx();
+        analyser = ctx.createAnalyser();
+        analyser.smoothingTimeConstant = 0.3; // as the call's noise gate analyser
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        data = new Uint8Array(analyser.frequencyBinCount);
+      }
+      audio = createAudio();
+      if (audio) {
+        audio.autoplay = true;
+        audio.srcObject = stream;
+        routeOutput();
+        applyPlayback();
+      }
     },
     onClose() {
       try { ctx?.close(); } catch { /* already closed */ }
       ctx = analyser = data = null;
+      if (audio) {
+        audio.pause?.();
+        audio.srcObject = null;
+        audio = null;
+      }
     },
   });
   return {
     get active() { return preview.active; },
+    get playback() { return playback; },
     start: preview.start,
     stop: preview.stop,
+    // Play the microphone back so the user hears how they sound.
+    setPlayback(on) {
+      playback = !!on;
+      applyPlayback();
+    },
+    // The speaker or headset the playback goes to ('' = the default).
+    setOutput(deviceId) {
+      outputId = deviceId || '';
+      routeOutput();
+    },
     // Same scale as VoiceManager.currentMicLevel, so the meter and the gate
     // marker read the same before and during a call.
     level() {

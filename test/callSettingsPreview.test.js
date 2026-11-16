@@ -79,6 +79,45 @@ test('the mic preview opens the chosen microphone and closes it on stop', async 
   assert.equal(mic.level(), 0);
 });
 
+function fakeAudioElement() {
+  const el = {
+    muted: false, playing: false, sinks: [], srcObject: null,
+    play() { el.playing = true; return Promise.resolve(); },
+    pause() { el.playing = false; },
+    setSinkId(id) { el.sinks.push(id); return Promise.resolve(); },
+  };
+  return el;
+}
+
+test('the mic test plays the microphone back only while asked, on the chosen output', async () => {
+  const audio = fakeAudioElement();
+  const mic = createMicPreview({ mediaDevices: fakeMedia(), AudioContext: fakeAudioContext(), createAudio: () => audio });
+  mic.setOutput('spk-a');
+  mic.setPlayback(false);
+  await mic.start('mic-a');
+  assert.equal(audio.srcObject.track.kind, 'audio');
+  assert.deepEqual(audio.sinks, ['spk-a']);
+  assert.equal(audio.muted, true, 'playback off: nothing is heard');
+  mic.setPlayback(true);
+  assert.equal(audio.muted, false);
+  assert.equal(audio.playing, true);
+  mic.setOutput('');
+  assert.deepEqual(audio.sinks, ['spk-a', ''], 'a new output applies straight away');
+  mic.stop();
+  assert.equal(audio.srcObject, null);
+  assert.equal(audio.playing, false);
+});
+
+test('playback works where the browser cannot pick an output', async () => {
+  const audio = fakeAudioElement();
+  delete audio.setSinkId;
+  const mic = createMicPreview({ mediaDevices: fakeMedia(), AudioContext: fakeAudioContext(), createAudio: () => audio });
+  mic.setOutput('spk-a');
+  mic.setPlayback(true);
+  await mic.start('');
+  assert.equal(audio.playing, true);
+});
+
 test('the mic level uses the same scale as the call meter', async () => {
   // Average 50 out of 255 is full scale on the call meter.
   const mic = createMicPreview({ mediaDevices: fakeMedia(), AudioContext: fakeAudioContext([50, 50, 50, 50]) });
@@ -158,6 +197,8 @@ async function setupPage({ voice = {}, present } = {}) {
   const camButton = make('button', 'call-preview-camera', 'Test camera');
   const status = make('small', 'call-preview-status');
   const video = make('video', 'call-preview-video');
+  const loopback = make('input', 'call-preview-loopback');
+  loopback.checked = true;
   const host = make('div', 'call-settings-page-panel');
   doc.body.appendChild(section);
 
@@ -167,7 +208,10 @@ async function setupPage({ voice = {}, present } = {}) {
     navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator'),
     AudioContext: globalThis.AudioContext,
     IntersectionObserver: globalThis.IntersectionObserver,
+    Audio: globalThis.Audio,
   };
+  const audios = [];
+  globalThis.Audio = function Audio() { const el = fakeAudioElement(); audios.push(el); return el; };
   Object.defineProperty(globalThis, 'navigator', { value: { mediaDevices: media }, configurable: true, writable: true });
   globalThis.AudioContext = fakeAudioContext();
   globalThis.IntersectionObserver = class {
@@ -191,10 +235,11 @@ async function setupPage({ voice = {}, present } = {}) {
     else delete globalThis.navigator;
     globalThis.AudioContext = saved.AudioContext;
     globalThis.IntersectionObserver = saved.IntersectionObserver;
+    globalThis.Audio = saved.Audio;
     delete globalThis.document;
     delete globalThis.t;
   };
-  return { app, doc, host, micButton, camButton, status, video, media, storage, flush, visible, done };
+  return { app, doc, host, micButton, camButton, loopback, audios, status, video, media, storage, flush, visible, done };
 }
 
 const buttonText = (button) => button.querySelector('span').textContent;
@@ -263,6 +308,23 @@ test('the meter follows the microphone test outside a call', async () => {
   } finally { done(); }
 });
 
+test('the mic test plays back by default, follows the checkbox and the chosen output', async () => {
+  const { app, micButton, loopback, audios, flush, done } = await setupPage();
+  try {
+    app.callSettings.set('outputDevice', 'spk-a');
+    micButton.dispatch('click');
+    await flush();
+    const audio = audios.at(-1);
+    assert.equal(audio.muted, false, 'on by default');
+    assert.equal(audio.sinks.at(-1), 'spk-a');
+    loopback.checked = false;
+    loopback.dispatch('change');
+    assert.equal(audio.muted, true);
+    app.callSettings.set('outputDevice', 'spk-b');
+    assert.equal(audio.sinks.at(-1), 'spk-b');
+  } finally { done(); }
+});
+
 test('picking another device during a test switches the test to it', async () => {
   const { app, camButton, media, flush, done } = await setupPage({ present: ['cam-a', 'cam-b'] });
   try {
@@ -308,7 +370,7 @@ test('the page is listed in Settings and every new label exists in English', () 
   const html = fs.readFileSync(path.join(ROOT, 'public/app.html'), 'utf8');
   assert.match(html, /data-target="section-call-settings"/);
   assert.equal((html.match(/id="section-call-settings"/g) || []).length, 1);
-  for (const key of ['title', 'hint', 'test_mic', 'stop_mic', 'test_camera', 'stop_camera', 'mic_missing',
+  for (const key of ['title', 'hint', 'test_mic', 'stop_mic', 'hear_myself', 'hear_myself_hint', 'test_camera', 'stop_camera', 'mic_missing',
     'camera_missing', 'camera_in_call', 'permission_denied', 'preview_failed']) {
     assert.ok(en.settings.call[key], `settings.call.${key}`);
   }
