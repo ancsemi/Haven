@@ -552,7 +552,8 @@ async _toggleWebcam() {
       btn.title = t('voice.stop_camera');
       btn.classList.add('sharing');
       this._handleWebcamStream(this.user.id, this.voice.webcamStream);
-      this._showToast(t('voice.camera_started'), 'success');
+      if (this.voice.webcamFellBack) this._showToast(t('voice.camera_fallback'), 'info');
+      else this._showToast(t('voice.camera_started'), 'success');
     } else {
       this._showToast(t('voice.camera_error'), 'error');
     }

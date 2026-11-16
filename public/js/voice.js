@@ -2520,14 +2520,27 @@ class VoiceManager {
 
   async startWebcam() {
     if (!this.inVoice || this.isWebcamActive) return false;
+    this.webcamFellBack = false;
     try {
       const savedCamId = localStorage.getItem('haven_cam_device') || '';
       const videoConstraints = this._webcamConstraints(savedCamId);
 
-      this.webcamStream = await navigator.mediaDevices.getUserMedia({
-        video: videoConstraints,
-        audio: false  // mic already captured separately
-      });
+      try {
+        this.webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: false  // mic already captured separately
+        });
+      } catch (err) {
+        // The saved camera is not plugged in: use the default one, as joining
+        // does for the microphone. The choice is kept for when it is back.
+        if (!savedCamId || !['OverconstrainedError', 'NotFoundError'].includes(err?.name)) throw err;
+        console.warn('[Voice] Saved camera not found, using the default one:', err.message);
+        this.webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: this._webcamConstraints(''),
+          audio: false
+        });
+        this.webcamFellBack = true;
+      }
 
       this.isWebcamActive = true;
 

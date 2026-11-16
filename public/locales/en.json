@@ -660,6 +660,7 @@
     "screen_share_cancelled": "Screen share cancelled or not supported",
     "camera_stopped": "Camera stopped",
     "camera_started": "Camera started",
+    "camera_fallback": "Your chosen camera was not found, so your default camera is on.",
     "camera_error": "Camera unavailable or permission denied",
     "stop_camera": "Stop Camera",
     "sharing_started": "{{who}} started sharing their screen",
