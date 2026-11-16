@@ -16,6 +16,8 @@
 // Which Discord message a Haven message is comes from ferry_message_map
 // (src/ferryReplies.js), so only messages Ferry carried take part.
 
+const { listReactions } = require('./db/messageReactions');
+
 const SNOWFLAKE = /^\d{5,25}$/;
 const NAMED = /^:([a-zA-Z0-9_-]{1,30}):$/;
 const MAX_NAME = 80;
@@ -64,10 +66,7 @@ function mergeInto(db, messageIds, reactionMap) {
 
 /** Every reaction on one message, Haven's and Discord's, as clients get them. */
 function listFor(db, messageId) {
-  const list = db.prepare(`
-    SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
-    JOIN users u ON r.user_id = u.id WHERE r.message_id = ? ORDER BY r.id
-  `).all(messageId);
+  const list = listReactions(db, messageId);
   return mergeInto(db, [messageId], new Map([[messageId, list]])).get(messageId);
 }
 

@@ -221,5 +221,6 @@ module.exports = function createAsyncPermissions(db) {
     return gate.mode === 'all' ? gate.roles.every(r => held.has(r)) : gate.roles.some(r => held.has(r));
   }
 
-  return { userHasPermission, roleGateAllows, getUserEffectiveLevel, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserUploadMb };
+  return { userHasPermission, roleGateAllows, getChannelRoleChain, getUserEffectiveLevel, getUserPermissions,
+    getUserGlobalPermissions, getUserRoles, getUserUploadMb };
 };

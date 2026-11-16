@@ -266,7 +266,16 @@ function readBadgeInput(db, data, current = null) {
 // ── Reading ───────────────────────────────────────────────
 
 function getBadge(db, id) {
-  return Number.isInteger(id) ? db.prepare('SELECT * FROM badges WHERE id = ?').get(id) : null;
+  const lock = db.kind === 'postgres' ? ' FOR SHARE' : '';
+  return Number.isInteger(id) ? db.prepare('SELECT * FROM badges WHERE id = ?' + lock).get(id) : null;
+}
+
+function setBadgeHidden(db, userId, badgeId, hidden) {
+  if (!hidden) return db.prepare('DELETE FROM badge_hidden WHERE user_id = ? AND badge_id = ?').run(userId, badgeId);
+  const sql = db.kind === 'postgres'
+    ? 'INSERT INTO badge_hidden (user_id, badge_id) VALUES (?, ?) ON CONFLICT (user_id, badge_id) DO NOTHING'
+    : 'INSERT OR IGNORE INTO badge_hidden (user_id, badge_id) VALUES (?, ?)';
+  return db.prepare(sql).run(userId, badgeId);
 }
 
 /** Every badge for the admin list, with how many hold a hand-given one. */
@@ -311,6 +320,22 @@ function statsFor(db, userId, now = Date.now()) {
   return { ageDays: daysSince(user && user.created_at, now), messages: row ? row.messages : 0, forumLikes: row ? row.forum_likes : 0 };
 }
 
+function profileBadgeDefinitions(db) {
+  // The PostgreSQL preview supports role and manual badges. Earned badge
+  // counters still depend on SQLite triggers.
+  const kinds = db.kind === 'postgres' ? " AND b.kind IN ('role', 'manual')" : '';
+  return db.prepare(`SELECT b.*, r.name AS role_name FROM badges b LEFT JOIN roles r ON r.id = b.role_id
+    WHERE b.enabled = 1` + kinds + ' ORDER BY b.position, b.id').all();
+}
+
+function profileBadgeAssignments(db, userId) {
+  return [
+    db.prepare('SELECT role_id FROM user_roles WHERE user_id = ? AND channel_id IS NULL').all(userId),
+    db.prepare('SELECT badge_id FROM user_badges WHERE user_id = ?').all(userId),
+    db.prepare('SELECT badge_id FROM badge_hidden WHERE user_id = ?').all(userId),
+  ];
+}
+
 /**
  * The badges a member shows on their card, in the admin's order. Their own
  * card (viewerId === userId) also lists the ones they hid, marked hidden, so
@@ -321,14 +346,24 @@ function statsFor(db, userId, now = Date.now()) {
  * role or by hand always show.
  */
 function badgesForProfile(db, userId, viewerId, now = Date.now()) {
-  const defs = db.prepare(`SELECT b.*, r.name AS role_name FROM badges b LEFT JOIN roles r ON r.id = b.role_id
-    WHERE b.enabled = 1 ORDER BY b.position, b.id`).all();
+  const defs = profileBadgeDefinitions(db);
+  const self = viewerId === userId;
+  if (db.kind === 'postgres') {
+    return defs.then(async rows => {
+      if (!rows.length) return [];
+      const assignments = await Promise.all(profileBadgeAssignments(db, userId));
+      return formatProfileBadges(rows, null, assignments, self);
+    });
+  }
   if (!defs.length) return [];
   const stats = defs.some(b => EARNED_KINDS.has(b.kind)) ? statsFor(db, userId, now) : null;
-  const roleIds = new Set(db.prepare('SELECT role_id FROM user_roles WHERE user_id = ? AND channel_id IS NULL').all(userId).map(r => r.role_id));
-  const given = new Set(db.prepare('SELECT badge_id FROM user_badges WHERE user_id = ?').all(userId).map(r => r.badge_id));
-  const hidden = new Set(db.prepare('SELECT badge_id FROM badge_hidden WHERE user_id = ?').all(userId).map(r => r.badge_id));
-  const self = viewerId === userId;
+  return formatProfileBadges(defs, stats, profileBadgeAssignments(db, userId), self);
+}
+
+function formatProfileBadges(defs, stats, [roles, givenRows, hiddenRows], self) {
+  const roleIds = new Set(roles.map(r => r.role_id));
+  const given = new Set(givenRows.map(r => r.badge_id));
+  const hidden = new Set(hiddenRows.map(r => r.badge_id));
   // The highest tier earned of each kind, worked out before anything hidden
   // is left out: hiding the top one does not bring a lower one back.
   const top = new Map();
@@ -355,5 +390,6 @@ function badgesForProfile(db, userId, viewerId, now = Date.now()) {
 module.exports = {
   KINDS, EARNED_KINDS, BUILTIN_ICONS, MAX_BADGES, ICON_PATH_RE, DEFAULT_BADGES,
   migrateBadges, readBadgeInput, getBadge, listBadges, badgesForProfile, statsFor, earns, daysSince, cleanIcon,
+  setBadgeHidden,
   iconKey, imageKey, imageIconKey, fillImageKeys, iconTakenBy,
 };

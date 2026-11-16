@@ -9,7 +9,12 @@ const authPosts = new Set(['/api/auth/register','/api/auth/login']);
 const protectedGets = new Set(['/api/auth/validate','/api/auth/totp/status','/api/auth/recovery-codes/status','/api/auth/user-servers',
   '/api/sounds','/api/emojis','/api/stickers','/api/standard-emojis','/api/user-sound-prefs','/api/user/channel-prefs',
   '/api/personas','/api/connection-address','/api/media-token','/api/ice-servers','/api/bot-commands','/api/push/vapid-key','/api/changelog']);
-const writes = new Set(['PUT /api/auth/user-servers','POST /api/user/channel-prefs/mute','POST /api/auth/verify-password']);
+const writes = new Set([
+  'PUT /api/auth/user-servers', 'POST /api/auth/verify-password',
+  'POST /api/user/channel-prefs/mute', 'PUT /api/user/channel-prefs/muted',
+  'POST /api/set-border-transform', 'POST /api/set-avatar-shape', 'POST /api/set-animate-profile',
+  'POST /api/user-sound-prefs',
+]);
 
 function installPostgresPreviewHttp(app) {
   app.use(async (req, res, next) => {
@@ -20,7 +25,8 @@ function installPostgresPreviewHttp(app) {
     const route = req.path.toLowerCase().replace(/\/+$/, '');
     if (!route.startsWith('/api/')) return next();
     const publicRequest = (req.method === 'GET' && publicGets.has(route)) || (req.method === 'POST' && authPosts.has(route));
-    const supported = publicRequest || (req.method === 'GET' && protectedGets.has(route)) || writes.has(req.method + ' ' + route);
+    const soundVolume = req.method === 'PUT' && /^\/api\/sounds\/[^/]+\/volume$/.test(route);
+    const supported = publicRequest || (req.method === 'GET' && protectedGets.has(route)) || writes.has(req.method + ' ' + route) || soundVolume;
     if (!supported) return res.status(501).json({ error: 'This feature is not available on this server yet', code: 'postgres_preview_unsupported' });
     if (publicRequest) return next();
     try {

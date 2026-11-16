@@ -8,6 +8,12 @@ function utcStamp(s) {
   return s.replace(' ', 'T') + 'Z';
 }
 
+// PiP DMs can edit or delete in a different channel from the one the socket has open.
+function editChannelCode(raw, currentChannel) {
+  const code = typeof raw === 'string' ? raw.trim() : '';
+  return /^[a-f0-9]{8}$/i.test(code) ? code : currentChannel;
+}
+
 // ── Input validation helpers ────────────────────────────
 function isString(v, min = 0, max = Infinity) {
   return typeof v === 'string' && v.length >= min && v.length <= max;
@@ -342,6 +348,7 @@ function roleMenuContent(title, entries) {
   return [title ? `🎭 ${title}` : '🎭 Pick your roles', ...entries.map(e => `${e.emoji}  ${e.name}`)].join('\n');
 }
 module.exports = {
+  editChannelCode,
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
   sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, roleMenuContent,
   normalizeWordGroups, validEscalation, filterIdleOnline,

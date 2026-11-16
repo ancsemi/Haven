@@ -53,9 +53,10 @@ function blockedWordIn(name, words) {
   return null;
 }
 
-/** The saved list, read from the SQLite settings table. */
+/** The saved list, read from the server settings table. */
 function readBlockedNames(db) {
   const row = db.prepare('SELECT value FROM server_settings WHERE key = ?').get(KEY);
+  if (db.kind === 'postgres') return row.then(setting => parseBlockedNames(setting?.value));
   return parseBlockedNames(row && row.value);
 }
 
@@ -66,14 +67,17 @@ const REFUSAL = 'That name is not allowed on this server';
  * so a broken settings table never lets a blocked name through.
  */
 function nameRefusal(db, name) {
-  let words;
-  try {
-    words = readBlockedNames(db);
-  } catch (err) {
+  const check = words => blockedWordIn(name, words) ? REFUSAL : null;
+  const failed = err => {
     console.warn('[blocked-names] could not read the list, refusing the name:', err.message);
     return 'Could not check that name right now. Try again in a moment.';
+  };
+  try {
+    const words = readBlockedNames(db);
+    return db.kind === 'postgres' ? words.then(check, failed) : check(words);
+  } catch (err) {
+    return failed(err);
   }
-  return blockedWordIn(name, words) ? REFUSAL : null;
 }
 
 module.exports = { KEY, MAX_WORDS, REFUSAL, parseBlockedNames, blockedWordIn, readBlockedNames, nameRefusal };

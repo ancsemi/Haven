@@ -3099,11 +3099,12 @@ try {
 }
 
 if (postgresPreview) {
-  console.log('[db] PostgreSQL browser preview: signup, login and public-room browsing are enabled; unsupported actions and background integrations are disabled.');
+  console.log('[db] PostgreSQL browser preview: signup, login, text chat, direct messages and status are enabled; unsupported actions and background integrations are disabled.');
   await _refreshIpBanCache();
   app.set('io', io);
   setFcmAdminEnabled(false);
   socketRuntime = require('./src/socketHandlers/postgresPreview').setupPostgresPreview(io, db, { isIpBanned });
+  require('./src/httpAudit').setAuditSink(socketRuntime.logAudit);
 } else {
 // ── Admin password reset (one-time, from .env) ───────────
 // Set ADMIN_RESET_PASSWORD in .env, restart, and it resets the admin's password.

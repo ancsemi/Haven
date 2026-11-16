@@ -1840,6 +1840,11 @@ function generateToken(payload) {
   return jwt.sign(payload, JWT_SECRET, _sessionSignOptions());
 }
 
+async function generateTokenAsync(payload) {
+  // Callers refreshing an existing session supply its verified password version.
+  return jwt.sign(payload, JWT_SECRET, await _sessionSignOptionsAsync());
+}
+
 /**
  * Short-lived token for the account-linking redirects (Steam OpenID, Spotify
  * OAuth). These travel in a URL, which means they can land in browser history,
@@ -2494,4 +2499,4 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
   }
 });
 
-module.exports = { router, verifyToken, verifyTokenAsync, generateChannelCode, generateToken, generateConnectToken, authLimiter, acceptTotpCode, totpLimited, noteTotpFail };
+module.exports = { router, verifyToken, verifyTokenAsync, generateChannelCode, generateToken, generateTokenAsync, generateConnectToken, authLimiter, acceptTotpCode, totpLimited, noteTotpFail };

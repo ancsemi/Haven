@@ -1,5 +1,29 @@
 'use strict';
 
+const { threadHistoryVisible } = require('./messageThreads');
+
+function threadReadUpsert(driver) {
+  const maximum = driver.kind === 'postgres'
+    ? 'GREATEST(thread_reads.last_read_reply_id, excluded.last_read_reply_id)'
+    : 'MAX(last_read_reply_id, excluded.last_read_reply_id)';
+  return `ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = ${maximum}`;
+}
+
+function advanceThreadRead(db, userId, parentId, replyId) {
+  return db.prepare(`
+    INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id) VALUES (?, ?, ?)
+    ${threadReadUpsert(db)}
+  `).run(userId, parentId, replyId);
+}
+
+function openThreadRead(db, userId, parentId) {
+  return db.prepare(`
+    INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
+    VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
+    ${threadReadUpsert(db)}
+  `).run(userId, parentId, parentId);
+}
+
 // Receipt writes keep their membership checks in the same SQL statement or
 // synchronous SQLite transaction. An await between a check and write would
 // let a removal slip between them.
@@ -115,18 +139,16 @@ module.exports = function createReadPositions(db) {
     },
     async markThreadRead(userId, parentId, isAdmin) {
       const driver = db.async || db;
-      const maximum = driver.kind === 'postgres'
-        ? 'GREATEST(thread_reads.last_read_reply_id, excluded.last_read_reply_id)'
-        : 'MAX(thread_reads.last_read_reply_id, excluded.last_read_reply_id)';
+      const scope = driver.kind === 'postgres' ? `AND r.channel_id = m.channel_id AND ${threadHistoryVisible('r')}` : '';
       return driver.prepare(`
         INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
-        SELECT ?, m.id, COALESCE((SELECT MAX(r.id) FROM messages r WHERE r.thread_id = m.id), 0)
+        SELECT ?, m.id, COALESCE((SELECT MAX(r.id) FROM messages r WHERE r.thread_id = m.id ${scope}), 0)
         FROM messages m JOIN channels c ON c.id = m.channel_id
         WHERE m.id = ? AND m.thread_id IS NULL
           AND (? = 1 OR EXISTS (
             SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = ?
           ))
-        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = ${maximum}
+        ${threadReadUpsert(driver)}
         RETURNING (
           SELECT c.code FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?
         ) AS channel_code
@@ -148,3 +170,6 @@ module.exports = function createReadPositions(db) {
     },
   };
 };
+
+module.exports.advanceThreadRead = advanceThreadRead;
+module.exports.openThreadRead = openThreadRead;

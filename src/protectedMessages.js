@@ -22,13 +22,17 @@ const CONVERSATION_REFUSAL = 'This conversation holds protected messages. Unprot
  *  refuses. */
 function refusal(db, id) {
   try {
-    const row = db.prepare(`SELECT m.is_archived, ${keptSql('m')} AS kept FROM messages m WHERE m.id = ?`).get(id);
+    const row = protectionFor(db, id);
     if (!row || !row.kept) return null;
     return row.is_archived ? REFUSAL : THREAD_REFUSAL;
   } catch (err) {
     console.warn('[protected] message check failed, keeping it:', err.message);
     return REFUSAL;
   }
+}
+
+function protectionFor(db, id) {
+  return db.prepare(`SELECT m.is_archived, ${keptSql('m')} AS kept FROM messages m WHERE m.id = ?`).get(id);
 }
 
 /** SQL that is true for a message row (table alias `alias`) that must stay. */
@@ -92,5 +96,5 @@ function installGuard(db) {
 
 module.exports = {
   REFUSAL, THREAD_REFUSAL, CHANNEL_REFUSAL, CONVERSATION_REFUSAL,
-  keptSql, deletableSql, refusal, protectedCount, clearUnprotected, keepChannel, installGuard,
+  keptSql, deletableSql, protectionFor, refusal, protectedCount, clearUnprotected, keepChannel, installGuard,
 };

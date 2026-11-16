@@ -466,7 +466,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
             // to no account, and NULL != ? is never true, so they never
             // counted (#5771). A group DM's "joined" / "left" lines are not
             // new messages.
-            "SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' LIMIT 1000)"
+            "SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' LIMIT 1000) AS unread_messages"
           ).get(ch.id, lastRead, userId);
           ch.unreadCount = countRow ? countRow.cnt : 0;
         } else {
