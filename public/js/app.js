@@ -90,6 +90,7 @@ import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
 import GroupMethods from './modules/app-groups.js?v=4.27.52';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.29.67';
+import DesktopActivityMethods from './modules/app-desktop-activity.js?v=4.29.68';
 import LoginBrandingMethods from './modules/app-login-branding.js?v=4.27.4';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
 import MessageGroupingMethods from './modules/message-grouping.js?v=4.25.1';
@@ -471,6 +472,7 @@ class HavenApp {
     this._setupToolbarIconPicker();
     // After the pickers above: the defaults apply through them (#5739).
     this._setupMemberDefaults();
+    this._setupDesktopAppActivity();
     this._setupLoginBranding();
     this._setupMessageHighlights();
     this._setupModCases();
@@ -677,6 +679,7 @@ Object.assign(HavenApp.prototype,
   GroupMethods,
   TemplateMethods,
   MemberDefaultsMethods,
+  DesktopActivityMethods,
   LoginBrandingMethods,
   MessageHighlightMethods,
   MessageGroupingMethods,

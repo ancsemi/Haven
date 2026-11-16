@@ -1966,6 +1966,8 @@
       "share_hint": "Others can see what you're playing or listening to. Games and music only appear once you link an account below. Nothing is ever shared while your status is Invisible.",
       "show_games": "Show games",
       "show_music": "Show music",
+      "desktop_apps": "Show activity from apps on this computer",
+      "desktop_apps_hint": "Haven Desktop only. Games and music players that support rich presence, the kind that shows in Discord, appear as your activity on this server. Haven Desktop asks before switching it on, for each server separately. Nothing is looked up online, so there is no artwork, and it only works while Discord itself is closed.",
       "connections": "Connections",
       "connections_hint": "Haven's own music player needs no connection. It shares automatically while you're listening in a voice channel."
     },

@@ -70,6 +70,7 @@ const registerTags       = require('./tags');
 const registerChannelTypes = require('./channelTypes');
 const registerMemberDefaults = require('./memberDefaults');
 const registerGameActivity = require('./gameActivity');
+const registerAppActivity = require('./appActivity');
 const registerMessageHighlights = require('./messageHighlights');
 const registerModCases = require('./modCases');
 const registerPermExceptions = require('./permExceptions');
@@ -2776,6 +2777,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerChannelTypes(socket, ctx);
     registerMemberDefaults(socket, ctx);
     registerGameActivity(socket, ctx);
+    registerAppActivity(socket, ctx);
     registerMessageHighlights(socket, ctx);
     registerModCases(socket, ctx);
     registerForumUnread(socket, ctx);
