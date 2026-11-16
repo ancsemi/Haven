@@ -99,13 +99,39 @@ test('the mic test plays the microphone back only while asked, on the chosen out
   assert.deepEqual(audio.sinks, ['spk-a']);
   assert.equal(audio.muted, true, 'playback off: nothing is heard');
   mic.setPlayback(true);
+  await new Promise((r) => setImmediate(r)); // the mic reopens without echo cancellation
+  assert.equal(audio.srcObject.track.readyState, 'live');
   assert.equal(audio.muted, false);
   assert.equal(audio.playing, true);
   mic.setOutput('');
-  assert.deepEqual(audio.sinks, ['spk-a', ''], 'a new output applies straight away');
+  assert.deepEqual(audio.sinks, ['spk-a', 'spk-a', ''], 'the reopened test keeps the output; a new one applies straight away');
   mic.stop();
   assert.equal(audio.srcObject, null);
   assert.equal(audio.playing, false);
+});
+
+test('echo cancellation is off while you hear yourself, so it does not cut your voice in and out', async () => {
+  const media = fakeMedia();
+  const mic = createMicPreview({ mediaDevices: media, AudioContext: fakeAudioContext(), createAudio: fakeAudioElement });
+  mic.setPlayback(true);
+  await mic.start('mic-a');
+  assert.equal(media.requests[0].audio.echoCancellation, false);
+  assert.equal(media.requests[0].audio.noiseSuppression, true, 'the rest of a call\'s processing stays on');
+  assert.equal(media.requests[0].audio.autoGainControl, true);
+
+  // Turning it off during the test reopens the same mic with echo cancellation.
+  mic.setPlayback(false);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(media.requests.length, 2);
+  assert.equal(media.requests[1].audio.echoCancellation, true);
+  assert.deepEqual(media.requests[1].audio.deviceId, { exact: 'mic-a' });
+  assert.equal(media.live(), 1, 'the first stream was closed');
+
+  mic.setPlayback(false);
+  assert.equal(media.requests.length, 2, 'no reopen when nothing changed');
+  mic.stop();
+  mic.setPlayback(true);
+  assert.equal(media.requests.length, 2, 'no reopen when no test is running');
 });
 
 test('playback works where the browser cannot pick an output', async () => {
@@ -385,8 +411,13 @@ test('the mic test plays back by default, follows the checkbox and the chosen ou
     loopback.checked = false;
     loopback.dispatch('change');
     assert.equal(audio.muted, true);
+    await flush(); // the mic reopens with echo cancellation on
+    const reopened = audios.at(-1);
+    assert.notEqual(reopened, audio);
+    assert.equal(reopened.muted, true);
+    assert.equal(reopened.sinks.at(-1), 'spk-a');
     app.callSettings.set('outputDevice', 'spk-b');
-    assert.equal(audio.sinks.at(-1), 'spk-b');
+    assert.equal(reopened.sinks.at(-1), 'spk-b');
   } finally { done(); }
 });
 

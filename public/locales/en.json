@@ -3276,7 +3276,7 @@
       "test_mic": "Test microphone",
       "stop_mic": "Stop microphone test",
       "hear_myself": "Hear myself during the microphone test",
-      "hear_myself_hint": "Use headphones, or your speakers may squeal. You hear yourself as a call would send you, with your noise reduction setting. Nothing plays while you are deafened in a call.",
+      "hear_myself_hint": "Use headphones, or your speakers may squeal. You hear yourself as a call would send you, with your noise reduction setting. Echo cancellation is paused while you listen, or it would keep cutting out your own voice. Nothing plays while you are deafened in a call.",
       "test_camera": "Test camera",
       "stop_camera": "Stop camera test",
       "mic_missing": "Your chosen microphone was not found, so the default one is being tested.",

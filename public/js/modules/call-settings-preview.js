@@ -86,6 +86,7 @@ export function createMicPreview(options = {}) {
   let audio = null;
   let playback = false;
   let outputId = '';
+  let deviceId = '';
 
   const routeOutput = () => {
     if (!audio || typeof audio.setSinkId !== 'function') return;
@@ -110,7 +111,11 @@ export function createMicPreview(options = {}) {
   const preview = createPreview({
     kind: 'audio',
     mediaDevices: options.mediaDevices,
-    constraintsFor: (id) => (id ? { ...AUDIO, deviceId: { exact: id } } : { ...AUDIO }),
+    // While the user hears themselves, echo cancellation is off: it would
+    // take their own voice coming back out as an echo and keep cutting it
+    // out, so the test (and its meter) would pump in and out. A call never
+    // plays your own voice back, so this is closer to what a call sends.
+    constraintsFor: (id) => ({ ...AUDIO, echoCancellation: !playback, ...(id ? { deviceId: { exact: id } } : {}) }),
     onOpen(stream) {
       let heard = stream;
       try {
@@ -152,12 +157,21 @@ export function createMicPreview(options = {}) {
   return {
     get active() { return preview.active; },
     get playback() { return playback; },
-    start: preview.start,
+    start(id = '') {
+      deviceId = id;
+      return preview.start(id);
+    },
     stop: preview.stop,
-    // Play the microphone back so the user hears how they sound.
+    // Play the microphone back so the user hears how they sound. Turning it
+    // on or off during a test reopens the microphone with echo cancellation
+    // to match.
     setPlayback(on) {
+      const changed = playback !== !!on;
       playback = !!on;
       applyPlayback();
+      if (changed && preview.active) {
+        preview.start(deviceId).catch((err) => console.warn('[CallSettings] could not reopen the microphone', err));
+      }
     },
     // The speaker or headset the playback goes to ('' = the default).
     setOutput(deviceId) {
