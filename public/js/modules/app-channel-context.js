@@ -156,7 +156,7 @@ _openChannelCtxMenu(code, btnEl) {
     const hasChildren = this.channels.some(c => c.parent_channel_id === ch.id);
     mergeBtn.style.display = (isAdmin && !ch.is_dm && !hasChildren && this._mergeTargets(ch).length > 0) ? '' : 'none';
   }
-  // "Add members": pick people, roles or everyone (app-channel-add-members.js).
+  // "Manage members": add or remove people, roles or everyone (app-channel-add-members.js).
   const addMembersBtn = menu.querySelector('[data-action="add-members"]');
   if (addMembersBtn) addMembersBtn.style.display = this._canAddChannelMembers(ch) ? '' : 'none';
   // Show "Promote to Channel" only for sub-channels

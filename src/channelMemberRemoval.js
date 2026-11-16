@@ -6,9 +6,12 @@
 // the member list change. The caller has already checked that the remover
 // may do this, and rotates private codes afterwards.
 //
-//   removeChannelMember(ctx, channel, targetUserId)
+//   removeChannelMember(ctx, channel, targetUserId, { quiet })
+//
+// quiet leaves the member list for the caller to redraw, once, after
+// removing several people.
 
-function removeChannelMember(ctx, channel, targetUserId) {
+function removeChannelMember(ctx, channel, targetUserId, { quiet = false } = {}) {
   const { io, db, state, getEnrichedChannels, emitOnlineUsers } = ctx;
   const { channelUsers } = state;
   const channelId = channel.id;
@@ -33,7 +36,7 @@ function removeChannelMember(ctx, channel, targetUserId) {
   const channelRoom = channelUsers.get(channel.code);
   if (channelRoom) {
     channelRoom.delete(targetUserId);
-    emitOnlineUsers(channel.code);
+    if (!quiet) emitOnlineUsers(channel.code);
   }
 }
 

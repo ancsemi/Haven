@@ -157,7 +157,7 @@ _bindChannelMenu() {
     this._closeChannelCtxMenu();
     this._copyChannelLink(code);
   });
-  // Pick people to add to this channel (app-channel-add-members.js).
+  // Add people to this channel or take them out (app-channel-add-members.js).
   document.querySelector('#channel-ctx-menu [data-action="add-members"]')?.addEventListener('click', () => {
     const code = this._ctxMenuChannel;
     if (!code) return;

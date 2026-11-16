@@ -1233,12 +1233,13 @@ html.reduce-motion .forum-unread-dot { animation: none; }
 /* ── Role tools: templates, gates, self-assign menus ───────────── */
 .tool-modal .tool-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 .tool-modal .tool-modal-body { max-height: 60vh; overflow: auto; }
-/* Add members picker (app-channel-add-members.js) */
+/* Manage members picker (app-channel-add-members.js) */
 .am-picker { display: flex; flex-direction: column; gap: 6px; width: min(420px, 78vw); max-width: 100%; }
 .am-picker .am-search { width: 100%; max-width: none; box-sizing: border-box; }
 .am-picker label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; }
 .am-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-top: 6px; }
 .am-all { font-weight: 600; padding: 4px 0; }
+.am-picker .settings-hint { margin: 0; }
 .am-roles { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .am-users { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; max-height: 40vh; overflow-y: auto; overflow-x: hidden; }
 .am-user { padding: 3px 0; min-width: 0; }
