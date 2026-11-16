@@ -176,3 +176,14 @@ test('a call still saves its noise mode and applies it', () => {
   assert.equal(store.haven_noise_mode, 'off');
   assert.deepEqual(applied, ['off']);
 });
+
+test('after switching microphone the soundboard still mixes into what is sent', () => {
+  // Join sets _vcDest; switching microphone built a new chain and left the
+  // soundboard on the old one, so clips stopped reaching the call.
+  const start = SOURCE.indexOf('async switchInputDevice(');
+  const end = SOURCE.indexOf('\n  }\n', start);
+  const body = SOURCE.slice(start, end);
+  const build = body.indexOf('const dest = this._buildMicChain(this.rawStream);');
+  assert.ok(build > 0);
+  assert.ok(body.indexOf('this._vcDest = dest;', build) > build);
+});

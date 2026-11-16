@@ -4056,6 +4056,9 @@ class VoiceManager {
     this._stopLocalTalkDetection();
 
     const dest = this._buildMicChain(this.rawStream);
+    // The soundboard mixes into this destination: point it at the new chain,
+    // or clips played after a microphone switch go nowhere.
+    this._vcDest = dest;
 
     const oldLocalStream = this.localStream;
     this.localStream = dest.stream;
