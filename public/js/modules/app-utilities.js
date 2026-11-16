@@ -539,7 +539,7 @@ _findNamedEmoji(name) {
 
 _autoEmoteWords(text) {
   const names = new Set((this.customEmojis || []).map(e => e.name));
-  try { if (localStorage.getItem('haven-emote-words') !== 'true') return text; } catch { return text; }
+  try { if (localStorage.getItem('haven-emote-words') !== 'true') return text; } catch { return text; } // private mode: storage is unavailable, so the setting is off
   return !text || !names.size || text.startsWith('/') ? text : text.split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) => i % 2 ? part : part.replace(/(?<!\S)[A-Za-z0-9_-]{1,30}(?!\S)/g, w => names.has(w) ? `:${w}:` : w)).join('');
 },
 
