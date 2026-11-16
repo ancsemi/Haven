@@ -185,12 +185,7 @@ _openChannelCtxMenu(code, btnEl) {
   menu.style.display = 'block';
   menu.style.top  = rect.bottom + 4 + 'px';
   menu.style.left = rect.left + 'px';
-  // Keep menu inside viewport
-  requestAnimationFrame(() => {
-    const mr = menu.getBoundingClientRect();
-    if (mr.right > window.innerWidth) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
-    if (mr.bottom > window.innerHeight) menu.style.top = (rect.top - mr.height - 4) + 'px';
-  });
+  requestAnimationFrame(() => this._fitCtxMenu(menu, rect));
 },
 
 /* ── Hidden channels (admin declutter, local-only, #5409) ─────────────
@@ -695,12 +690,35 @@ _openDmCtxMenu(code, anchorEl, mouseEvent) {
   }
   menu.style.display = 'block';
 
-  // Keep inside viewport
-  requestAnimationFrame(() => {
-    const mr = menu.getBoundingClientRect();
-    if (mr.right > window.innerWidth) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
-    if (mr.bottom > window.innerHeight) menu.style.top = (mr.top - mr.height - 4) + 'px';
-  });
+  const anchor = mouseEvent
+    ? { top: mouseEvent.clientY, bottom: mouseEvent.clientY }
+    : anchorEl.getBoundingClientRect();
+  requestAnimationFrame(() => this._fitCtxMenu(menu, anchor));
+},
+
+/* Keep a context menu on screen. Open below the anchor, flip above when
+   there is no room below, and when it fits neither way (a tall menu in a
+   short window, or a channel near the top), pin it to the top edge and let
+   it scroll instead of running off screen. */
+_fitCtxMenu(menu, anchor) {
+  const pad = 8;
+  menu.style.maxHeight = '';
+  menu.style.overflowY = '';
+  const mr = menu.getBoundingClientRect();
+  const vh = window.innerHeight;
+  if (mr.right > window.innerWidth) menu.style.left = Math.max(pad, window.innerWidth - mr.width - pad) + 'px';
+  if (mr.bottom <= vh - pad) return;
+  const above = anchor.top - 4 - pad;
+  if (mr.height <= above) {
+    menu.style.top = (anchor.top - mr.height - 4) + 'px';
+    return;
+  }
+  const top = mr.height <= vh - pad * 2 ? Math.max(pad, vh - pad - mr.height) : pad;
+  menu.style.top = top + 'px';
+  if (mr.height > vh - pad * 2) {
+    menu.style.maxHeight = (vh - pad * 2) + 'px';
+    menu.style.overflowY = 'auto';
+  }
 },
 
 _closeDmCtxMenu() {
