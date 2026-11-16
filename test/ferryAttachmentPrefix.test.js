@@ -40,6 +40,7 @@ function makeApp(value, { images = [], files = [], dm = null } = {}) {
     _ferryTargets: { aaaaaaaa: { enabled: true, trigger: '=>', targets: [{ guild_name: 'Test Guild', discord_channel_name: 'general' }] } },
     _destructField: () => ({}),
     _highlightDefault: () => false,
+    _autoEmoteWords: (text) => text,
     _setHighlightArmed() {},
     _clearReply() {},
     _hideMentionDropdown() {},

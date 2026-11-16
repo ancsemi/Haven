@@ -214,6 +214,7 @@ async _sendMessage() {
     }
   }
 
+  content = this._autoEmoteWords(content);
   const payload = { code: this.currentChannel, content };
   // Discord display names are not unique, so a "=>@Name" DM has to carry the
   // resolved Discord user id rather than leaving the server to guess.
