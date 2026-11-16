@@ -12,7 +12,7 @@ const { themePreferenceAllowed } = require('../themeMetadata');
 const { MEDIA_GROUP_LAYOUTS } = require('../mediaGroup');
 const { cleanEmojiFavorites } = require('../builtinEmojis');
 const { nameRefusal } = require('../blockedNames');
-const { cleanPinnedDms } = require('../pinnedDms');
+const { cleanPinnedDms, cleanDmOrder, DM_SORT_MODES } = require('../pinnedDms');
 const createEncryptionKeyReads = require('../db/encryptionKeys');
 
 const PUSH_SCOPES = ['all', 'mentions'];
@@ -794,13 +794,17 @@ module.exports = function register(socket, ctx) {
       // 'stacked'. No row follows the server's media_group_layout.
       'media_group_layout',
       'emoji_favorites',
+      // How your DM list is sorted on every device (app-dm-sort.js):
+      // 'recent', 'alpha' or 'manual', and the order you arranged it in.
+      'dm_sort',
+      'dm_order',
       // DMs pinned to the top of your own DM list (src/pinnedDms.js).
       'pinned_dms',
     ];
     // 'effects' is a JSON array of effect ids, longer than the other values.
     // A theme is saved as file:<file name>, and a community theme's file name
     // can run long; at 50 it was dropped without a word and lost on reload.
-    const maxLen = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : key === 'emoji_favorites' ? 1700 : key === 'pinned_dms' ? 4000 : key === 'theme' ? 200 : 50;
+    const maxLen = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : key === 'emoji_favorites' ? 1700 : key === 'pinned_dms' ? 4000 : key === 'dm_order' ? 20000 : key === 'theme' ? 200 : 50;
     if (!allowedKeys.includes(key) || !value || value.length > maxLen) return;
     let stored = value;
     if (key === 'channel_order') {
@@ -815,8 +819,13 @@ module.exports = function register(socket, ctx) {
       stored = cleanPinnedDms(db, socket.user.id, value);
       if (!stored) return;
     }
+    if (key === 'dm_order') {
+      stored = cleanDmOrder(db, socket.user.id, value);
+      if (!stored) return;
+    }
     if (key === 'server_mute' && value !== 'all' && value !== 'mentions') return;
     if (key === 'media_group_layout' && !MEDIA_GROUP_LAYOUTS.includes(value)) return;
+    if (key === 'dm_sort' && !DM_SORT_MODES.includes(value)) return;
     // Members pick from Haven's own themes and the published theme files. A
     // refusal is quiet: the picker only offers allowed themes, so this is a
     // stale list or a crafted request, and the client falls back on its own.
@@ -855,7 +864,7 @@ module.exports = function register(socket, ctx) {
   socket.on('delete-preference', (data) => {
     if (!data || typeof data !== 'object') return;
     const key = typeof data.key === 'string' ? data.key.trim() : '';
-    const deletableKeys = ['timezone', 'time_format', 'channel_order', 'server_mute', 'muted_users', 'media_group_layout', 'pinned_dms'];
+    const deletableKeys = ['timezone', 'time_format', 'channel_order', 'server_mute', 'muted_users', 'media_group_layout', 'dm_sort', 'dm_order', 'pinned_dms'];
     if (!deletableKeys.includes(key)) return;
     db.prepare('DELETE FROM user_preferences WHERE user_id = ? AND key = ?').run(socket.user.id, key);
     socket.emit('preference-deleted', { key });
