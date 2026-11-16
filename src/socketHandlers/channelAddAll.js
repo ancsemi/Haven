@@ -18,7 +18,7 @@
 // It takes what the switch at creation takes: the admin, Invite Users or
 // Manage Server, and reaching the channel. A private channel stays invite-only
 // and a DM is not a channel anyone else belongs in, so both are refused.
-// Banned people are left out. The new members get the channel in their list
+// Banned people are left out, and guests too unless the admin does it. The new members get the channel in their list
 // straight away, and the member list is drawn again.
 
 const { reachableChannelByCode } = require('./channelAccess');
@@ -38,12 +38,24 @@ module.exports = function register(socket, ctx) {
       : reachableChannelByCode(ctx, socket.user, code);
     if (!channel || channel.is_dm) return cb({ error: 'Channel not found' });
     if (channel.is_private) return cb({ error: 'A private channel stays invite-only' });
+    // A hidden-code channel, or a sub-channel under a private or hidden-code
+    // one, is private to everyone but the admin, as invite-to-channel has it.
+    if (!socket.user.isAdmin) {
+      const parent = channel.parent_channel_id
+        ? db.prepare('SELECT is_private, code_visibility FROM channels WHERE id = ?').get(channel.parent_channel_id)
+        : null;
+      if (channel.code_visibility === 'private' || (parent && (parent.is_private || parent.code_visibility === 'private'))) {
+        return cb({ error: 'A private channel stays invite-only' });
+      }
+    }
 
     let added = 0;
     try {
       const insert = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
       db.transaction(() => {
-        for (const u of db.prepare('SELECT id FROM users WHERE id NOT IN (SELECT user_id FROM bans)').all()) {
+        for (const u of db.prepare('SELECT id, is_guest FROM users WHERE id NOT IN (SELECT user_id FROM bans)').all()) {
+          // A guest only uses the channels the admin opened to guests.
+          if (u.is_guest && !socket.user.isAdmin) continue;
           added += insert.run(channel.id, u.id).changes;
         }
       })();

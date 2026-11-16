@@ -106,3 +106,41 @@ test('add picked people, on public and private channels', async (t) => {
 
   A.disconnect(); C.disconnect(); O.disconnect();
 });
+
+test('add everyone stays out of hidden-code channels and private parents, and leaves guests', async (t) => {
+  const inviter = await h.register('hinviter');
+  const other = await h.register('hother');
+  const guest = await h.register('hguest');
+  const db = new Database(path.join(h.dataDir, 'haven.db'));
+  db.pragma('busy_timeout = 5000');
+  t.after(() => db.close());
+  db.prepare('UPDATE users SET is_guest = 1 WHERE id = ?').run(guest.id);
+
+  // Someone who may invite people, but is not the admin.
+  const role = Number(db.prepare("INSERT INTO roles (name, level, scope, color) VALUES ('Inviter', 20, 'server', '#ccc')").run().lastInsertRowid);
+  db.prepare("INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, 'invite_users', 1)").run(role);
+  db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id) VALUES (?, ?, NULL)').run(inviter.id, role);
+
+  const insert = db.prepare('INSERT INTO channels (name, code, created_by, is_private, code_visibility, parent_channel_id) VALUES (?, ?, ?, ?, ?, ?)');
+  const open = insert.run('town', 'cdef0001', other.id, 0, 'public', null).lastInsertRowid;
+  const hidden = insert.run('hidden', 'cdef0002', other.id, 0, 'private', null).lastInsertRowid;
+  const parent = insert.run('vault', 'cdef0003', other.id, 1, 'public', null).lastInsertRowid;
+  const sub = insert.run('vault-sub', 'cdef0004', other.id, 0, 'public', parent).lastInsertRowid;
+  const join = db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)');
+  for (const id of [open, hidden, parent, sub]) join.run(id, inviter.id);
+  const members = (id) => db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(id).map(r => r.user_id);
+
+  const I = await h.connect(inviter.token);
+  for (const [code, id] of [['cdef0002', hidden], ['cdef0004', sub]]) {
+    const res = await h.ask(I, 'add-all-members', { code });
+    assert.ok(res.error, code + ' ' + JSON.stringify(res));
+    assert.deepStrictEqual(members(id), [inviter.id], code + ' gained nobody');
+  }
+
+  const res = await h.ask(I, 'add-all-members', { code: 'cdef0001' });
+  assert.ok(res.success, JSON.stringify(res));
+  assert.ok(members(open).includes(other.id), 'members are added to a public channel');
+  assert.ok(!members(open).includes(guest.id), 'a guest is not, unless the admin does it');
+
+  I.disconnect();
+});

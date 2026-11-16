@@ -25,7 +25,7 @@ function isKnownNamedEmoji(db, text) {
   if (!m) return false;
   const name = m[1].toLowerCase();
   if (BUILTIN_EMOJI_NAMES.has(name)) return true;
-  return !!db.prepare('SELECT 1 FROM custom_emojis WHERE name = ?').get(name);
+  return !!db.prepare('SELECT 1 FROM custom_emojis WHERE lower(name) = ?').get(name);
 }
 
 // An emoji someone may react with or put on a role menu: a Unicode emoji, or
