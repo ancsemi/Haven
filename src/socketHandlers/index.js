@@ -81,6 +81,7 @@ const registerForumPictureVotes = require('./forumPictureVotes');
 const registerBadges = require('./badges');
 const registerMoveToThread = require('./moveToThread');
 const registerChannelAddAll = require('./channelAddAll');
+const registerChannelMerge = require('./channelMerge');
 const registerMessageNsfw = require('./messageNsfw');
 const registerBlockedNames = require('./blockedNames');
 const createLiveAccess = require('./liveAccess');
@@ -1308,7 +1309,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // and a member you muted sends you none at all.
       let quietFor = new Set();
       try {
-        quietFor = quietRecipients(db, { channelId, senderUserId, messageContent });
+        quietFor = quietRecipients(db, { channelId, senderUserId, messageContent, replyToUserId: pushOpts.replyToUserId });
       } catch (err) {
         // Pushes still go out, but muted people get them too, so say so.
         throttledWarn('push personal mute lookup failed', err);
@@ -2237,6 +2238,10 @@ function setupSocketHandlers(io, db, opts = {}) {
     socket.on('visibility-change', (data) => {
       if (data && typeof data.visible === 'boolean') socket.hasFocus = data.visible;
     });
+    // Whether this device notifies the author of a message it replies to.
+    socket.on('reply-ping', (data) => {
+      if (data && typeof data.on === 'boolean') socket.replyPing = data.on;
+    });
 
     // Push authoritative session info
     // (#5394) Include server-stored nicknames so they sync across devices.
@@ -2783,6 +2788,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);
     registerChannelAddAll(socket, ctx);
+    registerChannelMerge(socket, ctx);
     registerMessageNsfw(socket, ctx);
     registerBlockedNames(socket, ctx);
 

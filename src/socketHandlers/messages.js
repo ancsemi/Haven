@@ -1503,6 +1503,8 @@ module.exports = function register(socket, ctx) {
       const replyMsg = db.prepare('SELECT channel_id, destruct_at FROM messages WHERE id = ?').get(replyTo);
       if (!replyMsg || replyMsg.channel_id !== channel.id || replyMsg.destruct_at) replyTo = null;
     }
+    // The sender can turn off pushing the author they reply to (app-reply-ping.js).
+    const replyPing = socket.replyPing !== false;
 
     // (#5280) burn-after-read for DMs, capped at 5 minutes; only honored
     // for is_dm channels (the issue scopes burn to direct messages only).
@@ -1705,7 +1707,7 @@ module.exports = function register(socket, ctx) {
         : destructAt ? '🔥 Sent a self-destructing message' : finalContent;
       const pushDisplayName = personaUsername || socket.user.displayName;
       sendPushNotifications(channel.id, code, channel.name, socket.user.id, pushDisplayName, pushContent,
-        { replyToUserId: message.replyContext?.user_id, pingText: finalContent, silent: !!silent });
+        { replyToUserId: replyPing ? message.replyContext?.user_id : null, pingText: finalContent, silent: !!silent });
       fireWebhookCallbacks(channel.id, code, message);
 
       // Deliberately after the broadcast: the Haven message is already sent and
@@ -3338,6 +3340,12 @@ module.exports = function register(socket, ctx) {
         sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName,
           `Started a thread on your message: ${safeContent}`,
           { onlyUserIds: [startedFor], replyToUserId: startedFor, silent: !!tSilent.silent });
+      }
+      // A reply in the thread pushes its author too, unless the sender turned that off.
+      const repliedTo = message.replyContext?.user_id;
+      if (repliedTo && repliedTo !== socket.user.id && repliedTo !== startedFor && socket.replyPing !== false) {
+        sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName, safeContent,
+          { onlyUserIds: [repliedTo], replyToUserId: repliedTo, silent: !!tSilent.silent });
       }
 
       // Update thread preview on the parent message for all users

@@ -4,8 +4,8 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.29.55';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.25';
+import SocketMethods   from './modules/app-socket.js?v=4.29.61';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.57';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.30';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
 import ComposerMethods from './modules/app-composer.js?v=4.29.57';
@@ -31,7 +31,7 @@ import MediaGridMethods from './modules/app-media-grid.js?v=4.27.31';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.25.26';
 import AttachmentMethods from './modules/app-attachments.js?v=4.26.17';
 import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.29.2';
-import AppearanceMethods from './modules/app-appearance.js?v=4.27.49';
+import AppearanceMethods from './modules/app-appearance.js?v=4.29.59';
 import AccessibilityMethods from './modules/app-accessibility.js?v=4.27.19';
 import SoundMethods from './modules/app-sounds.js?v=4.25.21';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.29.12';
@@ -39,14 +39,15 @@ import EmojiSearchMethods from './modules/app-emoji-search.js?v=4.29.12';
 import BotMethods from './modules/app-bots.js?v=4.27.52';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
 import ChannelMethods  from './modules/app-channels.js?v=4.29.56';
-import ChannelContextMethods from './modules/app-channel-context.js?v=4.29.56';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.29.60';
 import ChannelTypeMethods from './modules/app-channel-types.js?v=4.27.42';
-import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.27.52';
+import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.29.63';
+import ChannelMergeMethods from './modules/app-channel-merge.js?v=4.29.60';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.29.30';
 import DmPinMethods from './modules/app-dm-pins.js?v=4.29.30';
 import MessageMethods  from './modules/app-messages.js?v=4.29.13';
-import LinkPreviewMethods from './modules/app-link-previews.js?v=4.27.51';
-import MessageToolMethods from './modules/app-message-tools.js?v=4.29.40';
+import LinkPreviewMethods from './modules/app-link-previews.js?v=4.29.57';
+import MessageToolMethods from './modules/app-message-tools.js?v=4.29.61';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.29.40';
 import UnthreadMethods from './modules/app-unthread.js?v=4.29.40';
 import UserMethods     from './modules/app-users.js?v=4.27.52';
@@ -76,7 +77,7 @@ import ModerationMethods from './modules/app-moderation.js?v=4.27.9';
 import PlatformMethods from './modules/app-platform.js?v=4.27.49';
 import SearchMethods   from './modules/app-search.js?v=4.29.18';
 import FerryMethods    from './modules/app-ferry.js?v=4.27.52';
-import ForumMethods    from './modules/app-forum.js?v=4.29.55';
+import ForumMethods    from './modules/app-forum.js?v=4.29.61';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
@@ -99,7 +100,7 @@ import ServerMuteMethods from './modules/app-server-mute.js?v=4.24.24';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.27.20';
 import ThreadDockMethods from './modules/app-thread-dock.js?v=4.25.7';
-import NavHistoryMethods from './modules/app-nav-history.js?v=4.29.50';
+import NavHistoryMethods from './modules/app-nav-history.js?v=4.29.59';
 import TypingMethods from './modules/app-typing.js?v=4.25.8';
 import MessageNsfwMethods from './modules/app-message-nsfw.js?v=4.25.10';
 import MediaPlaybackMethods from './modules/app-media-playback.js?v=4.27.49';
@@ -109,6 +110,7 @@ import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
+import ReplyPingMethods from './modules/app-reply-ping.js?v=4.29.61';
 import MentionsMethods from './modules/app-mentions.js?v=4.29.11';
 import SettingsPageMethods from './modules/app-settings-pages.js?v=4.29.55';
 import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.29.12';
@@ -487,6 +489,7 @@ class HavenApp {
     this._setupMediaPlayback();
     this._setupMusicListenButtons();
     this._setupSilentToggle();
+    this._setupReplyPing();
     this._setupCategoryLayoutPicker();
     this._setupDebugSection();
     this._setupLightbox();
@@ -500,6 +503,7 @@ class HavenApp {
     this._initWelcomePopups();
     this._initMoveMessages();
     this._initMoveToThread();
+    this._initChannelMerge();
     this._initUnthread();
 
     // CSP-safe image error handling (no inline onerror attributes)
@@ -632,6 +636,7 @@ Object.assign(HavenApp.prototype,
   ChannelMethods,
   ChannelContextMethods,
   ChannelOrganizeMethods,
+  ChannelMergeMethods,
   ChannelUnreadMethods,
   MessageMethods,
   LinkPreviewMethods,
@@ -701,6 +706,7 @@ Object.assign(HavenApp.prototype,
   BadgeMethods,
   ThemePickerMethods,
   SilentMethods,
+  ReplyPingMethods,
   SettingsPageMethods,
   ChannelTypeMethods,
   MentionsMethods,

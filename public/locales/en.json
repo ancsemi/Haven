@@ -416,6 +416,8 @@
   },
   "toasts": {
     "roles_updated": "Your roles have been updated",
+    "timeout_notice_one": "You are in a timeout for 1 more minute. Messages, edits and reactions are paused.",
+    "timeout_notice_other": "You are in a timeout for {{count}} more minutes. Messages, edits and reactions are paused.",
     "role_server_no_response": "No response from the server. It may be running an older Haven version. Update the server files and fully restart it, then try again.",
     "status_pending_reconnect": "Status will update when reconnected",
     "channel_created": "Channel \"#{{name}}\" created!\nCode: {{code}}",
@@ -1009,6 +1011,8 @@
     "pinned_count": "Pinned Messages",
     "uploading": "Uploading...",
     "cancel_reply": "Cancel reply",
+    "reply_ping_on": "A push notification will be sent to this user if applicable",
+    "reply_ping_off": "User will be notified within Haven, but no push notification will be sent",
     "message_placeholder_commands": "Type a message... (/ for commands)",
     "gif_search_placeholder": "Search GIFs...",
     "powered_by_giphy": "Powered by GIPHY",
@@ -1900,7 +1904,9 @@
       "full": "Large",
       "full_hint": "Large: big media, author, and post stats",
       "pause_offscreen": "Pause videos and audio scrolled out of view",
-      "pause_offscreen_hint": "A video, sound file or YouTube card in chat stops when you scroll past it."
+      "pause_offscreen_hint": "A video, sound file or YouTube card in chat stops when you scroll past it.",
+      "start_folded": "Start link previews folded",
+      "start_folded_hint": "Link previews show as a small bar you click to open. Only changes this device. A message with more than two links always folds the ones after the second."
     },
     "banner_display": {
       "title": "Banner Display",
@@ -1920,6 +1926,8 @@
       "up_arrow_edit_hint": "Press the Up arrow key on an empty input to quickly edit your last message.",
       "dm_fullscreen": "Open DMs in fullscreen on single click",
       "dm_fullscreen_hint": "Single-click a DM to open it in the full pane instead of a floating PiP. Double-click opens the PiP.",
+      "mouse_nav": "Mouse side buttons go back and forward",
+      "mouse_nav_hint": "Back closes the thread or pop-out DM you opened, or returns to the channel you came from. Turn this off if a side button is your push to talk or a hotkey in another program: the side buttons then do nothing in Haven.",
       "hover_profile_card": "Show profile card on hover",
       "hover_profile_card_hint": "Hovering over a name or avatar shows a quick profile preview. Clicking opens the full card either way.",
       "official_style": "Official messages",
@@ -3594,6 +3602,30 @@
     "move_channel": {
       "title": "Move Channel"
     },
+    "merge_channel": {
+      "title": "Merge Channel",
+      "desc": "Pick the channel #{{name}} merges into. That channel keeps its name, settings, permissions and members; every message of #{{name}} moves into it and #{{name}} is deleted.",
+      "no_targets": "No other channel of the same kind to merge into.",
+      "loading": "Working out the merge…",
+      "back": "Back",
+      "merge_btn": "Merge",
+      "summary_one": "1 message moves from #{{from}} into #{{to}}.",
+      "summary_many": "{{n}} messages move from #{{from}} into #{{to}}.",
+      "duplicates_one": "1 message is in both channels (the same Discord message) and is kept once.",
+      "duplicates_many": "{{n}} messages are in both channels (the same Discord message) and are kept once.",
+      "carried": "Also moving: {{webhooks}} webhooks, {{scheduled}} scheduled messages, {{menus}} role menus, {{links}} Ferry links.",
+      "reposts_title": "Probably re-posted by hand ({{n}})",
+      "reposts_desc": "These Haven messages have the same text as an older Discord message in the other channel. Ticked ones are removed and the Discord copy, with its real author and time, stays.",
+      "reposts_more": "Only the first {{shown}} of {{n}} are listed; the rest are kept.",
+      "repost_drop": "Remove",
+      "repost_keep": "Keeps",
+      "select_all": "Tick all",
+      "select_none": "Untick all",
+      "confirm": "Merge #{{from}} into #{{to}}? #{{from}} is deleted and this cannot be undone.",
+      "done": "Merged into #{{name}}. Messages moved: {{moved}}. Duplicates removed: {{dupes}}.",
+      "merged_away": "This channel was merged into #{{name}}",
+      "failed": "Could not merge the channels"
+    },
     "rename_channel": {
       "title": "Rename Channel",
       "prompt": "Rename #{{name}}:\nEnter new name:"
@@ -4172,7 +4204,8 @@
         "webhook_update": "changed bot",
         "whitelist_add": "added to the whitelist:",
         "whitelist_remove": "removed from the whitelist:",
-        "server_shutdown": "shut the server down"
+        "server_shutdown": "shut the server down",
+        "channel_merge": "merged channel"
       },
       "exporting": "Exporting...",
       "on": "on",
@@ -4283,6 +4316,7 @@
       "create_sub": "Create Sub-channel",
       "organize": "Organize",
       "move_to": "Move to…",
+      "merge": "Merge into…",
       "promote": "Promote to Channel",
       "functions": "Channel Functions",
       "roles": "Roles",
@@ -4900,6 +4934,12 @@
     "move_topic_title": "Move topic",
     "move_topic_desc": "Move \"{{title}}\" and its replies to:",
     "move_topic_done": "Moved to {{name}}",
+    "move_topics_desc": "Move {{n}} topics and their replies to:",
+    "move_topics_done": "Moved {{n}} topics to {{name}}",
+    "select": "Select topics",
+    "select_title": "Pick several topics to move or delete at once",
+    "select_all": "Select all",
+    "select_none": "Select none",
     "unmark_nsfw": "Unmark NSFW",
     "attach_hint": "To attach an image or a file, paste or drop it into the message box below the topics instead.",
     "attach_file": "Add a picture or file",
