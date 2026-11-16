@@ -533,10 +533,14 @@ _discordEmoteHtml(name, id, animated) {
 // Returns { name, url } or null.
 _findNamedEmoji(name) {
   if (!name) return null;
-  const lower = String(name).toLowerCase();
-  return (this.builtinEmojis && this.builtinEmojis.find(e => e.name === lower))
-      || (this.customEmojis && this.customEmojis.find(e => e.name === lower))
-      || null;
+  const s = String(name), lower = s.toLowerCase(), pools = [this.builtinEmojis || [], this.customEmojis || []];
+  return pools.map(p => p.find(e => e.name === s)).find(Boolean) || pools.map(p => p.find(e => e.name.toLowerCase() === lower)).find(Boolean) || null;
+},
+
+_autoEmoteWords(text) {
+  const names = new Set((this.customEmojis || []).map(e => e.name));
+  try { if (localStorage.getItem('haven-emote-words') !== 'true') return text; } catch { return text; }
+  return !text || !names.size || text.startsWith('/') ? text : text.split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) => i % 2 ? part : part.replace(/(?<!\S)[A-Za-z0-9_-]{1,30}(?!\S)/g, w => names.has(w) ? `:${w}:` : w)).join('');
 },
 
 // Punctuation search aliases: typing an actual punctuation mark (e.g. "?"

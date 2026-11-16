@@ -379,6 +379,11 @@
   opacity: 0.7;
 }
 
+/* The DM sort menu ticks the sort in force (app-dm-sort.js). */
+.dm-sort-menu .channel-ctx-item { justify-content: space-between; }
+.dm-sort-check { visibility: hidden; }
+.dm-sort-menu .channel-ctx-item[aria-checked="true"] .dm-sort-check { visibility: visible; }
+
 /* ── DM Category Headers ──────────────────────────────── */
 .dm-category-header {
   display: flex;

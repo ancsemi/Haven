@@ -128,4 +128,4 @@ function keepForumTags(db, channelId, topIds) {
   }
 }
 
-module.exports = { moveToChannel };
+module.exports = { moveToChannel, keepForumTags };

@@ -292,8 +292,8 @@ _setupDmDragDrop() {
     indicator.parentNode.insertBefore(dragSrc, indicator);
     indicator.remove();
     const newOrder = [...dmList.querySelectorAll('.dm-item')].map(el => el.dataset.code);
-    localStorage.setItem('haven_dm_order', JSON.stringify(newOrder));
-    localStorage.setItem('haven_dm_sort_mode', 'manual');
+    this._saveDmManualOrder(newOrder);
+    this._setDmSortMode('manual');
     dragSrc.classList.remove('ch-dragging');
     dragSrc = null;
     this._syncDmPinOrder?.(newOrder);

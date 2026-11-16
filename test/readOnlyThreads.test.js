@@ -57,7 +57,7 @@ test('a blocked thread send stops before reaching the server', () => {
   const { app } = makeApp();
   const toasts = [];
   let emitted = 0;
-  Object.assign(app, { _activeThreadParent: 7, _showToast: (m, k) => toasts.push([m, k]), socket: { emit: () => { emitted++; } } });
+  Object.assign(app, { _activeThreadParent: 7, _autoEmoteWords: (text) => text, _showToast: (m, k) => toasts.push([m, k]), socket: { emit: () => { emitted++; } } });
   app._sendThreadMessage();
   assert.equal(emitted, 0);
   assert.deepEqual(toasts, [['thread_runtime.read_only_no_replies', 'error']]);

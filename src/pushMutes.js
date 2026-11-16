@@ -15,14 +15,15 @@ const pingsEveryone = (text) => /(?<![\w@])@(everyone|here)\b/i.test(text);
 // (public/js/modules/app-server-mute.js):
 //   - a member they muted for themselves sends them none at all;
 //   - a muted server sends none except for DMs, and with "except @mentions"
-//     also for messages that mention them (or @everyone / @here).
+//     also for messages that mention them (or @everyone / @here) or reply
+//     to them.
 // Returns a Set of user ids to leave out.
-function quietRecipients(db, { channelId, senderUserId, messageContent }) {
+function quietRecipients(db, { channelId, senderUserId, messageContent, replyToUserId }) {
   const quiet = new Set();
   const isDm = !!(db.prepare('SELECT is_dm FROM channels WHERE id = ?').get(channelId) || {}).is_dm;
   const text = String(messageContent || '');
   const everyone = pingsEveryone(text);
-  const mentions = (u) => everyone || pingsName(text, u.username) || pingsName(text, u.display_name);
+  const mentions = (u) => everyone || u.user_id === Number(replyToUserId) || pingsName(text, u.username) || pingsName(text, u.display_name);
   const rows = db.prepare(`
     SELECT p.user_id, p.key, p.value, u.username, u.display_name
     FROM user_preferences p JOIN users u ON u.id = p.user_id

@@ -6,10 +6,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [4.29.0] - Unreleased
+## [4.30.0] - Unreleased
 
 ### Added
+- Mass-select in forums: a Select button on the forum toolbar and a Select entry in a topic's right-click menu pick topics for moving or deleting several at once, with Select all. Phone-width screens had no way into selection mode in a forum. Moving offers forums only and takes the topics' replies along. Thanks Amnibro (#5892).
+- A bell in the reply bar chooses whether your reply sends a push notification to the person you reply to (on by default, remembered on this device). With it on, a reply reaches them like an @mention would, including through a server muted with "except @mentions", and replies inside a thread now notify their author too. Thanks Bo0sted (#5891).
+- Merge a channel into another (admin, a channel's menu > Merge into…), for the duplicates a Ferry history import leaves next to channels copied by hand. The channel merged into keeps its name, settings, permissions and members; every message of the other moves into it in time order, threads and all, and the other is deleted. A Discord message that is in both (imported in one, relayed by Ferry in the other) is kept once, with its replies, reactions and pin. Messages that look re-posted by hand from Discord (the same text, posted later in Haven) are listed with both copies, and only the ticked ones go, leaving the Discord copy with its real author and time. Ferry links, webhooks, scheduled messages and role menus come along, a later history import lands in the merged channel, and people who were caught up stay caught up. Protected messages always stay.
 - Link previews fold themselves after the second one in a message, so a message with many links no longer fills the chat; the chevron on a folded card opens it (#5882). The Link Previews settings also have "Start link previews folded", which folds every card until you open it, on this device (#5883).
+- A switch for the mouse side buttons (Settings > Chat > Mouse side buttons go back and forward). Off, they do nothing in Haven, for people who use them as push to talk or a hotkey in another program (#5886).
+- Bots can edit their own messages: `PATCH /api/webhooks/<token>/messages/<message_id>` with the new `content`. For tools that mirror another service, so a changed comment is edited in place instead of deleted and posted again (asked for by Beef_Enthusiast). See the bot section of the guide.
+- Emote names keep their capitals (asked for by gitty323, #5895): upload `HOLY` and `holy` as two different emotes, as Twitch and 7TV do. `:holy:` still finds `HOLY` when there is no exact match, so older messages keep working. A new switch, Settings > Chat & media > Turn emote names into emotes when I send, is off by default. When it is on, a word you type that is exactly a custom emote's name, capitals included, is sent as that emote, with no colons or picker, in channels, threads and pop-out DMs. Code, links, mentions and slash commands are left alone. Server templates still export emote names in lowercase.
+- Sort your DMs: the new sort button in the Direct Messages header picks Latest message, Alphabetical or Manual order. Latest message moves a DM to the top as soon as someone writes in it, and is what a list you have not arranged by hand now uses. The pick and the order you arranged by hand now follow your account to every device, and pinned DMs stay on top whatever you choose. Picking Manual order for a list you have not arranged keeps it as it is shown. Recent Activity in Organize DMs did nothing before; it now sorts by the newest message (thanks Amnibro).
+
+### Fixed
+- A new forum post written while in a timeout vanished with only a few seconds of red notice, and nothing said how long the timeout would last. The title and text now come back to send later, and a notice above the message box shows the time left until the timeout ends.
+
+## [4.29.0] - 2026-11-14
+
+### Added
 - Call controls in fullscreen (thanks Roolk, #5849): mute, deafen, camera, screen share, call settings and leave stay on screen over a fullscreen camera or screen share, and a picker switches which stream is shown without leaving fullscreen.
 - Video players in chat have Theater (as wide as the chat) and Fullscreen buttons: YouTube cards, uploaded videos and videos in link previews.
 - Platform emoji built into Haven: Windows, Mac, iPhone, Android and Linux, under Platforms in the emoji picker. They work in messages, reactions and role menus.
@@ -19,8 +33,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Video tutorials: short how-to videos are linked from the website, the README and the setup guide, and are on YouTube and Rumble.
 - Mentions and replies: the @ button next to your name lists every message that @mentions you or replies to you, newest first, and clicking one jumps to it. A small count on the button shows how many you have not seen yet, including ones sent while you were away, and while it is above zero the @ takes the accent color and the count pulses gently (it stays still when reduced motion is on) (thanks broilpromptu). Typing `mentions:me` in search does the same and works with the other filters.
 - Click an @mention of a person in a message to open their profile card, the same card as clicking their name (#5878, asked for by birdcrazy).
-- A switch for the mouse side buttons (Settings > Chat > Mouse side buttons go back and forward). Off, they do nothing in Haven, for people who use them as push to talk or a hotkey in another program (#5886).
-- Bots can edit their own messages: `PATCH /api/webhooks/<token>/messages/<message_id>` with the new `content`. For tools that mirror another service, so a changed comment is edited in place instead of deleted and posted again (asked for by Beef_Enthusiast). See the bot section of the guide.
 - Blocked names (Settings > Admin > Who can sign up): words no username or display name may contain. Checked when someone signs up, joins as a guest or changes a display name, ignoring capitals, spaces, symbols, accents and look-alike numbers, so "B4d_W0rd" counts as "badword". Members who already have one are listed so the admin can deal with them. The admin is not held to the list.
 - Ferry carries reactions both ways (asked for by Raidenphantom). A reaction on Discord shows on the Haven copy with the person's Discord name, and a reaction in Haven makes the bridge bot react on Discord, once per emoji, since Discord only lets a bot react as itself. The bot needs Add Reactions in the channel; new invite links ask for it.
 - Default banner height and offset (Settings > Admin > Branding, asked for by MutantRabbit767): the admin sets how tall the server banner is and which part of it shows, for everyone. A member's own choice under Banner Display still wins on their device, and a new "Use the server's default" button there goes back to the admin's.
@@ -49,10 +61,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
 
 ### Fixed
-- A new forum post written while in a timeout vanished with only a few seconds of red notice, and nothing said how long the timeout would last. The title and text now come back to send later, and a notice above the message box shows the time left until the timeout ends.
+- The size menu on a link preview opened behind a thread, a forum topic or a pop-out DM, so the button seemed to do nothing there. It opens on top now, and has its border back.
 - The emoji picker for reactions could stay on screen with no way to close it: open it on a message, open the full list with its "...", then pick one of the quick emoji instead. It also goes away now when the thread or pop-out DM it was opened in closes.
 - When the server turned a reconnect away (too many connections from one address in a minute, or a passing server error), the app never tried again and stayed offline until it was reloaded. It now tries again after a few seconds, waiting longer each time (#5875).
 - On a phone, chat could go quiet after about a minute and stay that way until the page was reloaded, even though Haven still said it was connected (#5875). The link drops, the socket connects again, and the handshake succeeds, but the channel that was open never starts delivering messages. Haven now asks for that channel again and reloads the page if it stays silent. A reconnect from the same tab also closes the socket it replaced, so those do not pile up.
+- Uploaded .aac, .flac and .opus files were sent with old or missing file types (audio/x-aac, audio/x-flac, none for .opus). They now go out as audio/aac, audio/flac and audio/ogg, the names players check for.
 - Muting a sub-channel moved it to the bottom of the whole list, out of its category, so the category showed twice: once for its channels and again for its muted ones. A muted sub-channel now goes to the end of its own category (reported by Grester).
 - Right-clicking a forum in the channel list and choosing Mark as Read, or Mark everything as read, left the forum's dot on: its unread topics are counted apart from channel messages and were not being marked. Both now clear them (reported by Grester).
 - A message sent during a timeout was refused with a notice but the text was thrown away. It now goes back in the box (reported by Grester).
@@ -79,6 +92,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Opening a picture from an encrypted DM on a phone, in an installed app window or in the Android app showed a white page. It opens in Haven's own picture viewer there now (#5853).
 
 ### Security
+- Add all members (new in this version) could be used by a member with Invite Users on a hidden-code channel, or on a sub-channel of a private one, which put everyone on the server into it. Both are refused now, as inviting one person there already was, and guests are only added when the admin does it.
 - The libraries the backup zip writer leans on (glob and minimatch) are moved to their fixed versions. Haven never handed them anything a user typed, so this closes two Dependabot alerts rather than a hole anyone could use.
 
 ## [4.28.0] - 2026-11-06

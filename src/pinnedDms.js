@@ -9,15 +9,18 @@
 // kept, each once, at most MAX_PINNED_DMS of them.
 
 const MAX_PINNED_DMS = 50;
+// The order someone arranged their DMs in (preference dm_order), kept the
+// same way: a JSON list of their own DM codes.
+const MAX_DM_ORDER = 500;
 const CODE_RE = /^[A-Za-z0-9_-]{1,32}$/;
 
 // The cleaned list as JSON, or null when nothing in it can be kept (then
 // nothing is saved).
-function cleanPinnedDms(db, userId, raw) {
+function cleanDmCodes(db, userId, raw, max) {
   let list;
   try { list = JSON.parse(raw); } catch { return null; } // not JSON: refused
   if (!Array.isArray(list)) return null;
-  const wanted = [...new Set(list.filter(c => typeof c === 'string' && CODE_RE.test(c)))].slice(0, MAX_PINNED_DMS * 2);
+  const wanted = [...new Set(list.filter(c => typeof c === 'string' && CODE_RE.test(c)))].slice(0, max * 2);
   if (!wanted.length) return null;
   const postgres = db.kind === 'postgres';
   const rows = db.prepare(`
@@ -28,10 +31,17 @@ function cleanPinnedDms(db, userId, raw) {
   `).all(userId, ...(postgres ? [wanted] : []));
   const filter = memberships => {
     const mine = new Set(memberships.map(row => row.code));
-    const kept = wanted.filter(code => mine.has(code)).slice(0, MAX_PINNED_DMS);
+    const kept = wanted.filter(code => mine.has(code)).slice(0, max);
     return kept.length ? JSON.stringify(kept) : null;
   };
   return postgres ? rows.then(filter) : filter(rows);
 }
 
-module.exports = { cleanPinnedDms, MAX_PINNED_DMS };
+const cleanPinnedDms = (db, userId, raw) => cleanDmCodes(db, userId, raw, MAX_PINNED_DMS);
+const cleanDmOrder = (db, userId, raw) => cleanDmCodes(db, userId, raw, MAX_DM_ORDER);
+
+// How the rest of the DM list is sorted (preference dm_sort): newest message
+// first, by name, or the order the member arranged them in (dm_order).
+const DM_SORT_MODES = ['recent', 'alpha', 'manual'];
+
+module.exports = { cleanPinnedDms, cleanDmOrder, MAX_PINNED_DMS, MAX_DM_ORDER, DM_SORT_MODES };

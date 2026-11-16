@@ -26,7 +26,7 @@ function isKnownNamedEmoji(db, text) {
   if (!m) return false;
   const name = m[1].toLowerCase();
   if (BUILTIN_EMOJI_NAMES.has(name)) return true;
-  const row = db.prepare('SELECT 1 FROM custom_emojis WHERE name = ?').get(name);
+  const row = db.prepare('SELECT 1 FROM custom_emojis WHERE lower(name) = ?').get(name);
   return row && typeof row.then === 'function' ? row.then(Boolean) : !!row;
 }
 
