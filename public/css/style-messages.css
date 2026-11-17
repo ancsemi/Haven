@@ -1193,12 +1193,12 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
 }
 /* Blended in OKLCH where the browser can: around the color wheel rather
    than across it, so opposite colors (green to purple) stay vivid instead
-   of passing through gray, or brown in a plain blend. */
-@supports (background: linear-gradient(in oklch, red, blue)) {
-  .has-profile-theme {
-    --profile-theme-fade: linear-gradient(to bottom in oklch,
-      var(--profile-theme-top) var(--pt-top, 0%), var(--profile-theme-bottom));
-  }
+   of passing through gray, or brown in a plain blend. _applyProfileTheme
+   asks the browser and marks the card (data-fade), so the fade drawn is
+   always the one its glass was worked out for. */
+.has-profile-theme[data-fade="oklch"] {
+  --profile-theme-fade: linear-gradient(to bottom in oklch,
+    var(--profile-theme-top) var(--pt-top, 0%), var(--profile-theme-bottom));
 }
 .profile-popup.has-profile-theme {
   --pt-top: var(--profile-banner-height);

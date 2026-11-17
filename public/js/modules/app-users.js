@@ -796,30 +796,6 @@ _paintProfileBanner(el, hex) {
   else el.style.removeProperty('--profile-banner');
 },
 
-// Fade a profile card (or the Edit Profile preview) between the member's two
-// theme colors, top to bottom, or take the theme off (theme null). Below the
-// banner a frosted glass panel carries the text, in one color for the whole
-// card, picked with the glass to suit the colors (_profileThemeGlass).
-_applyProfileTheme(el, theme) {
-  if (!el) return;
-  const top = this._safeHexColor(theme?.top), bottom = this._safeHexColor(theme?.bottom);
-  if (!top || !bottom) {
-    el.classList.remove('has-profile-theme');
-    el.removeAttribute('data-ink');
-    for (const p of ['--profile-theme-top', '--profile-theme-bottom', '--profile-theme-glass']) el.style.removeProperty(p);
-    return;
-  }
-  // The fade is drawn in OKLCH where the browser can (the @supports rule in
-  // the stylesheet asks the same question), and in plain RGB where not.
-  const oklch = CSS.supports('background', 'linear-gradient(in oklch, red, blue)');
-  const { ink, alpha } = this._profileThemeGlass(top, bottom, oklch);
-  el.classList.add('has-profile-theme');
-  el.dataset.ink = ink;
-  el.style.setProperty('--profile-theme-top', top);
-  el.style.setProperty('--profile-theme-bottom', bottom);
-  el.style.setProperty('--profile-theme-glass', String(alpha));
-},
-
 // Put a banner picture in a profile banner, or take it out (url null). Only a
 // local /uploads/ path is used, and it goes in as an <img> src, never a CSS
 // url(), so nothing in it can be read as style. The owner's animation

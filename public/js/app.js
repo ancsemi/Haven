@@ -29,6 +29,7 @@ import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.25.26';
 import AttachmentMethods from './modules/app-attachments.js?v=4.26.17';
 import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.26.19';
 import BannerEditorMethods from './modules/app-banner-editor.js?v=4.26.19';
+import ProfileThemeMethods from './modules/app-profile-theme.js?v=4.26.21';
 import AppearanceMethods from './modules/app-appearance.js?v=4.22.9';
 import AccessibilityMethods from './modules/app-accessibility.js?v=4.22.3';
 import SoundMethods from './modules/app-sounds.js?v=4.25.21';
@@ -43,7 +44,7 @@ import MessageMethods  from './modules/app-messages.js?v=4.25.10';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.26.9';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.26.14';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.29';
-import UserMethods     from './modules/app-users.js?v=4.26.20';
+import UserMethods     from './modules/app-users.js?v=4.26.21';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
 import VoiceMethods    from './modules/app-voice.js?v=4.26.11';
 import ThemePickerMethods from './modules/app-theme-picker.js?v=4.25.30';
@@ -52,7 +53,7 @@ import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.24.20';
 import StreamTileMethods from './modules/app-stream-tiles.js?v=4.23.9';
 import MusicMethods from './modules/app-music.js?v=4.24.19';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
-import UtilityMethods  from './modules/app-utilities.js?v=4.26.20';
+import UtilityMethods  from './modules/app-utilities.js?v=4.26.21';
 import MessageContentMethods from './modules/app-message-content.js?v=4.26.18';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.25.2';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
@@ -574,6 +575,7 @@ Object.assign(HavenApp.prototype,
   AttachmentMethods,
   AvatarEditorMethods,
   BannerEditorMethods,
+  ProfileThemeMethods,
   AppearanceMethods,
   AccessibilityMethods,
   SoundMethods,

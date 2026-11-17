@@ -17,6 +17,55 @@ module.exports = function registerProfile(deps) {
     const n = parseInt(getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_avatar_mb'").get()?.value, 10);
     return n >= 1 && n <= 10 ? n : 2;
   };
+  // The checks every profile picture upload shares (avatars, banners,
+  // borders, bot and persona avatars), once multer has the file: under
+  // maxMb when the route has a limit, bytes that really are the image type
+  // claimed, and the extension that type should have. A failed check is
+  // answered here, the upload removed, and gives null; otherwise the name
+  // the file is kept under.
+  const keepImageUpload = (req, res, { maxMb = null, label = 'Image' } = {}) => {
+    const discard = () => { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } };
+    if (maxMb !== null && req.file.size > maxMb * 1024 * 1024) {
+      discard();
+      res.status(400).json({ error: `${label} must be under ${maxMb} MB` });
+      return null;
+    }
+    try {
+      const fd = fs.openSync(req.file.path, 'r');
+      const hdr = Buffer.alloc(12);
+      fs.readSync(fd, hdr, 0, 12, 0);
+      fs.closeSync(fd);
+      let validMagic = false;
+      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
+      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
+      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
+      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
+      if (!validMagic) {
+        discard();
+        res.status(400).json({ error: 'File content does not match image type' });
+        return null;
+      }
+    } catch {
+      discard();
+      res.status(400).json({ error: 'Failed to validate file' });
+      return null;
+    }
+    // Force safe extension
+    const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
+    const safeExt = mimeToExt[req.file.mimetype];
+    if (!safeExt) {
+      discard();
+      res.status(400).json({ error: 'Invalid file type' });
+      return null;
+    }
+    let finalName = req.file.filename;
+    if (path.extname(finalName).toLowerCase() !== safeExt) {
+      finalName = finalName.replace(/\.[^.]+$/, '') + safeExt;
+      fs.renameSync(req.file.path, path.join(uploadDir, finalName));
+    }
+    return finalName;
+  };
+
   // ── Avatar upload endpoint (saves to /uploads, updates DB) ──
   app.post('/api/upload-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
@@ -30,47 +79,8 @@ module.exports = function registerProfile(deps) {
     upload.single('avatar')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      const maxMb = avatarMaxMb();
-      if (req.file.size > maxMb * 1024 * 1024) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: `Avatar must be under ${maxMb} MB` });
-      }
-
-      // Validate file magic bytes
-      try {
-        const fd = fs.openSync(req.file.path, 'r');
-        const hdr = Buffer.alloc(12);
-        fs.readSync(fd, hdr, 0, 12, 0);
-        fs.closeSync(fd);
-        let validMagic = false;
-        if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-        else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-        else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-        else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-        if (!validMagic) {
-          fs.unlinkSync(req.file.path);
-          return res.status(400).json({ error: 'File content does not match image type' });
-        }
-      } catch {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Failed to validate file' });
-      }
-
-      // Force safe extension
-      const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-      const safeExt = mimeToExt[req.file.mimetype];
-      if (!safeExt) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'Invalid file type' });
-      }
-      const currentExt = path.extname(req.file.filename).toLowerCase();
-      let finalName = req.file.filename;
-      if (currentExt !== safeExt) {
-        finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        const oldPath = req.file.path;
-        const newPath = path.join(uploadDir, finalName);
-        fs.renameSync(oldPath, newPath);
-      }
+      const finalName = keepImageUpload(req, res, { maxMb: avatarMaxMb(), label: 'Avatar' });
+      if (!finalName) return;
       const avatarUrl = `/uploads/${finalName}`;
 
       recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
@@ -130,44 +140,8 @@ module.exports = function registerProfile(deps) {
     upload.single('banner')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      const maxMb = bannerMaxMb();
-      if (req.file.size > maxMb * 1024 * 1024) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: `Banner must be under ${maxMb} MB` });
-      }
-
-      // The bytes must be the image type claimed, not just the name
-      try {
-        const fd = fs.openSync(req.file.path, 'r');
-        const hdr = Buffer.alloc(12);
-        fs.readSync(fd, hdr, 0, 12, 0);
-        fs.closeSync(fd);
-        let validMagic = false;
-        if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-        else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-        else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-        else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-        if (!validMagic) {
-          fs.unlinkSync(req.file.path);
-          return res.status(400).json({ error: 'File content does not match image type' });
-        }
-      } catch {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Failed to validate file' });
-      }
-
-      // Force safe extension
-      const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-      const safeExt = mimeToExt[req.file.mimetype];
-      if (!safeExt) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'Invalid file type' });
-      }
-      let finalName = req.file.filename;
-      if (path.extname(finalName).toLowerCase() !== safeExt) {
-        finalName = finalName.replace(/\.[^.]+$/, '') + safeExt;
-        fs.renameSync(req.file.path, path.join(uploadDir, finalName));
-      }
+      const finalName = keepImageUpload(req, res, { maxMb: bannerMaxMb(), label: 'Banner' });
+      if (!finalName) return;
       const bannerUrl = `/uploads/${finalName}`;
 
       recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
@@ -217,47 +191,8 @@ module.exports = function registerProfile(deps) {
     upload.single('border')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      const maxMb = avatarMaxMb();
-      if (req.file.size > maxMb * 1024 * 1024) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: `Border must be under ${maxMb} MB` });
-      }
-
-      // Validate file magic bytes
-      try {
-        const fd = fs.openSync(req.file.path, 'r');
-        const hdr = Buffer.alloc(12);
-        fs.readSync(fd, hdr, 0, 12, 0);
-        fs.closeSync(fd);
-        let validMagic = false;
-        if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-        else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-        else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-        else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-        if (!validMagic) {
-          fs.unlinkSync(req.file.path);
-          return res.status(400).json({ error: 'File content does not match image type' });
-        }
-      } catch {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Failed to validate file' });
-      }
-
-      // Force safe extension
-      const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-      const safeExt = mimeToExt[req.file.mimetype];
-      if (!safeExt) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'Invalid file type' });
-      }
-      const currentExt = path.extname(req.file.filename).toLowerCase();
-      let finalName = req.file.filename;
-      if (currentExt !== safeExt) {
-        finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        const oldPath = req.file.path;
-        const newPath = path.join(uploadDir, finalName);
-        fs.renameSync(oldPath, newPath);
-      }
+      const finalName = keepImageUpload(req, res, { maxMb: avatarMaxMb(), label: 'Border' });
+      if (!finalName) return;
       const borderUrl = `/uploads/${finalName}`;
 
       // Update the user's border in the database
@@ -359,39 +294,8 @@ module.exports = function registerProfile(deps) {
     upload.single('avatar')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-      // Validate file magic bytes
-      try {
-        const fd = fs.openSync(req.file.path, 'r');
-        const hdr = Buffer.alloc(12);
-        fs.readSync(fd, hdr, 0, 12, 0);
-        fs.closeSync(fd);
-        let validMagic = false;
-        if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-        else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-        else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-        else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-        if (!validMagic) {
-          fs.unlinkSync(req.file.path);
-          return res.status(400).json({ error: 'File content does not match image type' });
-        }
-      } catch {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Failed to validate file' });
-      }
-
-      const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-      const safeExt = mimeToExt[req.file.mimetype];
-      if (!safeExt) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'Invalid file type' });
-      }
-      const currentExt = path.extname(req.file.filename).toLowerCase();
-      let finalName = req.file.filename;
-      if (currentExt !== safeExt) {
-        finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        fs.renameSync(req.file.path, path.join(uploadDir, finalName));
-      }
+      const finalName = keepImageUpload(req, res);
+      if (!finalName) return;
       const avatarUrl = `/uploads/${finalName}`;
 
       // Update the webhook's avatar in DB
@@ -552,41 +456,8 @@ module.exports = function registerProfile(deps) {
     upload.single('avatar')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      const maxMb = avatarMaxMb();
-      if (req.file.size > maxMb * 1024 * 1024) {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: `Avatar must be under ${maxMb} MB` });
-      }
-      try {
-        const fd = fs.openSync(req.file.path, 'r');
-        const hdr = Buffer.alloc(12);
-        fs.readSync(fd, hdr, 0, 12, 0);
-        fs.closeSync(fd);
-        let validMagic = false;
-        if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-        else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-        else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-        else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-        if (!validMagic) {
-          fs.unlinkSync(req.file.path);
-          return res.status(400).json({ error: 'File content does not match image type' });
-        }
-      } catch {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Failed to validate file' });
-      }
-      const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-      const safeExt = mimeToExt[req.file.mimetype];
-      if (!safeExt) {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Invalid file type' });
-      }
-      const currentExt = path.extname(req.file.filename).toLowerCase();
-      let finalName = req.file.filename;
-      if (currentExt !== safeExt) {
-        finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        fs.renameSync(req.file.path, path.join(uploadDir, finalName));
-      }
+      const finalName = keepImageUpload(req, res, { maxMb: avatarMaxMb(), label: 'Avatar' });
+      if (!finalName) return;
       const avatarUrl = `/uploads/${finalName}`;
       recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
 

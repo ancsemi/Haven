@@ -11,8 +11,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const Database = require('better-sqlite3');
 const { io } = require('socket.io-client');
 const { createHarness } = require('./socketServerHarness');
@@ -95,20 +95,11 @@ test('a half set or malformed theme in the database is never handed out', async 
   }
 });
 
-// The card's color math, taken from the client module as written.
-function clientMethod(name) {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'public/js/modules/app-utilities.js'), 'utf8');
-  const start = src.indexOf(`\n${name}(`);
-  assert.ok(start > 0, `${name} found`);
-  const open = start + name.length + 2, close = src.indexOf(') {\n', open);
-  return new Function(src.slice(open, close), src.slice(close + 3, src.indexOf('\n},', close)));
-}
-
-test('one text color on a glass panel reads at 4.5:1 or better over the whole fade, whatever the colors', () => {
-  // _profileThemeGlass calls the others through `this`, so give it them.
-  const methods = {};
-  for (const name of ['_profileThemeColorsAt', '_profileThemeInkNeeds', '_profileThemeGlass']) methods[name] = clientMethod(name);
-  const glassFor = (...args) => methods._profileThemeGlass.apply(methods, args);
+test('one text color on a glass panel reads at 4.5:1 or better over the whole fade, whatever the colors', async () => {
+  // The card's color math, from the browser module as it ships.
+  const modulePath = path.join(__dirname, '..', 'public/js/modules/app-profile-theme.js');
+  const theme = (await import(pathToFileURL(modulePath).href)).default;
+  const glassFor = (...args) => theme._profileThemeGlass(...args);
   const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
   const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
