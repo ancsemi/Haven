@@ -107,6 +107,98 @@ module.exports = function registerProfile(deps) {
     }
   });
 
+  // Banners have their own size limit (Settings, Uploads & Limits): they are
+  // wide, and animated ones get big. 1 to 20 MB, 5 MB by default.
+  const bannerMaxMb = () => {
+    const { getDb } = require('../database');
+    const n = parseInt(getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_banner_mb'").get()?.value, 10);
+    return n >= 1 && n <= 20 ? n : 5;
+  };
+
+  // ── Banner upload endpoint (mirrors avatar upload) ──
+  // A banner is part of who someone is, like their avatar, so it takes no
+  // permission beyond being signed in and not banned.
+  app.post('/api/upload-banner', uploadLimiter, uploadDiskGuard, (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    const user = token ? verifyToken(token) : null;
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { getDb } = require('../database');
+    const ban = getDb().prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
+    if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
+
+    upload.single('banner')(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message, code: err.code });
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+      const maxMb = bannerMaxMb();
+      if (req.file.size > maxMb * 1024 * 1024) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: `Banner must be under ${maxMb} MB` });
+      }
+
+      // The bytes must be the image type claimed, not just the name
+      try {
+        const fd = fs.openSync(req.file.path, 'r');
+        const hdr = Buffer.alloc(12);
+        fs.readSync(fd, hdr, 0, 12, 0);
+        fs.closeSync(fd);
+        let validMagic = false;
+        if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
+        else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
+        else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
+        else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
+        if (!validMagic) {
+          fs.unlinkSync(req.file.path);
+          return res.status(400).json({ error: 'File content does not match image type' });
+        }
+      } catch {
+        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
+        return res.status(400).json({ error: 'Failed to validate file' });
+      }
+
+      // Force safe extension
+      const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
+      const safeExt = mimeToExt[req.file.mimetype];
+      if (!safeExt) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: 'Invalid file type' });
+      }
+      let finalName = req.file.filename;
+      if (path.extname(finalName).toLowerCase() !== safeExt) {
+        finalName = finalName.replace(/\.[^.]+$/, '') + safeExt;
+        fs.renameSync(req.file.path, path.join(uploadDir, finalName));
+      }
+      const bannerUrl = `/uploads/${finalName}`;
+
+      recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
+
+      try {
+        getDb().prepare('UPDATE users SET banner = ? WHERE id = ?').run(bannerUrl, user.id);
+        console.log(`[Banner] ${user.username} uploaded banner: ${bannerUrl}`);
+      } catch (dbErr) {
+        console.error('Banner DB update error:', dbErr);
+        return res.status(500).json({ error: 'Failed to save banner' });
+      }
+
+      res.json({ url: bannerUrl });
+    });
+  });
+
+  // ── Banner remove endpoint ──
+  app.post('/api/remove-banner', express.json(), (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    const user = token ? verifyToken(token) : null;
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const { getDb } = require('../database');
+      getDb().prepare('UPDATE users SET banner = NULL WHERE id = ?').run(user.id);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('Banner remove error:', err);
+      res.status(500).json({ error: 'Failed to remove banner' });
+    }
+  });
+
   // ── Border upload endpoint (pfp overlay, mirrors avatar upload) ──
   app.post('/api/upload-border', uploadLimiter, uploadDiskGuard, (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];

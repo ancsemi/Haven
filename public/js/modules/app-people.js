@@ -279,6 +279,7 @@ _openRenameModal() {
   this._updateAvatarPreview();
   this._resetAvatarEditState();
   this._resetBorderEditState();
+  this._resetBannerEditState();
   // Sync shape picker buttons
   const picker = document.getElementById('avatar-shape-picker');
   if (picker) {

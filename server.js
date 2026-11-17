@@ -272,6 +272,7 @@ function relocateUnreferencedUploads(db, relPaths) {
   const protectedUrlReferences = db.prepare(`
     SELECT avatar AS reference FROM users WHERE avatar LIKE '%/uploads/%'
     UNION ALL SELECT border FROM users WHERE border LIKE '%/uploads/%'
+    UNION ALL SELECT banner FROM users WHERE banner LIKE '%/uploads/%'
     UNION ALL SELECT avatar FROM user_personas WHERE avatar LIKE '%/uploads/%'
     UNION ALL SELECT avatar_url FROM webhooks WHERE avatar_url LIKE '%/uploads/%'
     UNION ALL SELECT icon FROM roles WHERE icon LIKE '%/uploads/%'

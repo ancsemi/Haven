@@ -1379,6 +1379,9 @@ async _commitAvatarSettings() {
       localStorage.setItem('haven_user', JSON.stringify(this.user));
     }
 
+    // 2e. Banner picture: upload a new one, or remove the saved one
+    await this._commitBannerPicture();
+
     // 3. Save shape via HTTP
     if (this._pendingAvatarShape !== this._avatarShape) {
       const resp = await fetch('/api/set-avatar-shape', {

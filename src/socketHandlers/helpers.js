@@ -285,7 +285,8 @@ function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null 
   const inMessages = db.prepare('SELECT 1 FROM messages WHERE instr(content, ?) > 0 AND (id < ? OR is_archived = 1) LIMIT 1');
   const inProfiles = db.prepare(`
     SELECT 1 WHERE
-         EXISTS(SELECT 1 FROM users WHERE instr(COALESCE(avatar, ''), @p) > 0 OR instr(COALESCE(border, ''), @p) > 0)
+         EXISTS(SELECT 1 FROM users WHERE instr(COALESCE(avatar, ''), @p) > 0 OR instr(COALESCE(border, ''), @p) > 0
+                                       OR instr(COALESCE(banner, ''), @p) > 0)
       OR EXISTS(SELECT 1 FROM user_personas WHERE instr(COALESCE(avatar, ''), @p) > 0)
       OR EXISTS(SELECT 1 FROM webhooks WHERE instr(COALESCE(avatar_url, ''), @p) > 0)
       OR EXISTS(SELECT 1 FROM roles WHERE instr(COALESCE(icon, ''), @p) > 0)

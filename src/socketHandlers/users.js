@@ -300,7 +300,7 @@ module.exports = function register(socket, ctx) {
       const row = db.prepare(
         `SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
                 u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.status, u.status_text, u.bio, u.created_at,
-                u.banner_color, u.avatar_color,
+                u.banner_color, u.avatar_color, u.banner,
                 CASE WHEN u.birthday_hidden <> 0 OR u.birthday_hidden IS NULL THEN NULL
                      WHEN u.birthday_hide_year = 0 THEN u.birthday ELSE substr(u.birthday, 6) END as birthday
          FROM users u WHERE u.id = ?`
@@ -383,6 +383,9 @@ module.exports = function register(socket, ctx) {
         // null and the card uses the color of their name. Checked again on the
         // way out: it lands in a style attribute.
         bannerColor: cleanHexColor(row.banner_color) || (row.avatar ? cleanHexColor(row.avatar_color) : null),
+        // Banner picture: only ever a local /uploads/ path, so a card can't
+        // be pointed at an outside server to see who opens it.
+        banner: isValidUploadPath(row.banner) ? row.banner : null,
         // MM-DD, or YYYY-MM-DD when the owner turned off Hide birth year;
         // null while they hide their birthday.
         birthday: row.birthday || null,

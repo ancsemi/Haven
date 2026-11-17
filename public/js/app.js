@@ -4,9 +4,9 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.26.5';
+import SocketMethods   from './modules/app-socket.js?v=4.26.19';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.26.11';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.26.14';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.26.19';
 import UIBindMethods   from './modules/app-ui.js?v=4.26.17';
 import ComposerMethods from './modules/app-composer.js?v=4.25.26';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
@@ -15,7 +15,7 @@ import VoiceControlMethods from './modules/app-voice-controls.js?v=4.25.22';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.26.8';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.26.9';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.26.13';
-import PeopleMethods from './modules/app-people.js?v=4.25.28';
+import PeopleMethods from './modules/app-people.js?v=4.26.19';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.23.9';
 import AdminReauthMethods from './modules/app-admin-reauth.js?v=4.23.8';
@@ -27,7 +27,8 @@ import ImageZoomMethods from './modules/app-image-zoom.js?v=4.25.20';
 import MediaGridMethods from './modules/app-media-grid.js?v=4.26.17';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.25.26';
 import AttachmentMethods from './modules/app-attachments.js?v=4.26.17';
-import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.25.28';
+import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.26.19';
+import BannerEditorMethods from './modules/app-banner-editor.js?v=4.26.19';
 import AppearanceMethods from './modules/app-appearance.js?v=4.22.9';
 import AccessibilityMethods from './modules/app-accessibility.js?v=4.22.3';
 import SoundMethods from './modules/app-sounds.js?v=4.25.21';
@@ -42,7 +43,7 @@ import MessageMethods  from './modules/app-messages.js?v=4.25.10';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.26.9';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.26.14';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.29';
-import UserMethods     from './modules/app-users.js?v=4.25.8';
+import UserMethods     from './modules/app-users.js?v=4.26.19';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
 import VoiceMethods    from './modules/app-voice.js?v=4.26.11';
 import ThemePickerMethods from './modules/app-theme-picker.js?v=4.25.30';
@@ -51,12 +52,12 @@ import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.24.20';
 import StreamTileMethods from './modules/app-stream-tiles.js?v=4.23.9';
 import MusicMethods from './modules/app-music.js?v=4.24.19';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
-import UtilityMethods  from './modules/app-utilities.js?v=4.23.9';
+import UtilityMethods  from './modules/app-utilities.js?v=4.26.19';
 import MessageContentMethods from './modules/app-message-content.js?v=4.26.18';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.25.2';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
 import ThreadMethods from './modules/app-threads.js?v=4.25.10';
-import AdminMethods    from './modules/app-admin.js?v=4.26.6';
+import AdminMethods    from './modules/app-admin.js?v=4.26.19';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.23.7';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.26.12';
@@ -378,6 +379,7 @@ class HavenApp {
     
     // CRITICAL FIX: Run avatar setup first and use delegation to ensure listeners work
     this._setupAvatarUpload();
+    this._setupBannerEditor();
 
     this._setupSocketListeners();
     this._initLinkPolicy?.();
@@ -571,6 +573,7 @@ Object.assign(HavenApp.prototype,
   FeedAnchorMethods,
   AttachmentMethods,
   AvatarEditorMethods,
+  BannerEditorMethods,
   AppearanceMethods,
   AccessibilityMethods,
   SoundMethods,

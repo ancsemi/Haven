@@ -2204,7 +2204,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     try {
       // created_at feeds the automod new-account link gate (v3.42.0).
-      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio, banner_color, avatar_color FROM users WHERE id = ?').get(user.id);
+      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio, banner_color, avatar_color, banner FROM users WHERE id = ?').get(user.id);
       if (!uRow || uRow.username !== user.username) {
         return next(new Error('Session expired'));
       }
@@ -2228,6 +2228,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       socket.user.bio = uRow.bio || '';
       socket.user.bannerColor = cleanHexColor(uRow.banner_color);
       socket.user.avatarColor = uRow.avatar ? cleanHexColor(uRow.avatar_color) : null;
+      socket.user.banner = isValidUploadPath(uRow.banner) ? uRow.banner : null;
       // (#12) The client needs this to ask for the right secret: an SSO
       // account unlocks E2E with its encryption passphrase, not a password.
       socket.user.isSso = !!uRow.oidc_subject;
@@ -2430,6 +2431,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // whose color comes along so Edit Profile can preview it.
       bannerColor: socket.user.bannerColor || null,
       avatarColor: socket.user.avatarColor || null,
+      banner: socket.user.banner || null,
       birthday: socket.user.birthday || null,
       birthdaySetAt: socket.user.birthdaySetAt || null,
       birthdayHideYear: socket.user.birthdayHideYear !== false,

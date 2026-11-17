@@ -55,7 +55,7 @@ const SETTINGS = {
   member_visibility: E('all', 'online', 'none'), allow_self_purge: B, hide_disabled_channel_badges: B, guests_enabled: B, guests_allow_voice: B,
   media_group_layout: E(...MEDIA_GROUP_LAYOUTS),
   max_upload_mb: N(1, 102400), max_attachments: N(1, 50), max_poll_options: N(2, 25), max_message_chars: N(200, 100000), max_tags_per_attachment: N(1, 20),
-  max_tag_len: N(1, 50), max_sound_kb: N(256, 10240), max_avatar_mb: N(1, 10), max_emoji_kb: N(64, 1024), max_sticker_kb: N(256, 10240),
+  max_tag_len: N(1, 50), max_sound_kb: N(256, 10240), max_avatar_mb: N(1, 10), max_banner_mb: N(1, 20), max_emoji_kb: N(64, 1024), max_sticker_kb: N(256, 10240),
   role_icon_sidebar: B, role_icon_chat: B, role_icon_after_name: B, channel_sort_mode: E(...SORT_MODES), channel_cat_sort: E('az', 'za', 'manual'),
   channel_cat_order: F(jsonOf((o) => Array.isArray(o) && o.length <= LIMITS.categories && o.every((c) => label(c, 40)))),
   channel_tag_sorts: F(jsonOf((o) => isObj(o) && Object.keys(o).length <= LIMITS.categories && Object.entries(o).every(([k, v]) => label(k, 40) && SORT_MODES.includes(v)))),

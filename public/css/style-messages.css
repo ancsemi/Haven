@@ -407,6 +407,24 @@
   background: var(--bg-tertiary); cursor: pointer;
 }
 .banner-color-row .muted-text { opacity: 0.6; }
+/* With a picture the preview takes the card's 5:2 banner shape. */
+.edit-profile-banner-preview { position: relative; overflow: hidden; }
+.edit-profile-banner-preview.has-banner-image { height: auto; aspect-ratio: 5 / 2; }
+
+/* Banner crop: a 5:2 window the picture is dragged around in. */
+#banner-crop-modal .modal { width: min(92%, 34rem); }
+.banner-crop-frame {
+  position: relative; overflow: hidden;
+  width: 100%; aspect-ratio: 5 / 2;
+  border-radius: 0.375rem; border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  cursor: grab; touch-action: none; user-select: none;
+}
+.banner-crop-frame.dragging { cursor: grabbing; }
+.banner-crop-frame:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.banner-crop-frame img { position: absolute; max-width: none; pointer-events: none; }
+.banner-crop-zoom { margin-top: 0.75rem; gap: 0.75rem; }
+.banner-crop-zoom input[type="range"] { flex: 1; }
 
 /* Avatar Shape Classes: applied to .message-avatar and .message-avatar-img */
 .avatar-circle   { border-radius: 50% !important; }
@@ -1109,6 +1127,19 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
     color-mix(in srgb, var(--profile-banner, transparent) 60%, transparent),
     color-mix(in srgb, var(--profile-banner, transparent) 30%, transparent));
 }
+/* With a picture the banner is full height, 5:2 on the card (20rem wide),
+   and the color shows while it loads and through transparent parts. The
+   close button gets a backing so it reads on any picture. */
+.profile-popup-banner.has-banner-image { height: 8rem; overflow: hidden; }
+.profile-banner-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+.has-banner-image .profile-popup-close { z-index: 1; background: rgba(0, 0, 0, 0.45); color: #fff; }
+.has-banner-image .profile-popup-close:hover { background: rgba(0, 0, 0, 0.65); color: #fff; }
 
 .profile-popup-close {
   position: absolute;
