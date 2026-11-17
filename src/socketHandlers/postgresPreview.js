@@ -19,7 +19,7 @@ const { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS } = require('./settingEffects')
 const { compatibleThemeFiles, validatedThemeDefault, themePreferenceAllowed } = require('../themeMetadata');
 const { cleanChannelOrder, deletableKeys } = require('./users');
 const { cleanEmojiFavorites } = require('../builtinEmojis');
-const { cleanPinnedDms } = require('../pinnedDms');
+const { cleanPinnedDms, cleanDmOrder, DM_SORT_MODES } = require('../pinnedDms');
 const { savePreference, deletePreference } = require('../db/userPreferences');
 const writeAudit = require('../db/postgres/audit');
 const createEncryptionKeyReads = require('../db/encryptionKeys');
@@ -153,14 +153,16 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     });
     on('set-preference', async data => {
       const allowed = ['theme','hide_score_badge','hide_nsfw','effects','share_activity','share_game_activity','share_music_activity',
-        'promo_seen_desktop','promo_seen_android','recovery_notice_seen','android_banner_seen','timezone','time_format','channel_order','server_mute','muted_users','media_group_layout','emoji_favorites','pinned_dms'];
+        'promo_seen_desktop','promo_seen_android','recovery_notice_seen','android_banner_seen','timezone','time_format','channel_order','server_mute','muted_users','media_group_layout','emoji_favorites','pinned_dms','dm_sort','dm_order'];
       const key = typeof data?.key === 'string' ? data.key.trim() : '';
       const value = typeof data?.value === 'string' ? data.value.trim() : '';
-      const max = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : key === 'emoji_favorites' ? 1700 : key === 'pinned_dms' ? 4000 : key === 'theme' ? 200 : 50;
+      const max = key === 'effects' ? 400 : (key === 'channel_order' || key === 'dm_order') ? 20000 : key === 'muted_users' ? 6000 : key === 'emoji_favorites' ? 1700 : key === 'pinned_dms' ? 4000 : key === 'theme' ? 200 : 50;
       if (!allowed.includes(key) || !value || value.length > max) return;
-      if (key === 'pinned_dms') {
+      if (key === 'dm_sort' && !DM_SORT_MODES.includes(value)) return;
+      if (key === 'pinned_dms' || key === 'dm_order') {
+        const cleanDmList = key === 'pinned_dms' ? cleanPinnedDms : cleanDmOrder;
         const stored = await db.withTransaction(async tx => {
-          const clean = await cleanPinnedDms(tx, socket.user.id, value);
+          const clean = await cleanDmList(tx, socket.user.id, value);
           if (clean) await savePreference(tx, socket.user.id, key, clean);
           return clean;
         });

@@ -17,6 +17,7 @@ const { spawn } = require('node:child_process');
 const { setTimeout: wait } = require('node:timers/promises');
 const jwt = require('jsonwebtoken');
 const { io } = require('socket.io-client');
+const { sizeCeiling } = require('../src/messageLimits');
 const JWT_SECRET = 'postgres-app-test-secret';
 
 function packet(socket, event, matches = () => true) {
@@ -304,6 +305,64 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     assert.equal(refusals.length, 1);
     assert.match(refusals[0], /Slow mode/);
     assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM messages WHERE content LIKE 'slow mode %'").get()).n, 1);
+  });
+  await t.test('oversized sends are refused before channel access and flood accounting', async st => {
+    const actor = await fixtureAccount('MessageLimitSender');
+    const { socket } = await connect(actor.token);
+    const maxChars = 64;
+    const previous = await db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
+    st.after(async () => {
+      socket.disconnect();
+      if (previous) await setting('max_message_chars', previous.value);
+      else await db.prepare("DELETE FROM server_settings WHERE key = 'max_message_chars'").run();
+      await db.prepare('DELETE FROM channels WHERE is_dm = 1 AND created_by = ?').run(actor.id);
+    });
+    await setting('max_message_chars', String(maxChars));
+    const refuse = (code, content) => emit(socket, 'send-message', 'error-msg', { code, content });
+    const tooLong = 'Message too long (max 64 characters)';
+    const oversized = 'x'.repeat(sizeCeiling(maxChars) + 1);
+    for (let i = 0; i < 11; i++) assert.equal(await refuse('e0000000', oversized), tooLong);
+
+    await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(room.id, actor.id);
+    assert.equal(await refuse(room.code, 'x'.repeat(maxChars + 1)), tooLong);
+    const dm = await emit(socket, 'start-dm', 'dm-opened', { targetUserId: actor.id });
+    const cipher = JSON.stringify({ v: 1, iv: 'opaque-iv', ct: 'x'.repeat(maxChars * 2) });
+    const sent = await emit(socket, 'send-message', 'new-message', { code: dm.code, content: cipher });
+    assert.equal(sent.message.content, cipher);
+  });
+  await t.test('slow mode counts only committed room messages and thread replies', async st => {
+    const actor = await fixtureAccount('SlowModeSender');
+    const channel = await db.prepare("INSERT INTO channels (name, code, slow_mode_interval) VALUES ('Posting rollback', 'e8888888', 30) RETURNING id, code").get();
+    const { socket } = await connect(actor.token);
+    const peer = (await connect(actor.token)).socket;
+    st.after(async () => {
+      socket.disconnect();
+      peer.disconnect();
+      await db.exec('DROP TRIGGER IF EXISTS fail_preview_send_commit ON messages; DROP FUNCTION IF EXISTS fail_preview_send_commit()');
+      await db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
+    });
+    await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channel.id, actor.id);
+    const parent = await db.prepare("INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, 'Thread parent') RETURNING id")
+      .get(channel.id, adminAccount.user.id);
+    // Fail at COMMIT, after the insert and the other transaction queries ran.
+    await db.exec(`
+      CREATE FUNCTION fail_preview_send_commit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'test send rollback';
+      END;
+      $$;
+      CREATE CONSTRAINT TRIGGER fail_preview_send_commit
+      AFTER INSERT ON messages DEFERRABLE INITIALLY DEFERRED
+      FOR EACH ROW WHEN (NEW.content = 'fail this commit')
+      EXECUTE FUNCTION fail_preview_send_commit();
+    `);
+    const sendReply = content => socket.timeout(10000).emitWithAck('send-thread-message', { parentId: parent.id, content });
+    assert.equal(await emit(socket, 'send-message', 'error-msg', { code: channel.code, content: 'fail this commit' }), 'Could not complete the request');
+    assert.deepEqual(await sendReply('fail this commit'), { error: 'Failed to send thread message' });
+    assert.deepEqual(await sendReply('reply after rollback'), { success: true });
+    assert.match(await emit(peer, 'send-message', 'error-msg', { code: channel.code, content: 'wait after reply' }), /Slow mode/);
+    assert.deepEqual(await db.prepare('SELECT content, thread_id FROM messages WHERE channel_id = ? AND user_id = ?').all(channel.id, actor.id),
+      [{ content: 'reply after rollback', thread_id: parent.id }]);
   });
   await t.test('room threads open, deliver replies and restore their previews and read counts', async st => {
     const channel = await db.prepare("INSERT INTO channels (name, code) VALUES ('Room threads', 'e6666666') RETURNING id, code").get();
@@ -997,14 +1056,14 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     await Promise.all([drain(own), drain(other)]);
     assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'user_rename' AND actor_id IN (?, ?)").get(actor.id, peer.id)).n, 2);
   });
-  await t.test('nicknames and DM pins are private preferences that can be imported or cleared', async st => {
+  await t.test('nicknames and DM sidebar preferences are private and can be cleared', async st => {
     const actor = await fixtureAccount('profile_nicknames');
     const recipient = await fixtureAccount('nickname_recipient');
     const own = (await connect(actor.token)).socket;
     const other = (await connect(recipient.token)).socket;
     st.after(async () => {
       own.disconnect(); other.disconnect();
-      await db.prepare('DELETE FROM channels WHERE is_dm = 1 AND created_by = ?').run(actor.id);
+      await db.prepare('DELETE FROM channels WHERE is_dm = 1 AND created_by IN (?, ?)').run(actor.id, recipient.id);
     });
     const dm = await emit(own, 'start-dm', 'dm-opened', { targetUserId: recipient.id });
     const pins = JSON.stringify([room.code, dm.code, dm.code]);
@@ -1013,6 +1072,17 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     assert.equal((await emit(other, 'get-preferences', 'preferences')).pinned_dms, undefined);
     assert.deepEqual(await emit(own, 'delete-preference', 'preference-deleted', { key: 'pinned_dms' }), { key: 'pinned_dms' });
     assert.equal((await emit(own, 'get-preferences', 'preferences')).pinned_dms, undefined);
+
+    const self = await emit(own, 'start-dm', 'dm-opened', { targetUserId: actor.id });
+    const unshared = await emit(other, 'start-dm', 'dm-opened', { targetUserId: recipient.id });
+    const order = JSON.stringify([self.code, unshared.code, room.code, dm.code, self.code]);
+    const validOrder = JSON.stringify([self.code, dm.code]);
+    assert.deepEqual(await emit(own, 'set-preference', 'preference-saved', { key: 'dm_sort', value: 'alpha' }),
+      { key: 'dm_sort', value: 'alpha' });
+    assert.deepEqual(await emit(own, 'set-preference', 'preference-saved', { key: 'dm_order', value: order }),
+      { key: 'dm_order', value: validOrder });
+    own.emit('set-preference', { key: 'dm_sort', value: 'unknown' });
+    own.emit('set-preference', { key: 'dm_order', value: JSON.stringify([unshared.code]) });
 
     own.emit('set-nicknames-bulk', { nicknames: { [recipient.id]: '  A nickname  ', [adminAccount.user.id]: 'Another nickname' } });
     await drain(own);
@@ -1025,6 +1095,12 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     const reopened = await connect(actor.token);
     st.after(() => reopened.socket.disconnect());
     assert.deepEqual(reopened.session.nicknames, { [recipient.id]: 'Renamed locally' });
+    assert.deepEqual(await emit(reopened.socket, 'get-preferences', 'preferences'), { dm_sort: 'alpha', dm_order: validOrder });
+    assert.deepEqual(await emit(other, 'get-preferences', 'preferences'), {});
+    for (const key of ['dm_sort', 'dm_order']) {
+      assert.deepEqual(await emit(reopened.socket, 'delete-preference', 'preference-deleted', { key }), { key });
+    }
+    assert.deepEqual(await emit(own, 'get-preferences', 'preferences'), {});
     const otherSession = await connect(recipient.token);
     st.after(() => otherSession.socket.disconnect());
     assert.equal(otherSession.session.nicknames[actor.id], undefined);

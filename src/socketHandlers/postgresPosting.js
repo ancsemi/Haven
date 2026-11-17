@@ -3,7 +3,7 @@
 const { generateChannelCode } = require('../auth');
 const automod = require('../automod');
 const mediaGroup = require('../mediaGroup');
-const { looksEncrypted, isGroupEnvelope, sizeRefusal } = require('../messageLimits');
+const { looksEncrypted, isGroupEnvelope, sizeCeiling, sizeRefusal } = require('../messageLimits');
 const { takeSilent } = require('../silentMessages');
 const { parseSlash } = require('../slashParse');
 const { sanitizeText, stripRoleMentions, toReplyContext, utcStamp, NEW_DMS_PER_HOUR } = require('./helpers');
@@ -68,6 +68,7 @@ function dmPayload(channel, target, isSelfDm) {
 function createPostgresPosting(io, db, readPositions, channelMembers) {
   const floodTimes = new Map();
   const slowTimes = new Map();
+  const pendingPosts = new Map();
 
   function checkFlood(user) {
     if (user.isAdmin) return;
@@ -84,7 +85,24 @@ function createPostgresPosting(io, db, readPositions, channelMembers) {
     const now = Date.now();
     const remaining = Math.ceil(((slowTimes.get(key) || 0) + channel.slow_mode_interval * 1000 - now) / 1000);
     if (remaining > 0) throw new Error(`Slow mode: wait ${remaining}s before sending another message`);
-    slowTimes.set(key, now);
+    return key;
+  }
+
+  async function withPostingTransaction(user, write) {
+    // Room messages and thread replies share slow mode across a member's
+    // devices. Let the previous send commit or roll back before checking it.
+    const previous = pendingPosts.get(user.id) || Promise.resolve();
+    const current = previous.catch(() => { /* the previous caller handles its error */ }).then(async () => {
+      const result = await db.withTransaction(write);
+      if (result?.slowKey) slowTimes.set(result.slowKey, Date.now());
+      return result;
+    });
+    pendingPosts.set(user.id, current);
+    try {
+      return await current;
+    } finally {
+      if (pendingPosts.get(user.id) === current) pendingPosts.delete(user.id);
+    }
   }
 
   async function checkChannelPosting(tx, socket, channel, permissions, saved) {
@@ -179,9 +197,14 @@ function createPostgresPosting(io, db, readPositions, channelMembers) {
     const code = typeof data?.code === 'string' ? data.code.trim() : '';
     if (!/^[a-f0-9]{8}$/i.test(code) || typeof data.content !== 'string' || !data.content.trim()) return;
     const user = socket.user;
-    checkFlood(user);
     const picked = takeSilent(data.content, data.silent);
-    const result = await db.withTransaction(async tx => {
+    const limit = await db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
+    const maxChars = parseInt(limit?.value, 10) || 2000;
+    // The exact limit depends on the channel. Refuse anything past even the
+    // largest allowed envelope before taking room locks or a flood slot.
+    if (picked.content.length > sizeCeiling(maxChars)) throw new Error(`Message too long (max ${maxChars} characters)`);
+    checkFlood(user);
+    const result = await withPostingTransaction(user, async tx => {
       // Lock both rows through the insert. A removal or a change to the
       // channel's posting options cannot slip between the check and write.
       const channel = await tx.prepare(`
@@ -232,14 +255,14 @@ function createPostgresPosting(io, db, readPositions, channelMembers) {
           FOR SHARE OF m
         `).get(data.replyTo, channel.id);
       }
-      checkSlowMode(user, channel, level);
+      const slowKey = checkSlowMode(user, channel, level);
       const row = await insertMessage(tx, {
         channelId: channel.id, userId: user.id, content, replyTo: reply?.id ?? null,
         silent: picked.silent ? 1 : 0, breakChain,
       });
       const members = await channelMembers(tx, channel, permissions);
       return {
-        channelId: channel.id, memberIds: new Set(members.map(member => member.id)),
+        slowKey, channelId: channel.id, memberIds: new Set(members.map(member => member.id)),
         message: {
           id: row.lastInsertRowid, content, created_at: utcStamp(row.created_at),
           username: user.displayName, user_id: user.id,
@@ -265,8 +288,8 @@ function createPostgresPosting(io, db, readPositions, channelMembers) {
   }
 
   return {
-    send, startDm, checkFlood, checkSlowMode, checkChannelPosting, cleanRoomText,
-    close: () => { floodTimes.clear(); slowTimes.clear(); },
+    send, startDm, checkFlood, checkSlowMode, withPostingTransaction, checkChannelPosting, cleanRoomText,
+    close: () => { floodTimes.clear(); slowTimes.clear(); pendingPosts.clear(); },
   };
 }
 
