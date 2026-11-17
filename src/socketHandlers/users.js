@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform, cleanHexColor } = require('./helpers');
+const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme } = require('./helpers');
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 const { saveFcmToken } = require('../fcm');
@@ -300,7 +300,7 @@ module.exports = function register(socket, ctx) {
       const row = db.prepare(
         `SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
                 u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.status, u.status_text, u.bio, u.created_at,
-                u.banner_color, u.avatar_color, u.banner,
+                u.banner_color, u.avatar_color, u.banner, u.profile_theme_top, u.profile_theme_bottom,
                 CASE WHEN u.birthday_hidden <> 0 OR u.birthday_hidden IS NULL THEN NULL
                      WHEN u.birthday_hide_year = 0 THEN u.birthday ELSE substr(u.birthday, 6) END as birthday
          FROM users u WHERE u.id = ?`
@@ -386,6 +386,8 @@ module.exports = function register(socket, ctx) {
         // Banner picture: only ever a local /uploads/ path, so a card can't
         // be pointed at an outside server to see who opens it.
         banner: isValidUploadPath(row.banner) ? row.banner : null,
+        // The two colors the card fades between, or null for none.
+        profileTheme: cleanProfileTheme(row.profile_theme_top, row.profile_theme_bottom),
         // MM-DD, or YYYY-MM-DD when the owner turned off Hide birth year;
         // null while they hide their birthday.
         birthday: row.birthday || null,
@@ -429,6 +431,23 @@ module.exports = function register(socket, ctx) {
       socket.emit('banner-color-updated', { color });
     } catch (err) {
       console.error('Set banner color error:', err);
+    }
+  });
+
+  // Profile theme: two exact #rrggbb colors, top and bottom, or both null to
+  // turn it off. Anything else is refused.
+  socket.on('set-profile-theme', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const off = data.top === null && data.bottom === null;
+    const theme = off ? null : cleanProfileTheme(data.top, data.bottom);
+    if (!off && !theme) return socket.emit('error-msg', 'Invalid profile theme');
+    try {
+      db.prepare('UPDATE users SET profile_theme_top = ?, profile_theme_bottom = ? WHERE id = ?')
+        .run(theme?.top ?? null, theme?.bottom ?? null, socket.user.id);
+      socket.user.profileTheme = theme;
+      socket.emit('profile-theme-updated', { theme });
+    } catch (err) {
+      console.error('Set profile theme error:', err);
     }
   });
 

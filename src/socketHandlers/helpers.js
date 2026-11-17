@@ -184,6 +184,12 @@ function cleanHexColor(value) {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
 }
 
+// A profile theme from its two stored colors: both exact, or no theme at all.
+function cleanProfileTheme(top, bottom) {
+  const t = cleanHexColor(top), b = cleanHexColor(bottom);
+  return t && b ? { top: t, bottom: b } : null;
+}
+
 // All recognized role permissions. Any permission sent by a client that is not here is silently rejected.
 const VALID_ROLE_PERMS = [
   'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
@@ -346,7 +352,7 @@ function roleMenuContent(title, entries) {
 }
 module.exports = {
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
-  sanitizeBorderTransform, parseBorderTransform, cleanHexColor, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_MENU_EMOJI_RE, roleMenuContent,
+  sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_MENU_EMOJI_RE, roleMenuContent,
   normalizeWordGroups, validEscalation, filterIdleOnline,
   replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads,
   NEW_DMS_PER_HOUR,

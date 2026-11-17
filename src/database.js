@@ -688,6 +688,10 @@ function initDatabase() {
   addColumn('users', 'avatar_color', "TEXT DEFAULT NULL");
   // ── Migration: banner picture (an /uploads/ path), shown over the color.
   addColumn('users', 'banner', "TEXT DEFAULT NULL");
+  // ── Migration: profile theme, two colors the card fades between from top
+  // to bottom. Both set, or both NULL for no theme.
+  addColumn('users', 'profile_theme_top', "TEXT DEFAULT NULL");
+  addColumn('users', 'profile_theme_bottom', "TEXT DEFAULT NULL");
 
   // ── Migration: birthday (YYYY-MM-DD) and when it was set (ISO UTC).
   // A birthday is set once and never changes; birthday_hidden keeps it off

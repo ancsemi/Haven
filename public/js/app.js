@@ -4,9 +4,9 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.26.19';
+import SocketMethods   from './modules/app-socket.js?v=4.26.20';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.26.11';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.26.19';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.26.20';
 import UIBindMethods   from './modules/app-ui.js?v=4.26.17';
 import ComposerMethods from './modules/app-composer.js?v=4.25.26';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
@@ -15,7 +15,7 @@ import VoiceControlMethods from './modules/app-voice-controls.js?v=4.25.22';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.26.8';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.26.9';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.26.13';
-import PeopleMethods from './modules/app-people.js?v=4.26.19';
+import PeopleMethods from './modules/app-people.js?v=4.26.20';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.23.9';
 import AdminReauthMethods from './modules/app-admin-reauth.js?v=4.23.8';
@@ -43,7 +43,7 @@ import MessageMethods  from './modules/app-messages.js?v=4.25.10';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.26.9';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.26.14';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.29';
-import UserMethods     from './modules/app-users.js?v=4.26.19';
+import UserMethods     from './modules/app-users.js?v=4.26.20';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
 import VoiceMethods    from './modules/app-voice.js?v=4.26.11';
 import ThemePickerMethods from './modules/app-theme-picker.js?v=4.25.30';
@@ -52,7 +52,7 @@ import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.24.20';
 import StreamTileMethods from './modules/app-stream-tiles.js?v=4.23.9';
 import MusicMethods from './modules/app-music.js?v=4.24.19';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
-import UtilityMethods  from './modules/app-utilities.js?v=4.26.19';
+import UtilityMethods  from './modules/app-utilities.js?v=4.26.20';
 import MessageContentMethods from './modules/app-message-content.js?v=4.26.18';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.25.2';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
