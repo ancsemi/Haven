@@ -23,6 +23,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ### Fixed
 - A new forum post written while in a timeout vanished with only a few seconds of red notice, and nothing said how long the timeout would last. The title and text now come back to send later, and a notice above the message box shows the time left until the timeout ends.
 - A channel's right-click menu could open partly off the top of the screen, with its first items out of reach, when it fit neither below nor above the channel (most often in voice, where the menu is longer). It now stays on screen, and scrolls if the window is too short for all of it (reported by gitty).
+- In the Compact layout, the channel list shrank to a sliver on shorter windows when Join a Channel and Create Channel were showing, wherever they sat in the sidebar. Channels and Direct Messages now keep a usable height and the sidebar scrolls for the rest (reported by gitty).
 
 ## [4.29.0] - 2026-11-14
 
