@@ -176,6 +176,14 @@ function parseBorderTransform(str) {
   }
 }
 
+// Profile colors (the banner color a member picks, the one their avatar
+// gives) are drawn into style attributes on everyone's screen, so only an
+// exact #rrggbb is ever kept: no names, no rgb(), nothing a ; or ) can ride
+// in on. Anything else comes back null.
+function cleanHexColor(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
+}
+
 // All recognized role permissions. Any permission sent by a client that is not here is silently rejected.
 const VALID_ROLE_PERMS = [
   'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
@@ -337,7 +345,7 @@ function roleMenuContent(title, entries) {
 }
 module.exports = {
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
-  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_MENU_EMOJI_RE, roleMenuContent,
+  sanitizeBorderTransform, parseBorderTransform, cleanHexColor, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_MENU_EMOJI_RE, roleMenuContent,
   normalizeWordGroups, validEscalation, filterIdleOnline,
   replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads,
   NEW_DMS_PER_HOUR,

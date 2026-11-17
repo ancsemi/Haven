@@ -680,6 +680,12 @@ function initDatabase() {
   // ── Migration: bio column ─────────────────────────────────
   addColumn('users', 'bio', "TEXT DEFAULT ''");
 
+  // ── Migration: banner color the member picked, and the one their avatar
+  // gives (worked out by the client when it uploads the avatar). Both NULL
+  // means the card falls back to the color of their name.
+  addColumn('users', 'banner_color', "TEXT DEFAULT NULL");
+  addColumn('users', 'avatar_color', "TEXT DEFAULT NULL");
+
   // ── Migration: birthday (YYYY-MM-DD) and when it was set (ISO UTC).
   // A birthday is set once and never changes; birthday_hidden keeps it off
   // the profile and member lists without throwing the date away.

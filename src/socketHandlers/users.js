@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform } = require('./helpers');
+const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayName, sanitizeBorderTransform, parseBorderTransform, cleanHexColor } = require('./helpers');
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 const { saveFcmToken } = require('../fcm');
@@ -300,6 +300,7 @@ module.exports = function register(socket, ctx) {
       const row = db.prepare(
         `SELECT u.id, u.username, COALESCE(u.display_name, u.username) as displayName,
                 u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.status, u.status_text, u.bio, u.created_at,
+                u.banner_color, u.avatar_color,
                 CASE WHEN u.birthday_hidden <> 0 OR u.birthday_hidden IS NULL THEN NULL
                      WHEN u.birthday_hide_year = 0 THEN u.birthday ELSE substr(u.birthday, 6) END as birthday
          FROM users u WHERE u.id = ?`
@@ -378,6 +379,10 @@ module.exports = function register(socket, ctx) {
         status: hidden ? 'offline' : (row.status || 'online'),
         statusText: row.status_text || '',
         bio: row.bio || '',
+        // The banner color they picked, else the one their avatar gives, else
+        // null and the card uses the color of their name. Checked again on the
+        // way out: it lands in a style attribute.
+        bannerColor: cleanHexColor(row.banner_color) || (row.avatar ? cleanHexColor(row.avatar_color) : null),
         // MM-DD, or YYYY-MM-DD when the owner turned off Hide birth year;
         // null while they hide their birthday.
         birthday: row.birthday || null,
@@ -406,6 +411,21 @@ module.exports = function register(socket, ctx) {
       socket.emit('bio-updated', { bio });
     } catch (err) {
       console.error('Set bio error:', err);
+    }
+  });
+
+  // Banner color: an exact #rrggbb, or null to go back to the avatar's
+  // color. Anything else is refused rather than quietly reset.
+  socket.on('set-banner-color', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const color = data.color === null ? null : cleanHexColor(data.color);
+    if (data.color !== null && !color) return socket.emit('error-msg', 'Invalid banner color');
+    try {
+      db.prepare('UPDATE users SET banner_color = ? WHERE id = ?').run(color, socket.user.id);
+      socket.user.bannerColor = color;
+      socket.emit('banner-color-updated', { color });
+    } catch (err) {
+      console.error('Set banner color error:', err);
     }
   });
 

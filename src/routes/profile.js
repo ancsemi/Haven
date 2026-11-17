@@ -6,6 +6,7 @@ const path = require('path');
 const express = require('express');
 const { verifyToken } = require('../auth');
 const { sanitizeBorderTransform } = require('../socketHandlers');
+const { cleanHexColor } = require('../socketHandlers/helpers');
 
 module.exports = function registerProfile(deps) {
   const { uploadDiskGuard, app, recordUploadOwnership, verifyAdminFromDb, userHasPermission, uploadDir, upload, uploadLimiter } = deps;
@@ -74,10 +75,13 @@ module.exports = function registerProfile(deps) {
 
       recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
 
-      // Update the user's avatar in the database
+      // Update the user's avatar in the database, with the color the client
+      // sampled from it for the default banner. A missing or malformed color
+      // just leaves the banner on the name color.
+      const avatarColor = cleanHexColor(req.body?.avatarColor);
       try {
         const db = getDb();
-        db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(avatarUrl, user.id);
+        db.prepare('UPDATE users SET avatar = ?, avatar_color = ? WHERE id = ?').run(avatarUrl, avatarColor, user.id);
         console.log(`[Avatar] ${user.username} uploaded avatar: ${avatarUrl}`);
       } catch (dbErr) {
         console.error('Avatar DB update error:', dbErr);
@@ -95,7 +99,7 @@ module.exports = function registerProfile(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     try {
       const { getDb } = require('../database');
-      getDb().prepare('UPDATE users SET avatar = NULL WHERE id = ?').run(user.id);
+      getDb().prepare('UPDATE users SET avatar = NULL, avatar_color = NULL WHERE id = ?').run(user.id);
       res.json({ ok: true });
     } catch (err) {
       console.error('Avatar remove error:', err);

@@ -393,6 +393,21 @@
 .shape-hex      { clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
 .shape-diamond  { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
 
+/* Banner color in Edit Profile: a strip painted like the profile card's
+   banner, then the picker and Match avatar. */
+.edit-profile-banner-preview {
+  height: 2.5rem; border-radius: 0.375rem; margin-bottom: 0.5rem;
+  background-color: var(--bg-secondary); /* what the card's banner sits on */
+  border: 1px solid var(--border);
+}
+.banner-color-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.banner-color-row input[type="color"] {
+  width: 2.375rem; height: 2rem; padding: 0.125rem;
+  border: 1px solid var(--border); border-radius: 0.375rem;
+  background: var(--bg-tertiary); cursor: pointer;
+}
+.banner-color-row .muted-text { opacity: 0.6; }
+
 /* Avatar Shape Classes: applied to .message-avatar and .message-avatar-img */
 .avatar-circle   { border-radius: 50% !important; }
 .avatar-rounded  { border-radius: 0.375rem !important; }
@@ -1083,7 +1098,16 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
 .profile-popup-banner {
   height: 3.75rem;
   position: relative;
-  background: var(--bg-tertiary);
+}
+/* --profile-banner is the member's banner color (#rrggbb), set by
+   _paintProfileBanner, as a faint diagonal tint over the card. Being faint,
+   the theme still shows through, so the close button keeps its colors.
+   Themes can restyle the banner and still read the variable. */
+.profile-popup-banner,
+.edit-profile-banner-preview {
+  background-image: linear-gradient(135deg,
+    color-mix(in srgb, var(--profile-banner, transparent) 60%, transparent),
+    color-mix(in srgb, var(--profile-banner, transparent) 30%, transparent));
 }
 
 .profile-popup-close {

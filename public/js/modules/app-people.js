@@ -231,6 +231,19 @@ _bindPeople() {
     if (e.key === 'Enter') this._saveRename();
   });
 
+  // Banner color: picking one sets it, Match avatar goes back to following
+  // the avatar. Both wait for Save like the rest of Edit Profile.
+  document.getElementById('banner-color-input').addEventListener('input', (e) => {
+    this._pendingBannerColor = this._safeHexColor(e.target.value);
+    this._refreshBannerColorPreview();
+    this._markAvatarUnsaved();
+  });
+  document.getElementById('banner-color-auto-btn').addEventListener('click', () => {
+    this._pendingBannerColor = null;
+    this._refreshBannerColorPreview();
+    this._markAvatarUnsaved();
+  });
+
   document.getElementById('rename-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
       e.currentTarget.style.display = 'none';
@@ -259,6 +272,7 @@ _openRenameModal() {
   if (bioInput) bioInput.value = this.user.bio || '';
   this._bioOpened = bioInput ? bioInput.value : null;
   this._syncBirthdayEditor();
+  this._pendingBannerColor = this.user.bannerColor || null;
   // Load personas list (#86, #5349)
   this._loadPersonas?.();
   this._loadRoles(() => this._renderUserProfileGroupsList());
@@ -275,6 +289,7 @@ _openRenameModal() {
     this._pendingAvatarShape = currentShape;
   }
   this._applyAvatarPreviewShape?.();
+  this._refreshBannerColorPreview();
 },
 
 _saveRename() {
@@ -310,10 +325,31 @@ _saveRename() {
   if (birthday || hidden !== (this.user.birthdayHidden === true) || hideYear !== (this.user.birthdayHideYear !== false)) {
     this.socket.emit('set-birthday', birthday ? { birthday, hidden, hideYear } : { hidden, hideYear });
   }
+  if (this._pendingBannerColor !== (this.user.bannerColor || null)) {
+    this.socket.emit('set-banner-color', { color: this._pendingBannerColor });
+  }
   // Also commit any pending avatar and groups changes
   this._commitAvatarSettings();
   this._GroupManagerSaveGroups();
   document.getElementById('rename-modal').style.display = 'none';
+},
+
+// The banner preview in Edit Profile, painted the way the card will be: the
+// picked color, else the avatar's (a new picture is sampled first), else the
+// name color.
+async _refreshBannerColorPreview() {
+  const preview = document.getElementById('banner-color-preview');
+  if (!preview) return;
+  const run = (this._bannerPreviewRun = (this._bannerPreviewRun || 0) + 1);
+  const picked = this._pendingBannerColor || null;
+  const shown = picked || await this._pendingAvatarColor() || this._getUserColor(this.user.username);
+  // A newer change landed while a picture was being sampled; that one paints.
+  if (run !== this._bannerPreviewRun) return;
+  this._paintProfileBanner(preview, shown);
+  document.getElementById('banner-color-input').value = shown;
+  document.getElementById('banner-color-auto-btn').disabled = !picked;
+  document.getElementById('banner-color-note').textContent =
+    t(picked ? 'modals.edit_profile.banner_color_picked' : 'modals.edit_profile.banner_color_following');
 },
 
 // A birthday is set once and never changed, so the date field locks for good

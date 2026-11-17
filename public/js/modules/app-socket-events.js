@@ -365,6 +365,11 @@ _listenMessageChanges() {
     this._showToast(t('toasts.bio_updated'), 'success');
   });
 
+  this.socket.on('banner-color-updated', (data) => {
+    this.user.bannerColor = this._safeHexColor(data?.color);
+    localStorage.setItem('haven_user', JSON.stringify(this.user));
+  });
+
   this.socket.on('birthday-updated', (data) => {
     const wasHidden = this.user.birthdayHidden === true;
     this.user.birthday = data.birthday || null;
