@@ -617,10 +617,24 @@ _setupEmbedSizePicker() {
     const btn = e.target.closest('[data-embed-size]');
     if (btn) this._applyEmbedSize(btn.dataset.embedSize);
   });
+  const fold = document.getElementById('previews-folded-toggle');
+  if (!fold) return;
+  fold.checked = this._previewsStartFolded();
+  fold.addEventListener('change', () => {
+    this._startFolded = fold.checked;
+    try { localStorage.setItem('haven-previews-folded', String(fold.checked)); }
+    catch { /* private mode: the choice lasts until the page closes */ }
+    this.currentChannel && this.socket?.connected && this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
+  });
+},
+
+_previewsStartFolded() {
+  this._startFolded === undefined && (this._startFolded = localStorage.getItem('haven-previews-folded') === 'true');
+  return this._startFolded;
 },
 
 // Embed size is the single source of truth shared by the Settings picker and
-// the per-embed ⤢ toggle (see app-messages.js). Legacy values are migrated.
+// the per-embed size menu (see app-media-playback.js). Legacy values are migrated.
 _normalizeEmbedSize(mode) {
   mode = ({ normal: 'medium', large: 'full' })[mode] || mode;
   return ['full', 'medium', 'small', 'off'].includes(mode) ? mode : 'medium';
@@ -635,8 +649,8 @@ _applyEmbedSize(mode) {
   localStorage.setItem('haven-embed-size', mode);
   document.body.classList.remove('embed-size-off', 'embed-size-small', 'embed-size-medium', 'embed-size-full');
   document.body.classList.add(`embed-size-${mode}`);
-  const label = `⤢ ${t(`settings.embed_display.${mode}`)}`;
-  document.querySelectorAll('.lp-size').forEach(b => { b.textContent = label; });
+  const label = t(`settings.embed_display.${mode}`);
+  document.querySelectorAll('.lp-size-label').forEach(b => { b.textContent = label; });
   const picker = document.getElementById('embed-size-picker');
   if (picker) picker.querySelectorAll('[data-embed-size]').forEach(b => b.classList.toggle('active', b.dataset.embedSize === mode));
 },
@@ -667,14 +681,17 @@ _setupToolbarIconPicker() {
   const resetBtn = document.getElementById('toolbar-order-reset-btn');
   if (!picker) return;
 
-  const defaultOrder = ['react', 'reply', 'quote', 'thread', 'pin', 'archive', 'edit', 'delete'];
+  // The same keys, in the same order, as the toolbar itself (app-messages.js).
+  const defaultOrder = ['react', 'reply', 'quote', 'thread', 'copy-link', 'pin', 'archive', 'nsfw', 'edit', 'delete'];
   const actionLabels = {
     react: t('msg_toolbar.react'),
     reply: t('msg_toolbar.reply'),
     quote: t('msg_toolbar.quote'),
     thread: t('msg_toolbar.thread'),
+    'copy-link': t('msg_toolbar.copy_link'),
     pin: t('media_runtime.toolbar.pin'),
     archive: t('media_runtime.toolbar.protect'),
+    nsfw: t('msg_toolbar.mark_nsfw'),
     edit: t('msg_toolbar.edit'),
     delete: t('msg_toolbar.delete')
   };

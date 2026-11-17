@@ -230,7 +230,14 @@
   background: #000;
 }
 /* When a stream/webcam video is fullscreened, override tile constraints */
-video:fullscreen,
+video:fullscreen {
+  max-height: unset !important;
+  max-width: unset !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  background: #000;
+}
 video:-webkit-full-screen {
   max-height: unset !important;
   max-width: unset !important;
@@ -240,7 +247,15 @@ video:-webkit-full-screen {
   background: #000;
 }
 /* When the file-video wrapper is the fullscreen element, center the video */
-.file-video-wrap:fullscreen,
+.file-video-wrap:fullscreen {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #000 !important;
+  max-width: unset !important;
+  width: 100% !important;
+  height: 100% !important;
+}
 .file-video-wrap:-webkit-full-screen {
   display: flex !important;
   align-items: center !important;
@@ -250,7 +265,14 @@ video:-webkit-full-screen {
   width: 100% !important;
   height: 100% !important;
 }
-.file-video-wrap:fullscreen .file-video,
+.file-video-wrap:fullscreen .file-video {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  margin: 0 !important;
+}
 .file-video-wrap:-webkit-full-screen .file-video {
   max-width: 100% !important;
   max-height: 100% !important;
@@ -579,6 +601,51 @@ video:-webkit-full-screen {
   height: 100%;
   object-fit: contain;
   display: block;
+}
+/* A popped-out stream in fullscreen: its frame fills the screen and the
+   video fits inside it (app-stream-tiles.js, app-screen-webcam.js). */
+.stream-pip-video:fullscreen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+.stream-pip-video:-webkit-full-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+.stream-pip-video:fullscreen video {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+.stream-pip-video:-webkit-full-screen video {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+/* Haven Desktop fills the window with a class instead of real fullscreen. */
+.stream-pip-video.haven-manual-fullscreen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stream-pip-video.haven-manual-fullscreen video {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
 }
 
 /* Maximized state: fill the whole window so the stream can take up a full
@@ -1023,10 +1090,46 @@ video:-webkit-full-screen {
 
 .code-block pre {
   margin: 0;
-  padding: 0.625rem 0.75rem;
+  padding: 0.625rem 4.5rem 0.625rem 0.75rem;
   overflow-x: auto;
   font-size: 0.8125rem;
   line-height: 1.5;
+}
+
+.code-block-copy {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  z-index: 1;
+  padding: 0.125rem 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.625rem;
+  cursor: pointer;
+}
+
+.code-block-copy::after { content: attr(data-label); }
+
+.code-block.copy-button-shifted pre {
+  padding-left: 3rem;
+  padding-right: 0.75rem;
+}
+
+.code-block.copy-button-shifted .code-block-copy {
+  left: 8px;
+  right: auto;
+}
+
+.code-block-copy:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.code-block-copy:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .code-block code {
@@ -1039,7 +1142,7 @@ video:-webkit-full-screen {
 .code-block-lang {
   position: absolute;
   top: 4px;
-  right: 8px;
+  right: 4.25rem;
   font-size: 0.625rem;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -1170,8 +1273,10 @@ ul.chat-list { list-style-type: disc; }
   transition: background var(--transition);
 }
 
+/* Stays solid on hover, a shade toward the text colour, so the header's
+   buttons stay readable over a background picture. */
 .link-preview:hover {
-  background: rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--bg-tertiary) 94%, var(--text-primary));
 }
 
 .link-preview-image {
@@ -1274,8 +1379,9 @@ ul.chat-list { list-style-type: disc; }
 }
 .lp-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem 0.5rem;
 }
 .lp-site {
   flex: 1 1 auto;
@@ -1288,47 +1394,6 @@ ul.chat-list { list-style-type: disc; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.lp-size,
-.lp-collapse {
-  flex: 0 0 auto;
-  background: none;
-  border: 0;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-}
-/* A YouTube card's own volume (app-media-playback.js): YouTube's player
-   shows only a mute button on narrow and Shorts layouts. */
-.lp-volume {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.lp-volume input { width: 5rem; accent-color: var(--lp-accent, var(--accent)); cursor: pointer; }
-
-/* Keep playing pin (app-media-playback.js): faint until hovered or pinned,
-   and gone while pausing scrolled-away media is switched off. */
-.media-keep, .media-loop {
-  margin-left: 0.375rem; padding: 0 0.25rem; border: 1px solid transparent; border-radius: var(--radius-sm, 4px);
-  background: none; font-size: 0.8rem; line-height: 1.4; cursor: pointer; opacity: 0.35; filter: grayscale(1);
-  vertical-align: middle;
-}
-.media-keep:hover, .media-keep:focus-visible, .media-loop:hover, .media-loop:focus-visible { opacity: 0.85; }
-.media-keep[aria-pressed="true"], .media-loop[aria-pressed="true"] { opacity: 1; filter: none; border-color: var(--accent); }
-body.pause-offscreen-off .media-keep { display: none; }
-.lp-size:hover,
-.lp-collapse:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text-secondary);
 }
 .lp-content {
   display: flex;
@@ -1480,5 +1545,197 @@ body.pause-offscreen-off .media-keep { display: none; }
 
 .channel-topic-bar:hover {
   color: var(--text-primary);
+}
+
+/* Use the app state class: fullscreen can be native in browsers or manual in Desktop. */
+.webcam-tile.is-fullscreen,
+.screen-share-tile.is-fullscreen,
+.webcam-tile.haven-manual-fullscreen,
+.screen-share-tile.haven-manual-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: #000;
+  z-index: 10000;
+}
+.webcam-tile.is-fullscreen video,
+.screen-share-tile.is-fullscreen video,
+.webcam-tile.haven-manual-fullscreen video,
+.screen-share-tile.haven-manual-fullscreen video {
+  display: block !important;
+  flex: 1 1 auto;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  object-fit: contain;
+}
+.webcam-tile.is-fullscreen > .webcam-tile-label,
+.screen-share-tile.is-fullscreen > .screen-share-tile-label,
+.webcam-tile.haven-manual-fullscreen > .webcam-tile-label,
+.screen-share-tile.haven-manual-fullscreen > .screen-share-tile-label {
+  top: 1rem;
+  bottom: auto;
+  left: 1rem;
+  right: auto;
+  z-index: 11;
+}
+.webcam-tile.is-fullscreen > .stream-popout-btn,
+.webcam-tile.is-fullscreen > .stream-fullscreen-btn,
+.webcam-tile.is-fullscreen > .stream-minimize-btn,
+.webcam-tile.is-fullscreen > .stream-close-btn,
+.screen-share-tile.is-fullscreen > .stream-popout-btn,
+.screen-share-tile.is-fullscreen > .stream-fullscreen-btn,
+.screen-share-tile.is-fullscreen > .stream-minimize-btn,
+.screen-share-tile.is-fullscreen > .stream-close-btn,
+.webcam-tile.haven-manual-fullscreen > .stream-popout-btn,
+.webcam-tile.haven-manual-fullscreen > .stream-fullscreen-btn,
+.webcam-tile.haven-manual-fullscreen > .stream-minimize-btn,
+.webcam-tile.haven-manual-fullscreen > .stream-close-btn,
+.screen-share-tile.haven-manual-fullscreen > .stream-popout-btn,
+.screen-share-tile.haven-manual-fullscreen > .stream-fullscreen-btn,
+.screen-share-tile.haven-manual-fullscreen > .stream-minimize-btn,
+.screen-share-tile.haven-manual-fullscreen > .stream-close-btn,
+.screen-share-tile.is-fullscreen > .stream-audio-controls,
+.screen-share-tile.haven-manual-fullscreen > .stream-audio-controls {
+  display: none !important;
+}
+.fullscreen-call-toolbar:not([hidden]) {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  max-width: calc(100vw - 1.5rem);
+  box-sizing: border-box;
+  padding: 0.5rem;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 0.75rem;
+  color: #fff;
+  background: rgba(18, 20, 26, 0.88);
+  box-shadow: 0 0.5rem 1.75rem rgba(0,0,0,0.45);
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.fullscreen-call-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 0.625rem;
+  color: #fff;
+  background: rgba(255,255,255,0.12);
+  font-size: 1.125rem;
+  cursor: pointer;
+}
+.fullscreen-call-control:hover,
+.fullscreen-call-control:focus-visible { background: rgba(255,255,255,0.24); }
+.fullscreen-call-control:focus-visible,
+.fullscreen-stream-select:focus-visible,
+.fullscreen-device-select:focus-visible,
+.fullscreen-call-volume:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fullscreen-call-control:disabled { opacity: 0.45; cursor: not-allowed; }
+.fullscreen-call-control.muted,
+.fullscreen-call-control.deafened { background: #a8323e; }
+.fullscreen-call-control.sharing {
+  background: var(--success);
+  color: var(--success-text);
+}
+.fullscreen-call-control.fullscreen-call-leave {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  border: 1px solid var(--danger);
+  border-radius: 50%;
+  background: var(--danger);
+  color: var(--danger-text);
+}
+.fullscreen-call-control.fullscreen-call-leave:hover,
+.fullscreen-call-control.fullscreen-call-leave:focus-visible {
+  background: #d93636;
+  color: var(--danger-text);
+}
+.fullscreen-stream-select {
+  max-width: min(18rem, 32vw);
+  min-height: 2.75rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 0.625rem;
+  color: #fff;
+  background: #242832;
+  font-size: 0.875rem;
+}
+.fullscreen-audio-popover:not([hidden]) {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.625rem);
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr);
+  gap: 0.625rem;
+  width: min(19rem, calc(100vw - 2rem));
+  max-height: min(60vh, 28rem);
+  overflow: auto;
+  padding: 0.875rem;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 0.75rem;
+  color: #fff;
+  background: rgba(24, 27, 34, 0.97);
+  box-shadow: 0 0.5rem 1.75rem rgba(0,0,0,0.5);
+  text-align: left;
+}
+.fullscreen-audio-popover label {
+  display: grid;
+  gap: 0.25rem;
+  color: rgba(255,255,255,0.85);
+  font-size: 0.75rem;
+}
+.fullscreen-device-select {
+  width: 100%;
+  min-height: 2rem;
+  color: #fff;
+  background: #30343d;
+}
+.fullscreen-call-volume { width: 100%; }
+.fullscreen-controls-idle .fullscreen-call-toolbar:not(:focus-within) {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 0.75rem);
+}
+.fullscreen-controls-idle.fullscreen-popup-open .fullscreen-call-toolbar,
+.fullscreen-controls-idle .fullscreen-call-toolbar:hover,
+.fullscreen-controls-idle .fullscreen-call-toolbar:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%);
+}
+@media (max-width: 40rem) {
+  .fullscreen-call-toolbar:not([hidden]) { gap: 0.25rem; padding: 0.375rem; }
+  .fullscreen-call-control { min-width: 2.375rem; min-height: 2.375rem; font-size: 1rem; }
+  .fullscreen-stream-select { max-width: 34vw; min-height: 2.375rem; font-size: 0.75rem; }
 }
 

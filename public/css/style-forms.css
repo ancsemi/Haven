@@ -48,3 +48,34 @@
 }
 :where(input, textarea):where(:focus) { border-color: var(--accent); }
 :where(input, textarea)::placeholder { color: var(--text-muted); }
+
+/* A button labelled with a lone symbol (+, ×, ‹) shows a drawn icon instead
+   (js/modules/glyph-icons.js). It fills the same space the symbol did: its
+   width, and one line of the button's text, with the drawing in the middle. */
+.glyph-icon {
+  display: inline-block;
+  vertical-align: top;
+  width: 1em;
+  height: 1em;
+  margin-block: calc((1lh - 1em) / 2);
+  margin-inline: calc((var(--glyph-adv, 1em) - 1em) / 2);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+  pointer-events: none;
+}
+.glyph-icon circle { fill: currentColor; stroke: none; }
+.glyph-icon-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

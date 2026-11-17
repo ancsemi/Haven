@@ -78,7 +78,7 @@ function schedulePendingVoiceLeave({
 function clearChannelRuntimeState(state, code) {
   for (const name of [
     'channelUsers', 'voiceUsers', 'activeMusic', 'musicQueues',
-    'activeScreenSharers', 'activeScreenSessions', 'activeWebcamUsers',
+    'activeScreenSharers', 'activeScreenSessions', 'activeWebcamUsers', 'activeWebcamStreamIds',
   ]) {
     state[name]?.delete(code);
   }
@@ -193,7 +193,8 @@ function rotateLiveChannelState(io, state, channelId, oldCode, newCode) {
     state.musicQueues,
     state.activeScreenSharers,
     state.activeScreenSessions,
-    state.activeWebcamUsers
+    state.activeWebcamUsers,
+    state.activeWebcamStreamIds
   ]) migrateMapKey(map, oldCode, newCode);
 
   for (const [key, viewers] of Array.from(state.streamViewers.entries())) {

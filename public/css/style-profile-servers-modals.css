@@ -1057,7 +1057,8 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
 .embed-size-full .link-preview--rich .lp-image,
 .embed-size-full .link-preview--rich .lp-video { max-height: 32.5rem; }
 .embed-size-full .link-preview--rich .lp-text { -webkit-line-clamp: 14; }
-.embed-size-full .link-preview--yt .link-preview-yt { max-width: 30rem; }
+.embed-size-full .link-preview--yt { max-width: 48rem; }
+.embed-size-full .link-preview--yt .link-preview-yt { max-width: min(100%, calc((100vh - 13rem) * 16 / 9)); }
 
 .embed-size-medium .link-preview--rich .lp-media,
 .embed-size-medium .link-preview--rich .lp-video,
@@ -1065,7 +1066,7 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
 .embed-size-medium .link-preview--rich .lp-image,
 .embed-size-medium .link-preview--rich .lp-video { max-height: 18.75rem; }
 .embed-size-medium .link-preview--rich .lp-text { -webkit-line-clamp: 8; }
-.embed-size-medium .link-preview--yt .link-preview-yt { max-width: 23.75rem; }
+.embed-size-medium .link-preview--yt .link-preview-yt { max-width: 100%; }
 
 .embed-size-small .link-preview { max-width: 22.5rem; }
 .embed-size-small .link-preview--rich .lp-media,
@@ -1074,7 +1075,7 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
 .embed-size-small .link-preview--rich .lp-image,
 .embed-size-small .link-preview--rich .lp-video { max-height: 10rem; }
 .embed-size-small .link-preview--rich .lp-text { -webkit-line-clamp: 4; }
-.embed-size-small .link-preview--yt .link-preview-yt { max-width: 17.5rem; }
+.embed-size-small .link-preview--yt .link-preview-yt { max-width: 100%; }
 
 /* Image lightbox overlay */
 .image-lightbox {
@@ -1533,7 +1534,9 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
   box-shadow: 0 0 4px var(--accent-glow, rgba(124,92,252,0.3));
 }
 
-.select-row select {
+.select-row select,
+select.settings-select,
+.whitelist-add-row select {
   background: var(--bg-input);
   color: var(--text-primary);
   border: 1px solid var(--border);
@@ -1545,7 +1548,9 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
   outline: none;
 }
 
-.select-row select:focus { border-color: var(--accent); }
+.select-row select:focus,
+select.settings-select:focus,
+.whitelist-add-row select:focus { border-color: var(--accent); }
 
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

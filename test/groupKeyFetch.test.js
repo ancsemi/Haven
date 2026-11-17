@@ -136,7 +136,7 @@ test('opening a page of locked history asks for the group keys once', async () =
   const page = [...before, after];
   await d._decryptGroupMessages(page, { code: 'g1' });
   assert.equal(keyLookups(server), 1);
-  assert.equal(page.filter(m => m.content === 'groups.no_key').length, 50);
+  assert.equal(page.filter(m => m.content === 'groups.before_join').length, 50);
   assert.equal(page.at(-1).content, 'after');
   // Scrolling back or drawing the page again costs nothing more.
   await d._decryptGroupMessages(before.map(m => ({ ...m })), { code: 'g1' });
@@ -159,6 +159,16 @@ test('a key for a newer epoch than the app knows about is still fetched', async 
   assert.equal(r.ok, true);
   assert.equal(r.plaintext, 'epoch three');
   assert.equal(keyLookups(server), 1);
+});
+
+test('a missing key newer than the ones held reads as waiting, not as before joining', async () => {
+  const { server, a, d, after } = await lateJoiner(3);
+  assert.equal((await d._groupDecrypt('g1', after.content, 1)).ok, true);
+  await a._groupRotate('g1');
+  // Dave's copy of the new key has not been shared with him yet.
+  server.rows = server.rows.filter(r => !(r.recipientId === 4 && r.epoch === server.epoch));
+  const newer = await a._groupEncrypt('g1', 'epoch three');
+  assert.equal((await d._groupDecrypt('g1', newer, 1)).reason, 'no-key');
 });
 
 test('an unanswered lookup pauses the rest, then retries once and redraws', async () => {

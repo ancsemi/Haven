@@ -121,6 +121,7 @@ _bindAdminControls() {
   document.getElementById('view-all-members-btn').addEventListener('click', () => {
     this._openAllMembersModal();
   });
+  this._setupTransferAdminRow();
   document.getElementById('close-all-members-btn').addEventListener('click', () => {
     document.getElementById('all-members-modal').style.display = 'none';
   });
@@ -194,13 +195,13 @@ _bindAdminControls() {
   const getBackupIncludes = () => {
     return Array.from(document.querySelectorAll('.backup-include:checked')).map(el => el.value);
   };
-  document.getElementById('backup-download-btn')?.addEventListener('click', () => {
+  document.getElementById('backup-download-btn')?.addEventListener('click', async () => {
     const includes = getBackupIncludes();
     if (!includes.length) {
       return this._showToast(t('toasts.backup_pick_one'), 'error');
     }
     const heavy = includes.includes('messages') || includes.includes('files');
-    if (heavy && !confirm(t('confirm.backup_heavy'))) return;
+    if (heavy && !await this._confirm(t('confirm.backup_heavy'))) return;
     startBackupDownload(includes.join(','));
   });
   document.getElementById('backup-select-all-btn')?.addEventListener('click', () => {
@@ -230,7 +231,7 @@ _bindAdminControls() {
       const fileInput = document.getElementById('backup-restore-file');
       const file = fileInput?.files?.[0];
       if (!file) return this._showToast(t('toasts.backup_no_file'), 'error');
-      if (!confirm(t('confirm.backup_restore'))) return;
+      if (!await this._confirm(t('confirm.backup_restore'))) return;
       const token = localStorage.getItem('haven_token');
       if (!token) return this._showToast(t('toasts.not_logged_in'), 'error');
       const reauth = await this._askAdminReauth();
@@ -358,7 +359,7 @@ _bindAdminControls() {
       listEl.querySelectorAll('.auto-backup-del-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           const name = btn.dataset.name;
-          if (!confirm(t('settings.admin.auto_backup_delete_confirm', { name }))) return;
+          if (!await this._confirm(t('settings.admin.auto_backup_delete_confirm', { name }), { danger: true })) return;
           const r = await fetch(`/api/admin/auto-backups/${encodeURIComponent(name)}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` },
@@ -478,7 +479,7 @@ _bindAdminControls() {
       this._showToast?.(lastUpdateCheck.message || t('settings.admin.update_not_supported', { method: lastUpdateCheck.method }), 'info');
       return;
     }
-    if (!confirm(t('settings.admin.update_confirm', { version: lastUpdateCheck.latestVersion }))) return;
+    if (!await this._confirm(t('settings.admin.update_confirm', { version: lastUpdateCheck.latestVersion }))) return;
     const token = localStorage.getItem('haven_token');
     if (!token) return;
     // Visible status before the fetch so admins always see *something*
@@ -499,6 +500,21 @@ _bindAdminControls() {
       if (updRunBtn()) updRunBtn().disabled = true;
     } catch (err) {
       if (status) status.textContent = t('settings.admin.update_failed', { error: err.message });
+    }
+  });
+
+  // Shut down cleanly from here, for servers Ctrl+C can no longer reach.
+  document.getElementById('server-shutdown-btn')?.addEventListener('click', async () => {
+    if (!await this._confirm(t('settings.admin.shutdown_confirm'))) return;
+    const token = localStorage.getItem('haven_token');
+    if (!token) return;
+    try {
+      const r = await fetch('/api/admin/shutdown', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      this._showToast?.(t('settings.admin.shutdown_sent'), 'success');
+    } catch (err) {
+      this._showToast?.(t('settings.admin.update_failed', { error: err.message }), 'error');
     }
   });
 
@@ -560,8 +576,8 @@ _bindAdminControls() {
   document.getElementById('generate-server-code-btn')?.addEventListener('click', () => {
     this.socket.emit('generate-server-code');
   });
-  document.getElementById('clear-server-code-btn')?.addEventListener('click', () => {
-    if (!confirm(t('confirm.clear_invite_code'))) return;
+  document.getElementById('clear-server-code-btn')?.addEventListener('click', async () => {
+    if (!await this._confirm(t('confirm.clear_invite_code'))) return;
     this.socket.emit('clear-server-code');
   });
   document.getElementById('copy-server-code-btn')?.addEventListener('click', () => {
@@ -596,14 +612,20 @@ _bindAdminControls() {
       value: e.target.checked ? 'true' : 'false'
     });
   });
+  document.getElementById('automod-ai-enabled')?.addEventListener('change', (e) => {
+    this.socket.emit('update-server-setting', {
+      key: 'automod_ai_enabled',
+      value: e.target.checked ? 'true' : 'false'
+    });
+  });
   document.getElementById('test-connectivity-btn')?.addEventListener('click', () => {
     this._runConnectivityTest();
   });
   document.getElementById('generate-registration-token-btn')?.addEventListener('click', () => {
     this.socket.emit('generate-registration-token');
   });
-  document.getElementById('clear-registration-token-btn')?.addEventListener('click', () => {
-    if (!confirm(t('settings.admin.registration.clear_confirm'))) return;
+  document.getElementById('clear-registration-token-btn')?.addEventListener('click', async () => {
+    if (!await this._confirm(t('settings.admin.registration.clear_confirm'))) return;
     this.socket.emit('clear-registration-token');
   });
   document.getElementById('copy-registration-token-btn')?.addEventListener('click', async () => {
@@ -928,7 +950,7 @@ _bindAdminControls() {
   });
 
   // One delegated handler for all per-card actions (the list re-renders often).
-  document.getElementById('invite-codes-list')?.addEventListener('click', (e) => {
+  document.getElementById('invite-codes-list')?.addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
     const card = e.target.closest('.invite-code-card');
@@ -963,7 +985,7 @@ _bindAdminControls() {
     } else if (act === 'toggle') {
       this.socket.emit('update-invite-code', { id, enabled: ic ? !ic.enabled : true });
     } else if (act === 'delete') {
-      if (confirm(t('settings.admin.invite_links.delete_confirm', { code: ic?.code || id }))) {
+      if (await this._confirm(t('settings.admin.invite_links.delete_confirm', { code: ic?.code || id }), { danger: true })) {
         this.socket.emit('delete-invite-code', { id });
       }
     } else if (act === 'edit') {
@@ -995,7 +1017,7 @@ _bindAdminControls() {
   // rather than polled, since the list is only interesting while you look at it.
   document.getElementById('revoke-sessions-btn')?.addEventListener('click', async () => {
     const status = document.getElementById('sessions-status');
-    const pw = prompt(t('settings.sessions_section.confirm_prompt'));
+    const pw = await this._showPromptModal(t('settings.sessions_section.title'), t('settings.sessions_section.confirm_prompt'), '', { password: true });
     if (pw === null) return;                       // cancelled
     if (!pw) { status.textContent = t('settings.sessions_section.need_password'); return; }
     status.classList.remove('error', 'success');

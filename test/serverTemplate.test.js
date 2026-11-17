@@ -74,8 +74,8 @@ test.after(() => {
   // antivirus); a leftover temp folder is not a failed test.
   try { fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch (err) { console.warn('[test] could not remove', ROOT, err.code); }
 });
-test('export keeps the layout and leaves out people, messages and secrets', () => {
-  const { template } = exported();
+test('export keeps the layout and leaves out people, messages and secrets', async () => {
+  const { template } = await exported();
   const json = JSON.stringify(template);
   assert.equal(template.format, 'haven-server-template');
   assert.equal(template.version, tpl.VERSION);
@@ -94,19 +94,19 @@ test('export keeps the layout and leaves out people, messages and secrets', () =
   const icon = Buffer.from(template.assets['icon.png'].data, 'base64');
   assert.ok(!icon.includes(Buffer.from(SECRET)), 'image metadata is stripped');
 });
-test('a fresh server built from the template exports the same template back', () => {
-  const { template } = exported();
+test('a fresh server built from the template exports the same template back', async () => {
+  const { template } = await exported();
   const v = tpl.validateTemplate(JSON.parse(JSON.stringify(template)));
   assert.ok(v.template, JSON.stringify(v.errors));
   const dst = dirs('dest');
   const db = freshDb('dest');
   const admin = db.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)').run('newadmin', 'x').lastInsertRowid;
-  const report = tpl.applyTemplate(db, v.template, { mode: 'replace', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  const report = await tpl.applyTemplate(db, v.template, { mode: 'replace', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
   assert.equal(report.created.channels.length, 7);
   assert.ok(report.created.roles.includes('Tester'));
   assert.equal(report.counts.posts, 2);
   assert.equal(report.counts.roleMenus, 1);
-  const again = tpl.exportTemplate(db, { uploadsDir: dst.uploads, themesDir: dst.themes, havenVersion: 'test' }).template;
+  const again = (await tpl.exportTemplate(db, { uploadsDir: dst.uploads, themesDir: dst.themes, havenVersion: 'test' })).template;
   const a = strip(template), b = strip(again);
   b.roles = b.roles.filter((r) => a.roles.some((x) => x.name === r.name));
   b.automodDomains = b.automodDomains.filter((d) => a.automodDomains.some((x) => x.domain === d.domain));
@@ -119,8 +119,8 @@ test('a fresh server built from the template exports the same template back', ()
   assert.match(token, /^[0-9a-f]{64}$/);
   db.close();
 });
-test('merge adds what is missing, leaves existing things alone and never deletes', () => {
-  const { template } = exported();
+test('merge adds what is missing, leaves existing things alone and never deletes', async () => {
+  const { template } = await exported();
   const v = tpl.validateTemplate(template).template;
   const dst = dirs('merge');
   const db = freshDb('merge');
@@ -128,7 +128,7 @@ test('merge adds what is missing, leaves existing things alone and never deletes
   db.prepare("INSERT INTO channels (name, code, topic, category, position) VALUES ('general', 'ffff0001', 'my own topic', 'Mine', 1)").run();
   db.prepare("INSERT INTO channels (name, code, position) VALUES ('keep-me', 'ffff0002', 2)").run();
   db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('server_name', 'Mine')").run();
-  const report = tpl.applyTemplate(db, v, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  const report = await tpl.applyTemplate(db, v, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
   const general = db.prepare("SELECT topic, category FROM channels WHERE name = 'general'").get();
   assert.deepEqual(general, { topic: 'my own topic', category: 'Mine' });
   assert.ok(db.prepare("SELECT 1 FROM channels WHERE name = 'keep-me'").get());
@@ -136,28 +136,29 @@ test('merge adds what is missing, leaves existing things alone and never deletes
   assert.deepEqual(report.existing.channels, ['general']);
   assert.ok(report.extra.channels.includes('keep-me'));
   assert.equal(report.created.channels.length, 6);
-  const second = tpl.applyTemplate(db, v, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  const second = await tpl.applyTemplate(db, v, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
   assert.equal(second.created.channels.length + second.created.roles.length + second.counts.posts + second.counts.roleMenus + second.created.webhooks.length, 0, 'applying twice changes nothing');
-  const replaced = tpl.applyTemplate(db, v, { mode: 'replace', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  const replaced = await tpl.applyTemplate(db, v, { mode: 'replace', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
   assert.deepEqual(db.prepare("SELECT topic, category FROM channels WHERE name = 'general'").get(), { topic: '', category: 'Talk' });
   assert.ok(db.prepare("SELECT 1 FROM channels WHERE name = 'keep-me'").get(), 'replace keeps channels outside the template');
   assert.ok(replaced.updated.settings.includes('server_name'));
   db.close();
 });
-test('a dry run changes nothing and writes no files', () => {
-  const v = tpl.validateTemplate(exported().template).template;
+test('a dry run changes nothing and writes no files', async () => {
+  const v = tpl.validateTemplate((await exported()).template).template;
   const dst = dirs('dry');
   const db = freshDb('dry');
   const before = db.prepare('SELECT (SELECT count(*) FROM channels) + (SELECT count(*) FROM roles) + (SELECT count(*) FROM server_settings) AS n').get().n;
-  const report = tpl.applyTemplate(db, v, { mode: 'replace', uploadsDir: dst.uploads, themesDir: dst.themes, dryRun: true });
+  const report = await tpl.applyTemplate(db, v, { mode: 'replace', uploadsDir: dst.uploads, themesDir: dst.themes, dryRun: true });
   assert.equal(report.created.channels.length, 7);
   assert.ok(report.created.files.length > 0);
   assert.equal(db.prepare('SELECT (SELECT count(*) FROM channels) + (SELECT count(*) FROM roles) + (SELECT count(*) FROM server_settings) AS n').get().n, before);
   assert.deepEqual(fs.readdirSync(dst.uploads), ['stickers']);
   db.close();
 });
-test('imports are checked strictly', () => {
-  const base = () => JSON.parse(JSON.stringify(exported().template));
+test('imports are checked strictly', async () => {
+  const once = (await exported()).template;
+  const base = () => JSON.parse(JSON.stringify(once));
   const bad = (mutate, pattern) => { const t = base(); mutate(t); const r = tpl.validateTemplate(t); assert.ok(r.errors, 'rejected'); assert.ok(r.errors.some((e) => pattern.test(e)), r.errors.join('\n')); };
   assert.deepEqual(tpl.validateTemplate({ format: 'something-else' }).errors, ['This is not a Haven server template']);
   bad((t) => { t.version = 99; }, /newer Haven/);
@@ -183,8 +184,8 @@ test('imports are checked strictly', () => {
   assert.ok(ok.warnings.some((w) => /turn_password/.test(w)));
   assert.equal(ok.template.channels[0].topic, 'Hello');
 });
-test('an older template\'s level thresholds become ticks on its roles, never admin-only ones', () => {
-  const t = JSON.parse(JSON.stringify(exported().template));
+test('an older template\'s level thresholds become ticks on its roles, never admin-only ones', async () => {
+  const t = JSON.parse(JSON.stringify((await exported()).template));
   assert.equal(t.server.settings.permission_thresholds, undefined, 'exports no longer carry thresholds');
   t.server.settings.permission_thresholds = JSON.stringify({ transfer_admin: 1, manage_server: 1, manage_roles: 1, pin_message: 10 });
   const v = tpl.validateTemplate(t);
@@ -197,7 +198,7 @@ test('an older template\'s level thresholds become ticks on its roles, never adm
   db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('permission_thresholds', '{}')").run();
   const roles = v.template.roles.filter((r) => r.scope === 'server' && r.level > 0 && !r.denied.includes('pin_message'));
   const ticked = new Map(roles.map((r) => [r.name, r.permissions.includes('pin_message')]));
-  tpl.applyTemplate(db, v.template, { mode: 'replace', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  await tpl.applyTemplate(db, v.template, { mode: 'replace', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
   const after = db.prepare("SELECT value FROM server_settings WHERE key = 'permission_thresholds'").get().value;
   assert.equal(after, '{}', 'the setting itself is not brought back');
   const has = (name, perm) => !!db.prepare('SELECT 1 FROM role_permissions rp JOIN roles r ON r.id = rp.role_id WHERE r.name = ? AND rp.permission = ? AND rp.allowed = 1').get(name, perm);
@@ -208,8 +209,8 @@ test('an older template\'s level thresholds become ticks on its roles, never adm
   }
   db.close();
 });
-test('a template cannot hand out power through roles, role menus or channel default roles', () => {
-  const { template } = exported();
+test('a template cannot hand out power through roles, role menus or channel default roles', async () => {
+  const { template } = await exported();
   assert.ok(!template.roles.some((r) => r.name === 'Admin'), 'the Admin role is never exported');
   const t = {
     format: 'haven-server-template', version: 1, meta: { name: 'Takeover' },
@@ -234,7 +235,7 @@ test('a template cannot hand out power through roles, role menus or channel defa
   const perms = (name) => db.prepare('SELECT rp.permission FROM role_permissions rp JOIN roles r ON r.id = rp.role_id WHERE r.name = ? AND rp.allowed = 1 ORDER BY rp.permission').all(name).map((x) => x.permission);
   const adminBefore = perms('Admin');
   const memberBefore = perms('Member');
-  const report = tpl.applyTemplate(db, v.template, { mode: 'replace', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  const report = await tpl.applyTemplate(db, v.template, { mode: 'replace', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
   assert.deepEqual(perms('Admin'), adminBefore, 'the Admin role is left alone');
   assert.equal(db.prepare("SELECT level FROM roles WHERE name = 'Admin'").get().level, 99);
   assert.deepEqual(perms('Member'), memberBefore, 'the role every member gets is not given more power');
@@ -251,8 +252,8 @@ test('a template cannot hand out power through roles, role menus or channel defa
   }
   db.close();
 });
-test('role menus are posted with the standard text, never text from the file', () => {
-  assert.equal(exported().template.roleMenus[0].content, undefined, 'menu text is not exported');
+test('role menus are posted with the standard text, never text from the file', async () => {
+  assert.equal((await exported()).template.roleMenus[0].content, undefined, 'menu text is not exported');
   const t = () => ({
     format: 'haven-server-template', version: 1, meta: { name: 'Menus' }, server: { settings: {} },
     roles: [{ ref: 'fun', name: 'Fun', level: 1 }, { ref: 'art', name: 'Art', level: 1 }],
@@ -264,7 +265,7 @@ test('role menus are posted with the standard text, never text from the file', (
   const dst = dirs('menus');
   const db = freshDb('menus');
   const admin = db.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)').run('a', 'x').lastInsertRowid;
-  tpl.applyTemplate(db, v.template, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  await tpl.applyTemplate(db, v.template, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
   const posted = db.prepare('SELECT m.content FROM role_menus rm JOIN messages m ON m.id = rm.message_id').get().content;
   assert.equal(posted, '🎭 Pick\n🎉  Fun\n🎨  Art');
   db.close();
@@ -274,7 +275,7 @@ test('role menus are posted with the standard text, never text from the file', (
   bad((m) => { m.roles[1].emoji = '🎉'; }, /twice/);
   bad((m) => { m.roles[1].role = 'fun'; }, /twice/);
 });
-test('a server with names saved under older rules still exports a file its own import accepts', () => {
+test('a server with names saved under older rules still exports a file its own import accepts', async () => {
   const from = dirs('legacy');
   const db = freshDb('legacy');
   const q = (sql, ...args) => db.prepare(sql).run(...args);
@@ -297,7 +298,7 @@ test('a server with names saved under older rules still exports a file its own i
   q("INSERT OR REPLACE INTO automod_domains (domain, mode, include_subdomains, note, added_by) VALUES ('not a domain', 'deny', 1, '', ?)", admin);
   fs.writeFileSync(path.join(from.uploads, 'party.png'), png([1, 2, 3]));
   q('INSERT INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)', 'Party Time!', 'party.png', admin);
-  const first = tpl.exportTemplate(db, { uploadsDir: from.uploads, themesDir: from.themes });
+  const first = await tpl.exportTemplate(db, { uploadsDir: from.uploads, themesDir: from.themes });
   const v = tpl.validateTemplate(JSON.parse(JSON.stringify(first.template)));
   assert.ok(v.template, (v.errors || []).join('\n'));
   const names = first.template.channels.map((c) => c.name);
@@ -312,14 +313,14 @@ test('a server with names saved under older rules still exports a file its own i
   const to = dirs('legacy-copy');
   const copy = freshDb('legacy-copy');
   const copyAdmin = copy.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)').run('a', 'x').lastInsertRowid;
-  tpl.applyTemplate(copy, v.template, { mode: 'replace', actorId: copyAdmin, uploadsDir: to.uploads, themesDir: to.themes });
-  const again = tpl.validateTemplate(JSON.parse(JSON.stringify(tpl.exportTemplate(copy, { uploadsDir: to.uploads, themesDir: to.themes }).template)));
+  await tpl.applyTemplate(copy, v.template, { mode: 'replace', actorId: copyAdmin, uploadsDir: to.uploads, themesDir: to.themes });
+  const again = tpl.validateTemplate(JSON.parse(JSON.stringify((await tpl.exportTemplate(copy, { uploadsDir: to.uploads, themesDir: to.themes })).template)));
   assert.ok(again.template, (again.errors || []).join('\n'));
   assert.deepEqual(again.template.channels.map((c) => c.name), v.template.channels.map((c) => c.name));
   db.close();
   copy.close();
 });
-test('template images keep to the emoji and sticker size limits and the disk headroom', () => {
+test('template images keep to the emoji and sticker size limits and the disk headroom', async () => {
   const small = png([1, 1, 1]);
   const big = Buffer.concat([small.subarray(0, small.length - 12), chunk('zzZz', Buffer.alloc(80 * 1024)), small.subarray(small.length - 12)]);
   const entry = (buf, kind = 'upload') => ({ kind, sha256: require('node:crypto').createHash('sha256').update(buf).digest('hex'), data: buf.toString('base64') });
@@ -334,10 +335,10 @@ test('template images keep to the emoji and sticker size limits and the disk hea
   const db = freshDb('images');
   const admin = db.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)').run('a', 'x').lastInsertRowid;
   db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('max_emoji_kb', '64')").run();
-  assert.throws(() => tpl.applyTemplate(db, v.template, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes, hasRoom: () => false }), { code: 'TEMPLATE_DISK_FULL' });
+  await assert.rejects(() => tpl.applyTemplate(db, v.template, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes, hasRoom: () => false }), { code: 'TEMPLATE_DISK_FULL' });
   assert.deepEqual(fs.readdirSync(dst.uploads), ['stickers'], 'nothing is written when the disk is low');
   assert.equal(db.prepare('SELECT count(*) AS n FROM custom_emojis').get().n, 0);
-  const report = tpl.applyTemplate(db, v.template, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
+  const report = await tpl.applyTemplate(db, v.template, { mode: 'merge', actorId: admin, uploadsDir: dst.uploads, themesDir: dst.themes });
   assert.deepEqual(report.created.emojis, ['small']);
   assert.ok(report.warnings.some((w) => /huge was left out/.test(w)));
   assert.deepEqual(fs.readdirSync(dst.uploads).filter((f) => f !== 'stickers').map((f) => f.replace(/-[0-9a-f]{10}/, '')), ['small.png'], 'only images the template uses are copied');

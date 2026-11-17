@@ -11,6 +11,7 @@ const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
 const privacyPass = require('../privacyPass');
+const storage = require('../storage');
 const { imageKey } = require('../badges');
 
 const MAX_BYTES = 256 * 1024;
@@ -30,9 +31,6 @@ module.exports = function registerBadgeRoutes(deps) {
   // Loaded here, not at the top, so the image check below can be tested on its own.
   const { verifyToken } = require('../auth');
   const BADGE_DIR = path.join(uploadDir, 'badges');
-  try { fs.mkdirSync(BADGE_DIR, { recursive: true }); } catch (err) {
-    console.error('[badges] Could not create the badge icon folder; icon uploads will fail:', err.message);
-  }
 
   const upload = multer({
     storage: privacyPass.diskStorage({
@@ -68,7 +66,7 @@ module.exports = function registerBadgeRoutes(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!mayUpload(user)) return res.status(403).json({ error: 'Requires admin or Manage Badges permission' });
 
-    upload.single('icon')(req, res, (err) => {
+    upload.single('icon')(req, res, async (err) => {
       if (err) {
         const message = err.code === 'LIMIT_FILE_SIZE' ? 'Badge icon must be under 256 KB' : err.message;
         return res.status(400).json({ error: message });
@@ -89,6 +87,7 @@ module.exports = function registerBadgeRoutes(deps) {
         discard(req.file);
         return res.status(400).json({ error: 'Invalid image' });
       }
+      try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       res.json({ path: `/uploads/badges/${req.file.filename}`, iconKey: imageKey(bytes) });
     });
   });

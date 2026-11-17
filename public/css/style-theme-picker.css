@@ -13,7 +13,12 @@
    their own; the effects and sliders under them stay put (.theme-popup-pinned). */
 .theme-popup { max-height: 70vh; flex-direction: column; overflow-y: auto; }
 .theme-popup > .theme-popup-header { flex: none; }
+/* Positioned so the hidden status line for screen readers (.tp-sr-only,
+   absolute) sits inside the gallery's own scroll. Placed against the popup
+   instead, it hung at the foot of the full theme list and gave the popup
+   twice its height in empty scroll (#5823). */
 .theme-popup > .theme-gallery {
+  position: relative;
   flex: 1 1 auto;
   min-height: 7rem;
   overflow-y: auto;

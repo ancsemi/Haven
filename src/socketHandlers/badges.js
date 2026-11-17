@@ -12,12 +12,12 @@
 //     the admin only when that role sits below them.
 //   - Every check that fails, or throws, refuses.
 
-const fs = require('fs');
 const path = require('path');
 const badges = require('../badges');
+const storage = require('../storage');
 
 module.exports = function register(socket, ctx) {
-  const { db, userHasPermission, getUserEffectiveLevel, logAudit, UPLOADS_DIR } = ctx;
+  const { db, userHasPermission, getUserEffectiveLevel, logAudit } = ctx;
   const audit = typeof logAudit === 'function' ? logAudit : () => {};
   const answer = (cb) => (typeof cb === 'function' ? cb : () => {});
 
@@ -61,22 +61,21 @@ module.exports = function register(socket, ctx) {
     return row ? row.name : null;
   };
 
-  // An uploaded icon no badge uses any more goes from disk.
-  const dropIconFile = (icon) => {
+  // An uploaded icon no badge uses any more goes from storage.
+  const dropIconFile = async (icon) => {
     if (!icon || !badges.ICON_PATH_RE.test(icon)) return;
     if (db.prepare("SELECT 1 FROM badges WHERE icon_type = 'image' AND icon = ?").get(icon)) return;
-    fs.unlink(path.join(UPLOADS_DIR, 'badges', path.basename(icon)), (err) => {
-      if (err && err.code !== 'ENOENT') console.warn('[badges] could not remove an unused icon:', err.code || err.message);
-    });
+    await storage.remove(`badges/${path.basename(icon)}`);
   };
 
   // The icon key for a checked badge, or the reason it cannot be used: the
   // uploaded file is gone, or another badge already shows this icon.
-  const keyFor = (b, current = null) => {
+  const keyFor = async (b, current = null) => {
     const same = current && current.icon_type === b.icon_type && current.icon === b.icon && current.icon_key;
-    const key = same ? current.icon_key : badges.iconKey(b.icon_type, b.icon, UPLOADS_DIR);
+    const key = same ? current.icon_key
+      : b.icon_type === 'image' ? await badges.imageIconKey(b.icon, storage) : badges.iconKey(b.icon_type, b.icon);
     if (!key) return { error: 'That uploaded icon is missing, upload it again' };
-    badges.fillImageKeys(db, UPLOADS_DIR);
+    await badges.fillImageKeys(db, storage);
     const other = badges.iconTakenBy(db, key, current ? current.id : null);
     if (other) return { error: `Another badge already uses this icon (${other.name})` };
     return { key };
@@ -102,7 +101,7 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  socket.on('create-badge', (data, callback) => {
+  socket.on('create-badge', async (data, callback) => {
     const cb = answer(callback);
     if (!canManage()) return cb({ error: 'You do not have permission to manage badges' });
     try {
@@ -113,7 +112,7 @@ module.exports = function register(socket, ctx) {
       const b = read.badge;
       const refusal = roleRefusal(b.role_id);
       if (refusal) return cb({ error: refusal });
-      const icon = keyFor(b);
+      const icon = await keyFor(b);
       if (icon.error) return cb({ error: icon.error });
       const position = (db.prepare('SELECT MAX(position) AS p FROM badges').get().p ?? -1) + 1;
       const id = db.prepare(`INSERT INTO badges (name, description, icon_type, icon, icon_key, kind, threshold, role_id, enabled, position, created_by)
@@ -128,7 +127,7 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  socket.on('update-badge', (data, callback) => {
+  socket.on('update-badge', async (data, callback) => {
     const cb = answer(callback);
     if (!canManage()) return cb({ error: 'You do not have permission to manage badges' });
     try {
@@ -139,7 +138,7 @@ module.exports = function register(socket, ctx) {
       const b = read.badge;
       const refusal = roleRefusal(current.role_id) || roleRefusal(b.role_id);
       if (refusal) return cb({ error: refusal });
-      const icon = keyFor(b, current);
+      const icon = await keyFor(b, current);
       if (icon.error) return cb({ error: icon.error });
       // Hand-given copies only make sense on a hand-given badge.
       const dropHolders = current.kind === 'manual' && b.kind !== 'manual';
@@ -148,9 +147,10 @@ module.exports = function register(socket, ctx) {
           WHERE id = ?`).run(b.name, b.description, b.icon_type, b.icon, icon.key, b.kind, b.threshold, b.role_id, b.enabled, current.id);
         if (dropHolders) db.prepare('DELETE FROM user_badges WHERE badge_id = ?').run(current.id);
       })();
-      if (current.icon !== b.icon) dropIconFile(current.icon);
+      if (current.icon !== b.icon) await dropIconFile(current.icon);
       audit({ actor: socket.user, action: 'badge_update', target_type: 'badge', target_id: current.id, target_name: b.name,
-        details: { kind: b.kind, threshold: b.threshold, roleId: b.role_id, enabled: !!b.enabled, renamedFrom: current.name !== b.name ? current.name : null } });
+        details: { kind: b.kind, threshold: b.threshold, roleId: b.role_id, enabled: !!b.enabled, renamedFrom: current.name !== b.name ? current.name : null,
+          descriptionChanged: current.description !== b.description, iconChanged: current.icon !== b.icon, holdersRemoved: !!dropHolders } });
       cb(fullList());
     } catch (err) {
       console.error('[badges] update failed:', err.message);
@@ -158,7 +158,7 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  socket.on('delete-badge', (data, callback) => {
+  socket.on('delete-badge', async (data, callback) => {
     const cb = answer(callback);
     if (!canManage()) return cb({ error: 'You do not have permission to manage badges' });
     try {
@@ -167,7 +167,7 @@ module.exports = function register(socket, ctx) {
       const refusal = roleRefusal(current.role_id);
       if (refusal) return cb({ error: refusal });
       db.prepare('DELETE FROM badges WHERE id = ?').run(current.id);
-      dropIconFile(current.icon);
+      await dropIconFile(current.icon);
       audit({ actor: socket.user, action: 'badge_delete', target_type: 'badge', target_id: current.id, target_name: current.name,
         details: { kind: current.kind } });
       cb(fullList());
@@ -269,8 +269,7 @@ module.exports = function register(socket, ctx) {
     try {
       const badge = badges.getBadge(db, data.badgeId);
       if (!badge) return cb({ error: 'Badge not found' });
-      if (data.hidden) db.prepare('INSERT OR IGNORE INTO badge_hidden (user_id, badge_id) VALUES (?, ?)').run(socket.user.id, badge.id);
-      else db.prepare('DELETE FROM badge_hidden WHERE user_id = ? AND badge_id = ?').run(socket.user.id, badge.id);
+      badges.setBadgeHidden(db, socket.user.id, badge.id, data.hidden);
       cb({ ok: true, hidden: data.hidden });
     } catch (err) {
       console.error('[badges] hide failed:', err.message);

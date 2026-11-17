@@ -1,37 +1,12 @@
 // ── Channel CRUD, sub-channels, settings, reordering, categories, DMs ──
-const fs = require('fs');
-const path = require('path');
-const { UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = require('../paths');
 
 const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
 const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
 
-function isSafeUploadRelPath(relPath) {
-  if (typeof relPath !== 'string' || !relPath) return false;
-  if (!/^((?!\.\.)(?!\.\/)(?!\/)[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+$/.test(relPath)) return false;
-  const parts = relPath.split('/');
-  if (parts.some(p => !p || p === '.' || p === '..')) return false;
-  return true;
-}
-
-function moveUploadToDeleted(relPath) {
-  if (!isSafeUploadRelPath(relPath)) return;
-  const src = path.join(UPLOADS_DIR, relPath);
-  if (!fs.existsSync(src)) return;
-  let stat;
-  try {
-    stat = fs.statSync(src);
-  } catch {
-    return;
-  }
-  if (!stat.isFile()) return;
-  const dst = path.join(DELETED_ATTACHMENTS_DIR, relPath);
-  try {
-    fs.mkdirSync(path.dirname(dst), { recursive: true });
-    fs.renameSync(src, dst);
-  } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
-}
+const storage = require('../storage');
+const { isSafeUploadRelPath } = storage;
 const { isString, isInt, releasableUploads, CHANNEL_NAME_RE, NEW_DMS_PER_HOUR } = require('./helpers');
+const { removeChannelMember } = require('../channelMemberRemoval');
 
 // The files the messages in these channels point at, kept per author, read
 // before the rows go. A file only goes with its own uploader's messages
@@ -58,21 +33,23 @@ function channelUploadsByAuthor(db, channelIds) {
 // After the delete: move out the files nothing else points at anymore. The
 // same file can be linked from more than one message (a copy pasted image
 // URL), so a file still used elsewhere stays. Mirrors auto-cleanup (#5423).
-function releaseChannelUploads(db, byAuthor, label) {
+async function releaseChannelUploads(db, byAuthor, label) {
   for (const [authorId, rels] of byAuthor) {
     try {
-      for (const rel of releasableUploads(db, [...rels], [authorId])) moveUploadToDeleted(rel);
+      for (const rel of releasableUploads(db, [...rels], [authorId])) await storage.softDelete(rel);
     } catch (err) { console.warn(`${label} attachment cleanup failed:`, err.message); /* the files stay in uploads/; nothing is lost */ }
   }
 }
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { reachableChannel } = require('./channelAccess');
 const protectedMessages = require('../protectedMessages');
+const channelTypes = require('../channelTypes');
+const directMessages = require('../db/directMessages');
 
 module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
-    broadcastChannelLists, getEnrichedChannels, emitOnlineUsers, emitDmPresence, resetPresenceSync,
+    broadcastChannelLists, getEnrichedChannels, getEnrichedChannelsAsync, emitOnlineUsers, emitDmPresence, resetPresenceSync,
     handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
     logAudit, fireWebhookEvent, enforceAutomod,
     rotateChannelCode, rotatePrivateCodesAfterRemoval, botAudioManager
@@ -86,6 +63,13 @@ module.exports = function register(socket, ctx) {
   // Existing conversations are not counted.
   const { channelUsers, voiceUsers, activeMusic, musicQueues } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
+  // One entry per changed channel setting: which setting, and what it is now.
+  const auditChannel = (channelId, setting, value) => {
+    const ch = db.prepare('SELECT name FROM channels WHERE id = ?').get(channelId);
+    _audit({ actor: socket.user, action: 'channel_setting_update',
+      target_type: 'channel', target_id: channelId, target_name: ch ? ch.name : null,
+      details: { setting, value } });
+  };
 
   // (#5389) Auto-grant a channel's default_role_id to a user when they join
   // or are added to that channel. No-op if the channel has no default role.
@@ -164,16 +148,22 @@ module.exports = function register(socket, ctx) {
     userHasPermission(socket.user.id, 'manage_sub_channels', parentId);
 
   // ── Get user's channels ─────────────────────────────────
-  socket.on('get-channels', () => {
-    const channels = getEnrichedChannels(
-      socket.user.id,
-      socket.user.isAdmin,
-      (room) => socket.join(room)
-    );
-    socket.emit('channels-list', channels);
-    // Now in every DM room: let partners know this user is here (#5574).
-    if (emitDmPresence) emitDmPresence(socket.user.id);
-    ctx.dmCalls?.snapshotFor(socket);
+  socket.on('get-channels', async () => {
+    try {
+      const joinRoom = (room) => socket.join(room);
+      // SQLite answers right here with no await, so channels-list keeps its
+      // place ahead of the other replies in the client's startup burst.
+      const channels = db.async?.kind === 'sqlite' || !getEnrichedChannelsAsync
+        ? getEnrichedChannels(socket.user.id, socket.user.isAdmin, joinRoom, null, true)
+        : await getEnrichedChannelsAsync(socket.user.id, socket.user.isAdmin, joinRoom, null, true);
+      socket.emit('channels-list', channels);
+      // Now in every DM room: let partners know this user is here (#5574).
+      if (emitDmPresence) emitDmPresence(socket.user.id);
+      ctx.dmCalls?.snapshotFor(socket);
+    } catch (err) {
+      console.error('Channel list failed:', err.message);
+      socket.emit('error-msg', 'Could not load channels');
+    }
   });
 
   // An Organize tag as stored: trimmed, at most 30 characters, null when
@@ -783,7 +773,7 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Delete channel ──────────────────────────────────────
-  socket.on('delete-channel', (data) => {
+  socket.on('delete-channel', async (data) => {
     if (!data || typeof data !== 'object') return;
     const delCode = typeof data.code === 'string' ? data.code.trim() : '';
     const delCh = delCode ? db.prepare('SELECT id, created_by, is_temp_voice FROM channels WHERE code = ?').get(delCode) : null;
@@ -843,7 +833,7 @@ module.exports = function register(socket, ctx) {
     for (const deletedCode of deletedCodes) botAudioManager?.stopChannel(deletedCode, 'channel-deleted');
     broadcastChannelLists();
 
-    releaseChannelUploads(db, doomedUploads, 'delete-channel');
+    await releaseChannelUploads(db, doomedUploads, 'delete-channel');
 
     for (const deletedCode of deletedCodes) {
       io.to(`channel:${deletedCode}`).to(`voice:${deletedCode}`).emit('channel-deleted', { code: deletedCode });
@@ -969,6 +959,9 @@ module.exports = function register(socket, ctx) {
       // (#5461) Give a non-admin sub-channel creator the configured creator
       // role too, scoped to the new sub-channel (top-level create already does).
       assignChannelCreatorRole(socket.user.id, result.lastInsertRowid);
+      _audit({ actor: socket.user, action: 'channel_create',
+        target_type: 'channel', target_id: result.lastInsertRowid, target_name: name,
+        details: { parent: parentChannel.name, isPrivate: !!isPrivate, temporary: !!expiresAt } });
 
       // (#5328) Inherit role-channel-access from the parent channel so that
       // roles configured to grant/revoke access on the parent automatically
@@ -1008,7 +1001,7 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  socket.on('delete-sub-channel', (data) => {
+  socket.on('delete-sub-channel', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
@@ -1047,7 +1040,7 @@ module.exports = function register(socket, ctx) {
       db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(channel.id);
       db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
-      releaseChannelUploads(db, doomedUploads, 'delete-sub-channel');
+      await releaseChannelUploads(db, doomedUploads, 'delete-sub-channel');
       botAudioManager?.stopChannel(code, 'channel-deleted');
       io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
       clearChannelRuntimeState(state, code);
@@ -1087,6 +1080,7 @@ module.exports = function register(socket, ctx) {
       db.prepare('UPDATE channels SET forum_tags = ? WHERE id = ?').run(tags.length ? JSON.stringify(tags) : null, channel.id);
       broadcastChannelLists();
       io.to(`channel:${code}`).emit('forum-tags-updated', { code, tags });
+      auditChannel(channel.id, 'forum_tags', tags.map(t => t.name));
     } catch (err) {
       console.error('set-forum-tags error:', err);
       socket.emit('error-msg', 'Failed to save forum tags');
@@ -1116,6 +1110,7 @@ module.exports = function register(socket, ctx) {
       db.prepare('UPDATE channels SET forum_layout = ? WHERE id = ?').run(JSON.stringify(layout), channel.id);
       broadcastChannelLists();
       io.to(`channel:${code}`).emit('forum-layout-updated', { code, layout });
+      auditChannel(channel.id, 'forum_layout', layout.locked ? `${view} (locked)` : view);
       cb({ success: true, layout });
     } catch (err) {
       console.error('set-forum-layout error:', err);
@@ -1147,6 +1142,11 @@ module.exports = function register(socket, ctx) {
 
     try {
       db.prepare(`UPDATE channels SET ${colName} = ? WHERE id = ?`).run(newVal, channel.id);
+      // Changing a function by hand takes the channel out of its type
+      // (src/channelTypes.js), so the type's icon stops showing for it.
+      if (channel.type_id && channelTypes.FUNCTIONS.includes(permission)) {
+        db.prepare('UPDATE channels SET type_id = NULL WHERE id = ?').run(channel.id);
+      }
       // Going private keeps everyone who is already in (#5563), but anyone
       // else who still has the room open on a socket is shown the door now
       // rather than on their next reconnect.
@@ -1177,6 +1177,7 @@ module.exports = function register(socket, ctx) {
       const labelMap = { streams: 'Screen sharing', music: 'Music sharing', media: 'Media uploads', voice: 'Voice chat', text: 'Text chat', read_only: 'Read-only mode', soundboard: 'Soundboard', forum: 'Forum mode', private: 'Private', nsfw: 'NSFW', reactions: 'Reactions', forum_blog: 'Blog mode', forum_blog_pics_only: 'Comments on pictures only' };
       broadcastChannelLists();
       io.to(`channel:${code}`).emit('channel-permission-updated', { code, permission, enabled: !!newVal });
+      auditChannel(channel.id, permission, !!newVal);
       socket.emit('toast', { message: `${labelMap[permission]} ${newVal ? 'enabled' : 'disabled'} for this channel`, type: 'success' });
     } catch (err) {
       console.error('Toggle permission error:', err);
@@ -1194,6 +1195,7 @@ module.exports = function register(socket, ctx) {
     const newVal = channel.cleanup_exempt ? 0 : 1;
     try {
       db.prepare('UPDATE channels SET cleanup_exempt = ? WHERE id = ?').run(newVal, channel.id);
+      auditChannel(channel.id, 'cleanup_exempt', !!newVal);
       broadcastChannelLists();
       socket.emit('toast', { message: newVal ? '🛡️ Channel exempt from auto-cleanup' : 'Cleanup protection removed', type: 'success' });
     } catch (err) {
@@ -1212,6 +1214,7 @@ module.exports = function register(socket, ctx) {
     const newVal = channel.show_welcome ? 0 : 1;
     try {
       db.prepare('UPDATE channels SET show_welcome = ? WHERE id = ?').run(newVal, channel.id);
+      auditChannel(channel.id, 'welcome_messages', !!newVal);
       broadcastChannelLists();
       socket.emit('toast', { message: newVal ? '👋 New-member welcome messages will post in this channel' : 'Welcome messages disabled for this channel', type: 'success' });
     } catch (err) {
@@ -1233,6 +1236,7 @@ module.exports = function register(socket, ctx) {
     if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to set slow mode');
     try {
       db.prepare('UPDATE channels SET slow_mode_interval = ? WHERE id = ?').run(interval, channel.id);
+      auditChannel(channel.id, 'slow_mode_seconds', interval);
       broadcastChannelLists();
       io.to(`channel:${code}`).emit('slow-mode-updated', { code, interval });
       socket.emit('toast', { message: interval > 0 ? `Slow mode set to ${interval}s` : 'Slow mode disabled', type: 'success' });
@@ -1355,6 +1359,7 @@ module.exports = function register(socket, ctx) {
     }
     try {
       db.prepare('UPDATE channels SET voice_user_limit = ? WHERE id = ?').run(normalizedLimit, channel.id);
+      auditChannel(channel.id, 'voice_user_limit', normalizedLimit);
       broadcastChannelLists();
       socket.emit('toast', { message: normalizedLimit >= 2 ? `👥 Voice limit set to ${normalizedLimit}` : '👥 Voice user limit removed', type: 'success' });
     } catch (err) {
@@ -1379,6 +1384,7 @@ module.exports = function register(socket, ctx) {
     }
     try {
       db.prepare('UPDATE channels SET voice_bitrate = ? WHERE id = ?').run(bitrate, channel.id);
+      auditChannel(channel.id, 'voice_bitrate', bitrate);
       broadcastChannelLists();
       io.to(`voice:${code}`).emit('voice-bitrate-updated', { code, bitrate });
       socket.emit('toast', { message: bitrate > 0 ? `🎙️ Voice bitrate set to ${bitrate} kbps` : '🎙️ Voice bitrate set to auto', type: 'success' });
@@ -1422,6 +1428,7 @@ module.exports = function register(socket, ctx) {
       db.prepare(
         'UPDATE channels SET expires_at = ?, auto_delete_mode = ?, auto_delete_interval_hours = ? WHERE id = ?'
       ).run(expiresAt, mode, intervalHours, channel.id);
+      auditChannel(channel.id, 'self_destruct', expiresAt ? `${mode} at ${expiresAt}` : 'off');
       broadcastChannelLists();
       if (expiresAt) {
         const hours = Math.round((new Date(expiresAt) - Date.now()) / 3600000);
@@ -1503,6 +1510,7 @@ module.exports = function register(socket, ctx) {
     }
     try {
       db.prepare('UPDATE channels SET notification_type = ? WHERE id = ?').run(type, channel.id);
+      auditChannel(channel.id, 'notification_type', type);
       broadcastChannelLists();
       const labels = { default: '🔔 Channel notifications reset to default', announcement: '📢 Channel set to announcement mode' };
       socket.emit('toast', { message: labels[type], type: 'success' });
@@ -1534,6 +1542,7 @@ module.exports = function register(socket, ctx) {
     try {
       db.prepare('UPDATE channels SET afk_sub_code = ?, afk_timeout_minutes = ? WHERE id = ?')
         .run(subCode || null, timeout, channel.id);
+      auditChannel(channel.id, 'afk', subCode ? `${timeout} min` : 'off');
       broadcastChannelLists();
       if (subCode === '__leave__' && timeout > 0) {
         socket.emit('toast', { message: `💤 Idle people leave voice after ${timeout} min`, type: 'success' });
@@ -1722,6 +1731,7 @@ module.exports = function register(socket, ctx) {
     if (topic && enforceAutomod(topic, { surface: 'channel', channelId: channel.id })) return;
     try {
       db.prepare('UPDATE channels SET topic = ? WHERE id = ?').run(topic, channel.id);
+      auditChannel(channel.id, 'topic', topic);
     } catch (err) {
       console.error('Set topic error:', err);
       return socket.emit('error-msg', 'Failed to update topic');
@@ -1761,6 +1771,7 @@ module.exports = function register(socket, ctx) {
     values.push(channelId);
     db.prepare(`UPDATE channels SET ${setParts.join(', ')} WHERE id = ?`).run(...values);
     const updated = db.prepare('SELECT id, code_visibility, code_mode, code_rotation_type, code_rotation_interval FROM channels WHERE id = ?').get(channelId);
+    auditChannel(channelId, 'invite_code', `${updated.code_visibility}, ${updated.code_mode}`);
     io.to(`channel:${channel.code}`).emit('channel-code-settings-updated', { channelId, channelCode: channel.code, settings: updated });
     socket.emit('error-msg', 'Channel code settings updated');
   });
@@ -1775,6 +1786,7 @@ module.exports = function register(socket, ctx) {
     const oldCode = channel.code;
     try {
       rotateChannelCode(channelId, oldCode);
+      auditChannel(channelId, 'invite_code', 'new code');
     } catch (err) {
       console.warn(`[ChannelRotation] Manual rotation failed for channel ${channelId}:`, err.message);
       socket.emit('error-msg', 'Channel code rotation failed. Please try again.');
@@ -1874,31 +1886,12 @@ module.exports = function register(socket, ctx) {
     if (!targetUser) return cb({ error: 'User not found' });
     const membershipCheck = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, targetUserId);
     if (!membershipCheck) return cb({ error: `${targetUser.username} is not in #${channel.name}` });
-    db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(channelId, targetUserId);
-    const subs = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id = ?').all(channelId);
-    const delSub = db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?');
-    subs.forEach(s => delSub.run(s.id, targetUserId));
-    // Roles held in that channel go with the membership; kept, a removed
-    // Channel Mod could still act there.
-    const delScoped = db.prepare('DELETE FROM user_roles WHERE user_id = ? AND channel_id = ?');
-    [channelId, ...subs.map(s => s.id)].forEach(id => delScoped.run(targetUserId, id));
-    // Out of the call too, before the code rotates below.
-    ctx.liveAccess?.cutOff(targetUserId, [channel.code, ...subs.map(s => s.code)], 'You were removed from this channel');
-    const targetSockets = [...io.sockets.sockets.values()].filter(s => s.user && s.user.id === targetUserId);
-    for (const ts of targetSockets) {
-      if (ts.currentChannel === channel.code || subs.some(sub => sub.code === ts.currentChannel)) ts.currentChannel = null;
-      ts.leave(`channel:${channel.code}`);
-      subs.forEach(sub => ts.leave(`channel:${sub.code}`));
-      ts.emit('channels-list', getEnrichedChannels(targetUserId, ts.user.isAdmin, (room) => ts.join(room)));
-      ts.emit('toast', { message: `You were removed from #${channel.name}`, type: 'warning' });
-    }
-    const channelRoom = channelUsers.get(channel.code);
-    if (channelRoom) {
-      channelRoom.delete(targetUserId);
-      emitOnlineUsers(channel.code);
-    }
+    removeChannelMember(ctx, channel, targetUserId);
     if (typeof rotatePrivateCodesAfterRemoval === 'function') rotatePrivateCodesAfterRemoval(channelId);
     cb({ success: true });
+    _audit({ actor: socket.user, action: 'channel_member_remove',
+      target_type: 'user', target_id: targetUserId, target_name: targetUser.displayName,
+      details: { channel: channel.name } });
     socket.emit('error-msg', `Removed ${targetUser.username} from #${channel.name}`);
   });
 
@@ -1914,21 +1907,9 @@ module.exports = function register(socket, ctx) {
     const targetId = isInt(data.targetUserId) ? data.targetUserId : null;
     if (!targetId) return;
     const isSelfDm = targetId === socket.user.id;
-    const target = db.prepare(
-      'SELECT u.id, COALESCE(u.display_name, u.username) as username FROM users u LEFT JOIN bans b ON u.id = b.user_id WHERE u.id = ? AND b.id IS NULL'
-    ).get(targetId);
+    const target = directMessages.target(db, targetId);
     if (!target) return socket.emit('error-msg', 'User not found');
-    // For self-DM, the channel has only one channel_members row, so both EXISTS
-    // clauses below collapse to the same check, which still matches correctly.
-    // A group DM that shrank to two (or one) members is still a group, not
-    // this pair's 1:1 conversation.
-    const existingDm = db.prepare(`
-      SELECT c.id, c.code, c.name FROM channels c
-      WHERE c.is_dm = 1 AND COALESCE(c.is_group, 0) = 0
-      AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id = c.id AND user_id = ?)
-      AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id = c.id AND user_id = ?)
-      AND (SELECT COUNT(*) FROM channel_members WHERE channel_id = c.id) = ${isSelfDm ? 1 : 2}
-    `).get(socket.user.id, targetId);
+    const existingDm = directMessages.existing(db, socket.user.id, targetId);
     if (existingDm) {
       socket.emit('dm-opened', {
         id: existingDm.id, code: existingDm.code, name: existingDm.name,
@@ -1942,11 +1923,7 @@ module.exports = function register(socket, ctx) {
       if (!socket.user.isAdmin) {
         let started;
         try {
-          started = db.prepare(`
-            SELECT COUNT(*) AS n FROM channels
-            WHERE created_by = ? AND is_dm = 1 AND COALESCE(is_group, 0) = 0 AND COALESCE(is_self_dm, 0) = 0
-              AND created_at >= datetime('now', '-1 hour')
-          `).get(socket.user.id).n;
+          started = directMessages.recentCount(db, socket.user.id).n;
         } catch (err) {
           console.warn('[dm] could not count new conversations, refusing:', err.message);
           return socket.emit('error-msg', 'Could not start the conversation. Try again in a moment.');
@@ -1958,12 +1935,12 @@ module.exports = function register(socket, ctx) {
     }
     const code = generateUniqueSharedCode();
     try {
-      const result = db.prepare('INSERT INTO channels (name, code, created_by, is_dm, is_self_dm) VALUES (?, ?, ?, 1, ?)').run('DM', code, socket.user.id, isSelfDm ? 1 : 0);
+      const result = directMessages.create(db, code, socket.user.id, isSelfDm);
       const channelId = result.lastInsertRowid;
-      db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, socket.user.id);
+      directMessages.join(db, channelId, socket.user.id);
       // Self-DMs only have one member; PRIMARY KEY prevents duplicate insert.
       if (!isSelfDm) {
-        db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channelId, targetId);
+        directMessages.join(db, channelId, targetId);
       }
       socket.join(`channel:${code}`);
       socket.emit('dm-opened', { id: channelId, code, name: 'DM', is_dm: 1, is_self_dm: isSelfDm ? 1 : 0, dm_target: { id: target.id, username: target.username } });
@@ -1982,7 +1959,7 @@ module.exports = function register(socket, ctx) {
   });
 
   // Returns false, deleting nothing, when the DM holds protected messages.
-  function purgeDmChannel(channel, attachments, extraOwners = []) {
+  async function purgeDmChannel(channel, attachments, extraOwners = []) {
     if (protectedMessages.protectedCount(db, [channel.id])) return false;
     // Collect attachment filenames before we drop the message rows. We
     // scan plaintext message content server-side, and also accept a
@@ -2028,25 +2005,46 @@ module.exports = function register(socket, ctx) {
     });
     deleteAll(channel.id);
 
-    for (const name of releasableUploads(db, filenames, participants)) moveUploadToDeleted(name);
+    for (const name of releasableUploads(db, filenames, participants)) await storage.softDelete(name);
     return true;
   }
   ctx.purgeDmChannel = purgeDmChannel;
-  socket.on('delete-dm', (data) => {
+  socket.on('delete-dm', async (data, callback) => {
+    // An app may pass a reply callback so it can drop the conversation in the
+    // window it deleted from even when the channel-deleted broadcast does not
+    // reach it (a reconnect or server switch around the delete). Apps that
+    // pass no callback keep reading error-msg. (#5848)
+    const done = typeof callback === 'function' ? callback : null;
+    const fail = (msg) => (done ? done({ error: msg }) : socket.emit('error-msg', msg));
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    // Deleting a DM erases it for everyone in it, so the app must have asked
+    // first. An app that sends this from a plain "close" gets refused instead.
+    if (data.confirmed !== true) {
+      return fail('Deleting a conversation removes it for everyone in it. Please update your app so it asks before deleting.');
+    }
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 1').get(code);
-    if (!channel) return socket.emit('error-msg', 'DM not found');
+    if (!channel) return fail('DM not found');
     const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!isMember && !socket.user.isAdmin) return socket.emit('error-msg', 'Not authorized');
-    if (isMember && channel.is_group && ctx.leaveGroupDm) return void ctx.leaveGroupDm(code, socket.user.id, data.attachments);
+    if (!isMember && !socket.user.isAdmin) return fail('Not authorized');
+    if (isMember && channel.is_group && ctx.leaveGroupDm) return void (await ctx.leaveGroupDm(code, socket.user.id, data.attachments));
     // An admin outside a group deletes it for everyone, with the same checks and notices as from its menu.
-    if (channel.is_group) return void (ctx.deleteGroupDmForEveryone ? ctx.deleteGroupDmForEveryone(code, data.attachments) : socket.emit('error-msg', 'Not authorized'));
+    if (channel.is_group) return void (ctx.deleteGroupDmForEveryone ? await ctx.deleteGroupDmForEveryone(code, data.attachments) : fail('Not authorized'));
 
-    if (!purgeDmChannel(channel, data.attachments)) return socket.emit('error-msg', protectedMessages.CONVERSATION_REFUSAL);
+    // An admin deleting a conversation they are not in is on the record.
+    const outsiders = isMember ? null : db.prepare(`
+      SELECT COALESCE(u.display_name, u.username) AS name FROM channel_members cm JOIN users u ON u.id = cm.user_id WHERE cm.channel_id = ?
+    `).all(channel.id).map(r => r.name);
+    if (!(await purgeDmChannel(channel, data.attachments))) return fail(protectedMessages.CONVERSATION_REFUSAL);
+    if (outsiders) {
+      _audit({ actor: socket.user, action: 'dm_delete',
+        target_type: 'channel', target_id: channel.id, target_name: outsiders.join(', ') });
+    }
 
     io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
     clearChannelRuntimeState(state, code);
+    // The delete is committed, so the app that asked can drop it now.
+    if (done) done({ success: true });
   });
 };

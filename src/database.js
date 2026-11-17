@@ -1,6 +1,4 @@
-const Database = require('better-sqlite3');
-const path = require('path');
-const { DB_PATH } = require('./paths');
+const { fromEnv } = require('./db');
 const { ensureSearchIndex } = require('./searchIndex');
 const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('./roleDefaults');
 const { migrateGroupDmTrust } = require('./groupDmSchema');
@@ -20,107 +18,25 @@ const { installGuard: installProtectedGuard } = require('./protectedMessages');
 
 let db;
 
-// ── Prepared-statement cache ──────────────────────────────
-// Every `db.prepare(sql)` allocates a native sqlite3_stmt.  In
-// socketHandlers.js the same queries are prepared on every socket event,
-// creating hundreds of native objects that only get freed when V8 GC
-// collects the JS wrapper.  Under load, GC can't keep up and Oilpan
-// hits a fatal "large allocation" error.
-//
-// This cache wraps db.prepare() so duplicate SQL strings reuse the same
-// Statement object.  Node.js is single-threaded, so concurrent access is
-// not a concern.  Dynamic SQL (e.g. `IN (?,?,?)`) still works; each
-// unique SQL string just gets its own cache entry.
-const _stmtCache = new Map();
-const MAX_STMT_CACHE = 500;   // safety cap, shouldn't be hit in practice
-
-// The usual reason Haven cannot open its database is file ownership: the data
-// folder (or haven.db in it) belongs to another user than the one Haven runs
-// as, for example after copying it in from another machine or starting Haven
-// once outside its container. Say that plainly instead of a bare SQLite error.
-function explainOpenFailure(err) {
-  const code = String(err && err.code || '');
-  if (!/^SQLITE_(CANTOPEN|READONLY|PERM|AUTH)/.test(code) && err.code !== 'EACCES') return err;
-  const uid = typeof process.getuid === 'function' ? process.getuid() : null;
-  const who = uid === null ? 'the user Haven runs as' : `the user Haven runs as (uid ${uid})`;
-  const e = new Error(
-    `Haven cannot open its database at ${DB_PATH} (${code || err.message}). ` +
-    `The folder ${path.dirname(DB_PATH)} and everything in it must be readable and writable by ${who}. ` +
-    'If you copied the data in from elsewhere, or ran Haven outside its container, fix the owner of those files. ' +
-    'In Docker or Podman, restarting the container fixes it when it can; otherwise run ' +
-    '"chown -R 1000:1000 <data folder>" (Docker) or "podman unshare chown -R 1000:1000 <data folder>" (rootless Podman) on the host.'
-  );
-  e.cause = err;
-  return e;
-}
-
 function initDatabase() {
-  try {
-    db = new Database(DB_PATH);
-  } catch (err) {
-    throw explainOpenFailure(err);
+  // Refuse before fromEnv(): selecting PostgreSQL there downloads its client,
+  // which helps nobody when the next step is to stop.
+  if (String(process.env.HAVEN_DATABASE_URL || '').trim()) {
+    throw new Error('PostgreSQL full server startup is not supported yet. Leave HAVEN_DATABASE_URL unset to use SQLite; the query adapter is available for migration tests.');
   }
-
-  // ── Performance settings (memory-conscious) ────────────
-  // These were originally set much higher (64 MB cache, 256 MB mmap) which
-  // combined to reserve ~320 MB of native memory for SQLite alone.  On the
-  // Haven Desktop machine that also runs Electron + a renderer, that left
-  // too little headroom and caused the Oilpan OOM crash.
-  try {
-    db.pragma('journal_mode = WAL');
-  } catch (err) {
-    throw explainOpenFailure(err);
+  const driver = fromEnv();
+  // Full startup and legacy synchronous calls still require SQLite. The
+  // opt-in PostgreSQL browser preview uses initDatabaseAsync() below. Never
+  // split a live server's reads and writes across two different databases.
+  if (driver.kind !== 'sqlite') {
+    throw new Error('PostgreSQL full server startup is not supported yet. Leave HAVEN_DATABASE_URL unset to use SQLite; the query adapter is available for migration tests.');
   }
-  db.pragma('foreign_keys = ON');
-  db.pragma('synchronous = NORMAL');       // safe with WAL, 2-3x faster writes
-  db.pragma('cache_size = -8000');          // 8 MB page cache (was 64 MB, overkill for a chat app)
-  db.pragma('busy_timeout = 5000');         // wait up to 5 s on lock contention
-  db.pragma('temp_store = MEMORY');         // keep temp tables in RAM
-  // Deleted rows are overwritten with zeros instead of lingering in the file
-  // until the space is reused, so deleted messages cannot be read back out of
-  // haven.db with a text editor (#5699).
-  db.pragma('secure_delete = ON');
-  db.pragma('mmap_size = 33554432');        // 32 MB memory-mapped I/O (was 256 MB)
+  db = driver;
 
-  // Hard-cap SQLite's own heap usage so it can never run away
-  db.pragma('soft_heap_limit = 33554432');  // 32 MB soft limit; SQLite tries to stay under
-  db.pragma('hard_heap_limit = 67108864');  // 64 MB hard ceiling
-
-  // ── Statement cache: intercept db.prepare() ──────────
-  const _origPrepare = db.prepare.bind(db);
-  db.prepare = function cachedPrepare(sql) {
-    let stmt = _stmtCache.get(sql);
-    if (stmt) return stmt;
-    // Safety cap: if cache grows too large (dynamic SQL), clear older entries
-    if (_stmtCache.size >= MAX_STMT_CACHE) {
-      // Remove oldest ~half of entries
-      const keys = [..._stmtCache.keys()];
-      for (let i = 0; i < keys.length / 2; i++) _stmtCache.delete(keys[i]);
-    }
-    stmt = _origPrepare(sql);
-    _stmtCache.set(sql, stmt);
-    return stmt;
-  };
-
-  // ── Bringing an older database up to date ──────────────
-  // A server that updates keeps its database and gains whatever columns the
-  // new version adds. Ask SQLite what a table already has rather than running
-  // a query and treating any error as "column missing": that way a real
-  // failure stops startup with a clear message instead of being mistaken for
-  // a column that is already there.
-  const hasColumn = (table, column) =>
-    db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column);
-  // Adds the column when it is missing. True when it was added, so a step
-  // that also fills in existing rows can run only that once.
-  const addColumn = (table, column, definition) => {
-    if (hasColumn(table, column)) return false;
-    try {
-      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-    } catch (err) {
-      throw new Error(`Database upgrade failed while adding ${table}.${column}: ${err.message}`);
-    }
-    return true;
-  };
+  // Schema inspection belongs to the driver. Keep these bound helpers while
+  // the schema and module migrations are still synchronous.
+  const hasColumn = db.hasColumn.bind(db);
+  const addColumn = db.addColumn.bind(db);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -314,6 +230,21 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_upload_ownership_user
       ON upload_ownership(user_id);
 
+    -- Every file under uploads/ (bot-audio/ aside), live or waiting in
+    -- deleted-attachments/, kept by src/storage so sizes and purges never need
+    -- a walk of the folder or a listing of the bucket. rel_path is the live
+    -- key; a deleted file keeps it and its state says where it is now.
+    CREATE TABLE IF NOT EXISTS media_objects (
+      rel_path TEXT PRIMARY KEY,
+      bytes INTEGER NOT NULL,
+      content_type TEXT,
+      state TEXT NOT NULL DEFAULT 'live',   -- 'live' | 'deleted'
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      deleted_at DATETIME
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_objects_state
+      ON media_objects(state, deleted_at);
+
     -- ── Attachment tagging (upload tags) ──────────────────
     -- A GLOBAL tag vocabulary applied to file/image uploads. Separate from the
     -- per-channel forum-topic tags (channels.forum_tags / messages.tags JSON).
@@ -485,6 +416,8 @@ function initDatabase() {
   insertSetting.run('max_attachments', '10');           // files one message may queue, images and other files together (1-50) (#5561)
   insertSetting.run('max_tags_per_attachment', '3');    // upload tags allowed on one attachment (1-20) (#tagging phase 4)
   insertSetting.run('max_tag_len', '20');               // max characters in an upload tag name (1-50) (#tagging phase 4)
+  insertSetting.run('automod_ai_enabled', 'false');      // experimental AutoMod Quarantine AI link checks, off until an admin opts in
+  insertSetting.run('blocked_upload_extensions', '');      // (#5833) file types members cannot upload, e.g. "exe,bat"
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2-25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200-100000)
   insertSetting.run('max_avatar_mb', '2');               // max profile picture / border / persona avatar size in MB (1-10)
@@ -575,7 +508,7 @@ function initDatabase() {
       const starter = [
         'youtube.com', 'youtu.be', 'twitch.tv', 'x.com', 'twitter.com', 'bsky.app',
         'reddit.com', 'github.com', 'gitlab.com', 'stackoverflow.com', 'wikipedia.org',
-        'imgur.com', 'giphy.com', 'tenor.com', 'spotify.com', 'soundcloud.com',
+        'imgur.com', 'giphy.com', 'tenor.com', 'klipy.com', 'spotify.com', 'soundcloud.com',
         'steamcommunity.com', 'steampowered.com', 'last.fm', 'archive.org',
         'haven-app.com'
       ];
@@ -602,6 +535,27 @@ function initDatabase() {
     }
   } catch (err) {
     console.error('automod: adding haven-app.com to the allowlist failed:', err.message);
+  }
+  // KLIPY became a GIF picker choice after the allowlist was seeded, so its
+  // GIFs were blocked on allowlist servers. Added once, the same way.
+  try {
+    const added = db.prepare("SELECT value FROM server_settings WHERE key = 'automod_klipy_v4270'").get();
+    if (!added || added.value !== 'true') {
+      db.prepare(
+        "INSERT OR IGNORE INTO automod_domains (domain, mode, include_subdomains, note) VALUES ('klipy.com', 'allow', 1, 'Seeded default')"
+      ).run();
+      db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('automod_klipy_v4270', 'true')").run();
+    }
+  } catch (err) {
+    console.error('automod: adding klipy.com to the allowlist failed:', err.message);
+  }
+
+  // Mutes made through the bot or HTTP API were stored as ISO times, which
+  // the mute checks misread as lasting until the next day. Cheap to repeat.
+  try {
+    db.prepare("UPDATE mutes SET expires_at = datetime(expires_at) WHERE expires_at LIKE '%T%'").run();
+  } catch (err) {
+    console.error('mutes: normalizing expiry times failed:', err.message);
   }
 
   // ── Migration: turn the safe protections on, once (v3.43.0) ──
@@ -1043,6 +997,11 @@ function initDatabase() {
   // know which kind it is talking to without asking Discord. Older rows are
   // NULL, which means text: forums could not be paired before this column.
   addColumn('ferry_links', 'discord_channel_type', 'INTEGER DEFAULT NULL');
+  // Which Haven message is which Discord message, for replies across the
+  // bridge (src/ferryReplies.js).
+  require('./ferryReplies').ensureSchema(db);
+  // Discord reactions on bridged messages (src/ferryReactions.js).
+  require('./ferryReactions').ensureSchema(db);
 
   // ── Migration: Ferry forum posts ────────────────────────
   // Which Haven forum topic is which Discord forum post, so replies keep
@@ -1514,6 +1473,10 @@ function initDatabase() {
   // ── Migration: transparent roles ────────────────────────
   // A transparent role never colors its holder; the next role down does.
   addColumn('roles', 'transparent', 'INTEGER NOT NULL DEFAULT 0');
+  // Per-role switches (#5822): whether @Role pings and shows in the @ list,
+  // and whether the role shows on profile cards for everyone or for staff only.
+  addColumn('roles', 'mentionable', 'INTEGER NOT NULL DEFAULT 1');
+  addColumn('roles', 'show_on_profile', 'INTEGER NOT NULL DEFAULT 1');
 
   // ── Migration: gradient role colors ─────────────────────
   // A role can draw names as a gradient from `color` to `color2`, and
@@ -1791,8 +1754,8 @@ function initDatabase() {
   // The table used to be named navidrome_tokens, back when this was tied to a
   // single source. Rename it in place so an existing install keeps its tokens.
   if (
-    db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='navidrome_tokens'`).get() &&
-    !db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='listening_tokens'`).get()
+    db.hasTable('navidrome_tokens') &&
+    !db.hasTable('listening_tokens')
   ) {
     db.exec(`ALTER TABLE navidrome_tokens RENAME TO listening_tokens`);
   }
@@ -1805,6 +1768,9 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_listening_tokens_token ON listening_tokens(token);
   `);
 
+  // Channel types (src/channelTypes.js): saved sets of Channel Functions.
+  require('./channelTypes').ensureChannelTypes(db);
+
   // Full-text search index (messages_fts): created/reconciled here so it runs
   // synchronously before the server listens. (search-overhaul phase 2)
   try {
@@ -1816,8 +1782,34 @@ function initDatabase() {
   return db;
 }
 
+// The legacy initializer stays synchronous for SQLite callers and tests.
+// PostgreSQL boot is explicit while unsupported app features are migrated.
+async function initDatabaseAsync() {
+  const url = String(process.env.HAVEN_DATABASE_URL || '').trim();
+  if (!url) return initDatabase();
+  // PostgreSQL is not ready for normal server use. Developers can comment out
+  // this throw and set HAVEN_POSTGRES_PREVIEW=1 to test the preview below.
+  throw new Error('PostgreSQL server startup is disabled while database migration is in progress. Leave HAVEN_DATABASE_URL unset to use SQLite.');
+  if (process.env.HAVEN_POSTGRES_PREVIEW !== '1') return initDatabase();
+  const driver = fromEnv();
+  try {
+    await require('./db/postgres/schema').initializePostgres(driver);
+    db = driver;
+    return db;
+  } catch (err) {
+    try { await driver.close(); } catch { /* preserve the startup failure */ }
+    throw err;
+  }
+}
+
 function getDb() {
   return db;
 }
 
-module.exports = { initDatabase, getDb };
+// Converted call sites use this promise-returning interface. Keep getDb()
+// synchronous until its remaining callers have migrated.
+function getAsyncDb() {
+  return db.async;
+}
+
+module.exports = { initDatabase, initDatabaseAsync, getDb, getAsyncDb };

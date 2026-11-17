@@ -39,8 +39,11 @@ _setupMobile() {
   // Close sidebar when switching channels on mobile
   const origSwitch = this.switchChannel.bind(this);
   this.switchChannel = (code) => {
-    origSwitch(code);
+    // Hand the switch's promise back: callers wait on it (a call starting in
+    // a DM, back and forward) and got nothing to wait on from this wrapper.
+    const switching = origSwitch(code);
     this._closeMobilePanels();
+    return switching;
   };
 
   // Swipe gesture support (touch)

@@ -2,13 +2,16 @@
 
 Welcome to **Haven**, your private chat server. This guide covers everything you need to get Haven running and invite your friends.
 
+Prefer to watch? There are short [video tutorials](https://haven-app.com/tutorials.html) for the most common tasks, also on [YouTube](https://www.youtube.com/@Haven-App_Tutorials) and [Rumble](https://rumble.com/user/HavenApp).
+
 ---
 
 ## What You Need
 
 - **Windows 10 or 11** (macOS / Linux can run it manually)
 - **Node.js** version 22 to 26 → [Download here](https://nodejs.org/)
-- About **50 MB** of disk space
+- About **200 MB** of disk space, plus whatever your community uploads
+- About **100 MB** of free memory for a small group. A Raspberry Pi is enough; measured numbers for every size are in [How much hardware does Haven need?](docs/hardware.md)
 - **OR** just [Docker](https://docs.docker.com/get-docker/), no Node.js needed
 
 ---
@@ -16,6 +19,8 @@ Welcome to **Haven**, your private chat server. This guide covers everything you
 ## Docker Setup (Alternative)
 
 If you'd rather run Haven in a container (great for NAS boxes, servers, or if you just like Docker):
+
+Video: [Install with Docker](https://haven-app.com/tutorials.html#install-docker)
 
 ### Quick Start
 
@@ -95,6 +100,26 @@ docker compose up -d
 
 Your data is safe: it lives in the volume, not the container.
 
+### Early Access (Beta) Builds
+
+New features reach the `:beta` image a few days before `:latest`. To run them, change the image line in `docker-compose.yml` to:
+
+```yaml
+image: ghcr.io/ancsemi/haven:beta
+```
+
+then pull and recreate as above. With `docker run` or Podman, pull `ghcr.io/ancsemi/haven:beta` and start the container from that image instead. Your data stays as it is. To leave early access, set the line back to `:latest` once the next stable release is out, so you never move to an older version than the one you ran.
+
+### Updating Automatically
+
+The **Update Now** button in Settings can't update a Docker install: a container can't replace itself, and giving Haven control of Docker would give it control of the whole machine. To stay current without logging in, let the host do it on a schedule. On Linux (a Raspberry Pi included), run `crontab -e` and add a line like this one, with your own folder:
+
+```bash
+0 4 * * * cd /home/pi/haven && docker compose pull -q && docker compose up -d
+```
+
+That checks for a new image every night at 4:00 and restarts Haven only when there is one. It follows whichever image `docker-compose.yml` names, `:latest` or `:beta`.
+
 ### Checking Your Version
 
 Open this URL in your browser (replace with your domain/IP if needed):
@@ -138,11 +163,19 @@ newgrp docker
 
 After that, `docker compose up -d` should work without errors.
 
+### Proxmox VE (LXC)
+
+If you run Proxmox VE in your homelab, an automated unprivileged LXC helper script is available. It supports automatic Caddy reverse proxy with Let's Encrypt SSL, Tailscale mesh VPN, or direct LAN modes.
+
+See the [Proxmox VE LXC Deployment Guide](docs/examples/proxmox-lxc/README.md) for quick-start instructions and configuration flags.
+
 ---
 
 ## Getting Started
 
 ### Step 1: First Launch
+
+Videos: [Install on Windows](https://haven-app.com/tutorials.html#install-windows) · [Install on Linux](https://haven-app.com/tutorials.html#install-linux) · [First login](https://haven-app.com/tutorials.html#first-login)
 
 Double-click **`Start Haven.bat`**
 
@@ -814,6 +847,50 @@ OUTBOUND_PROXY_RESOLVES_NAMES=true
 
 ---
 
+## External Media Storage (S3)
+
+By default, attachments, avatars, borders, emoji, stickers, sounds, badge icons, role icons and the server icon and banner live in the `uploads` folder of Haven's data folder. You can keep them in an S3-compatible bucket instead: Garage, MinIO, RustFS, SeaweedFS or AWS S3. The database, certificates and `.env` stay in the data folder either way.
+
+```env
+HAVEN_EXTERNAL_STORAGE=true
+HAVEN_S3_ENDPOINT=http://garage:3900
+HAVEN_S3_BUCKET=haven-media
+HAVEN_S3_REGION=garage            # AWS: your region, such as us-east-1
+HAVEN_S3_ACCESS_KEY=...
+HAVEN_S3_SECRET_KEY=...
+# HAVEN_S3_PREFIX=haven/          # optional: keep Haven's files under a prefix
+# HAVEN_S3_FORCE_PATH_STYLE=true  # the default; Garage, MinIO and RustFS need it
+```
+
+- **It's an add-on, downloaded only if you turn it on.** Haven talks to the bucket through Amazon's S3 library, which isn't part of a normal install or the Docker image. The first start with `HAVEN_EXTERNAL_STORAGE=true` installs it into the data folder (`addons/s3`, about 16 MB, at versions pinned by Haven), so that start needs to reach registry.npmjs.org once. A bucket on your own NAS still needs no outside service after that.
+- **The bucket stays private.** Haven reads each file and serves it itself, with the same safety headers as files on disk, so don't make the bucket public.
+- **Haven won't start without it.** If the bucket can't be reached or the key is wrong, Haven stops at startup and names the endpoint, the bucket and the reason. It doesn't fall back to the disk.
+- **Location data is still removed first.** Uploads are cleaned on the server before they reach the bucket, and photos already in the bucket are checked once.
+
+### Moving an existing server to a bucket
+
+1. Set the variables above, plus `HAVEN_S3_LOCAL_FALLBACK=true`, and restart. Files still on disk keep being served while you move them.
+2. Copy them over. It's safe to run again, and nothing on disk is removed yet:
+   ```bash
+   node scripts/migrate-uploads-to-s3.js
+   # Docker: docker compose exec haven node scripts/migrate-uploads-to-s3.js
+   ```
+3. Remove `HAVEN_S3_LOCAL_FALLBACK` and restart. Everything should still load.
+4. Free the disk space. This only removes local files once the bucket holds all of them:
+   ```bash
+   node scripts/migrate-uploads-to-s3.js --delete-local
+   ```
+
+If the server finds files on disk that aren't being served, it says so at startup.
+
+### Backups
+
+The bucket is the backup of the files themselves; use your storage's own replication or snapshots for it. Haven's backups still include the files when you choose **files**, copied out of the bucket one at a time, which takes a while on a large server. With scheduled backups, every run copies the whole bucket. Restoring a backup puts its files back into the bucket on the next start.
+
+If files are added to or removed from the bucket outside Haven, rebuild Haven's list of them with `node scripts/reconcile-media.js`.
+
+---
+
 ## Router-Specific Tips
 
 ### Xfinity / Comcast (XB7 Gateway)
@@ -1259,6 +1336,12 @@ To DM a Discord user (when the admin has enabled it), type `=>@` and search by n
 - **Set `PUBLIC_URL`** in your `.env` if you want Haven avatars to appear on the Discord
   side, and files too big for Discord to show as links. Discord has to be able to reach
   them over the internet. Without it names still come through, just without avatars
+- **Reactions cross both ways** on messages Ferry carried. A reaction on Discord shows on
+  the Haven copy with the person's Discord name. A reaction in Haven makes the bot react
+  on Discord, once per emoji, since Discord only lets a bot react as itself; it stays
+  while anyone who may send to Discord has that emoji on the message. The bot needs
+  **Add Reactions** in the channel. Custom emoji cross when the other side has one with
+  the same name
 - **Discord attachments arrive as links**, and Discord's own links expire after about a
   day. The text of the message is permanent, the pictures are not
 - **Other Discord bots are ignored** unless an admin turns on **Relay other bots**,
@@ -1348,7 +1431,7 @@ the timestamp generators people already use work here too.
 
 | Key | Action |
 |-----|--------|
-| `Shift+Enter` | New line |
+| `Shift+Enter` | New line (on a phone or tablet, plain `Enter` is a new line and the Send button sends) |
 | `Ctrl+F` | Search messages |
 | `@` | Mention autocomplete |
 | `:` | Emoji autocomplete (type 2+ characters) |
@@ -1490,7 +1573,7 @@ issue.
 
 ## Bot & Webhook Developer Guide
 
-Haven has a built-in bot API powered by webhooks. Bots can send messages, delete messages, play soundboard sounds, and register custom slash commands.
+Haven has a built-in bot API powered by webhooks. Bots can send messages, edit and delete messages, play soundboard sounds, and register custom slash commands.
 
 > **Looking for ready-made bots and webhooks?** The community library at [**ancsemi/haven-community**](https://github.com/ancsemi/haven-community) collects user-contributed integrations you can deploy as-is (a GitHub releases poster, etc.). PRs welcome there if you've built one of your own. See its [`CONTRIBUTING.md`](https://github.com/ancsemi/haven-community/blob/main/CONTRIBUTING.md) for how to submit.
 
@@ -1550,6 +1633,17 @@ Content-Type: application/json
 Response (regular): `{ "success": true, "message_id": 124 }` (plus `"thread_id": 123` for a thread reply)
 
 Response (ephemeral): `{ "success": true, "ephemeral": true, "recipient_id": 42, "delivered": true }`
+
+### Editing Messages
+
+```
+PATCH https://your-server.com/api/webhooks/<token>/messages/<message_id>
+Content-Type: application/json
+
+{ "content": "The new text" }
+```
+
+A bot can edit the messages it posted itself (use the `message_id` it got back when posting), and nobody else's. The message shows as edited. Returns `{ "success": true, "message_id": 124 }`.
 
 ### Deleting Messages
 
@@ -1638,6 +1732,35 @@ All webhook endpoints are rate-limited to **30 requests per minute** per IP.
 ### Callback Payloads
 
 If your webhook has a `callback_url` and `callback_secret` configured, Haven will POST command invocations to your URL. The payload includes an HMAC signature in the `X-Haven-Signature` header that you should verify using your callback secret.
+
+### Receiving Messages
+
+A bot with a `callback_url` also hears ordinary chat: every message posted in its channel is sent to that URL as it arrives, so a bot can read what people say and answer with the Sending Messages call above. This is how assistants and chat bridges plug in. Each delivery looks like this:
+
+```
+POST <your callback_url>
+Content-Type: application/json
+X-Haven-Event: message
+X-Haven-Signature: sha256=<HMAC of the body with your callback secret>
+
+{
+  "event": "message",
+  "channelId": "<channel code>",
+  "timestamp": "2026-10-27T18:04:11.000Z",
+  "message": {
+    "id": 1234,
+    "content": "hey bot, what's the weather?",
+    "author": { "id": 7, "username": "alice" },
+    "reply_to": null,
+    "is_webhook": false,
+    "timestamp": "2026-10-27 18:04:11"
+  }
+}
+```
+
+- Bot posts (its own included) are not sent back, so a bot cannot loop on itself.
+- DMs never reach a bot, and a bot only hears its channel while the person who made it can still read that channel.
+- The callback URL must be reachable from the server. A bot on your own network (`192.168.x`, `localhost`, a sibling Docker container) needs `HAVEN_ALLOW_PRIVATE_CALLBACKS=true` in `.env`. A failed delivery is retried once, and the last result shows on the bot's card in Settings.
 
 ---
 

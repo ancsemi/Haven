@@ -4,7 +4,114 @@
 
 export default {
 
+_bindCodeBlockCopy() {
+  // Code blocks can appear in messages, threads, search results, and forum
+  // content, so handle the copy control once at the document level.
+  document.addEventListener('click', (e) => {
+    const button = e.target?.closest?.('.code-block-copy');
+    if (!button) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void this._copyCodeBlock(button);
+  }, true); // capture: a card or message under the button must not get the click too
+
+  // The message toolbar shares the code block's top-right corner. Reposition
+  // only the copy buttons that it actually covers while the message is hovered.
+  document.addEventListener('pointerover', (e) => {
+    const msgEl = e.target?.closest?.('.message, .message-compact, .thread-message');
+    if (!msgEl || msgEl.contains(e.relatedTarget)) return;
+    requestAnimationFrame(() => {
+      if (msgEl.isConnected === false || !msgEl.matches(':hover')) return;
+      this._placeMessageToolbar(msgEl);
+      this._updateCodeBlockCopyPlacement(msgEl);
+    });
+  });
+  document.addEventListener('pointerout', (e) => {
+    const msgEl = e.target?.closest?.('.message, .message-compact, .thread-message');
+    if (!msgEl || (e.relatedTarget && msgEl.contains(e.relatedTarget))) return;
+    msgEl.querySelectorAll('.code-block').forEach(block => block.classList.remove('copy-button-shifted'));
+  });
+  // Scrolling inside a tall message moves its bottom edge while the pointer
+  // stays put, so the toolbar has to follow. Once a frame at most.
+  let scrollFrame = 0;
+  document.addEventListener('scroll', (e) => {
+    if (scrollFrame || !e.target?.matches?.('#messages, #thread-messages, #dm-pip-messages')) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = 0;
+      e.target.querySelectorAll('.message:hover, .message-compact:hover, .thread-message:hover')
+        .forEach(msgEl => this._placeMessageToolbar(msgEl));
+    });
+  }, true);
+  window.addEventListener('resize', () => {
+    document.querySelectorAll('.message:hover, .message-compact:hover, .thread-message:hover')
+      .forEach(msgEl => {
+        this._placeMessageToolbar(msgEl);
+        this._updateCodeBlockCopyPlacement(msgEl);
+      });
+  });
+},
+
+// Beside the last reaction chip when there is room, level with the chips. With
+// no chips the stylesheet's bottom corner stands. Either way it stays on screen
+// on a message taller than the list.
+_placeMessageToolbar(msgEl) {
+  const bar = msgEl.querySelector('.msg-toolbar, .thread-msg-toolbar');
+  if (!bar) return;
+  bar.style.left = '';
+  bar.style.right = '';
+  bar.style.bottom = '';
+  const box = bar.offsetParent;
+  if (!box || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  const boxRect = box.getBoundingClientRect();
+  let bottom = null;
+
+  const chips = [...(msgEl.querySelector('.reactions-row')?.children || [])].map(c => c.getBoundingClientRect());
+  if (chips.length) {
+    const lastRowTop = Math.max(...chips.map(c => c.top));
+    const lastRow = chips.filter(c => c.top === lastRowTop);
+    const left = Math.max(...lastRow.map(c => c.right)) - boxRect.left + 8;
+    if (left + bar.offsetWidth <= boxRect.width - 8) {
+      bar.style.left = `${left}px`;
+      bar.style.right = 'auto';
+      bottom = boxRect.bottom - lastRow[0].bottom - (bar.offsetHeight - lastRow[0].height) / 2;
+      bar.style.bottom = `${bottom}px`;
+    }
+  }
+
+  const list = msgEl.closest('#messages, #thread-messages, #dm-pip-messages');
+  const below = list ? bar.getBoundingClientRect().bottom - list.getBoundingClientRect().bottom : 0;
+  if (below > 0) {
+    const now = bottom ?? (boxRect.bottom - bar.getBoundingClientRect().bottom);
+    bar.style.bottom = `${now + below + 4}px`;
+  }
+},
+
+_updateCodeBlockCopyPlacement(msgEl) {
+  const toolbar = msgEl.querySelector('.msg-toolbar, .thread-msg-toolbar');
+  const toolbarRect = toolbar?.getBoundingClientRect();
+  const toolbarVisible = toolbarRect
+    && toolbarRect.right > toolbarRect.left
+    && toolbarRect.bottom > toolbarRect.top;
+
+  msgEl.querySelectorAll('.code-block').forEach(block => {
+    block.classList.remove('copy-button-shifted');
+    const button = block.querySelector('.code-block-copy');
+    if (!button || !toolbarVisible) return;
+
+    // Read after removing the shifted class so this always tests the button's
+    // normal top-right position, including after a resize.
+    const buttonRect = button.getBoundingClientRect();
+    const overlaps = buttonRect.left < toolbarRect.right
+      && buttonRect.right > toolbarRect.left
+      && buttonRect.top < toolbarRect.bottom
+      && buttonRect.bottom > toolbarRect.top;
+    if (overlaps) block.classList.add('copy-button-shifted');
+  });
+},
+
 _bindMessageClicks() {
+  this._bindCodeBlockCopy();
+
   // Image click: open lightbox overlay (CSP-safe, no inline handlers)
   document.getElementById('messages').addEventListener('click', (e) => {
     // A forum card handles its own clicks: the thumbnail opens the topic,
@@ -220,7 +327,7 @@ _bindMessageActions() {
         return;
       }
 
-      if (e.shiftKey && this._lastMoveSelectedEl) {
+      if (e.shiftKey && this._lastMoveSelectedEl && !this._moveSourceThread) {
         // Shift+click: select all messages between last selected and this one
         const container = document.getElementById('messages');
         const allMsgs = Array.from(container.querySelectorAll('.message, .message-compact, .forum-topic'));

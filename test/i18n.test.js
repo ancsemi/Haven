@@ -225,6 +225,19 @@ test('a slower stale locale response cannot overwrite the latest load', async ()
   assert.equal(env.i18n.t('marker'), 'pt');
 });
 
+test('a locale fetch that fails once is tried again instead of leaving raw keys', async () => {
+  let failures = 0;
+  const env = await createI18n({
+    storedLocale: 'en',
+    fetchOverride: url => {
+      if (url === '/locales/en.json' && failures < 1) { failures++; throw new Error('server restarting'); }
+      return undefined;
+    }
+  });
+  assert.equal(failures, 1);
+  assert.equal(env.i18n.t('marker'), 'en');
+});
+
 test('language controls use bundled Brazilian artwork instead of OS flag emoji', () => {
   const indexHtml = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
   const appHtml = fs.readFileSync(path.join(ROOT, 'public/app.html'), 'utf8');

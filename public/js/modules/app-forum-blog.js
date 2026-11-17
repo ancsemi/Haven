@@ -232,7 +232,7 @@ _forumBlogComposerHint() {
   const b = this._forumBlogThread;
   if (!b) { input.placeholder = t('thread_runtime.reply_placeholder'); return; }
   const isAuthor = !!(this.user && b.authorId && b.authorId === this.user.id);
-  input.placeholder = t(isAuthor && !b.openPiece ? 'forum.blog_add_to_post' : 'forum.blog_write_comment');
+  input.placeholder = t(isAuthor && !b.openPiece && !this._threadReplyingTo ? 'forum.blog_add_to_post' : 'forum.blog_write_comment');
 },
 
 _forumBlogClose() {

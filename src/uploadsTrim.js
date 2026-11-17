@@ -12,25 +12,27 @@ const fs = require('fs');
 const path = require('path');
 const { deletableSql } = require('./protectedMessages');
 
-const SKIP_TOP_DIRS = new Set(['deleted-attachments']);
 const BATCH = 200;
 
-/** Bytes used under uploads/, not counting deleted-attachments. */
-async function uploadsSizeBytes(uploadsDir) {
-  let total = 0;
-  const walk = async (dir, top) => {
+/**
+ * Bytes used by uploads, not counting deleted-attachments: the live files in
+ * the media index, plus whatever sits in `localDirs` on this machine (bot
+ * audio, which is kept on disk whatever the storage).
+ */
+async function uploadsSizeBytes(db, localDirs = []) {
+  let total = db.prepare("SELECT COALESCE(SUM(bytes), 0) AS n FROM media_objects WHERE state = 'live'").get().n;
+  const walk = async (dir) => {
     let entries;
     try { entries = await fs.promises.readdir(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
-      if (top && SKIP_TOP_DIRS.has(e.name)) continue;
       const full = path.join(dir, e.name);
-      if (e.isDirectory()) await walk(full, false);
+      if (e.isDirectory()) await walk(full);
       else if (e.isFile()) {
         try { total += (await fs.promises.stat(full)).size; } catch { /* gone meanwhile */ }
       }
     }
   };
-  await walk(uploadsDir, true);
+  for (const dir of localDirs) await walk(dir);
   return total;
 }
 
@@ -52,11 +54,11 @@ let running = false;
  * message goes, so they need no move here.
  * @returns {Promise<{deleted:number, before:number, after:number}>}
  */
-async function trimUploadsToLimit({ db, uploadsDir, maxBytes, extractPaths, move, maxMessages = 5000 }) {
+async function trimUploadsToLimit({ db, localDirs = [], maxBytes, extractPaths, move, maxMessages = 5000 }) {
   if (running || !(maxBytes > 0)) return { deleted: 0, before: 0, after: 0 };
   running = true;
   try {
-    const before = await uploadsSizeBytes(uploadsDir);
+    const before = await uploadsSizeBytes(db, localDirs);
     let size = before;
     let deleted = 0;
     if (size <= maxBytes) return { deleted, before, after: size };
@@ -69,6 +71,7 @@ async function trimUploadsToLimit({ db, uploadsDir, maxBytes, extractPaths, move
         AND channel_id NOT IN (SELECT id FROM channels WHERE cleanup_exempt = 1)
         AND (created_at > ? OR (created_at = ? AND id > ?))
       ORDER BY created_at ASC, id ASC LIMIT ?`);
+    const liveBytes = db.prepare("SELECT bytes FROM media_objects WHERE rel_path = ? AND state = 'live'");
     const stillUsed = db.prepare("SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1");
     const delReactions = db.prepare('DELETE FROM reactions WHERE message_id = ?');
     const delMessage = db.prepare('DELETE FROM messages WHERE id = ?');
@@ -88,10 +91,8 @@ async function trimUploadsToLimit({ db, uploadsDir, maxBytes, extractPaths, move
         let rowBytes = 0;
         for (const rel of own) {
           if (counted.has(rel)) continue;
-          try {
-            const st = await fs.promises.stat(path.join(uploadsDir, rel));
-            if (st.isFile()) { rowBytes += st.size; counted.add(rel); }
-          } catch { /* not on this server, or already gone */ }
+          const bytes = liveBytes.get(rel)?.bytes;
+          if (bytes !== undefined) { rowBytes += bytes; counted.add(rel); }   // else not on this server, or already gone
         }
         // A message whose files are already gone frees nothing, so it stays.
         if (rowBytes === 0) continue;
@@ -110,7 +111,7 @@ async function trimUploadsToLimit({ db, uploadsDir, maxBytes, extractPaths, move
         // once nothing left points at it.
         for (const rel of contentFiles) {
           const like = '%/uploads/' + rel.replace(/[\\%_]/g, '\\$&') + '%';
-          if (!stillUsed.get(like)) move(rel);
+          if (!stillUsed.get(like)) await move(rel);
         }
         size -= freed;
       }

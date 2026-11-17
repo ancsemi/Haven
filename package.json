@@ -1,6 +1,6 @@
 ﻿{
   "name": "haven",
-  "version": "4.26.2",
+  "version": "4.30.0-beta.2",
   "description": "Haven - self-hosted private chat for your server, your rules",
   "license": "AGPL-3.0",
   "main": "server.js",
@@ -24,7 +24,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "localtunnel": "^2.0.2",
-    "multer": "^2.4.0",
+    "multer": "^2.5.0",
     "music-metadata": "^11.16.0",
     "otpauth": "^9.5.0",
     "qrcode": "^1.5.4",
@@ -36,7 +36,11 @@
   },
   "overrides": {
     "bn.js": ">=5.2.3",
-    "axios": ">=1.8.2"
+    "axios": ">=1.8.2",
+    "archiver-utils": {
+      "glob": "^14.0.3"
+    },
+    "minimatch": "^11.0.4"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

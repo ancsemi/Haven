@@ -276,6 +276,7 @@
       "logout": "退出登录",
       "invite": "邀请用户",
       "change_display_name": "修改显示名称",
+      "mentions": "提及和回复",
       "close_sidebar": "关闭侧边栏",
       "message_actions": "消息操作",
       "organize_channels": "整理频道",
@@ -650,7 +651,14 @@
     },
     "push_to_mute_held": "按住静音已生效。松开前你的麦克风保持静音。",
     "sharing_ended": "{{who}} 已不再共享屏幕",
-    "status_push_to_mute": "已静音（按住静音）"
+    "status_push_to_mute": "已静音（按住静音）",
+    "music_file_platform": "音频文件",
+    "music_file_listen": "为语音中的所有人播放",
+    "music_file_join_voice": "加入语音频道后可为那里的所有人播放",
+    "music_file_failed": "无法播放此音频文件",
+    "music_yt_gone": "YouTube 表示此视频已不存在",
+    "music_yt_blocked": "YouTube 不会在这里播放此视频（上传者关闭了嵌入，或在此国家/地区被屏蔽）",
+    "music_yt_failed": "YouTube 无法播放此视频"
   },
   "calls": {
     "incoming": "来电",
@@ -697,7 +705,8 @@
     "member_removed": "已将 {{name}} 移出群组",
     "leave_confirm": "退出 {{group}}？除非有人再次邀请你，否则你将无法阅读新消息。",
     "key_changed": "{{name}} 的加密密钥已更改。请在再次分享群组密钥前验证。",
-    "no_key": "🔒 在你加入前发送，或正在等待群组成员分享密钥",
+    "no_key": "🔒 正在等待其他群组成员打开 Haven 并分享密钥",
+    "before_join": "🔒 在你加入之前（或在你的加密密钥重置之前）发送，因此无法在此打开",
     "cannot_verify": "⚠️ 此消息无法验证，已不显示",
     "already_exists": "你已经有与这些人组成的群组：{{name}}",
     "keys_changed_title": "此群组的加密密钥已更改",
@@ -1052,6 +1061,7 @@
     "uploads_disabled": "此频道已禁用媒体上传",
     "soundboard_disabled": "此频道已关闭音效板",
     "file_too_large": "文件过大（最大 {{maxMb}} MB）",
+    "file_type_blocked": "此服务器不允许上传 .{{ext}} 文件",
     "image_too_large": "图片过大（最大 {{maxMb}} MB）",
     "max_images": "一次最多 5 张图片",
     "max_files": "一次最多 5 个文件",
@@ -1417,7 +1427,9 @@
     "frame_rate": "帧率",
     "bitrate": "码率",
     "bitrate_unlimited": "不限",
-    "camera_fallback": "摄像头 {{n}}"
+    "camera_fallback": "摄像头 {{n}}",
+    "camera_quality": "摄像头画质",
+    "camera_quality_hint": "画质越高越清晰，但你和观看者都会用更多带宽。你的摄像头可能达不到这么高。"
   },
   "notifications_runtime": {
     "title": "{{sender}} 在 {{channel}}",
@@ -1576,7 +1588,26 @@
       "backup": "备份",
       "template": "服务器模板",
       "audit_log": "审计日志",
-      "badges": "徽章"
+      "badges": "徽章",
+      "whats_new": "新功能"
+    },
+    "pages": {
+      "look": "外观",
+      "chat": "聊天与媒体",
+      "alerts": "通知",
+      "profile": "个人资料与动态",
+      "security": "账户与安全",
+      "language": "语言",
+      "access": "无障碍",
+      "advanced": "插件与高级",
+      "server": "服务器",
+      "people": "成员与角色",
+      "safety": "安全",
+      "content": "内容",
+      "network": "网络与规模",
+      "tools": "机器人与数据",
+      "more": "更多",
+      "more_info": "更多信息"
     },
     "localization_section": {
       "title": "本地化"
@@ -1698,6 +1729,12 @@
         "underline_links": "链接下划线",
         "large_targets": "更大的点击区域",
         "large_targets_hint": "侧边栏、消息框和消息操作中的按钮更大、行更高。"
+      },
+      "emoji": {
+        "title": "表情符号",
+        "system": "设备自带的表情",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji 在所有设备上显示一样的表情，字体由 Haven 自己提供。"
       }
     },
     "reaction_size": {
@@ -2119,6 +2156,8 @@
       "listener_only_hint": "不请求麦克风权限加入语音频道。你能听到所有人但不能说话。适合你没有麦克风、暂时无法授权，或只想旁听。若因任何原因无法打开麦克风，Haven 也会自动回退到仅收听模式。（#5380）",
       "screen_share_voice_proc": "对屏幕共享音频应用语音处理",
       "screen_share_voice_proc_hint": "对屏幕共享捕获的音频重新启用回声消除、噪声抑制和自动增益控制。自 3.17.3 起默认关闭，因为这些滤波器会破坏音乐和游戏音频。若你分享的是语音内容（教程旁白、播客、会议），开启会有帮助。不影响你的麦克风，麦克风始终进行完整语音处理。",
+      "stereo_stream_audio": "串流音频立体声（实验性）",
+      "stereo_stream_audio_hint": "以面向音乐和游戏的更高码率用立体声播放屏幕共享的声音。开启后即可用立体声收听串流；在使用语音中继的服务器上，共享者也需要开启。会占用更多带宽。更改后请重新加入语音。实验性功能：如果语音出问题，请关闭。",
       "screen_audio_webaudio": "屏幕共享音频使用 Web Audio 混音",
       "screen_audio_webaudio_hint": "默认 Haven 直接通过 audio 元素播放传入的屏幕共享音频，在 TURN/中继连接上可与视频保持同步。开启后改为通过 Haven 的 Web Audio 混音器路由，可解锁上方超过 100% 的单路音量提升，但在中继上可能导致音频卡顿和音画不同步（局域网没问题）。若屏幕共享音频卡顿或漂移，请保持关闭。（#5426）",
       "screen_relay_profile": "中继连接使用更温和的屏幕共享",
@@ -2144,6 +2183,10 @@
       "update_hint": "检查新的 Haven 发布版本并就地更新。服务器会自动创建更新前备份并自行重启。",
       "update_check_btn": "检查更新",
       "update_run_btn": "立即更新",
+      "shutdown_btn": "关闭服务器",
+      "shutdown_hint": "像 Ctrl+C 一样干净地停止 Haven。之后按平常的方式再启动。如果 Docker 或服务管理器会自动重启 Haven，这会变成重启。",
+      "shutdown_confirm": "现在关闭服务器？在重新启动之前所有人都会断开。",
+      "shutdown_sent": "服务器正在关闭。",
       "update_checking": "检查中…",
       "update_run_on_host": "在主机上运行：",
       "update_copy_command": "复制命令",
@@ -2165,6 +2208,11 @@
       "view_ip_bans_btn": "查看 IP 封禁",
       "admin_pw_reset_label": "允许管理员重置密码",
       "admin_pw_reset_hint": "⚠️ 启用后，管理员可将任何用户的密码重置为一次性临时值。用户必须在下次登录时修改。重置密码也会清除该用户的 E2E 私信历史（其包装密钥由密码派生）。此能力已启用的情况会通过 /api/public-config 暴露，以便用户了解本服务器管理员是否拥有此权限。",
+      "transfer_title": "将服务器交给其他人",
+      "transfer_hint": "让另一位成员成为管理员，你将不再是管理员。需要用密码确认。",
+      "transfer_placeholder": "成员名称…",
+      "transfer_btn": "移交管理员…",
+      "transfer_pick": "请先从列表中选择一位成员",
       "oidc_group": "单点登录（OIDC）",
       "oidc_desc": "让成员使用你自己的身份提供方（Authentik、Keycloak、Authelia、Auth0 及任何支持 OpenID Connect 的服务）账号登录，而不是 Haven 密码。在此填写签发者地址和客户端 ID，然后将客户端密钥以 OIDC_CLIENT_SECRET 写入 .env 文件并重启。密钥刻意不存入数据库，因此备份永远不会包含它。请将以下地址注册为你提供方的重定向 URI：<code>https://your-haven-address/api/auth/oidc/callback</code>",
       "oidc_e2e_note": "加密私信使用登录时输入内容派生的密钥解锁，而 SSO 成员在此从不输入密码。他们会在首次登录时被要求设置单独的加密口令，在每台新设备上再次输入。包括你在内的任何人都无法为其重置该口令。",
@@ -2239,6 +2287,9 @@
       "automod_log_channel_placeholder": "频道代码（可选）",
       "automod_activity_group": "最近活动",
       "automod_refresh": "刷新",
+      "automod_ai_group": "AI 链接检查（实验性）",
+      "automod_ai_enabled": "允许 AutoMod Quarantine 插件使用此服务器",
+      "automod_ai_hint": "实验性功能，默认关闭。开启 AutoMod Quarantine 插件的服务器端：用运行在此服务器上的 AI 模型检查链接（通过 scripts/setup-automod-ai.sh 安装），并把版主的请求转发给拒绝浏览器请求的云端 AI 服务。发给 AI 的始终只有链接，从不包括消息内容。成员仍可自行决定是否在“插件与主题”中开启该插件。",
       "bulk_preview_failed": "预览失败",
       "mention_everyone_desc": "通知频道中的所有人",
       "mention_here_desc": "通知在线成员",
@@ -2404,7 +2455,6 @@
       "upload_btn": "上传",
       "remove_btn": "移除",
       "server_banner_hint": "服务器横幅（宽幅，最大 4 MB）",
-      "server_banner_display_hint": "横幅显示设置（高度、偏移、页眉样式）在用户设置中。",
       "appearance_welcome": "外观与欢迎",
       "welcome_message": "欢迎消息",
       "welcome_message_placeholder": "例如：欢迎 {user}！",
@@ -2627,6 +2677,12 @@
       "save_hint": "更改仅在点击保存后生效。关闭（✕）以取消。",
       "save_notice": "下方更改需要点击<strong>保存设置</strong>才能生效。",
       "login_title_hint": "显示在登录界面 HAVEN 标志下方的自定义标题。",
+      "login_show_icon": "在登录页显示服务器图标",
+      "login_show_banner": "用服务器横幅作为登录页背景",
+      "login_message": "登录页消息",
+      "login_message_hint": "标题下方的简短说明，例如欢迎语或如何获得邀请。",
+      "login_css": "登录页 CSS",
+      "login_css_hint": "只作用于登录和注册页面。如果某个样式把表单藏起来了，在登录页地址末尾加上 ?nocss 即可跳过。引用其他网站的图片或字体会让该网站看到访问者。",
       "server_icon_hint": "服务器图标（正方形，最大 2 MB）",
       "default_theme_hint": "新用户首次访问时看到此主题。他们仍可自行选择。在“新成员默认值”中分享的主题与此设置相同：改一个另一个也会变。",
       "default_locale": "默认语言",
@@ -2696,6 +2752,9 @@
       "max_avatar_hint": "某人可上传的最大头像、边框或人设图片（1 到 10 MB，默认 2）。动态 GIF 通常超过 2 MB，但每张图片都会在其所有者发送的每条消息旁加载，因此请尽量保持较低。",
       "max_emoji_hint": "最大自定义表情上传大小（64-1024 KB，默认 256）",
       "max_poll_hint": "每个投票的最大选项数（2-25，默认 10）",
+      "blocked_upload_types": "禁止的文件类型",
+      "blocked_upload_types_hint": "任何人都不能上传这些类型的文件。用逗号分隔。常见的危险类型：exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar。留空则允许所有类型。",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_message_chars_hint": "每条消息、帖子或私信的最大字符数（200-100000，默认 2000）",
       "max_invite_uses": "邀请链接最大使用次数",
       "max_invite_uses_hint": "邀请链接可设置的最大使用次数。管理员和管理服务器权限不受此限制。（0 = 不限）",
@@ -2837,6 +2896,13 @@
       "no_banned_users": "没有被封禁的用户",
       "no_reason": "无原因",
       "unban_btn": "解封",
+      "scrub_btn": "删除消息",
+      "scrub_title": "删除其在本服务器频道中写下的全部内容",
+      "scrub_confirm": "删除 {{name}} 的所有消息？",
+      "scrub_confirm_hint": "其在本服务器频道中写下的全部内容将对所有人删除。受保护的消息和私信会保留。此操作无法撤销。",
+      "scrub_done": "已删除 {{n}} 条消息",
+      "scrub_none": "已没有可删除的消息",
+      "scrub_failed": "无法删除其消息",
       "ban_appeal_label": "申诉",
       "dismiss_appeal_btn": "忽略申诉",
       "dismiss_appeal_title": "不解封并清除此申诉",
@@ -2994,6 +3060,11 @@
         "style_preview_name": "身份组名称",
         "transparent": "透明",
         "transparent_hint": "开启后，此身份组从不为其持有者着色。改由他们下一个非透明身份组着色，若没有则显示无色。",
+        "mentionable": "可以被 @提及",
+        "mentionable_hint": "会出现在 @ 列表中，@名称 会通知拥有该角色的所有人。装饰和游戏角色可以关闭。",
+        "show_on_profile": "在资料卡上显示",
+        "show_on_profile_hint": "关闭：角色不显示在资料卡上。管理角色的人仍会看到它（变淡显示）。",
+        "hidden_on_profile_title": "只有管理角色的人能在资料卡上看到此角色",
         "auto_assign": "自动分配给新成员",
         "auto_assign_hint": "新用户注册或加入频道时将自动获得此身份组。",
         "channel_access": "频道访问",
@@ -3079,7 +3150,17 @@
       "blur": "NSFW 话题点击前模糊",
       "blur_hint": "标记 🔞 的话题图片和预览会像剧透一样模糊显示。关闭后可直接查看。"
     },
-    "search_placeholder": "搜索设置（Ctrl+F）"
+    "search_placeholder": "搜索设置（Ctrl+F）",
+    "whats_new": {
+      "title": "新功能",
+      "show_label": "何时显示新内容",
+      "all": "每次更新",
+      "minor": "新功能",
+      "major": "仅重大更新",
+      "off": "从不",
+      "hint": "版本号分三部分：重大更新改变第一部分，新功能改变第二部分，修复改变第三部分。带下划线的部分变化时，会弹出更新说明。保存在此设备上。",
+      "show_now": "查看此版本的新内容"
+    }
   },
   "modals": {
     "timezone": {
@@ -3421,7 +3502,9 @@
       "not_here": "私信中不可用稍后发送",
       "scheduled": "已计划于 {{when}} 发送",
       "updated": "已更新，将于 {{when}} 发送",
-      "sent": "你的计划消息已在 #{{channel}} 发出"
+      "sent": "你的计划消息已在 #{{channel}} 发出",
+      "attach": "📎 附加文件",
+      "remove_file": "移除"
     },
     "self_destruct": {
       "title": "自毁消息",
@@ -3570,7 +3653,7 @@
     "donors": {
       "title": "感谢你",
       "subtitle": "Haven 以爱打造，靠像你这样的人的慷慨维持。每一笔捐赠，无论大小，都意义重大。",
-      "sponsors_title": "赞助者",
+      "sponsors_title": "每月支持者",
       "donors_title": "捐赠者",
       "note": "新捐赠者会随每次发布添加。若你已捐赠但未看到名字，将在下次更新中出现！",
       "kofi_btn": "在 Ko-fi 支持 Haven",
@@ -4773,5 +4856,10 @@
     "label": "{{count}} 个附件",
     "more": "还有 {{count}} 个",
     "play_video": "播放视频"
+  },
+  "whats_new": {
+    "title": "Haven {{version}} 的新内容",
+    "settings_hint": "可在 设置 > 新功能 中选择何时显示。",
+    "unavailable": "此服务器上没有可用的更新说明。"
   }
 }

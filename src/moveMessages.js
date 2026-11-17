@@ -35,10 +35,14 @@
 //    forum, so in another channel it would match no link: Discord replies
 //    would keep landing in the old channel under a topic that left it, and
 //    Haven replies would stop crossing. Unpairing it quietly would be worse
-//  - not to or from a blog forum. There, who wrote a reply decides whether
-//    it is part of the post or a comment, so moving a post and its replies
-//    in or out would rewrite which is which. Move here as thread refuses the
-//    same
+//  - to or from a blog forum, only whole topics, forum to forum (#5809).
+//    There, who wrote a reply decides whether it is part of the post or a
+//    comment, and that is worked out from the messages themselves
+//    (src/forumBlog.js), so a topic that moves with all its replies reads the
+//    same way in its new forum as turning blog mode on or off would show it.
+//    A single reply pulled out of a post, or a chat message dropped in, would
+//    land as a post of its own, so those stay refused. Move here as thread
+//    refuses blog forums altogether
 //
 // Everything runs in one transaction, checked again inside it, so two moves
 // at once cannot both move the same message.
@@ -57,7 +61,8 @@ function moveToChannel(db, { from, to, messageIds }) {
     if (!from || !to) return { error: 'Channel not found' };
     if (from.id === to.id) return { error: 'Invalid channels' };
     if (from.is_dm || to.is_dm) return { error: 'Cannot move messages to or from DMs' };
-    if (forumBlog.blogOn(db, from.id) || forumBlog.blogOn(db, to.id)) return { error: 'Messages cannot be moved into or out of a blog forum' };
+    const blog = forumBlog.blogOn(db, from.id) || forumBlog.blogOn(db, to.id);
+    if (blog && !(from.is_forum && to.is_forum)) return { error: 'Messages cannot be moved into or out of a blog forum' };
     if (ids.length === 0 || ids.length > MAX_SELECTED) return { error: `Select between 1 and ${MAX_SELECTED} messages` };
 
     const rows = db.prepare(`SELECT id, thread_id FROM messages WHERE id IN (${placeholders(ids.length)}) AND channel_id = ?`)
@@ -73,6 +78,7 @@ function moveToChannel(db, { from, to, messageIds }) {
       // else: it moves with its root
     }
     if (tops.length === 0) return { error: 'Those messages are replies in a thread that is staying put' };
+    if (blog && kept.length) return { error: 'In a blog forum only whole topics can be moved' };
     tops.sort((a, b) => a - b);
     kept.sort((a, b) => a - b);
 
@@ -122,4 +128,4 @@ function keepForumTags(db, channelId, topIds) {
   }
 }
 
-module.exports = { moveToChannel };
+module.exports = { moveToChannel, keepForumTags };

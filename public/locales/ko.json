@@ -256,6 +256,7 @@
       "logout": "로그아웃",
       "invite": "사용자 초대",
       "change_display_name": "표시 이름 변경",
+      "mentions": "멘션 및 답장",
       "close_sidebar": "사이드바 닫기",
       "message_actions": "메시지 작업",
       "organize_channels": "채널 정리",
@@ -581,7 +582,14 @@
       "soundboard": "사운드보드",
       "listen_together": "함께 듣기",
       "settings": "음성 설정"
-    }
+    },
+    "music_file_platform": "오디오 파일",
+    "music_file_listen": "음성의 모두에게 재생",
+    "music_file_join_voice": "음성 채널에 들어가면 모두에게 재생할 수 있습니다",
+    "music_file_failed": "이 오디오 파일을 재생할 수 없습니다",
+    "music_yt_gone": "YouTube에 따르면 이 동영상은 없어졌습니다",
+    "music_yt_blocked": "YouTube가 여기서 이 동영상을 재생하지 않습니다(퍼가기가 꺼져 있거나 이 나라에서 차단됨)",
+    "music_yt_failed": "YouTube가 이 동영상을 재생하지 못했습니다"
   },
   "calls": {
     "incoming": "수신 전화",
@@ -628,7 +636,8 @@
     "member_removed": "{{name}}님을 그룹에서 제외했습니다",
     "leave_confirm": "{{group}}에서 나갈까요? 누군가 다시 초대하지 않으면 새 메시지를 읽을 수 없습니다.",
     "key_changed": "{{name}}님의 암호화 키가 변경되었습니다. 그룹 키를 다시 공유하기 전에 확인하세요.",
-    "no_key": "🔒 참여하기 전에 보낸 메시지이거나, 그룹 멤버가 키를 공유하기를 기다리는 중입니다",
+    "no_key": "🔒 다른 그룹 멤버가 Haven을 열어 키를 공유하기를 기다리는 중입니다",
+    "before_join": "🔒 참여하기 전(또는 암호화 키를 재설정하기 전)에 보낸 메시지라 여기서 열 수 없습니다",
     "cannot_verify": "⚠️ 이 메시지는 확인할 수 없어 표시되지 않았습니다",
     "already_exists": "이미 이 사람들과 함께하는 그룹이 있습니다: {{name}}",
     "keys_changed_title": "이 그룹의 암호화 키가 변경되었습니다",
@@ -942,6 +951,7 @@
     "uploads_disabled": "이 채널에서는 미디어 업로드가 비활성화되어 있습니다",
     "soundboard_disabled": "이 채널에서는 사운드보드가 꺼져 있습니다",
     "file_too_large": "파일이 너무 큽니다 (최대 {{maxMb}} MB)",
+    "file_type_blocked": "이 서버에서는 .{{ext}} 파일을 업로드할 수 없습니다",
     "image_too_large": "이미지가 너무 큽니다 (최대 {{maxMb}} MB)",
     "max_images": "한 번에 최대 5개의 이미지",
     "max_files": "한 번에 최대 5개의 파일",
@@ -1297,7 +1307,9 @@
     "frame_rate": "프레임 레이트",
     "bitrate": "비트레이트",
     "bitrate_unlimited": "무제한",
-    "camera_fallback": "카메라 {{n}}"
+    "camera_fallback": "카메라 {{n}}",
+    "camera_quality": "카메라 화질",
+    "camera_quality_hint": "화질이 높을수록 선명하지만 나와 보는 사람 모두 데이터를 더 씁니다. 카메라가 그만큼 지원하지 않을 수도 있습니다."
   },
   "notifications_runtime": {
     "title": "{{channel}}의 {{sender}}",
@@ -1409,7 +1421,26 @@
       "tunnel": "터널",
       "bots": "봇",
       "import": "가져오기",
-      "mod_mode": "관리 모드"
+      "mod_mode": "관리 모드",
+      "whats_new": "새로운 기능"
+    },
+    "pages": {
+      "look": "모양",
+      "chat": "채팅 및 미디어",
+      "alerts": "알림",
+      "profile": "프로필 및 활동",
+      "security": "계정 및 보안",
+      "language": "언어",
+      "access": "접근성",
+      "advanced": "플러그인 및 고급",
+      "server": "서버",
+      "people": "사람 및 역할",
+      "safety": "안전",
+      "content": "콘텐츠",
+      "network": "네트워크 및 규모",
+      "tools": "봇 및 데이터",
+      "more": "더 보기",
+      "more_info": "자세히"
     },
     "language_section": {
       "title": "언어",
@@ -1667,6 +1698,12 @@
       "save_hint": "변경 사항은 저장을 클릭해야 적용됩니다. 취소하려면 닫기(✕)를 누르세요.",
       "save_notice": "아래 변경 사항을 적용하려면 <strong>설정 저장</strong>을 클릭해야 합니다.",
       "login_title_hint": "로그인 화면의 HAVEN 로고 아래에 표시되는 사용자 지정 제목입니다.",
+      "login_show_icon": "로그인 페이지에 서버 아이콘 표시",
+      "login_show_banner": "서버 배너를 로그인 페이지 배경으로 사용",
+      "login_message": "로그인 페이지 메시지",
+      "login_message_hint": "제목 아래에 표시되는 짧은 메모. 환영 인사나 초대 받는 방법 등.",
+      "login_css": "로그인 페이지 CSS",
+      "login_css_hint": "로그인 및 가입 페이지에만 적용됩니다. 스타일 때문에 양식이 가려지면 로그인 페이지 주소 끝에 ?nocss를 붙여 건너뛸 수 있습니다. 다른 사이트의 그림이나 글꼴을 쓰면 그 사이트가 방문자를 볼 수 있습니다.",
       "server_icon_hint": "서버 아이콘 (정사각형, 최대 2 MB)",
       "default_theme_hint": "새 사용자는 처음 방문할 때 이 테마를 보게 됩니다. 사용자는 여전히 자신의 테마를 선택할 수 있습니다. 새 멤버 기본값에서 공유한 테마도 같은 설정이므로, 하나를 바꾸면 다른 하나도 바뀝니다.",
       "update_banner_hint": "사용하면 \"업데이트 가능\" 배너가 관리자에게만 표시됩니다",
@@ -1679,6 +1716,9 @@
       "max_sound_hint": "사운드보드 최대 업로드 크기 (256-10240 KB, 기본값 1024 / 1 MB)",
       "max_emoji_hint": "사용자 지정 이모지 최대 업로드 크기 (64-1024 KB, 기본값 256)",
       "max_poll_hint": "투표당 최대 선택지 수 (2-25, 기본값 10)",
+      "blocked_upload_types": "차단할 파일 형식",
+      "blocked_upload_types_hint": "이 형식의 파일은 아무도 업로드할 수 없습니다. 쉼표로 구분하세요. 흔한 위험 형식: exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar. 비워 두면 모든 형식을 허용합니다.",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_message_chars_hint": "메시지, 게시물 또는 DM당 최대 글자 수 (200-100000, 기본값 2000)",
       "sounds_hint": "사용자 지정 알림음으로 쓸 오디오 파일을 업로드하세요",
       "emojis_hint": "사용자 지정 서버 이모지로 쓸 이미지를 업로드하세요",
@@ -1690,6 +1730,13 @@
       "no_banned_users": "차단된 사용자가 없습니다",
       "no_reason": "사유 없음",
       "unban_btn": "차단 해제",
+      "scrub_btn": "메시지 삭제",
+      "scrub_title": "이 서버의 채널에 쓴 모든 것을 삭제",
+      "scrub_confirm": "{{name}}의 메시지를 모두 삭제할까요?",
+      "scrub_confirm_hint": "이 서버의 채널에 쓴 모든 내용이 모두에게서 삭제됩니다. 보호된 메시지와 DM은 남습니다. 되돌릴 수 없습니다.",
+      "scrub_done": "메시지 {{n}}개를 삭제했습니다",
+      "scrub_none": "삭제할 메시지가 남아 있지 않습니다",
+      "scrub_failed": "메시지를 삭제하지 못했습니다",
       "delete_user_title": "사용자 삭제",
       "confirm_delete_user": "⚠️ {{name}}님을 영구적으로 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
       "no_deleted_users": "삭제된 사용자가 없습니다",
@@ -1818,12 +1865,48 @@
         "reapply_access": "모든 사용자에게 접근 권한 다시 적용",
         "reapply_access_tooltip": "이미 이 역할을 가진 모든 사용자에게 위의 채널 접근 규칙을 다시 실행합니다. 부여/해제 체크박스를 편집한 후 유용하며, 역할을 다시 지정하지 않아도 기존 멤버를 현재 설정에 맞춰 줍니다.",
         "permissions": "권한",
-        "delete": "삭제"
+        "delete": "삭제",
+        "mentionable": "@멘션 가능",
+        "mentionable_hint": "@ 목록에 표시되고, @이름 으로 역할을 가진 모두에게 알립니다. 꾸미기용이나 게임 역할은 끄세요.",
+        "show_on_profile": "프로필 카드에 표시",
+        "show_on_profile_hint": "끔: 프로필 카드에 역할이 나오지 않습니다. 역할을 관리하는 사람에게는 흐리게 보입니다.",
+        "hidden_on_profile_title": "역할을 관리하는 사람만 프로필 카드에서 이 역할을 봅니다"
       },
       "import_files_progress": "파일 {{count}}개 복사됨",
       "import_files_copied": "사진과 파일 {{count}}개를 Haven으로 복사했습니다.",
       "import_files_links": "{{count}}개는 링크로 남았습니다 (만료됨, 너무 큼, 또는 접근 불가).",
-      "import_files_disk": "서버의 디스크 공간이 부족해 복사를 멈췄습니다. 나머지는 링크로 남았습니다."
+      "import_files_disk": "서버의 디스크 공간이 부족해 복사를 멈췄습니다. 나머지는 링크로 남았습니다.",
+      "transfer_title": "서버를 다른 사람에게 넘기기",
+      "transfer_hint": "다른 멤버를 관리자로 만들고 당신은 관리자가 아니게 됩니다. 비밀번호로 확인합니다.",
+      "transfer_placeholder": "멤버 이름…",
+      "transfer_btn": "관리자 넘기기…",
+      "transfer_pick": "먼저 목록에서 멤버를 고르세요",
+      "shutdown_btn": "서버 종료",
+      "shutdown_hint": "Ctrl+C처럼 Haven을 안전하게 멈춥니다. 평소처럼 다시 시작하세요. Docker나 서비스 관리자가 Haven을 자동으로 다시 시작하면 재시작이 됩니다.",
+      "shutdown_confirm": "지금 서버를 종료할까요? 다시 시작할 때까지 모두 연결이 끊깁니다.",
+      "shutdown_sent": "서버를 종료하는 중입니다."
+    },
+    "debug_section": {
+      "stereo_stream_audio": "스트림 오디오 스테레오 (실험)",
+      "stereo_stream_audio_hint": "화면 공유 소리를 음악과 게임용 높은 비트레이트의 스테레오로 재생합니다. 켜면 스트림을 스테레오로 들을 수 있습니다. 음성 릴레이를 쓰는 서버에서는 공유하는 사람도 켜야 합니다. 데이터를 더 씁니다. 바꾼 뒤 음성에 다시 들어가세요. 실험 기능입니다. 음성이 이상하면 끄세요."
+    },
+    "accessibility": {
+      "emoji": {
+        "title": "이모지",
+        "system": "기기의 이모지",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji는 모든 기기에서 이모지를 똑같이 그립니다. 글꼴은 Haven이 직접 제공합니다."
+      }
+    },
+    "whats_new": {
+      "title": "새로운 기능",
+      "show_label": "새 소식 표시 시점",
+      "all": "모든 업데이트",
+      "minor": "새 기능",
+      "major": "큰 업데이트만",
+      "off": "표시 안 함",
+      "hint": "버전 번호는 세 부분입니다. 큰 업데이트는 첫째, 새 기능은 둘째, 수정은 셋째 부분을 바꿉니다. 밑줄 친 부분이 바뀌면 릴리스 노트가 표시됩니다. 이 기기에 저장됩니다.",
+      "show_now": "이 버전의 새로운 기능 보기"
     }
   },
   "modals": {
@@ -2118,7 +2201,7 @@
     "donors": {
       "title": "감사합니다",
       "subtitle": "Haven은 애정으로 만들어지고 여러분 같은 분들의 후원으로 유지됩니다. 크든 작든 모든 후원이 정말 큰 힘이 됩니다.",
-      "sponsors_title": "스폰서",
+      "sponsors_title": "정기 후원자",
       "donors_title": "후원자",
       "note": "새 후원자는 릴리스마다 추가됩니다. 후원하셨는데 이름이 보이지 않는다면 다음 업데이트에 포함될 거예요!",
       "kofi_btn": "Ko-fi에서 Haven 후원하기",
@@ -2306,6 +2389,10 @@
       "desc": "대상 채널을 선택하세요",
       "move_one": "메시지 {{n}}개를 이동할 위치:",
       "move_many": "메시지 {{n}}개를 이동할 위치:"
+    },
+    "schedule": {
+      "attach": "📎 파일 첨부",
+      "remove_file": "제거"
     }
   },
   "context_menu": {
@@ -2922,5 +3009,10 @@
     "days_ago": "{{n}}일 전",
     "tags_editor_title": "포럼 태그",
     "tags_editor_hint": "한 줄에 태그 하나씩 입력하세요. 원한다면 \"🎨 미술\"처럼 이모지를 앞에 붙이세요. 최대 20개."
+  },
+  "whats_new": {
+    "title": "Haven {{version}}의 새로운 기능",
+    "settings_hint": "설정 > 새로운 기능에서 표시 시점을 고를 수 있습니다.",
+    "unavailable": "이 서버에서는 릴리스 노트를 볼 수 없습니다."
   }
 }

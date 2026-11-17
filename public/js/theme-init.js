@@ -80,7 +80,8 @@
     lineSpacing: ['normal', 'relaxed', 'loose'],
     letterSpacing: ['normal', 'wide'],
     font: ['theme', 'system', 'hyperlegible', 'dyslexic'],
-    motion: ['system', 'on', 'off']
+    motion: ['system', 'on', 'off'],
+    emoji: ['system', 'twemoji']
   };
   function _a11yPick(value, list) { return list.indexOf(value) >= 0 ? value : list[0]; }
   function _readA11y(storage) {
@@ -93,6 +94,7 @@
       lineSpacing: _a11yPick(get('haven-line-spacing'), A11Y_CHOICES.lineSpacing),
       letterSpacing: _a11yPick(get('haven-letter-spacing'), A11Y_CHOICES.letterSpacing),
       font: _a11yPick(get('haven-readable-font'), A11Y_CHOICES.font),
+      emoji: _a11yPick(get('haven-emoji-style'), A11Y_CHOICES.emoji),
       highContrast: get('haven-contrast') === 'high',
       motion: _a11yPick(get('haven-reduce-motion'), A11Y_CHOICES.motion),
       underlineLinks: get('haven-underline-links') === '1',
@@ -109,6 +111,7 @@
     root.setAttribute('data-line-spacing', prefs.lineSpacing);
     root.setAttribute('data-letter-spacing', prefs.letterSpacing);
     root.setAttribute('data-readable-font', prefs.font);
+    root.setAttribute('data-emoji-style', prefs.emoji);
     root.setAttribute('data-contrast', prefs.highContrast ? 'high' : 'normal');
     root.setAttribute('data-reduce-motion', prefs.motion);
     root.setAttribute('data-underline-links', prefs.underlineLinks ? 'on' : 'off');

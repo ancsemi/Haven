@@ -27,10 +27,18 @@ _threadReplySound({ mine = false, channelMuted = false, quiet = false, isMention
 
 _setupThreadUnread() {
   if (!this._threadUnread) this._threadUnread = new Map();
-  // Opened on another device: the news is read here too.
+  // Opened on another device: the news is read here too, and the mention
+  // bell for that thread goes quiet.
   this.socket.on('thread-read', (data) => {
-    if (data && data.parentId != null) this._clearThreadUnread(data.parentId);
+    if (data && data.parentId != null) {
+      this._clearThreadUnread(data.parentId);
+      if (data.channelCode) this._clearThreadMentionsForParent?.(data.channelCode, Number(data.parentId));
+    }
   });
+  // This device was closed when a thread was read elsewhere: drop the
+  // mentions it remembers that are already read, on every (re)connect.
+  this.socket.on('connect', () => this._pruneReadThreadMentions?.());
+  this._pruneReadThreadMentions?.();
 },
 
 _threadIsOpen(parentId) {

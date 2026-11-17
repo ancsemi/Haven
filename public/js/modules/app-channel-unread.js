@@ -292,10 +292,11 @@ _setupDmDragDrop() {
     indicator.parentNode.insertBefore(dragSrc, indicator);
     indicator.remove();
     const newOrder = [...dmList.querySelectorAll('.dm-item')].map(el => el.dataset.code);
-    localStorage.setItem('haven_dm_order', JSON.stringify(newOrder));
-    localStorage.setItem('haven_dm_sort_mode', 'manual');
+    this._saveDmManualOrder(newOrder);
+    this._setDmSortMode('manual');
     dragSrc.classList.remove('ch-dragging');
     dragSrc = null;
+    this._syncDmPinOrder?.(newOrder);
   });
 
   dmList.addEventListener('dragend', cleanUp);
@@ -534,32 +535,37 @@ _resyncDesktopBadgeOnFocus() {
   this._desktopBadgeFocusBound = true;
   const resync = () => {
     if (document.hidden) return;
-    // Clear stale unread badge on the channel the user is actively viewing.
-    // When the page is hidden (backgrounded BrowserView, alt-tab, minimise)
-    // incoming messages bump unreadCounts even though the user was already
-    // at the bottom, because isActivelyViewing = false in the new-message
-    // handler.  The badge-clearing path inside that handler only fires when
-    // a *new* message arrives while visible, so if no message arrives after
-    // the user returns the "N unread" badge is stuck until someone else
-    // types.  Fix: as soon as the window becomes visible again, if the user
-    // is still coupled to the bottom of the current channel, treat those
-    // messages as read immediately. (#phantom-badge-on-focus-return)
-    if (this.currentChannel && this._coupledToBottom && this.unreadCounts?.[this.currentChannel]) {
-      const code = this.currentChannel;
-      const ch = this.channels?.find(c => c.code === code);
-      const latestId = ch?.latestMessageId || this._newestMsgId;
-      this.unreadCounts[code] = 0;
-      try { this._updateBadge?.(code); } catch (err) { console.warn('[Channels] _updateBadge failed', err); }
-      try { this._updateDmSectionBadge?.(); } catch (err) { console.warn('[Channels] _updateDmSectionBadge failed', err); }
-      try { this._updateTabTitle?.(); } catch (err) { console.warn('[Channels] _updateTabTitle failed', err); }
-      if (latestId) {
-        try { this.socket.emit('mark-read', { code, messageId: latestId }); } catch (err) { console.warn('[Channels] could not mark the channel read', err); }
-      }
-    }
+    this._clearSeenUnread();
     try { this._updateDesktopBadge(); } catch (err) { console.warn('[Channels] _updateDesktopBadge failed', err); }
   };
   window.addEventListener('focus', resync);
   document.addEventListener('visibilitychange', resync);
+  // A click or key press in the page means someone is looking at it, even
+  // when the window never lost focus as far as the page could tell.
+  document.addEventListener('pointerdown', () => this._clearSeenUnread(), { capture: true, passive: true });
+  document.addEventListener('keydown', () => this._clearSeenUnread(), { capture: true });
+},
+
+// Messages that came in while the page was hidden or the window unfocused
+// count as unread even in the open channel. They are read once the newest
+// ones are in view: the page showing and the feed at its bottom. Called when
+// the window comes back, when the feed is scrolled back down to the bottom,
+// and on a click or key press. The new-message handler only clears them when
+// another message arrives, so without this the count stayed until someone
+// else posted. (#phantom-badge-on-focus-return)
+_clearSeenUnread() {
+  const code = this.currentChannel;
+  if (document.hidden || !code || !this._coupledToBottom || !this.unreadCounts?.[code]) return;
+  const ch = this.channels?.find(c => c.code === code);
+  const latestId = ch?.latestMessageId || this._newestMsgId;
+  this.unreadCounts[code] = 0;
+  try { this._updateBadge?.(code); } catch (err) { console.warn('[Channels] _updateBadge failed', err); }
+  try { this._updateDmSectionBadge?.(); } catch (err) { console.warn('[Channels] _updateDmSectionBadge failed', err); }
+  try { this._updateTabTitle?.(); } catch (err) { console.warn('[Channels] _updateTabTitle failed', err); }
+  try { this._updateDesktopBadge?.(); } catch (err) { console.warn('[Channels] _updateDesktopBadge failed', err); }
+  if (latestId) {
+    try { this.socket.emit('mark-read', { code, messageId: latestId }); } catch (err) { console.warn('[Channels] could not mark the channel read', err); }
+  }
 },
 
 /**
@@ -599,7 +605,7 @@ _fireNativeNotification(message, channelCode, opts) {
   const title = t('notifications_runtime.title', { sender, channel: channelLabel });
   let rawContent = message.content || '';
   // A Discord emote token reads as its :name: in a notification.
-  rawContent = rawContent.replace(/<a?:([A-Za-z0-9_]{2,32}):\d{15,25}>/g, ':$1:');
+  rawContent = this._maskSpoilers(rawContent).replace(/<a?:([A-Za-z0-9_]{2,32}):\d{15,25}>/g, ':$1:');
   // Detect E2E encrypted envelope: show generic text instead of ciphertext
   try { const p = JSON.parse(rawContent); if (p && p.v && p.ct) rawContent = ''; } catch { /* not JSON */ }
   // Burn-after-read: never reveal the message content in a notification
@@ -632,10 +638,55 @@ _fireNativeNotification(message, channelCode, opts) {
         this.switchChannel(channelCode);
         n.close();
       };
+      // Tracked so a 'channel-read' from another device/tab can close it
+      // before the auto-close timer below runs.
+      this._liveNotificationsByChannel ||= new Map();
+      this._liveNotificationsByChannel.set(channelCode, n);
+      n.onclose = () => {
+        if (this._liveNotificationsByChannel?.get(channelCode) === n) {
+          this._liveNotificationsByChannel.delete(channelCode);
+        }
+      };
       // Auto-close after 5 seconds
       setTimeout(() => n.close(), 5000);
     } catch { /* Notification constructor can throw in some contexts */ }
   }
+},
+
+/**
+ * Another device/tab for this account marked a channel read: dismiss any
+ * notification we are currently showing for it here too (browser Notification,
+ * web-push via the service worker, or Haven Desktop's native toast).
+ */
+_dismissChannelNotifications(channelCode) {
+  if (!channelCode) return;
+  const live = this._liveNotificationsByChannel?.get(channelCode);
+  if (live) { try { live.close(); } catch { /* already closed */ } }
+  if (this._swRegistration?.active) {
+    try { this._swRegistration.active.postMessage({ type: 'close-channel-notifications', channelCode }); }
+    catch (err) { console.warn('[Notifications] could not message the service worker', err); }
+  }
+  if (window.havenDesktop?.dismissNotification) {
+    try { window.havenDesktop.dismissNotification(channelCode); }
+    catch (err) { console.warn('[Notifications] could not dismiss the desktop notification', err); }
+  }
+},
+
+/**
+ * Another device of this account read a channel: clear its unread count and
+ * the badges built from it, unless a newer message has arrived here since
+ * (then the read marker is behind us and the count is still right).
+ */
+_applyChannelRead(channelCode, messageId) {
+  if (!channelCode || !this.unreadCounts?.[channelCode]) return;
+  const channel = this.channels?.find(c => c.code === channelCode);
+  const latest = channel?.latestMessageId || 0;
+  if (messageId && latest && latest > messageId) return;
+  this.unreadCounts[channelCode] = 0;
+  try { this._updateBadge?.(channelCode); } catch (err) { console.warn('[Unread] _updateBadge failed', err); }
+  try { this._updateDmSectionBadge?.(); } catch (err) { console.warn('[Unread] _updateDmSectionBadge failed', err); }
+  try { this._updateTabTitle?.(); } catch (err) { console.warn('[Unread] _updateTabTitle failed', err); }
+  try { this._updateDesktopBadge?.(); } catch (err) { console.warn('[Unread] _updateDesktopBadge failed', err); }
 },
 
 _updateDmSectionBadge() {

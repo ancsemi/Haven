@@ -424,12 +424,10 @@ _showEmojiDropdown(query) {
     });
   }
 
-  // Standard emojis by name/keyword
+  // Standard emojis by name and keyword, best matches first
   if (this.emojiNames) {
-    for (const [char, keywords] of Object.entries(this.emojiNames)) {
-      if (keywords.toLowerCase().includes(query)) {
-        results.push({ type: 'standard', name: keywords.split(' ')[0], char });
-      }
+    for (const char of this._emojiSearch(query)) {
+      results.push({ type: 'standard', name: String(this.emojiNames[char] || '').split(' ')[0], char });
     }
   }
 

@@ -27,7 +27,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
-const { UPLOADS_DIR, UNPROCESSED_DIR } = require('./paths');
+const { UNPROCESSED_DIR } = require('./paths');
 const diskGuard = require('./diskGuard');
 
 const DISCORD_FILE_HOSTS = new Set(['cdn.discordapp.com', 'media.discordapp.net']);
@@ -90,8 +90,9 @@ async function copyOne(url, name, { capBytes, fetchImpl, admit }) {
     if (err.message === 'over the upload limit') return null;
     throw err;
   }
-  await admit(tmp, path.join(UPLOADS_DIR, stored));
-  return { stored, size: fs.statSync(path.join(UPLOADS_DIR, stored)).size };
+  // Stored like any upload (src/storage): on disk, or in the bucket.
+  const admitted = await admit(tmp, stored);
+  return { stored, size: admitted.size };
 }
 
 /**

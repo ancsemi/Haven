@@ -350,7 +350,7 @@ test('group DM rules', async (t) => {
   });
   await t.test('deleting a group from the DM list leaves it instead of deleting it for everyone', async () => {
     const left = next(D, ['group-dm-left']);
-    D.emit('delete-dm', { code });
+    D.emit('delete-dm', { code, confirmed: true });
     assert.strictEqual((await left).data.code, code);
     const r = next(A, ['group-roster']);
     A.emit('get-group-roster', { code });
@@ -387,7 +387,7 @@ test('group DM rules', async (t) => {
     B.emit('publish-group-epoch', { code: data.code, epoch: 1, ...epochFor([bob]) });
     assert.strictEqual((await published).event, 'group-epoch-published');
     const gone = next(B, ['channel-deleted']);
-    Z.emit('delete-dm', { code: data.code });
+    Z.emit('delete-dm', { code: data.code, confirmed: true });
     assert.strictEqual((await gone).data.code, data.code);
     const Database = require('better-sqlite3');
     const db = new Database(path.join(DATA, 'haven.db'), { readonly: true });

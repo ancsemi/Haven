@@ -26,28 +26,28 @@ _setupAuditLog() {
   this._auditOldestId = 0;
   this._auditHasMore = false;
 
-  const ACTION_META = {
-    server_setting_update: { icon: '⚙️', label: t('modals.audit_log.actions.server_setting_update') },
-    channel_create:        { icon: '➕', label: t('modals.audit_log.actions.channel_create') },
-    channel_delete:        { icon: '🗑️', label: t('modals.audit_log.actions.channel_delete') },
-    channel_rename:        { icon: '✏️', label: t('modals.audit_log.actions.channel_rename') },
-    role_create:           { icon: '🎭', label: t('modals.audit_log.actions.role_create') },
-    role_update:           { icon: '🎭', label: t('modals.audit_log.actions.role_update') },
-    role_delete:           { icon: '🎭', label: t('modals.audit_log.actions.role_delete') },
-    role_assign:           { icon: '👤', label: t('modals.audit_log.actions.role_assign') },
-    role_revoke:           { icon: '👤', label: t('modals.audit_log.actions.role_revoke') },
-    user_kick:             { icon: '👢', label: t('modals.audit_log.actions.user_kick') },
-    user_ban:              { icon: '🚫', label: t('modals.audit_log.actions.user_ban') },
-    user_unban:            { icon: '✅', label: t('modals.audit_log.actions.user_unban') },
-    user_mute:             { icon: '🔇', label: t('modals.audit_log.actions.user_mute') },
-    user_unmute:           { icon: '🔊', label: t('modals.audit_log.actions.user_unmute') },
-    user_rename:           { icon: '✏️', label: t('modals.audit_log.actions.user_rename') },
-    badge_create:          { icon: '🏅', label: t('modals.audit_log.actions.badge_create') },
-    badge_update:          { icon: '🏅', label: t('modals.audit_log.actions.badge_update') },
-    badge_delete:          { icon: '🏅', label: t('modals.audit_log.actions.badge_delete') },
-    badge_grant:           { icon: '🏅', label: t('modals.audit_log.actions.badge_grant') },
-    badge_revoke:          { icon: '🏅', label: t('modals.audit_log.actions.badge_revoke') },
+  // Every action reads as a phrase from the locale file; one with no phrase
+  // yet shows its own name with spaces. The icon goes by what was acted on.
+  const ICONS = {
+    user_kick: '👢', user_ban: '🚫', user_unban: '✅', user_mute: '🔇', user_unmute: '🔊',
+    user_warn: '⚠️', user_delete: '🗑️', user_scrub: '🧹', voice_kick: '🎙️', admin_transfer: '👑',
+    admin_recover: '👑', roles_reset: '🎭', message_delete: '🗑️', messages_bulk_delete: '🗑️',
+    message_pin: '📌', message_unpin: '📌', message_protect: '🛡️', message_unprotect: '🛡️',
+    channel_create: '➕', channel_delete: '🗑️', channel_rename: '✏️', user_rename: '✏️',
+    dm_delete: '🗑️', server_update: '⬆️', backup_restore: '💾',
   };
+  const ICON_PREFIXES = [
+    ['role_', '🎭'], ['user_', '👤'], ['channel_', '#️⃣'], ['message', '💬'], ['topic_', '💬'],
+    ['webhook_', '🤖'], ['ferry_', '🌉'], ['badge_', '🏅'], ['tag_', '🏷️'], ['emoji_', '😀'],
+    ['sticker_', '🖼️'], ['sound_', '🔉'], ['backup_', '💾'], ['ip_', '🚫'], ['automod_', '🤖'],
+    ['invite_', '🔗'], ['server_', '⚙️'], ['whitelist_', '📋'], ['registration_', '📋'],
+  ];
+  const actionLabel = (action) => {
+    const key = `modals.audit_log.actions.${action}`;
+    const label = t(key);
+    return label && label !== key ? label : String(action).replace(/_/g, ' ');
+  };
+  const actionIcon = (action) => ICONS[action] || (ICON_PREFIXES.find(([pre]) => action.startsWith(pre)) || [null, '•'])[1];
 
   const _esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const _formatTime = (iso) => {
@@ -56,6 +56,42 @@ _setupAuditLog() {
       const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
       return this._fmtDateTime(d);
     } catch { return iso; }
+  };
+  // "autoAssignTakenFrom" reads "auto assign taken from".
+  const keyLabel = (k) => String(k).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase();
+  const valueText = (v) => {
+    if (v === true) return t('modals.audit_log.on');
+    if (v === false) return t('modals.audit_log.off');
+    if (Array.isArray(v)) return v.map(valueText).join(', ');
+    if (v && typeof v === 'object') {
+      if ('from' in v && 'to' in v) return `${valueText(v.from)} → ${valueText(v.to)}`;
+      return Object.entries(v).map(([k, x]) => `${keyLabel(k)}: ${valueText(x)}`).join(', ');
+    }
+    return String(v);
+  };
+  // What changed, one pair per line part. A setting entry names its key in
+  // the target already, so the key is not repeated.
+  const detailsHtml = (r) => {
+    if (!r.details) return '';
+    let obj;
+    try { obj = JSON.parse(r.details); } catch {
+      return `<div class="audit-details">${_esc(String(r.details).slice(0, 600))}</div>`;
+    }
+    if (!obj || typeof obj !== 'object') return '';
+    const parts = [];
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length)) continue;
+      if (k === 'key' && r.action === 'server_setting_update') continue;
+      // false only matters for a value that was switched off.
+      if (v === false && !['value', 'autoAssign', 'active', 'linked', 'enabled', 'canModerate', 'canUseVoice'].includes(k) && r.action !== 'channel_setting_update') continue;
+      // Permission lists read as the names the role editor shows.
+      const permLabel = (p) => { const k = `permissions.${p}`; const l = t(k); return l && l !== k ? l : p; };
+      const text = Array.isArray(v) && ['added', 'removed', 'permissions', 'granted', 'denied'].includes(k)
+        ? v.map(permLabel).join(', ')
+        : valueText(v);
+      parts.push(`<span class="audit-detail-pair"><b>${_esc(keyLabel(k))}:</b> ${_esc(text.length > 600 ? text.slice(0, 597) + '...' : text)}</span>`);
+    }
+    return parts.length ? `<div class="audit-details">${parts.join('')}</div>` : '';
   };
 
   const renderRows = (append = false) => {
@@ -69,33 +105,17 @@ _setupAuditLog() {
     const start = append ? listEl.querySelectorAll('.audit-log-row').length : 0;
     for (let i = start; i < this._auditRows.length; i++) {
       const r = this._auditRows[i];
-      const meta = ACTION_META[r.action] || { icon: '•', label: r.action };
       const row = document.createElement('div');
       row.className = 'audit-log-row';
-      let detailsHtml = '';
-      if (r.details) {
-        try {
-          const obj = JSON.parse(r.details);
-          const parts = [];
-          for (const [k, v] of Object.entries(obj)) {
-            if (v === null || v === undefined || v === false || v === '') continue;
-            const vs = typeof v === 'object' ? JSON.stringify(v) : String(v);
-            parts.push(`<span class="audit-detail-pair"><b>${_esc(k)}:</b> ${_esc(vs.slice(0, 120))}</span>`);
-          }
-          if (parts.length) detailsHtml = `<div class="audit-details">${parts.join('')}</div>`;
-        } catch {
-          detailsHtml = `<div class="audit-details">${_esc(String(r.details).slice(0, 240))}</div>`;
-        }
-      }
       row.innerHTML = `
-        <span class="audit-icon">${meta.icon}</span>
+        <span class="audit-icon">${actionIcon(r.action)}</span>
         <div class="audit-body">
           <div class="audit-line">
             <span class="audit-actor">${_esc(r.actor_username || t('modals.audit_log.system'))}</span>
-            <span class="audit-action">${_esc(meta.label)}</span>
+            <span class="audit-action">${_esc(actionLabel(r.action))}</span>
             ${r.target_name ? `<span class="audit-target">${_esc(r.target_name)}</span>` : ''}
           </div>
-          ${detailsHtml}
+          ${detailsHtml(r)}
           <div class="audit-meta">${_formatTime(r.created_at)} · #${r.id}</div>
         </div>`;
       frag.appendChild(row);
@@ -104,13 +124,28 @@ _setupAuditLog() {
     loadMoreBtn.style.display = this._auditHasMore ? '' : 'none';
   };
 
+  // The filter list follows what the log holds, so an action logged for the
+  // first time shows up on the next load, not only after a reload.
+  const fillActions = (actions) => {
+    const chosen = filterAction.value;
+    while (filterAction.options.length > 1) filterAction.remove(1);
+    const sorted = [...actions].sort((x, y) => actionLabel(x).localeCompare(actionLabel(y)));
+    for (const a of sorted) {
+      const opt = document.createElement('option');
+      opt.value = a;
+      opt.textContent = actionLabel(a);
+      filterAction.appendChild(opt);
+    }
+    filterAction.value = sorted.includes(chosen) ? chosen : '';
+  };
+
+  const filters = () => ({
+    action: filterAction.value || null,
+    actorUsername: filterActor.value.trim() || null,
+  });
+
   const load = (append = false) => {
-    const opts = {
-      limit: 50,
-      action: filterAction.value || null,
-      actorUsername: filterActor.value.trim() || null,
-      beforeId: append ? this._auditOldestId : 0
-    };
+    const opts = { limit: 50, ...filters(), beforeId: append ? this._auditOldestId : 0 };
     if (!append) {
       this._auditRows = [];
       this._auditOldestId = 0;
@@ -122,21 +157,29 @@ _setupAuditLog() {
         loadMoreBtn.style.display = 'none';
         return;
       }
-      // Populate filter dropdown once
-      if (resp.actions && filterAction.options.length <= 1) {
-        for (const a of resp.actions) {
-          const opt = document.createElement('option');
-          opt.value = a;
-          opt.textContent = (ACTION_META[a] && ACTION_META[a].label) || a;
-          filterAction.appendChild(opt);
-        }
-      }
+      if (resp.actions) fillActions(resp.actions);
       const rows = resp.rows || [];
       this._auditRows = append ? this._auditRows.concat(rows) : rows;
       if (rows.length) this._auditOldestId = rows[rows.length - 1].id;
       this._auditHasMore = !!resp.hasMore;
       renderRows(append);
     });
+  };
+
+  // Export saves every entry that matches the filters, not just the rows
+  // loaded on screen: it pages through the log 200 at a time.
+  const fetchAll = async () => {
+    const all = [];
+    let beforeId = 0;
+    for (let page = 0; page < 500; page++) {
+      const resp = await new Promise(res => this.socket.emit('get-audit-log', { limit: 200, ...filters(), beforeId }, res));
+      if (!resp || resp.error) throw new Error(resp && resp.error ? resp.error : 'load failed');
+      const rows = resp.rows || [];
+      all.push(...rows);
+      if (!resp.hasMore || !rows.length) break;
+      beforeId = rows[rows.length - 1].id;
+    }
+    return all;
   };
 
   openBtn?.addEventListener('click', () => {
@@ -152,9 +195,18 @@ _setupAuditLog() {
     return () => { clearTimeout(timer); timer = setTimeout(() => load(false), 300); };
   })());
   loadMoreBtn?.addEventListener('click', () => load(true));
-  exportBtn?.addEventListener('click', () => {
+  exportBtn?.addEventListener('click', async () => {
+    const label = exportBtn.textContent;
+    exportBtn.disabled = true;
+    exportBtn.textContent = t('modals.audit_log.exporting');
     try {
-      const blob = new Blob([JSON.stringify(this._auditRows, null, 2)], { type: 'application/json' });
+      const rows = await fetchAll();
+      const out = rows.map(r => {
+        let details = r.details;
+        try { details = r.details ? JSON.parse(r.details) : null; } catch { /* older entries may hold plain text; kept as it is */ }
+        return { ...r, action_label: actionLabel(r.action), details };
+      });
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -163,6 +215,10 @@ _setupAuditLog() {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       console.error('Audit log export failed:', err);
+      this._showToast?.(t('modals.audit_log.load_failed'), 'error');
+    } finally {
+      exportBtn.disabled = false;
+      exportBtn.textContent = label;
     }
   });
 },

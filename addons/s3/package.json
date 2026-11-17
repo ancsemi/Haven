@@ -1,0 +1,10 @@
+{
+  "name": "haven-s3-addon",
+  "private": true,
+  "description": "Amazon's S3 library, for Haven's optional external media storage. Installed into the data folder only when HAVEN_EXTERNAL_STORAGE is on (src/storage/s3Addon.js); a normal install never downloads it.",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1152.0",
+    "@aws-sdk/lib-storage": "3.1152.0"
+  }
+}

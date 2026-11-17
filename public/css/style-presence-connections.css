@@ -135,6 +135,13 @@
   background: var(--bg-hover);
 }
 
+.status-option.status-set-custom {
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.125rem;
+  padding-bottom: 0.5rem;
+}
+
 .status-option .user-dot {
   position: static;
   flex-shrink: 0;
@@ -363,6 +370,19 @@
 .dm-item .channel-hash {
   color: var(--accent);
 }
+
+/* A DM pinned to the top of your own list (app-dm-pins.js). */
+.dm-pin-mark {
+  flex-shrink: 0;
+  margin-left: 0.25rem;
+  font-size: 0.625rem;
+  opacity: 0.7;
+}
+
+/* The DM sort menu ticks the sort in force (app-dm-sort.js). */
+.dm-sort-menu .channel-ctx-item { justify-content: space-between; }
+.dm-sort-check { visibility: hidden; }
+.dm-sort-menu .channel-ctx-item[aria-checked="true"] .dm-sort-check { visibility: visible; }
 
 /* ── DM Category Headers ──────────────────────────────── */
 .dm-category-header {
@@ -907,13 +927,14 @@ html.reduce-motion .pa-marquee-track { animation: none; }
 .file-video {
   max-width: 100%;
   /* A tall, narrow clip would be too thin for the player's buttons, which
-     the browser then hides; it gets black bars at the sides instead. */
+     the browser then hides; it gets black bars at the sides instead. Never
+     drawn bigger than it is, so small pixel art stays sharp (#5817). */
   min-width: min(15rem, 60vw);
   max-height: 18.75rem;
   border-radius: 0.25rem;
   margin-top: 0.25rem;
   background: #0a0a0a;
-  object-fit: contain;
+  object-fit: scale-down;
 }
 
 .file-video-wrap {
@@ -930,6 +951,9 @@ html.reduce-motion .pa-marquee-track { animation: none; }
 }
 
 /* ── Risky download warning modal ── */
+/* Also the external link warning. It answers a click anywhere, so it sits
+   above every panel and window: at 10000 it opened behind a full-width
+   forum topic (99996) and the link looked dead. */
 .risky-download-overlay {
   position: fixed;
   inset: 0;
@@ -937,7 +961,7 @@ html.reduce-motion .pa-marquee-track { animation: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 999999;
   animation: fadeIn 0.15s ease;
 }
 .risky-download-modal {

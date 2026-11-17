@@ -533,10 +533,14 @@ _discordEmoteHtml(name, id, animated) {
 // Returns { name, url } or null.
 _findNamedEmoji(name) {
   if (!name) return null;
-  const lower = String(name).toLowerCase();
-  return (this.builtinEmojis && this.builtinEmojis.find(e => e.name === lower))
-      || (this.customEmojis && this.customEmojis.find(e => e.name === lower))
-      || null;
+  const s = String(name), lower = s.toLowerCase(), pools = [this.builtinEmojis || [], this.customEmojis || []];
+  return pools.map(p => p.find(e => e.name === s)).find(Boolean) || pools.map(p => p.find(e => e.name.toLowerCase() === lower)).find(Boolean) || null;
+},
+
+_autoEmoteWords(text) {
+  const names = new Set((this.customEmojis || []).map(e => e.name));
+  try { if (localStorage.getItem('haven-emote-words') !== 'true') return text; } catch { return text; } // private mode: storage is unavailable, so the setting is off
+  return !text || !names.size || text.startsWith('/') ? text : text.split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) => i % 2 ? part : part.replace(/(?<!\S)[A-Za-z0-9_-]{1,30}(?!\S)/g, w => names.has(w) ? `:${w}:` : w)).join('');
 },
 
 // Punctuation search aliases: typing an actual punctuation mark (e.g. "?"
@@ -557,22 +561,6 @@ _getEmojiPunctAliases() {
   return this._emojiPunctAliases;
 },
 
-// Shared emoji search matcher used by the emoji picker and reaction picker.
-// Matches on keyword substrings, the literal emoji character (so typing an
-// actual "?", "#", or a digit surfaces the matching emoji), and punctuation
-// aliases (typing "?" surfaces ❓ ⁉️ etc.).
-_emojiSearchMatch(emoji, keywords, rawQuery) {
-  const raw = (rawQuery || '').trim();
-  const q = raw.toLowerCase();
-  if (!q) return true;
-  const kw = (keywords || '').toLowerCase();
-  if (kw.includes(q)) return true;
-  if (typeof emoji === 'string' && raw && emoji.includes(raw)) return true;
-  const alias = this._getEmojiPunctAliases()[q];
-  if (alias && alias.split(/\s+/).some(w => kw.includes(w))) return true;
-  return false;
-},
-
 // ── Role mentions (#5579) ──
 // "@Moderators" lights up for everyone holding the role and pings them,
 // unless they have turned role pings off. Sending one needs the same
@@ -585,8 +573,10 @@ _refreshMentionableRoles() {
   try {
     this.socket.emit('get-roles', null, (res) => {
       const roles = res && Array.isArray(res.roles) ? res.roles : [];
+      // A role switched off for @mentions (#5822) is neither offered in the
+      // @ list nor drawn or counted as a mention.
       this._mentionableRoles = roles
-        .filter(r => r && r.name)
+        .filter(r => r && r.name && r.mentionable !== 0)
         .map(r => ({ id: r.id, name: String(r.name), color: r.color || null, color2: r.color2 || null, color_shimmer: r.color_shimmer || 0, level: r.level }));
     });
   } catch { /* offline: keep whatever we had */ }
@@ -595,7 +585,9 @@ _refreshMentionableRoles() {
 /** True when `content` pings a role the viewer holds and role pings are on. */
 _mentionsMyRole(content) {
   if (!content || (this.notifications && this.notifications.roleMentionsEnabled === false)) return false;
-  const mine = (this.user && Array.isArray(this.user.roles)) ? this.user.roles : [];
+  const pingable = new Set((this._mentionableRoles || []).map(r => r.id));
+  const mine = ((this.user && Array.isArray(this.user.roles)) ? this.user.roles : [])
+    .filter(r => r && (!this._mentionableRoles || pingable.has(r.id)));
   if (!mine.length) return false;
   const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return mine.some(r => r && r.name && new RegExp(`(?<![\\w@])@${esc(r.name)}(?!\\w)`, 'i').test(content));
@@ -1387,7 +1379,8 @@ _flushPendingMedia() {
 },
 
 // ── Generic prompt modal (replaces window.prompt for Electron compat) ──
-_showPromptModal(title, message, defaultValue = '') {
+// `password` hides what is typed, for asking for the account password.
+_showPromptModal(title, message, defaultValue = '', { password = false } = {}) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -1397,7 +1390,7 @@ _showPromptModal(title, message, defaultValue = '') {
       <div class="modal" style="max-width:380px">
         <h3 style="margin-top:0">${this._escapeHtml(title)}</h3>
         ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
-        <input type="text" class="modal-input" id="prompt-modal-input" value="${this._escapeHtml(defaultValue)}" style="width:100%;box-sizing:border-box">
+        <input type="${password ? 'password' : 'text'}"${password ? ' autocomplete="current-password"' : ''} class="modal-input" id="prompt-modal-input" value="${this._escapeHtml(defaultValue)}" style="width:100%;box-sizing:border-box">
         <div class="modal-actions" style="margin-top:12px">
           <button class="btn-sm" id="prompt-modal-cancel">${t('modals.common.cancel')}</button>
           <button class="btn-sm btn-accent" id="prompt-modal-ok">${t('modals.common.ok')}</button>
@@ -1459,6 +1452,16 @@ _showConfirmModal(title, message, opts = {}) {
   });
 },
 
+// Themed stand-ins for the browser's confirm() and alert(), which it draws
+// in its own plain style. _confirm resolves true for OK.
+_confirm(message, opts = {}) {
+  return this._showConfirmModal(opts.title || t('modals.common.confirm'), message, opts);
+},
+
+_alert(message) {
+  return this._askChoice('', message, [{ id: 'ok', label: t('modals.common.ok'), accent: true }]);
+},
+
 // A question with several answers. Resolves the id of the button pressed, or
 // null for Escape or a click outside. Focus starts on the first button and
 // Enter only presses the focused one, so a stray Enter (someone still sending)
@@ -1471,7 +1474,7 @@ _askChoice(title, message, buttons) {
     overlay.style.zIndex = '100002';
     overlay.innerHTML = `
       <div class="modal modal-confirm">
-        <h3 style="margin-top:0">${this._escapeHtml(title || '')}</h3>
+        ${title ? `<h3 style="margin-top:0">${this._escapeHtml(title)}</h3>` : ''}
         ${message ? `<p class="muted-text" style="margin:0 0 12px;white-space:pre-line">${this._escapeHtml(message)}</p>` : ''}
         <div class="modal-actions" style="margin-top:12px;flex-wrap:wrap"></div>
       </div>

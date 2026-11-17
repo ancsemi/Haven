@@ -1,64 +1,59 @@
 'use strict';
 
-const path = require('path');
-const fs   = require('fs');
 const bcrypt = require('bcryptjs');
-const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
+const { utcStamp, editChannelCode, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const selfDestruct = require('../selfDestruct');
+const { isUsableEmoji } = require('../builtinEmojis');
 const { applyTagsToMessage, applyTagsToFiles, fileTags, messageTags, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, extractUploadPaths, effectiveLimits } = require('../uploadTags');
 const { votesFor, pieceVotesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
 const highlights = require('../messageHighlights');
 const quotes = require('../messageQuotes');
+const ferryReactions = require('../ferryReactions');
 const forumUnread = require('../forumUnread');
 const threadNotify = require('../threadNotify');
 const protectedMessages = require('../protectedMessages');
 const mediaGroup = require('../mediaGroup');
+const { sizeCeiling, sizeRefusal, isGroupEnvelope, editNeedsOriginalImage } = require('../messageLimits');
+const { REPLY_CONTEXT_SELECT, insertMessage, getActiveMute, muteNotice, updateMessageContent } = require('../db/messagePosting');
+const { addReaction, removeReaction, reactionsForMessages, reactionsByMessage } = require('../db/messageReactions');
+const { threadParent, threadMessages, threadReplyContexts, insertThreadReply, threadSummaries,
+        channelThreads, formatChannelThreads, formatThreadParent, formatThreadMessage } = require('../db/messageThreads');
+const { messageChannel, messageChannelMember, messageForAction, messageAuthor,
+        ownDeleteOverride, deleteMessage, findPin, countPins, insertPin, deletePin, clearDestructAt,
+        setProtection, listPins, formatPins } = require('../db/messageManagement');
 const { takeSilent } = require('../silentMessages');
+const { parseSlash } = require('../slashParse');
 const { tagAccess } = require('../uploadTagRoles');
 const { moveToChannel } = require('../moveMessages');
-
-// The length limit is on what people type. An encrypted DM reaches the
-// server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
-// up to about four times the typed length (a character can take three bytes
-// as UTF-8 and base64 adds a third). A DM near the limit was refused after
-// the message box had already cleared (#5691), so ciphertext gets that room.
-function encryptedDmCap(maxChars) {
-  return maxChars * 4 + 256;
-}
-function looksEncrypted(content) {
-  if (typeof content !== 'string' || content.charCodeAt(0) !== 123) return false;
-  try {
-    const o = JSON.parse(content);
-    return !!(o && (o.v === 1 || o.v === 2 || (o.v === 3 && Number.isInteger(o.e) && typeof o.sig === 'string')) && typeof o.iv === 'string' && typeof o.ct === 'string');
-  } catch { return false; }
-}
-function isGroupEnvelope(content) {
-  return looksEncrypted(content) && JSON.parse(content).v === 3;
-}
-// The longest a message can be before its channel is known: ciphertext room
-// for a DM, or text at the limit with a full set of upload lines.
-function sizeCeiling(maxChars) {
-  return Math.max(encryptedDmCap(maxChars), mediaGroup.ceiling(maxChars));
-}
-// Why a message cannot go out for its size, or null. An encrypted DM gets
-// ciphertext room; anything else is held to the typed limit, with room for
-// the upload lines of pictures sent together, and to the number of files one
-// message carries (src/mediaGroup.js, #5799).
-function sizeRefusal(content, channel, { maxChars, maxAttachments, forumTopic = false }) {
-  if (channel && channel.is_dm && looksEncrypted(content)) {
-    return content.length > encryptedDmCap(maxChars) ? `Message too long (max ${maxChars} characters)` : null;
-  }
-  return mediaGroup.refusal(content, { maxChars, maxAttachments, forumTopic });
-}
+const storage = require('../storage');
+const { groupHistoryFloor } = require('../groupHistory');
+const { isSafeUploadRelPath } = storage;
+const createReadPositions = require('../db/readPositions');
+const { advanceThreadRead, openThreadRead } = createReadPositions;
+const emitChannelRead = require('./channelReadEvents');
+const { mentionsMeCondition } = require('../mentionFilter');
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
           sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
           touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay, ferryRelayReply,
-          logAudit, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR } = ctx;
+          logAudit } = ctx;
   const { slowModeTracker } = state;
+  const readPositions = createReadPositions(db);
+  // A moderator acting on a message in a channel goes on the audit log, with
+  // the channel and whose message it was. DMs are left out: what happens in
+  // a conversation is its two people's business.
+  const auditMessage = (action, messageId, channelId, extra = {}) => {
+    if (typeof logAudit !== 'function') return;
+    const ch = db.prepare('SELECT name, is_dm FROM channels WHERE id = ?').get(channelId);
+    if (!ch || ch.is_dm) return;
+    const author = db.prepare('SELECT u.id, COALESCE(u.display_name, u.username) AS name FROM messages m JOIN users u ON u.id = m.user_id WHERE m.id = ?').get(messageId);
+    logAudit({ actor: socket.user, action,
+      target_type: 'message', target_id: messageId, target_name: author ? author.name : null,
+      details: { channel: ch.name, ...extra } });
+  };
   const { youngAccountWait, refuseYoungAccount } = require('./postingWait')(socket, ctx);
   // The upload tags this person may use in a channel: those not limited to a
   // role, and those limited to one they hold there (src/uploadTagRoles.js).
@@ -121,31 +116,6 @@ module.exports = function register(socket, ctx) {
   const UPLOAD_PATH_RE = /\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)/g;
   const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|stickers)\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+)$/;
 
-  function isSafeUploadRelPath(relPath) {
-    if (typeof relPath !== 'string' || !relPath) return false;
-    if (!/^((?!\.\.)(?!\.\/)(?!\/)[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+$/.test(relPath)) return false;
-    const parts = relPath.split('/');
-    if (parts.some(p => !p || p === '.' || p === '..')) return false;
-    return true;
-  }
-
-  function moveUploadToDeleted(relPath) {
-    if (!isSafeUploadRelPath(relPath)) return;
-    const src = path.join(UPLOADS_DIR, relPath);
-    if (!fs.existsSync(src)) return;
-    let stat;
-    try {
-      stat = fs.statSync(src);
-    } catch {
-      return;
-    }
-    if (!stat.isFile()) return;
-    const dst = path.join(DELETED_ATTACHMENTS_DIR, relPath);
-    try {
-      fs.mkdirSync(path.dirname(dst), { recursive: true });
-      fs.renameSync(src, dst);
-    } catch { /* file locked or already moved; it stays where it is and nothing is lost */ }
-  }
 
   // Thread replies go with the message they hang from (ON DELETE CASCADE), so
   // a forum topic takes its replies, and a blog gallery every picture, with
@@ -157,14 +127,14 @@ module.exports = function register(socket, ctx) {
     for (const id of ids) out.push(...q.all(id));
     return out;
   }
-  function releaseReplyUploads(replies) {
+  async function releaseReplyUploads(replies) {
     for (const r of replies) {
       if (!Number.isInteger(r.user_id)) continue;
       const rels = [];
       UPLOAD_PATH_RE.lastIndex = 0;
       let m;
       while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) rels.push(m[1]);
-      for (const rel of releasableUploads(db, rels, [r.user_id])) moveUploadToDeleted(rel);
+      for (const rel of releasableUploads(db, rels, [r.user_id])) await storage.softDelete(rel);
     }
   }
 
@@ -194,12 +164,6 @@ module.exports = function register(socket, ctx) {
     }
   }
 
-  // Reply banners must match message rendering: bots live in webhook_* with
-  // user_id NULL, so a users-table COALESCE alone becomes "[Deleted User]".
-  const REPLY_CONTEXT_SELECT = `
-    SELECT m.id, m.content, m.user_id, m.is_webhook, m.webhook_username, m.imported_from, m.persona_username,
-           COALESCE(u.display_name, u.username, '[Deleted User]') as username
-    FROM messages m LEFT JOIN users u ON m.user_id = u.id`;
 
   // ── Get message history ─────────────────────────────────
   // ── Forum channels (#144) ──────────────────────────────
@@ -299,7 +263,7 @@ module.exports = function register(socket, ctx) {
     const tags = Array.isArray(data.tags) ? data.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().slice(0, 30)).slice(0, 10) : [];
     const tagMode = data.tagMode === 'all' ? 'all' : 'some';
 
-    const channel = db.prepare('SELECT id, is_forum, role_gate, forum_blog, is_dm FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_forum, role_gate, forum_blog, is_dm, is_group FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = db.prepare(
@@ -309,6 +273,7 @@ module.exports = function register(socket, ctx) {
     if (!member && (!socket.user.isAdmin || channel.is_dm)) return socket.emit('error-msg', 'Not a member of this channel');
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
 
+    const floor = groupHistoryFloor(db, channel, socket.user.id);
     let messages;
     if (channel.is_forum) {
       messages = forumHistory(channel.id, { before, after, around, limit, sort, tags, tagMode });
@@ -318,9 +283,9 @@ module.exports = function register(socket, ctx) {
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
+        WHERE m.channel_id = ? AND m.id < ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
-      `).all(channel.id, before, limit);
+      `).all(channel.id, before, floor, limit);
     } else if (after) {
       messages = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
@@ -329,7 +294,7 @@ module.exports = function register(socket, ctx) {
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at ASC, m.id ASC LIMIT ?
-      `).all(channel.id, after, limit);
+      `).all(channel.id, Math.max(after, floor), limit);
     } else if (around) {
       const half = Math.floor(limit / 2);
       const beforeMsgs = db.prepare(`
@@ -337,16 +302,16 @@ module.exports = function register(socket, ctx) {
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.id < ? AND m.thread_id IS NULL
+        WHERE m.channel_id = ? AND m.id < ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
-      `).all(channel.id, around, half);
+      `).all(channel.id, around, floor, half);
       const targetMsg = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.id = ?
-      `).all(channel.id, around);
+        WHERE m.channel_id = ? AND m.id = ? AND m.id > ?
+      `).all(channel.id, around, floor);
       const afterMsgs = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
@@ -354,7 +319,7 @@ module.exports = function register(socket, ctx) {
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at ASC, m.id ASC LIMIT ?
-      `).all(channel.id, around, half);
+      `).all(channel.id, Math.max(around, floor), half);
       // Combine: beforeMsgs is DESC so reverse it, target, then afterMsgs ASC
       messages = [...beforeMsgs.reverse(), ...targetMsg, ...afterMsgs];
     } else {
@@ -363,9 +328,9 @@ module.exports = function register(socket, ctx) {
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.thread_id IS NULL
+        WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
-      `).all(channel.id, limit);
+      `).all(channel.id, floor, limit);
     }
 
     // Batch-enrich messages (reply context, reactions, pin status) in 3 queries
@@ -397,6 +362,7 @@ module.exports = function register(socket, ctx) {
         if (!reactionMap.has(r.message_id)) reactionMap.set(r.message_id, []);
         reactionMap.get(r.message_id).push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
       });
+      ferryReactions.mergeInto(db, msgIds, reactionMap);
 
       pinnedSet = new Set(
         db.prepare(`SELECT message_id FROM pinned_messages WHERE message_id IN (${ph})`)
@@ -445,40 +411,7 @@ module.exports = function register(socket, ctx) {
     }
 
     // ── Thread metadata enrichment ─────────────────────────
-    const threadMap = new Map();
-    if (msgIds.length > 0) {
-      const ph = msgIds.map(() => '?').join(',');
-      // Get thread counts and last activity for messages that are thread parents
-      db.prepare(`
-        SELECT thread_id,
-               COUNT(*) as reply_count,
-               MAX(created_at) as last_reply_at,
-               MAX(id) as last_reply_id
-        FROM messages WHERE thread_id IN (${ph})
-        GROUP BY thread_id
-      `).all(...msgIds).forEach(t => {
-        threadMap.set(t.thread_id, { count: t.reply_count, lastReplyAt: utcStamp(t.last_reply_at), lastReplyId: t.last_reply_id, participants: [] });
-      });
-      // Get participants for threads (up to 5 unique usernames)
-      if (threadMap.size > 0) {
-        const threadIds = [...threadMap.keys()];
-        const tph = threadIds.map(() => '?').join(',');
-        db.prepare(`
-          SELECT tm.thread_id, COALESCE(u.display_name, u.username) as username, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape
-          FROM (
-            SELECT thread_id, user_id, MAX(created_at) as latest
-            FROM messages WHERE thread_id IN (${tph})
-            GROUP BY thread_id, user_id
-          ) tm JOIN users u ON tm.user_id = u.id
-          ORDER BY tm.latest DESC
-        `).all(...threadIds).forEach(p => {
-          const info = threadMap.get(p.thread_id);
-          if (info && info.participants.length < 5) {
-            info.participants.push({ username: p.username, avatar: p.avatar, avatarShape: p.avatar_shape });
-          }
-        });
-      }
-    }
+    const threadMap = threadSummaries(db, msgIds);
 
     // Which reply this account last saw in each topic, for the unread dot on
     // forum cards (#5641).
@@ -591,7 +524,7 @@ module.exports = function register(socket, ctx) {
       channelCode: code,
       messages: (after || around) ? enriched : enriched.reverse(),
       lastReadMessageId,
-      pinnedCount: db.prepare('SELECT COUNT(*) as cnt FROM pinned_messages WHERE channel_id = ?').get(channel.id).cnt,
+      pinnedCount: db.prepare('SELECT COUNT(*) as cnt FROM pinned_messages WHERE channel_id = ? AND message_id > ?').get(channel.id, floor).cnt,
       ...(around ? { around } : {})
     });
   });
@@ -622,7 +555,7 @@ module.exports = function register(socket, ctx) {
     const token = data.token;
 
     // ── Parse filters out of the query text ──
-    const filters = { from: null, in: null, has: null, pinned: null, before: null, after: null, during: null, tag: null };
+    const filters = { from: null, in: null, has: null, pinned: null, before: null, after: null, during: null, tag: null, mentions: null };
     query = query.replace(/\bfrom:(\S+)/gi, (_, v) => { filters.from = v; return ''; });
     // tag: supports a quoted value so multi-word tags work (tags allow spaces);
     // the filter picker and clickable message tags append the quoted form.
@@ -635,6 +568,8 @@ module.exports = function register(socket, ctx) {
     query = query.replace(/\bbefore:(\S+)/gi, (_, v) => { filters.before = v; return ''; });
     query = query.replace(/\bafter:(\S+)/gi, (_, v) => { filters.after = v; return ''; });
     query = query.replace(/\bduring:(\S+)/gi, (_, v) => { filters.during = v; return ''; });
+    // mentions:me lists messages that @mention you or reply to you (the @ button).
+    query = query.replace(/\bmentions:me\b/gi, () => { filters.mentions = 'me'; return ''; });
     query = query.trim();
 
     // Only keep well-formed YYYY-MM-DD dates; drop anything else silently.
@@ -655,7 +590,7 @@ module.exports = function register(socket, ctx) {
 
     // Never dump the whole corpus: require free text or at least one filter.
     const anyFilter = filters.from || filters.has || filters.in || filters.pinned ||
-                      filters.before || filters.after || filters.during || filters.tag;
+                      filters.before || filters.after || filters.during || filters.tag || filters.mentions;
     if (!usesFts && !anyFilter) {
       return socket.emit('search-results', empty);
     }
@@ -725,6 +660,15 @@ module.exports = function register(socket, ctx) {
       if (!norm) return socket.emit('search-results', empty);
       conditions.push("m.id IN (SELECT at.message_id FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id WHERE ut.name_norm LIKE ? ESCAPE '\\')");
       params.push(escapeLike(norm.norm) + '%');
+    }
+
+    // ── mentions:me filter (src/mentionFilter.js) ──
+    if (filters.mentions) {
+      const me = db.prepare('SELECT username FROM users WHERE id = ?').get(socket.user.id);
+      const cond = me && mentionsMeCondition(socket.user.id, me.username);
+      if (!cond) return socket.emit('search-results', empty);
+      conditions.push(cond.sql);
+      params.push(...cond.params);
     }
 
     // ── date filters (created_at). during: is the whole named day. ──
@@ -811,7 +755,7 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_dm, is_group FROM channels WHERE code = ?').get(code);
     if (!channel) return;
 
     const member = hasChannelAccess(channel.id);
@@ -827,12 +771,12 @@ module.exports = function register(socket, ctx) {
              COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username,
              u.id as user_id
       FROM messages m LEFT JOIN users u ON m.user_id = u.id
-      WHERE m.channel_id = ?
+      WHERE m.channel_id = ? AND m.id > ?
         AND m.thread_id IS NULL
         AND (m.content LIKE '%/uploads/%' ESCAPE '\\' OR m.content LIKE '%http://%' ESCAPE '\\' OR m.content LIKE '%https://%' ESCAPE '\\')
       ORDER BY m.created_at DESC, m.id DESC
       LIMIT 5000
-    `).all(channel.id);
+    `).all(channel.id, groupHistoryFloor(db, channel, socket.user.id));
 
     const photos = [];
     const videos = [];
@@ -852,23 +796,19 @@ module.exports = function register(socket, ctx) {
     // http(s):// URLs (anywhere in content)
     const httpRe     = /(https?:\/\/[^\s<>"']+)/gi;
 
-    // Resolve a /uploads/<name> path to a byte size by stat'ing the file on
-    // disk. Memoized per request so a popular file isn't stat'd hundreds of
-    // times. Returns 0 when the file is missing or path-traversal would
-    // escape UPLOADS_DIR.
+    // Resolve a /uploads/<name> path to a byte size from the media index.
+    // Memoized per request so a popular file is looked up once. Returns 0
+    // when the file is missing or the name is not a plain upload name.
     const sizeCache = new Map();
     const safeName = /^[\w\-.]+$/;
+    const liveBytes = db.prepare("SELECT bytes FROM media_objects WHERE rel_path = ? AND state = 'live'");
     const sizeOf = (url) => {
       if (!url || !url.startsWith('/uploads/')) return 0;
       if (sizeCache.has(url)) return sizeCache.get(url);
       const name = url.slice('/uploads/'.length);
       if (!safeName.test(name)) { sizeCache.set(url, 0); return 0; }
       let s = 0;
-      try {
-        const full = path.join(UPLOADS_DIR, name);
-        const st = fs.statSync(full);
-        if (st && st.isFile()) s = st.size;
-      } catch { /* missing or permission denied: counts as 0 bytes */ }
+      try { s = liveBytes.get(name)?.bytes || 0; } catch { /* index unreadable: counts as 0 bytes */ }
       sizeCache.set(url, s);
       return s;
     };
@@ -983,7 +923,7 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    const channel = messageChannel(db, code);
     if (!channel) return;
 
     const member = hasChannelAccess(channel.id);
@@ -996,32 +936,12 @@ module.exports = function register(socket, ctx) {
     // the media gallery so a long-lived channel cannot produce an unbounded
     // payload. Ordered by last reply, because "which thread is alive" is the
     // question people open this to answer.
-    const threads = db.prepare(`
-      SELECT p.id,
-             p.content,
-             p.created_at,
-             COALESCE(p.persona_username, p.webhook_username, u.display_name, u.username, '[Deleted User]') AS username,
-             u.id AS user_id,
-             COUNT(t.id) AS reply_count,
-             MAX(t.created_at) AS last_reply_at
-      FROM messages p
-      JOIN messages t ON t.thread_id = p.id
-      LEFT JOIN users u ON p.user_id = u.id
-      WHERE p.channel_id = ? AND p.thread_id IS NULL
-      GROUP BY p.id
-      ORDER BY last_reply_at DESC, p.id DESC
-      LIMIT 500
-    `).all(channel.id);
+    const threads = channelThreads(db, channel.id);
 
     const threadNew = threadNotify.newCounts(db, socket.user.id, threads.map(t => ({ id: t.id, userId: t.user_id })));
     socket.emit('channel-threads', {
       channelCode: code,
-      threads: threads.map(t => ({
-        ...t,
-        ...(threadNew.has(t.id) ? { new_count: threadNew.get(t.id) } : {}),
-        created_at: utcStamp(t.created_at),
-        last_reply_at: utcStamp(t.last_reply_at),
-      })),
+      threads: formatChannelThreads(threads, threadNew),
     });
   });
 
@@ -1032,7 +952,7 @@ module.exports = function register(socket, ctx) {
   // for each so other clients update. Shared by the Files & Media gallery
   // (delete-channel-media, #5375) and the multi-select toolbar Delete
   // (delete-messages, #5460) so both stay behaviourally identical.
-  const bulkDeleteMessagesByIds = (data, cb) => {
+  const bulkDeleteMessagesByIds = async (data, cb) => {
     if (!data || typeof data !== 'object') return cb({ error: 'Bad request' });
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return cb({ error: 'Bad channel' });
@@ -1080,6 +1000,13 @@ module.exports = function register(socket, ctx) {
        FROM messages m WHERE m.channel_id = ? AND m.id IN (${placeholders})`
     ).all(channel.id, ...ids);
 
+    // Selected messages that are no longer there (another delete or a scrub
+    // got to them first, and this screen was never told) are done already:
+    // they come off this screen, and count as deleted rather than refused.
+    const found = new Set(rows.map(r => r.id));
+    const gone = ids.filter(id => !found.has(id));
+    for (const id of gone) socket.emit('message-deleted', { channelCode: code, messageId: id });
+
     const deletable = [];
     const skipped = [];
     let kept = 0;
@@ -1100,6 +1027,7 @@ module.exports = function register(socket, ctx) {
     }
 
     if (deletable.length === 0) {
+      if (gone.length && !skipped.length) return cb({ success: true, deleted: gone.length, skipped: 0, kept: 0 });
       if (kept && kept === rows.length) return cb({ error: protectedMessages.REFUSAL, deleted: 0, skipped: skipped.length, kept });
       return cb({ error: 'You don\'t have permission to delete the selected items', deleted: 0, skipped: skipped.length, kept });
     }
@@ -1118,6 +1046,16 @@ module.exports = function register(socket, ctx) {
     try { purge(); } catch (err) {
       console.error('Bulk media delete error:', err);
       return cb({ error: 'Failed to delete items', detail: err && err.message });
+    }
+    const othersDeleted = deletable.filter(r => r.user_id !== socket.user.id);
+    if (othersDeleted.length && !channel.is_dm && typeof logAudit === 'function') {
+      const authorIds = [...new Set(othersDeleted.map(r => r.user_id))];
+      const names = db.prepare(`SELECT COALESCE(display_name, username) AS name FROM users WHERE id IN (${authorIds.map(() => '?').join(',')})`)
+        .all(...authorIds).map(r => r.name);
+      const chName = db.prepare('SELECT name FROM channels WHERE id = ?').get(channel.id)?.name || null;
+      logAudit({ actor: socket.user, action: 'messages_bulk_delete',
+        target_type: 'channel', target_id: channel.id, target_name: chName,
+        details: { count: othersDeleted.length, authors: names } });
     }
 
     // Move attachment files to deleted-attachments/ for each deleted message,
@@ -1142,9 +1080,9 @@ module.exports = function register(socket, ctx) {
           }
         }
       }
-      for (const rel of releasableUploads(db, toRelease, [r.user_id])) moveUploadToDeleted(rel);
+      for (const rel of releasableUploads(db, toRelease, [r.user_id])) await storage.softDelete(rel);
     }
-    releaseReplyUploads(bulkReplies);
+    await releaseReplyUploads(bulkReplies);
 
     // Broadcast individual deletes so all clients' message lists, pin lists,
     // and open Files & Media views stay consistent.
@@ -1155,7 +1093,7 @@ module.exports = function register(socket, ctx) {
       });
     }
 
-    cb({ success: true, deleted: deletable.length, skipped: skipped.length, kept });
+    cb({ success: true, deleted: deletable.length + gone.length, skipped: skipped.length, kept });
   };
 
   // ── Delete every message you wrote (#5686) ────────────────
@@ -1203,7 +1141,7 @@ module.exports = function register(socket, ctx) {
       db.transaction(() => {
         for (const r of rows) { delPin.run(r.id); delMsg.run(r.id); }
       })();
-      releaseReplyUploads(othersReplies);
+      await releaseReplyUploads(othersReplies);
 
       const toRelease = [];
       for (const r of rows) {
@@ -1211,7 +1149,7 @@ module.exports = function register(socket, ctx) {
         let m;
         while ((m = UPLOAD_PATH_RE.exec(r.content || '')) !== null) toRelease.push(m[1]);
       }
-      for (const rel of releasableUploads(db, toRelease, [uid])) moveUploadToDeleted(rel);
+      for (const rel of releasableUploads(db, toRelease, [uid])) await storage.softDelete(rel);
 
       // One event per channel rather than one per message: a person with
       // years of history would otherwise send thousands of events to every
@@ -1423,11 +1361,9 @@ module.exports = function register(socket, ctx) {
     const trimmed = content.trim();
     const isImage = data.isImage === true;
     const isUpload = /^\/uploads\b/i.test(trimmed);
-    const isPath = trimmed.startsWith('/') && trimmed.indexOf('/', 1) !== -1;
-    const slashMatch = (!isImage && !isUpload && !isPath) ? trimmed.match(/^\/([a-zA-Z]+)(?:\s+(.*))?$/) : null;
-    if (slashMatch) {
-      const cmd = slashMatch[1].toLowerCase();
-      const arg = (slashMatch[2] || '').trim();
+    const slash = (!isImage && !isUpload) ? parseSlash(trimmed) : null;
+    if (slash) {
+      const { cmd, arg } = slash;
       const slashResult = processSlashCommand(cmd, arg, socket.user.displayName, channel.id, code);
       if (slashResult && slashResult.botCommand) {
         // Bot command fired; bot will respond via webhook endpoint
@@ -1468,13 +1404,8 @@ module.exports = function register(socket, ctx) {
           destructAt ? '🔥 Sent a self-destructing message' : slashResult.content, { silent: !!silent });
         fireWebhookCallbacks(channel.id, code, message);
 
-        try {
-          db.prepare(`
-            INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-            VALUES (?, ?, ?)
-            ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-          `).run(socket.user.id, channel.id, result.lastInsertRowid);
-        } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
+        readPositions.advance(socket.user.id, channel.id, result.lastInsertRowid)
+          .catch(() => { /* only the sender's own unread marker; it catches up on their next read */ });
         return;
       }
     }
@@ -1489,6 +1420,8 @@ module.exports = function register(socket, ctx) {
       const replyMsg = db.prepare('SELECT channel_id, destruct_at FROM messages WHERE id = ?').get(replyTo);
       if (!replyMsg || replyMsg.channel_id !== channel.id || replyMsg.destruct_at) replyTo = null;
     }
+    // The sender can turn off pushing the author they reply to (app-reply-ping.js).
+    const replyPing = socket.replyPing !== false;
 
     // (#5280) burn-after-read for DMs, capped at 5 minutes; only honored
     // for is_dm channels (the issue scopes burn to direct messages only).
@@ -1572,9 +1505,11 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, reply_to, burn_seconds, persona_id, persona_username, persona_avatar, break_chain, ferry_target, title, tags, nsfw, e2e_files, destruct_at, silent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, finalContent, replyTo, burnSeconds, personaId, personaUsername, personaAvatar, breakChain, ferryLabel, topicTitle, topicTags, topicNsfw, e2eFiles, destructAt, silent);
+      const result = insertMessage(db, {
+        channelId: channel.id, userId: socket.user.id, content: finalContent, replyTo, burnSeconds,
+        personaId, personaUsername, personaAvatar, breakChain, ferryLabel,
+        topicTitle, topicTags, topicNsfw, e2eFiles, destructAt, silent,
+      });
       if (destructAt) selfDestruct.schedule(destructAt);
 
       // Attachment tags (#tagging): the composer sends `attachmentTags` alongside
@@ -1691,7 +1626,7 @@ module.exports = function register(socket, ctx) {
         : destructAt ? '🔥 Sent a self-destructing message' : finalContent;
       const pushDisplayName = personaUsername || socket.user.displayName;
       sendPushNotifications(channel.id, code, channel.name, socket.user.id, pushDisplayName, pushContent,
-        { replyToUserId: message.replyContext?.user_id, pingText: finalContent, silent: !!silent });
+        { replyToUserId: replyPing ? message.replyContext?.user_id : null, pingText: finalContent, silent: !!silent });
       fireWebhookCallbacks(channel.id, code, message);
 
       // Deliberately after the broadcast: the Haven message is already sent and
@@ -1702,6 +1637,8 @@ module.exports = function register(socket, ctx) {
           channelId: channel.id,
           user: socket.user,
           body: finalContent,
+          havenMessageId: Number(result.lastInsertRowid),
+          replyTo,
           target: ferryTarget,
           personaUsername, personaAvatar,
           notify: (msg) => socket.emit('error-msg', msg),
@@ -1713,13 +1650,8 @@ module.exports = function register(socket, ctx) {
         });
       }
 
-      try {
-        db.prepare(`
-          INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-          VALUES (?, ?, ?)
-          ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-        `).run(socket.user.id, channel.id, result.lastInsertRowid);
-      } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
+      readPositions.advance(socket.user.id, channel.id, result.lastInsertRowid)
+        .catch(() => { /* only the sender's own unread marker; it catches up on their next read */ });
     } catch (err) {
       console.error('send-message error:', err.message);
       socket.emit('error-msg', 'Failed to send message. Please try again');
@@ -1954,19 +1886,31 @@ module.exports = function register(socket, ctx) {
   function scheduleMaxChars() {
     return parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get()?.value) || 2000;
   }
+  // A scheduled message may carry files like a live one: the typed text is
+  // held to the limit, with room for the upload lines, and the channel has
+  // to take media. Why it cannot be queued, or null.
+  function scheduleRefusal(content, channel, isAdmin) {
+    const why = sizeRefusal(content, channel, { maxChars: scheduleMaxChars(), maxAttachments: maxAttachmentsSetting() });
+    if (why) return why;
+    const media = mediaGroup.hasMedia(content);
+    if (channel.text_enabled === 0 && !(media && mediaGroup.isMediaOnly(content))) return 'Text messages are disabled in this channel';
+    if (media && channel.media_enabled === 0 && !isAdmin) return 'Media uploads are disabled in this channel';
+    return null;
+  }
 
   socket.on('schedule-message', (data, callback) => {
     const cb = typeof callback === 'function' ? callback : () => {};
     if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!/^[a-f0-9]{8}$/i.test(code)) return cb({ error: 'Invalid channel' });
-    if (!isString(data.content, 1, scheduleMaxChars())) return cb({ error: 'Nothing to send, or the message is too long' });
+    if (!isString(data.content, 1, sizeCeiling(scheduleMaxChars()))) return cb({ error: 'Nothing to send, or the message is too long' });
     const sendAt = parseSendAt(data.sendAt);
     if (!sendAt) return cb({ error: `Pick a time in the future, up to ${SCHEDULE_MAX_DAYS} days away` });
-    const channel = db.prepare('SELECT id, is_dm, read_only, text_enabled FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_dm, read_only, text_enabled, media_enabled FROM channels WHERE code = ?').get(code);
     if (!channel) return cb({ error: 'Channel not found' });
     if (channel.is_dm) return cb({ error: 'Scheduled sends are not available in direct messages' });
-    if (channel.text_enabled === 0) return cb({ error: 'Text messages are disabled in this channel' });
+    const refusal = scheduleRefusal(data.content.trim(), channel, socket.user.isAdmin);
+    if (refusal) return cb({ error: refusal });
     if (!hasChannelAccess(channel.id)) return cb({ error: 'Not a member of this channel' });
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) return cb({ error: 'This channel is read-only' });
     const mute = activeMuteNotice(socket.user.id);
@@ -1998,11 +1942,14 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object' || !isInt(data.id)) return cb({ error: 'Invalid request' });
     const row = db.prepare('SELECT id, channel_id FROM scheduled_messages WHERE id = ? AND user_id = ?').get(data.id, socket.user.id);
     if (!row) return cb({ error: 'That scheduled message is gone' });
-    if (!isString(data.content, 1, scheduleMaxChars())) return cb({ error: 'Nothing to send, or the message is too long' });
+    if (!isString(data.content, 1, sizeCeiling(scheduleMaxChars()))) return cb({ error: 'Nothing to send, or the message is too long' });
     const sendAt = parseSendAt(data.sendAt);
     if (!sendAt) return cb({ error: `Pick a time in the future, up to ${SCHEDULE_MAX_DAYS} days away` });
     const content = sanitizeText(data.content.trim());
     if (!content) return cb({ error: 'Nothing to send' });
+    const chRow = db.prepare('SELECT id, is_dm, text_enabled, media_enabled FROM channels WHERE id = ?').get(row.channel_id);
+    const refusal = chRow ? scheduleRefusal(content, chRow, socket.user.isAdmin) : 'Channel not found';
+    if (refusal) return cb({ error: refusal });
     if (enforceAutomod(content, { surface: 'edit', channelId: row.channel_id, markdown: true })) return cb({ error: 'That message was blocked' });
     db.prepare('UPDATE scheduled_messages SET content = ?, send_at = ? WHERE id = ?').run(content, sendAt, row.id);
     cb({ success: true, items: scheduledList(socket.user.id) });
@@ -2034,12 +1981,16 @@ module.exports = function register(socket, ctx) {
           const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(row.channel_id, row.user_id);
           if (!author || !member) continue;
           // The rules at the moment it goes out, not when it was queued: a
-          // ban or a mute since then, a channel gone read-only or text-off,
-          // required roles lost, or mention_everyone taken away all count.
+          // ban or a mute since then, a channel gone read-only, text-off or
+          // media-off, required roles lost, or mention_everyone taken away
+          // all count.
           if (db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(author.id)) continue;
           if (activeMuteNotice(author.id)) continue;
-          const chNow = db.prepare('SELECT id, read_only, text_enabled, role_gate FROM channels WHERE id = ?').get(row.channel_id);
-          if (!chNow || chNow.text_enabled === 0) continue;
+          const chNow = db.prepare('SELECT id, read_only, text_enabled, media_enabled, role_gate FROM channels WHERE id = ?').get(row.channel_id);
+          if (!chNow) continue;
+          const media = mediaGroup.hasMedia(row.content);
+          if (chNow.text_enabled === 0 && !(media && mediaGroup.isMediaOnly(row.content))) continue;
+          if (media && chNow.media_enabled === 0 && !author.is_admin) continue;
           if (!author.is_admin && chNow.read_only === 1 && !userHasPermission(author.id, 'read_only_override', chNow.id)) continue;
           if (!author.is_admin && !ctx.roleGateAllows(author.id, chNow)) continue;
           // A scheduled "@silent" message goes out silent too.
@@ -2128,6 +2079,7 @@ module.exports = function register(socket, ctx) {
       const closedNow = closed !== null ? closed : (row.closed || 0);
       const nsfwNow = nsfw !== null ? nsfw : (row.nsfw || 0);
       io.to(`channel:${msg.code}`).emit('topic-updated', { channelCode: msg.code, messageId: msg.id, title: title || null, tags, closed: !!closedNow, nsfw: !!nsfwNow });
+      if (!mine) auditMessage('topic_edit', msg.id, msg.channel_id, { title: title || null, tags, closed: !!closedNow });
     } catch (err) {
       console.error('set-topic-meta error:', err);
       socket.emit('error-msg', 'Failed to update the topic');
@@ -2138,12 +2090,7 @@ module.exports = function register(socket, ctx) {
   // mute. Sends, edits and reactions in the server's channels all go through
   // it; DMs are exempt (#5640).
   function activeMuteNotice(userId) {
-    const row = db.prepare(
-      'SELECT expires_at FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') ORDER BY expires_at DESC LIMIT 1'
-    ).get(userId);
-    if (!row) return null;
-    const remaining = Math.ceil((new Date(row.expires_at + 'Z') - Date.now()) / 60000);
-    return `You are in a timeout for ${remaining} more minute${remaining !== 1 ? 's' : ''}`;
+    return muteNotice(getActiveMute(db, userId));
   }
 
   socket.on('edit-message', (data) => {
@@ -2155,8 +2102,7 @@ module.exports = function register(socket, ctx) {
     // Accept an explicit channelCode from the client (e.g. DM PiP, where
     // socket.currentChannel is a different server channel). Fall back to
     // socket.currentChannel for backwards compatibility.
-    const rawCode = typeof data.channelCode === 'string' ? data.channelCode.trim() : null;
-    const code = (rawCode && /^[a-f0-9]{8}$/i.test(rawCode)) ? rawCode : socket.currentChannel;
+    const code = editChannelCode(data.channelCode, socket.currentChannel);
     if (!code) return;
 
     const channel = db.prepare('SELECT id, is_dm, is_group, is_forum FROM channels WHERE code = ?').get(code);
@@ -2194,7 +2140,7 @@ module.exports = function register(socket, ctx) {
     // trivially bypassed: post something harmless, then edit the payload in.
     if (enforceAutomod(newContent, { surface: 'edit', channelId: channel.id, markdown: true })) return;
 
-    if (/^\/uploads\/[\w\-]+\.(jpg|jpeg|png|gif|webp)$/i.test(newContent)) {
+    if (editNeedsOriginalImage(newContent)) {
       const origMsg = db.prepare('SELECT original_name FROM messages WHERE id = ?').get(data.messageId);
       if (!origMsg || !origMsg.original_name) {
         return socket.emit('error-msg', 'Cannot change a text message into an image');
@@ -2202,9 +2148,7 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      db.prepare(
-        'UPDATE messages SET content = ?, edited_at = datetime(\'now\') WHERE id = ?'
-      ).run(newContent, data.messageId);
+      updateMessageContent(db, data.messageId, newContent);
     } catch (err) {
       console.error('Edit message error:', err);
       return socket.emit('error-msg', 'Failed to edit message');
@@ -2220,31 +2164,30 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Delete message ──────────────────────────────────────
-  socket.on('delete-message', (data) => {
+  socket.on('delete-message', async (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
     // Allow the PiP DM overlay (and similar cases where the socket is joined to
     // a different channel) to pass the target channel explicitly so the lookup
     // isn't blocked by socket.currentChannel pointing at a server channel.
-    const rawCode = typeof data.channelCode === 'string' ? data.channelCode.trim() : null;
-    const code = (rawCode && /^[a-f0-9]{8}$/i.test(rawCode)) ? rawCode : socket.currentChannel;
+    const code = editChannelCode(data.channelCode, socket.currentChannel);
     if (!code) return;
 
-    const channel = db.prepare('SELECT id, is_dm FROM channels WHERE code = ?').get(code);
+    const channel = messageChannel(db, code);
     if (!channel) return;
     // Deleting starts with being there. A DM belongs to its two people, so
     // only they can delete in it, whatever server-wide delete permission
     // someone else holds; anywhere else, a non-admin must be in the channel.
-    const _inChannel = !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
+    const _inChannel = !!messageChannelMember(db, channel.id, socket.user.id);
     if (channel.is_dm ? !_inChannel : (!_inChannel && !socket.user.isAdmin)) return;
     // A role-gated channel is out of reach for people its gate keeps out.
     if (!channel.is_dm && !socket.user.isAdmin && !hasChannelAccess(channel.id)) return;
 
-    const msg = db.prepare(
-      'SELECT id, user_id, content, destruct_at FROM messages WHERE id = ? AND channel_id = ?'
-    ).get(data.messageId, channel.id);
-    if (!msg) return;
+    const msg = messageForAction(db, channel.id, data.messageId);
+    // Already gone (a scrub or another delete got there first, and this
+    // screen was never told): take it off this screen instead of doing nothing.
+    if (!msg) return socket.emit('message-deleted', { channelCode: code, messageId: data.messageId });
     // Protected means kept, whoever asks, the admin included.
     const kept = protectedMessages.refusal(db, msg.id);
     if (kept) return socket.emit('error-msg', kept);
@@ -2253,11 +2196,7 @@ module.exports = function register(socket, ctx) {
       if (!socket.user.isAdmin) {
         try {
           // (#5433) Channel-scoped override rows only apply in their channel.
-          const chain = getChannelRoleChain(channel.id);
-          const ph = chain.map(() => '?').join(',');
-          const deny = db.prepare(
-            `SELECT allowed FROM user_role_perms WHERE user_id = ? AND permission = 'delete_own_messages' AND (channel_id IS NULL OR channel_id IN (${ph})) ORDER BY allowed ASC LIMIT 1`
-          ).get(socket.user.id, ...chain);
+          const deny = ownDeleteOverride(db, socket.user.id, getChannelRoleChain(channel.id));
           if (deny && deny.allowed === 0) {
             return socket.emit('error-msg', 'You don\'t have permission to delete messages');
           }
@@ -2283,15 +2222,25 @@ module.exports = function register(socket, ctx) {
     }
 
     const replies = repliesUnder([msg.id]);
+    // Looked up before the row goes, for the audit entry.
+    const othersMessage = msg.user_id !== socket.user.id && !channel.is_dm;
+    const authorName = othersMessage
+      ? messageAuthor(db, msg.user_id)?.name || null
+      : null;
     try {
-      db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(data.messageId);
+      deletePin(db, data.messageId);
       db.prepare('DELETE FROM reactions WHERE message_id = ?').run(data.messageId);
-      db.prepare('DELETE FROM messages WHERE id = ?').run(data.messageId);
+      deleteMessage(db, data.messageId);
     } catch (err) {
       console.error('Delete message error:', err);
       return socket.emit('error-msg', 'Failed to delete message');
     }
-    releaseReplyUploads(replies);
+    if (othersMessage && typeof logAudit === 'function') {
+      const chName = channel.name || null;
+      logAudit({ actor: socket.user, action: 'message_delete',
+        target_type: 'message', target_id: msg.id, target_name: authorName, details: { channel: chName } });
+    }
+    await releaseReplyUploads(replies);
     // Deleted before its timer ran out: the self-destruct timer may have been
     // waiting for this one, so let it move on to the next, or sleep.
     if (msg.destruct_at) selfDestruct.forget(msg.destruct_at);
@@ -2314,7 +2263,7 @@ module.exports = function register(socket, ctx) {
         toRelease.push(match[1]);
       }
     }
-    for (const rel of releasableUploads(db, toRelease, [msg.user_id])) moveUploadToDeleted(rel);
+    for (const rel of releasableUploads(db, toRelease, [msg.user_id])) await storage.softDelete(rel);
 
     io.to(`channel:${code}`).emit('message-deleted', {
       channelCode: code,
@@ -2335,8 +2284,8 @@ module.exports = function register(socket, ctx) {
     if (!fromCode || !toCode || fromCode === toCode) return cb({ error: 'Invalid channels' });
     if (!/^[a-f0-9]{8}$/i.test(fromCode) || !/^[a-f0-9]{8}$/i.test(toCode)) return cb({ error: 'Invalid channel codes' });
 
-    const fromCh = db.prepare('SELECT id, name, is_dm FROM channels WHERE code = ?').get(fromCode);
-    const toCh   = db.prepare('SELECT id, name, is_dm FROM channels WHERE code = ?').get(toCode);
+    const fromCh = db.prepare('SELECT id, name, is_dm, is_forum FROM channels WHERE code = ?').get(fromCode);
+    const toCh   = db.prepare('SELECT id, name, is_dm, is_forum FROM channels WHERE code = ?').get(toCode);
     if (!fromCh || !toCh) return cb({ error: 'Channel not found' });
     if (fromCh.is_dm || toCh.is_dm) return cb({ error: 'Cannot move messages to or from DMs' });
 
@@ -2399,46 +2348,35 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
-    const pinCode = socket.currentChannel;
-    const pinCh = pinCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(pinCode) : null;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'pin_message', pinCh ? pinCh.id : null)) {
+    const code = socket.currentChannel;
+    const channel = code ? messageChannel(db, code) : null;
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'pin_message', channel ? channel.id : null)) {
       return socket.emit('error-msg', 'You don\'t have permission to pin messages');
     }
 
-    const code = socket.currentChannel;
-    if (!code) return;
-
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
     // currentChannel is where the person last was, not proof they still
     // reach it: a gate, a role or going private can have taken it away.
     if (!canTouchChannel(channel.id)) return;
 
-    const msg = db.prepare(
-      'SELECT id, destruct_at FROM messages WHERE id = ? AND channel_id = ?'
-    ).get(data.messageId, channel.id);
+    const msg = messageForAction(db, channel.id, data.messageId);
     if (!msg) return socket.emit('error-msg', 'Message not found');
 
-    const existing = db.prepare(
-      'SELECT id FROM pinned_messages WHERE message_id = ?'
-    ).get(data.messageId);
+    const existing = findPin(db, data.messageId);
     if (existing) return socket.emit('error-msg', 'Message is already pinned');
 
-    const pinCount = db.prepare(
-      'SELECT COUNT(*) as cnt FROM pinned_messages WHERE channel_id = ?'
-    ).get(channel.id);
+    const pinCount = countPins(db, channel.id);
     if (pinCount.cnt >= 50) {
       return socket.emit('error-msg', 'Channel has reached the 50-pin limit');
     }
 
     try {
-      db.prepare(
-        'INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)'
-      ).run(data.messageId, channel.id, socket.user.id);
+      insertPin(db, data.messageId, channel.id, socket.user.id);
+      auditMessage('message_pin', data.messageId, channel.id);
       // Pinning keeps a self-destructing message, as it keeps one from
       // auto-cleanup: the timer is dropped.
       if (msg.destruct_at) {
-        db.prepare('UPDATE messages SET destruct_at = NULL WHERE id = ?').run(msg.id);
+        clearDestructAt(db, msg.id);
         selfDestruct.forget(msg.destruct_at);
       }
     } catch (err) {
@@ -2457,28 +2395,23 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
-    const unpinCode = socket.currentChannel;
-    const unpinCh = unpinCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(unpinCode) : null;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'pin_message', unpinCh ? unpinCh.id : null)) {
+    const code = socket.currentChannel;
+    const channel = code ? messageChannel(db, code) : null;
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'pin_message', channel ? channel.id : null)) {
       return socket.emit('error-msg', 'You don\'t have permission to unpin messages');
     }
 
-    const code = socket.currentChannel;
-    if (!code) return;
-
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
     // currentChannel is where the person last was, not proof they still
     // reach it: a gate, a role or going private can have taken it away.
     if (!canTouchChannel(channel.id)) return;
 
-    const pin = db.prepare(
-      'SELECT id FROM pinned_messages WHERE message_id = ? AND channel_id = ?'
-    ).get(data.messageId, channel.id);
-    if (!pin) return socket.emit('error-msg', 'Message is not pinned');
+    const pin = findPin(db, data.messageId);
+    if (!pin || pin.channel_id !== channel.id) return socket.emit('error-msg', 'Message is not pinned');
 
     try {
-      db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(data.messageId);
+      deletePin(db, data.messageId);
+      auditMessage('message_unpin', data.messageId, channel.id);
     } catch (err) {
       console.error('Unpin message error:', err);
       return socket.emit('error-msg', 'Failed to unpin message');
@@ -2495,29 +2428,26 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
-    const archCode = socket.currentChannel;
-    const archCh = archCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(archCode) : null;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'archive_messages', archCh ? archCh.id : null)) {
+    const code = socket.currentChannel;
+    const channel = code ? messageChannel(db, code) : null;
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'archive_messages', channel ? channel.id : null)) {
       return socket.emit('error-msg', 'You don\'t have permission to archive messages');
     }
 
-    const code = socket.currentChannel;
-    if (!code) return;
-
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
     // currentChannel is where the person last was, not proof they still
     // reach it: a gate, a role or going private can have taken it away.
     if (!canTouchChannel(channel.id)) return;
 
-    const msg = db.prepare('SELECT id, is_archived, destruct_at FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
+    const msg = messageForAction(db, channel.id, data.messageId);
     if (!msg) return socket.emit('error-msg', 'Message not found');
     if (msg.is_archived) return socket.emit('error-msg', 'Message is already archived');
 
     try {
       // A protected message is kept: its self-destruct and burn-after-read
       // timers stop, the same as auto-cleanup and self-purge leave it alone.
-      db.prepare('UPDATE messages SET is_archived = 1, destruct_at = NULL, burn_seconds = 0, burning_started_at = NULL WHERE id = ?').run(data.messageId);
+      setProtection(db, data.messageId, true);
+      auditMessage('message_protect', data.messageId, channel.id);
       if (msg.destruct_at) selfDestruct.forget(msg.destruct_at);
     } catch (err) {
       console.error('Archive message error:', err);
@@ -2535,27 +2465,24 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
 
-    const unarchCode = socket.currentChannel;
-    const unarchCh = unarchCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(unarchCode) : null;
-    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'archive_messages', unarchCh ? unarchCh.id : null)) {
+    const code = socket.currentChannel;
+    const channel = code ? messageChannel(db, code) : null;
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'archive_messages', channel ? channel.id : null)) {
       return socket.emit('error-msg', 'You don\'t have permission to unarchive messages');
     }
 
-    const code = socket.currentChannel;
-    if (!code) return;
-
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
     if (!channel) return;
     // currentChannel is where the person last was, not proof they still
     // reach it: a gate, a role or going private can have taken it away.
     if (!canTouchChannel(channel.id)) return;
 
-    const msg = db.prepare('SELECT id, is_archived FROM messages WHERE id = ? AND channel_id = ?').get(data.messageId, channel.id);
+    const msg = messageForAction(db, channel.id, data.messageId);
     if (!msg) return socket.emit('error-msg', 'Message not found');
     if (!msg.is_archived) return socket.emit('error-msg', 'Message is not archived');
 
     try {
-      db.prepare('UPDATE messages SET is_archived = 0 WHERE id = ?').run(data.messageId);
+      setProtection(db, data.messageId, false);
+      auditMessage('message_unprotect', data.messageId, channel.id);
     } catch (err) {
       console.error('Unarchive message error:', err);
       return socket.emit('error-msg', 'Failed to unarchive message');
@@ -2573,34 +2500,14 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+    const channel = messageChannel(db, code);
     if (!channel) return;
 
     const member = hasChannelAccess(channel.id);
     if (!member) return;
 
-    const pins = db.prepare(`
-      SELECT m.id, m.content, m.created_at, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar,
-             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id,
-             pm.pinned_at, COALESCE(pb.display_name, pb.username, '[Deleted User]') as pinned_by
-      FROM pinned_messages pm
-      JOIN messages m ON pm.message_id = m.id
-      LEFT JOIN users u ON m.user_id = u.id
-      LEFT JOIN users pb ON pm.pinned_by = pb.id
-      WHERE pm.channel_id = ?
-      ORDER BY pm.pinned_at DESC
-    `).all(channel.id);
-
-    pins.forEach(p => {
-      p.created_at = utcStamp(p.created_at);
-      p.edited_at = utcStamp(p.edited_at);
-      p.pinned_at = utcStamp(p.pinned_at);
-      if (p.is_webhook) {
-        p.username = `[BOT] ${p.webhook_username || 'Bot'}`;
-      }
-    });
-
-    socket.emit('pinned-messages', { channelCode: code, pins });
+    const pins = listPins(db, channel.id, groupHistoryFloor(db, channel, socket.user.id));
+    socket.emit('pinned-messages', { channelCode: code, pins: formatPins(pins) });
   });
 
   // ── Reactions ───────────────────────────────────────────
@@ -2611,16 +2518,8 @@ module.exports = function register(socket, ctx) {
       const reactMute = activeMuteNotice(socket.user.id);
       if (reactMute) return socket.emit('error-msg', reactMute);
 
-      const allowed = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]+$/u;
-      const customEmojiPattern = /^:[a-zA-Z0-9_-]{1,30}:$/;
-      if (!allowed.test(data.emoji) && !customEmojiPattern.test(data.emoji)) return;
-      if (data.emoji.length > 32) return;
-
-      if (customEmojiPattern.test(data.emoji)) {
-        const emojiName = data.emoji.slice(1, -1).toLowerCase();
-        const exists = db.prepare('SELECT 1 FROM custom_emojis WHERE name = ?').get(emojiName);
-        if (!exists) return;
-      }
+      // A Unicode emoji, or :name: for one of Haven's own or the server's custom ones.
+      if (!isUsableEmoji(db, data.emoji)) return;
 
       // Look up the channel from the message itself, not socket.currentChannel.
       // Reactions can be triggered from the DM PiP while the user's main pane
@@ -2645,21 +2544,19 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
       }
 
-      db.prepare(
-        'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
-      ).run(data.messageId, socket.user.id, data.emoji);
+      addReaction(db, data.messageId, socket.user.id, data.emoji);
       ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, true);
+      // On a message Ferry carried, the Discord copy gets the bot's reaction.
+      ctx.ferryReactionChanged?.({ messageId: data.messageId, channelId: msg.channel_id, emoji: data.emoji, added: true });
 
-      const reactions = db.prepare(`
-        SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
-        JOIN users u ON r.user_id = u.id WHERE r.message_id = ? ORDER BY r.id
-      `).all(data.messageId);
+      const reactions = ferryReactions.listFor(db, data.messageId);
 
       io.to(`channel:${code}`).emit('reactions-updated', {
         channelCode: code,
         messageId: data.messageId,
         reactions
       });
+      ctx.emitRolePickers?.(code, data.messageId);
 
       // Webhook event: reaction-added (3.13.0)
       try {
@@ -2692,21 +2589,18 @@ module.exports = function register(socket, ctx) {
         return socket.emit('error-msg', 'Reactions are disabled in this channel');
       }
 
-      db.prepare(
-        'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
-      ).run(data.messageId, socket.user.id, data.emoji);
+      removeReaction(db, data.messageId, socket.user.id, data.emoji);
       ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, false);
+      ctx.ferryReactionChanged?.({ messageId: data.messageId, channelId: msgRow.channel_id, emoji: data.emoji, added: false });
 
-      const reactions = db.prepare(`
-        SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
-        JOIN users u ON r.user_id = u.id WHERE r.message_id = ? ORDER BY r.id
-      `).all(data.messageId);
+      const reactions = ferryReactions.listFor(db, data.messageId);
 
       io.to(`channel:${code}`).emit('reactions-updated', {
         channelCode: code,
         messageId: data.messageId,
         reactions
       });
+      ctx.emitRolePickers?.(code, data.messageId);
     } catch (err) {
       console.error('remove-reaction error:', err.message);
     }
@@ -2886,52 +2780,40 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Read positions ──────────────────────────────────────
-  socket.on('mark-read', (data) => {
+  socket.on('mark-read', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     if (!isInt(data.messageId) || data.messageId <= 0) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-    if (!channel) return;
-
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!member) return;
-
     try {
-      db.prepare(`
-        INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-        VALUES (?, ?, ?)
-        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-      `).run(socket.user.id, channel.id, data.messageId);
+      const result = await readPositions.markRead(socket.user.id, code, data.messageId);
+      // Only a receipt that was actually stored (the account is a member)
+      // is worth telling the account's other devices about.
+      if (result?.changes) emitChannelRead(io, socket.user.id, [{ channelCode: code, messageId: data.messageId }]);
     } catch (err) {
       console.error('Mark read error:', err);
     }
   });
 
   // Mark entire channel as read (context menu action)
-  socket.on('mark-read-channel', (data) => {
+  socket.on('mark-read-channel', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-    if (!channel) return;
-
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!member) return;
-
     try {
       // Mark up to the latest non-thread message. Thread replies have their
       // own panel and don't participate in channel-level read positions.
-      const latest = db.prepare('SELECT MAX(id) AS maxId FROM messages WHERE channel_id = ? AND thread_id IS NULL').get(channel.id);
-      if (!latest || !latest.maxId) return;
-
-      db.prepare(`
-        INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-        VALUES (?, ?, ?)
-        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-      `).run(socket.user.id, channel.id, latest.maxId);
+      const result = await readPositions.markChannelRead(socket.user.id, code);
+      if (result?.changes) {
+        const latest = await (db.async || db).prepare(`
+          SELECT MAX(m.id) AS "messageId"
+          FROM channels c JOIN messages m ON m.channel_id = c.id AND m.thread_id IS NULL
+          WHERE c.code = ?
+        `).get(code);
+        emitChannelRead(io, socket.user.id, [{ channelCode: code, messageId: latest?.messageId || null }]);
+      }
     } catch (err) {
       console.error('Mark read channel error:', err);
     }
@@ -2940,25 +2822,22 @@ module.exports = function register(socket, ctx) {
   // Mark everything read (#5683): every channel and DM this account belongs
   // to moves to its latest message, including ones the sidebar is not showing,
   // which is where a badge nobody can reach to clear comes from.
-  socket.on('mark-all-read', (data, callback) => {
+  socket.on('mark-all-read', async (data, callback) => {
     const cb = typeof callback === 'function' ? callback : () => {};
     try {
-      const rows = db.prepare(`
-        SELECT cm.channel_id AS channelId, MAX(m.id) AS latest
-        FROM channel_members cm
-        JOIN messages m ON m.channel_id = cm.channel_id AND m.thread_id IS NULL
-        WHERE cm.user_id = ?
-        GROUP BY cm.channel_id
+      const channels = await readPositions.markAllRead(socket.user.id);
+      const driver = db.async || db;
+      const readChannels = await driver.prepare(`
+        SELECT c.code, MAX(m.id) AS "messageId"
+        FROM channels c
+        JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
+        LEFT JOIN messages m ON m.channel_id = c.id AND m.thread_id IS NULL
+        GROUP BY c.id, c.code
       `).all(socket.user.id);
-      const upsert = db.prepare(`
-        INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-        VALUES (?, ?, ?)
-        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-      `);
-      db.transaction(() => {
-        for (const r of rows) if (r.latest) upsert.run(socket.user.id, r.channelId, r.latest);
-      })();
-      cb({ ok: true, channels: rows.length });
+      emitChannelRead(io, socket.user.id, readChannels
+        .filter(channel => channel.messageId)
+        .map(channel => ({ channelCode: channel.code, messageId: channel.messageId })));
+      cb({ ok: true, channels });
     } catch (err) {
       console.error('Mark all read error:', err);
       cb({ error: 'Could not mark everything read' });
@@ -2968,25 +2847,13 @@ module.exports = function register(socket, ctx) {
   // Mark every topic in a forum channel read for this account (#5641). Each
   // topic's row moves to its latest reply, or 0 when it has none, so the dot
   // comes back only for replies that land after this.
-  socket.on('mark-forum-read', (data) => {
+  socket.on('mark-forum-read', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id, is_forum FROM channels WHERE code = ?').get(code);
-    if (!channel || !channel.is_forum) return;
-
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!member && !socket.user.isAdmin) return;
-
     try {
-      db.prepare(`
-        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
-        SELECT ?, m.id, COALESCE((SELECT MAX(r.id) FROM messages r WHERE r.thread_id = m.id), 0)
-        FROM messages m
-        WHERE m.channel_id = ? AND m.thread_id IS NULL
-        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
-      `).run(socket.user.id, channel.id);
+      if (!await readPositions.markForumRead(socket.user.id, code, socket.user.isAdmin)) return;
       for (const [, s] of io.sockets.sockets) {
         if (s.user && s.user.id === socket.user.id) s.emit('forum-read', { channelCode: code });
       }
@@ -2997,20 +2864,11 @@ module.exports = function register(socket, ctx) {
 
   // A reply that lands while you have the thread open on screen has been
   // seen: record it so a reload, or another device, does not flag it (#5641).
-  socket.on('mark-thread-read', (data) => {
+  socket.on('mark-thread-read', async (data) => {
     if (!data || typeof data !== 'object' || !isInt(data.parentId)) return;
-    const parentRow = db.prepare(
-      'SELECT m.id, m.channel_id, c.code as channel_code FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ? AND m.thread_id IS NULL'
-    ).get(data.parentId);
-    if (!parentRow) return;
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(parentRow.channel_id, socket.user.id);
-    if (!member && !socket.user.isAdmin) return;
     try {
-      db.prepare(`
-        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
-        VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
-        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
-      `).run(socket.user.id, data.parentId, data.parentId);
+      const parentRow = await readPositions.markThreadRead(socket.user.id, data.parentId, socket.user.isAdmin);
+      if (!parentRow) return;
       for (const [, s] of io.sockets.sockets) {
         if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parentRow.channel_code, parentId: data.parentId });
       }
@@ -3033,24 +2891,13 @@ module.exports = function register(socket, ctx) {
     // socket.currentChannel: the thread panel can persist across channel
     // switches, and a stale currentChannel would silently empty the thread
     // (issue: web users seeing 28 replies but no messages, mobile fine).
-    const parentRow = db.prepare(
-      'SELECT m.id, m.user_id, m.content, m.created_at, m.channel_id, m.closed, c.is_forum, c.code as channel_code, c.is_dm as is_dm, m.is_webhook, m.webhook_username, m.imported_from,\n              COALESCE(m.webhook_username, u.display_name, u.username, \'[Deleted User]\') as username,\n              COALESCE(m.webhook_avatar, u.avatar) as avatar,\n              COALESCE(u.avatar_shape, \'circle\') as avatar_shape\n       FROM messages m\n       JOIN channels c ON m.channel_id = c.id\n       LEFT JOIN users u ON m.user_id = u.id\n       WHERE m.id = ?'
-    ).get(parentId);
-    if (!parentRow) return;
-    if (parentRow.is_dm) return; // Threads are not available in DMs
-    const channel = { id: parentRow.channel_id };
-    const parent = parentRow;
-    // A relayed or bot author is marked the same way channel history marks
-    // it, so a Discord nickname cannot pass for a Haven member's name.
-    if (parent.is_webhook && !parent.imported_from) {
-      parent.username = `[BOT] ${parent.webhook_username || 'Bot'}`;
-      parent.avatar_shape = 'square';
-    }
+    const parent = threadParent(db, parentId);
+    if (!parent) return;
+    if (parent.is_dm) return; // Threads are not available in DMs
+    const channel = { id: parent.channel_id };
 
     // Verify the user is a member of the channel (admins exempt).
-    const member = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
+    const member = messageChannelMember(db, channel.id, socket.user.id);
     if (!member && !socket.user.isAdmin) return;
     // A role gate on the channel covers its threads too (#5597).
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
@@ -3058,49 +2905,23 @@ module.exports = function register(socket, ctx) {
     // Opening a thread marks every reply in it seen for this account, and the
     // person's other devices drop the unread dot too (#5641).
     try {
-      db.prepare(`
-        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
-        VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
-        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
-      `).run(socket.user.id, parentId, parentId);
+      openThreadRead(db, socket.user.id, parentId);
       for (const [, s] of io.sockets.sockets) {
-        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parentRow.channel_code, parentId });
+        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parent.channel_code, parentId });
       }
     } catch (err) {
       console.error('Thread read error:', err);
     }
 
-    const messages = db.prepare(`
-      SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.silent, m.nsfw,
-             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, COALESCE(m.webhook_avatar, u.avatar) as avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
-      FROM messages m LEFT JOIN users u ON m.user_id = u.id
-      WHERE m.thread_id = ?
-      ORDER BY m.created_at ASC, m.id ASC
-    `).all(parentId);
+    const messages = threadMessages(db, parentId);
 
     // Enrich with reactions and reply context
     const msgIds = messages.map(m => m.id);
     const replyIds = [...new Set(messages.filter(m => m.reply_to).map(m => m.reply_to))];
 
-    const replyMap = new Map();
-    if (replyIds.length > 0) {
-      const ph = replyIds.map(() => '?').join(',');
-      db.prepare(`${REPLY_CONTEXT_SELECT}
-        WHERE m.id IN (${ph})
-      `).all(...replyIds).forEach(r => replyMap.set(r.id, toReplyContext(r)));
-    }
-
-    const reactionMap = new Map();
-    if (msgIds.length > 0) {
-      const ph = msgIds.map(() => '?').join(',');
-      db.prepare(`
-        SELECT r.message_id, r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username
-        FROM reactions r JOIN users u ON r.user_id = u.id WHERE r.message_id IN (${ph}) ORDER BY r.id
-      `).all(...msgIds).forEach(r => {
-        if (!reactionMap.has(r.message_id)) reactionMap.set(r.message_id, []);
-        reactionMap.get(r.message_id).push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
-      });
-    }
+    const replyMap = new Map(threadReplyContexts(db, replyIds).map(row => [row.id, row]));
+    const reactionMap = reactionsByMessage(reactionsForMessages(db, msgIds));
+    if (msgIds.length > 0) ferryReactions.mergeInto(db, msgIds, reactionMap);
 
     // Attachment tags on the replies' pictures, for their footers and the
     // Edit tags entry on the image menu (#5682).
@@ -3122,32 +2943,9 @@ module.exports = function register(socket, ctx) {
     const blogParts = forumBlog.blogOn(db, channel.id) ? forumBlog.partIdsOf(db, parentId) : null;
 
     const enriched = messages.map(m => {
-      const obj = { ...m };
-      if (m.silent) obj.silent = true; else delete obj.silent;
-      if (m.nsfw) obj.nsfw = true; else delete obj.nsfw;
+      const obj = formatThreadMessage(m, replyMap.get(m.reply_to), reactionMap.get(m.id));
       const atags = threadTagMap.get(m.id);
       if (atags && atags.length) obj.attachmentTags = atags;
-      // Border fit travels with the message (like avatar) so it renders even when
-      // the author is offline. Parse the stored JSON into the op array the client folds.
-      obj.borderTransform = parseBorderTransform(m.border_transform);
-      delete obj.border_transform;
-      // Animation policy travels with the message too (offline-safe, like the border).
-      obj.animateProfile = m.animate_profile || 'trigger';
-      delete obj.animate_profile;
-      if (obj.created_at && !obj.created_at.endsWith('Z')) obj.created_at = utcStamp(obj.created_at);
-      if (obj.edited_at && !obj.edited_at.endsWith('Z')) obj.edited_at = utcStamp(obj.edited_at);
-      obj.replyContext = m.reply_to ? (replyMap.get(m.reply_to) || null) : null;
-      obj.reactions = reactionMap.get(m.id) || [];
-      // Same marking as channel history: a relayed or bot author gets the
-      // [BOT] prefix, so a Discord nickname cannot pass for a Haven member.
-      // webhook_username stays the bare name, so the prefix is added once.
-      // Imported history keeps its original author's name, as it does there.
-      if (m.is_webhook && !m.imported_from) {
-        obj.is_webhook = true;
-        obj.username = `[BOT] ${m.webhook_username || 'Bot'}`;
-        obj.avatar_shape = 'square';
-        obj.border = null; obj.borderTransform = null; obj.animateProfile = 'trigger';
-      }
       if (blogParts) obj.post_part = blogParts.has(m.id);
       return obj;
     });
@@ -3162,12 +2960,7 @@ module.exports = function register(socket, ctx) {
       pieceVotes: blogParts ? pieceVotesFor(db, socket.user.id, [parentId, ...blogParts]) : undefined,
       // A closed forum topic: only moderators and admins may still reply.
       closed: !!(parent.is_forum && parent.closed),
-      parentContent: parent.content,
-      parentUserId: parent.user_id || null,
-      parentUsername: parent.username || '[Deleted User]',
-      parentAvatar: parent.avatar || null,
-      parentAvatarShape: parent.avatar_shape || 'circle',
-      parentCreatedAt: utcStamp(parent.created_at),
+      ...formatThreadParent(parent),
       messages: enriched
     });
   });
@@ -3187,18 +2980,14 @@ module.exports = function register(socket, ctx) {
     // Resolve channel via the parent message (not socket.currentChannel) so
     // sending from a thread panel still works after the user has navigated
     // away from the parent's channel. (#thread-blank-web)
-    const parent = db.prepare(
-      'SELECT m.id, m.thread_id, m.channel_id, m.closed, c.code as code, c.is_dm, c.is_forum FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ?'
-    ).get(parentId);
+    const parent = threadParent(db, parentId);
     if (!parent || parent.thread_id) return; // Can't create sub-threads
     if (parent.is_dm) return socket.emit('error-msg', 'Threads are not available in DMs');
-    const code = parent.code;
+    const code = parent.channel_code;
     const channel = { id: parent.channel_id, is_dm: parent.is_dm };
 
     // Verify the user is a member of the channel (admins exempt).
-    const tMember = db.prepare(
-      'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
-    ).get(channel.id, socket.user.id);
+    const tMember = messageChannelMember(db, channel.id, socket.user.id);
     if (!tMember && !socket.user.isAdmin) return;
     // A role gate on the channel covers its threads too (#5597).
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
@@ -3222,13 +3011,8 @@ module.exports = function register(socket, ctx) {
     const tSizeWhy = mediaGroup.refusal(content, { maxChars: tMax, maxAttachments: maxAttachmentsSetting() });
     if (tSizeWhy) return socket.emit('error-msg', tSizeWhy);
 
-    const tMute = db.prepare(
-      'SELECT expires_at FROM mutes WHERE user_id = ? AND expires_at > datetime(\'now\') ORDER BY expires_at DESC LIMIT 1'
-    ).get(socket.user.id);
-    if (tMute) {
-      const remaining = Math.ceil((new Date(tMute.expires_at + 'Z') - Date.now()) / 60000);
-      return socket.emit('error-msg', `You are in a timeout for ${remaining} more minute${remaining !== 1 ? 's' : ''}`);
-    }
+    const tMute = muteNotice(getActiveMute(db, socket.user.id));
+    if (tMute) return socket.emit('error-msg', tMute);
 
     const tChannelRow = db.prepare('SELECT read_only, text_enabled, media_enabled FROM channels WHERE id = ?').get(channel.id);
     if (tChannelRow && tChannelRow.read_only === 1 && !socket.user.isAdmin &&
@@ -3268,14 +3052,12 @@ module.exports = function register(socket, ctx) {
     const blogComment = forumBlog.authorComment(db, { parentId, userId: socket.user.id, replyTo, asComment: data.asComment });
 
     try {
-      const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, thread_id, reply_to, silent, blog_comment) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(channel.id, socket.user.id, safeContent, parentId, replyTo, tSilent.silent ? 1 : 0, blogComment);
+      const result = insertThreadReply(db, {
+        channelId: channel.id, userId: socket.user.id, content: safeContent, parentId, replyTo,
+        silent: tSilent.silent ? 1 : 0, blogComment,
+      });
       // Your own reply is not news to you (#5641).
-      db.prepare(`
-        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id) VALUES (?, ?, ?)
-        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
-      `).run(socket.user.id, parentId, result.lastInsertRowid);
+      advanceThreadRead(db, socket.user.id, parentId, result.lastInsertRowid);
 
       const message = {
         id: result.lastInsertRowid,
@@ -3296,11 +3078,7 @@ module.exports = function register(socket, ctx) {
         silent: tSilent.silent ? true : undefined
       };
 
-      if (replyTo) {
-        message.replyContext = toReplyContext(db.prepare(`${REPLY_CONTEXT_SELECT}
-          WHERE m.id = ?
-        `).get(replyTo));
-      }
+      if (replyTo) message.replyContext = toReplyContext(threadReplyContexts(db, [replyTo])[0]);
       // Blog mode (#5742): the server, not the sender, says whether this is
       // part of the post or a comment.
       const blogMode = forumBlog.blogOn(db, channel.id);
@@ -3321,6 +3099,12 @@ module.exports = function register(socket, ctx) {
         sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName,
           `Started a thread on your message: ${safeContent}`,
           { onlyUserIds: [startedFor], replyToUserId: startedFor, silent: !!tSilent.silent });
+      }
+      // A reply in the thread pushes its author too, unless the sender turned that off.
+      const repliedTo = message.replyContext?.user_id;
+      if (repliedTo && repliedTo !== socket.user.id && repliedTo !== startedFor && socket.replyPing !== false) {
+        sendPushNotifications(channel.id, code, channel.name, socket.user.id, socket.user.displayName, safeContent,
+          { onlyUserIds: [repliedTo], replyToUserId: repliedTo, silent: !!tSilent.silent });
       }
 
       // Update thread preview on the parent message for all users

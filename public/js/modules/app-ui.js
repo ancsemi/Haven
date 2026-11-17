@@ -3,6 +3,8 @@
 // buttons, the sidebar collapse, the encryption menu, keyboard shortcuts,
 // games, member search, file uploads, resizable sidebars, and the donors list.
 
+import { keepInColumn } from './keep-in-column.js?v=4.29.18';
+
 export default {
 
 _setupUI() {
@@ -23,6 +25,8 @@ _setupUI() {
   this._bindSettings();
   this._bindAdminControls();
   this._bindMemberSearch();
+  this._initDrafts();
+  this._initWhatsNewSettings();
 },
 
 _bindSearchAndPins() {
@@ -161,6 +165,8 @@ _bindAppChrome() {
     e.stopPropagation();
     const dd = document.getElementById('e2e-dropdown');
     dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+    // With a short DM name it opened under the left sidebar.
+    if (dd.style.display === 'block') keepInColumn(dd);
   });
   // Close dropdown on outside click
   document.addEventListener('click', () => {
@@ -212,7 +218,8 @@ _bindAppChrome() {
     // Type-to-focus: start typing anywhere and the message box takes over.
     // No preventDefault, so the browser inserts the keystroke into the newly
     // focused textarea. Nothing is dropped.
-    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !e.isComposing) {
+    const pasteKey = (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'v';
+    if ((pasteKey || e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) && !e.isComposing) {
       const ae = document.activeElement;
       const tag = ae?.tagName;
       const editing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae?.isContentEditable;
@@ -309,6 +316,27 @@ _bindAppChrome() {
     )].some(el => el.getClientRects().length > 0);
     if (somethingOpen) return;
     this._jumpToLatest();
+  }, true);
+
+  // Escape closes the open thread or forum topic when nothing in front of
+  // it (a menu, picker or window) has Escape to close, and no message is
+  // being edited. A reply half typed in the thread box keeps it open, so
+  // the draft is not lost to a stray key.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    const panel = document.getElementById('thread-panel');
+    if (!panel || !panel.getClientRects().length || panel.classList.contains('pip')) return;
+    if (document.querySelector('.edit-textarea')) return;
+    const draft = document.getElementById('thread-input');
+    if (draft && draft.value.trim()) return;
+    const inFront = [...document.querySelectorAll(
+      '.modal-overlay, #quick-switcher-overlay, #theme-popup, #search-container, ' +
+      '#search-panel, #image-lightbox, .image-lightbox, #emoji-picker, ' +
+      '#gif-picker, .channel-ctx-menu, #emoji-dropdown, #slash-dropdown, ' +
+      '#mention-dropdown, #channel-dropdown, #persona-dropdown, #ferry-dropdown, #gif-slash-picker'
+    )].some(el => el.getClientRects().length > 0);
+    if (inFront) return;
+    this._closeThread?.();
   }, true);
 
   // Theme popup toggle
@@ -879,6 +907,7 @@ _uploadGeneralFile(file, targetCode, { prefix = '', ferryDiscordUserId = null } 
  */
 async _maybeUploadEncryptedDmFile(file, code, ch) {
   if (!ch || !ch.is_dm || !(ch.dm_target || ch.is_group)) return false;
+  if (this._refuseBlockedUploadType(file)) return true;
   const gate = await this._dmSendGate(code);
   if (!gate) return true;
   const partner = gate.partner;

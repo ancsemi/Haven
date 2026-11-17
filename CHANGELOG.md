@@ -6,6 +6,230 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
+## [4.30.0] - Unreleased
+
+### Added
+- Activity from apps on your computer (asked for by gitty323, #5894): with Haven Desktop 1.9.0 or newer, games and music players that support rich presence, the kind that shows in Discord, can show as your activity in Haven. Switch it on under Settings > Activity > Show activity from apps on this computer; Haven Desktop asks before switching it on, for each server separately, and it is off until you do. Everything stays on your computer and your server: nothing is looked up online, so there is no artwork and the app's name is the one it gives itself or the name of its program. It only works while Discord itself is closed, since Discord takes those announcements first. Steam, Haven's own player and linked music accounts keep priority when they already show something.
+- Manage members replaces Add members in a channel's right-click menu. Everyone is listed with the people in the channel ticked: tick someone to add them, untick to remove them, by person, by role, or with All users, which adds everyone when ticked and removes everyone when unticked. Nothing changes until you press the button, and removing asks first. Whoever may add people to a channel may take them out again, and so may anyone with Kick there; only the admin removes an admin or a guest, and others only remove people ranked below them (a private channel's creator may remove anyone else in it). A role hidden on profile cards no longer shows in this list.
+- Mass-select in forums: a Select button on the forum toolbar and a Select entry in a topic's right-click menu pick topics for moving or deleting several at once, with Select all. Phone-width screens had no way into selection mode in a forum. Moving offers forums only and takes the topics' replies along. Thanks Amnibro (#5892).
+- A bell in the reply bar chooses whether your reply sends a push notification to the person you reply to (on by default, remembered on this device). With it on, a reply reaches them like an @mention would, including through a server muted with "except @mentions", and replies inside a thread now notify their author too. Thanks Bo0sted (#5891).
+- Merge a channel into another (admin, a channel's menu > Merge into…), for the duplicates a Ferry history import leaves next to channels copied by hand. The channel merged into keeps its name, settings, permissions and members; every message of the other moves into it in time order, threads and all, and the other is deleted. A Discord message that is in both (imported in one, relayed by Ferry in the other) is kept once, with its replies, reactions and pin. Messages that look re-posted by hand from Discord (the same text, posted later in Haven) are listed with both copies, and only the ticked ones go, leaving the Discord copy with its real author and time. Ferry links, webhooks, scheduled messages and role menus come along, a later history import lands in the merged channel, and people who were caught up stay caught up. Protected messages always stay.
+- Link previews fold themselves after the second one in a message, so a message with many links no longer fills the chat; the chevron on a folded card opens it (#5882). The Link Previews settings also have "Start link previews folded", which folds every card until you open it, on this device (#5883).
+- A switch for the mouse side buttons (Settings > Chat > Mouse side buttons go back and forward). Off, they do nothing in Haven, for people who use them as push to talk or a hotkey in another program (#5886).
+- Bots can edit their own messages: `PATCH /api/webhooks/<token>/messages/<message_id>` with the new `content`. For tools that mirror another service, so a changed comment is edited in place instead of deleted and posted again (asked for by Beef_Enthusiast). See the bot section of the guide.
+- Emote names keep their capitals (asked for by gitty323, #5895): upload `HOLY` and `holy` as two different emotes, as Twitch and 7TV do. `:holy:` still finds `HOLY` when there is no exact match, so older messages keep working. A new switch, Settings > Chat & media > Turn emote names into emotes when I send, is off by default. When it is on, a word you type that is exactly a custom emote's name, capitals included, is sent as that emote, with no colons or picker, in channels, threads and pop-out DMs. Code, links, mentions and slash commands are left alone. Server templates still export emote names in lowercase. An admin can make the switch part of Defaults for New Members, so it starts on for everyone on their server.
+- Sort your DMs: the new sort button in the Direct Messages header picks Latest message, Alphabetical or Manual order. Latest message moves a DM to the top as soon as someone writes in it, and is what a list you have not arranged by hand now uses. The pick and the order you arranged by hand now follow your account to every device, and pinned DMs stay on top whatever you choose. Picking Manual order for a list you have not arranged keeps it as it is shown. Recent Activity in Organize DMs did nothing before; it now sorts by the newest message (thanks Amnibro).
+
+### Fixed
+- A new forum post written while in a timeout vanished with only a few seconds of red notice, and nothing said how long the timeout would last. The title and text now come back to send later, and a notice above the message box shows the time left until the timeout ends.
+- A channel's right-click menu could open partly off the top of the screen, with its first items out of reach, when it fit neither below nor above the channel (most often in voice, where the menu is longer). It now stays on screen, and scrolls if the window is too short for all of it (reported by gitty).
+- On a phone's browser, scrolling down the login and register page kept bouncing back up to the top. The page now scrolls like any other.
+
+## [4.29.0] - 2026-11-14
+
+### Added
+- Call controls in fullscreen (thanks Roolk, #5849): mute, deafen, camera, screen share, call settings and leave stay on screen over a fullscreen camera or screen share, and a picker switches which stream is shown without leaving fullscreen.
+- Video players in chat have Theater (as wide as the chat) and Fullscreen buttons: YouTube cards, uploaded videos and videos in link previews.
+- Platform emoji built into Haven: Windows, Mac, iPhone, Android and Linux, under Platforms in the emoji picker. They work in messages, reactions and role menus.
+- Role menus: each role's emoji is picked from a searchable list of every emoji, the server's custom ones and Haven's own included. A role named after a platform starts with its icon.
+- Add members to a channel that already exists: right-click it and pick people one by one, a whole role at a time, or All users. People already in it are shown, and banned people are left out. It works for the admin and anyone who can invite people, and on a private channel for whoever may invite to it (its creator or a moderator there).
+- Hide pictures and videos (Settings > Chat & media): pictures, GIFs and videos in chat show as a small tag you click to see them, videos keep their file name, and link cards start folded. For reading chat around other people. Only changes what you see, on that device (thanks MutantRabbit767).
+- Video tutorials: short how-to videos are linked from the website, the README and the setup guide, and are on YouTube and Rumble.
+- Mentions and replies: the @ button next to your name lists every message that @mentions you or replies to you, newest first, and clicking one jumps to it. A small count on the button shows how many you have not seen yet, including ones sent while you were away, and while it is above zero the @ takes the accent color and the count pulses gently (it stays still when reduced motion is on) (thanks broilpromptu). Typing `mentions:me` in search does the same and works with the other filters.
+- Click an @mention of a person in a message to open their profile card, the same card as clicking their name (#5878, asked for by birdcrazy).
+- Blocked names (Settings > Admin > Who can sign up): words no username or display name may contain. Checked when someone signs up, joins as a guest or changes a display name, ignoring capitals, spaces, symbols, accents and look-alike numbers, so "B4d_W0rd" counts as "badword". Members who already have one are listed so the admin can deal with them. The admin is not held to the list.
+- Ferry carries reactions both ways (asked for by Raidenphantom). A reaction on Discord shows on the Haven copy with the person's Discord name, and a reaction in Haven makes the bridge bot react on Discord, once per emoji, since Discord only lets a bot react as itself. The bot needs Add Reactions in the channel; new invite links ask for it.
+- Default banner height and offset (Settings > Admin > Branding, asked for by MutantRabbit767): the admin sets how tall the server banner is and which part of it shows, for everyone. A member's own choice under Banner Display still wins on their device, and a new "Use the server's default" button there goes back to the admin's.
+- Favorite emoji (asked for by quakeman00, #5874): right-click an emoji in the picker, or press and hold it on a touch screen, and it goes into a Favorites row at the top. Do the same to take it out. Press Alt+Enter on the highlighted emoji to do it from the keyboard. The row also tops the picker you get from the ⋯ button on a message's reactions. Your favorites are saved on your account, up to 40, so they follow you to other devices.
+- Pin DMs to the top: right-click a DM (or tap its ... button) and pick Pin to top. Pinned DMs stay above the rest of your DM list in the order you pinned them, whatever sort you use, and show a small pin. Only you see your pins, and they follow your account to every device.
+- Take replies back out of a thread: while selecting messages to move, click replies in an open thread (docked or popped out, or use the new select button in the thread's header), then Move to... and "Back to #channel". They become normal messages in the channel, in the spot they were written, and keep their authors, reactions and pins. Anyone who can move messages into a thread can take them out again, and it goes on the audit log.
+- Back and forward on the mouse's side buttons (Mouse 4 and Mouse 5), the way a browser uses them. Back closes the thread you opened, leaves a forum topic for the forum's list, closes a pop-out DM or returns to the channel you came from, whichever was your last step, and forward undoes it. With a window open on top (settings, a picture, a picker), back closes that first. In a browser the side buttons no longer leave Haven. A side button set as a shortcut in the desktop app (push to talk, for one) keeps doing only that.
+- Hardware requirements, measured: `node scripts/benchmark.js` runs a throwaway server at several community sizes and prints the memory and processor time each one took. The results and what they mean for small machines are in docs/hardware.md. The load tester (`scripts/loadtest.js`) now reports the server's memory and processor use for each phase.
+
+### Changed
+- Add a Server asks for the address first and the name is optional: left blank, the server's own name is used. The window also says that you sign in, or make an account, on that server when you open it (reported by Grester).
+- Tooltips are drawn by Haven: they wrap at a readable width, stay inside the window and follow the theme. A long one used to run far past the edge of the app.
+- In Permissions, clicking a role's name opens its full settings (name, level, color, icon) on top of the table, and changes waiting to be saved stay. A click anywhere in a box's cell ticks the box.
+- The controls on videos, sounds and link previews are rebuilt: matching drawn icons in one size, with playing controls and view controls in separate groups. The speaker button mutes, and the size button opens a menu of Small, Medium and Large. It used to look like a fullscreen button.
+- The "Full" preview size is now called Large, and a YouTube player at that size is about 750 pixels wide instead of 480. At every size the player now fills its card.
+- With a mouse, the buttons that appear when you hover a message (react, reply, quote, thread, more) now sit at the bottom of the message: beside the reaction chips when it has some, and in the bottom corner when it doesn't. They used to cover the top right of the message. Touch screens are unchanged.
+- The donors list calls the people who give every month Monthly Supporters instead of Sponsors.
+- The account bar at the top of the sidebar shows your profile picture, in your chosen shape, and clicking it opens Edit Profile. The server connection light sits on its top-left corner.
+- Your custom status shows under your name in the account bar, or Set status when you have none, and clicking it opens the status picker. It used to be hidden behind the status dot (thanks reverb256, #5859).
+- Reading a channel on one device clears its unread badge and closes its notification on your other devices too, Haven Desktop's included once it is updated (thanks Roolk).
+- The emoji picker offers people as a man or a woman. The gender-neutral versions (person shrugging, technologist, Mx Claus and so on) are gone wherever a man and a woman version exist. People with no man or woman version, like baby, ninja or snowboarder, stay. Pregnant man, woman with beard, man with veil and woman in tuxedo are gone too.
+- Emoji search knows far more words: Unicode's keywords for every emoji plus everyday chat words, so "this" finds 👆, "dead" finds 💀 and "sus" finds 🤨. Results are ordered best match first, and a word has to start with what you type, so "ok" no longer turns up "book". Works in the emoji picker, reactions, role menus and `:` autocomplete.
+- Role menus show each role once, as its button. The list of roles in the message text and the row of reaction chips under it are no longer shown on top of the buttons.
+- Hover a role button in a role menu to see who picked that role, the way a reaction lists its people (asked for by quakeman00, #5869). A role hidden on profile cards keeps who holds it hidden here too.
+- New Android, iPhone and Mac emoji: the Android robot, a modern iPhone and an iMac.
+- Groundwork for optional PostgreSQL support (thanks Slyke, #5827, #5852). Haven's database calls start moving behind a common layer. SQLite stays the default and nothing changes for it; PostgreSQL cannot be turned on yet. The start-up message now gives the whole reason when Haven cannot start.
+
+### Fixed
+- The size menu on a link preview opened behind a thread, a forum topic or a pop-out DM, so the button seemed to do nothing there. It opens on top now, and has its border back.
+- The emoji picker for reactions could stay on screen with no way to close it: open it on a message, open the full list with its "...", then pick one of the quick emoji instead. It also goes away now when the thread or pop-out DM it was opened in closes.
+- When the server turned a reconnect away (too many connections from one address in a minute, or a passing server error), the app never tried again and stayed offline until it was reloaded. It now tries again after a few seconds, waiting longer each time (#5875).
+- On a phone, chat could go quiet after about a minute and stay that way until the page was reloaded, even though Haven still said it was connected (#5875). The link drops, the socket connects again, and the handshake succeeds, but the channel that was open never starts delivering messages. Haven now asks for that channel again and reloads the page if it stays silent. A reconnect from the same tab also closes the socket it replaced, so those do not pile up.
+- Uploaded .aac, .flac and .opus files were sent with old or missing file types (audio/x-aac, audio/x-flac, none for .opus). They now go out as audio/aac, audio/flac and audio/ogg, the names players check for.
+- Muting a sub-channel moved it to the bottom of the whole list, out of its category, so the category showed twice: once for its channels and again for its muted ones. A muted sub-channel now goes to the end of its own category (reported by Grester).
+- Right-clicking a forum in the channel list and choosing Mark as Read, or Mark everything as read, left the forum's dot on: its unread topics are counted apart from channel messages and were not being marked. Both now clear them (reported by Grester).
+- A message sent during a timeout was refused with a notice but the text was thrown away. It now goes back in the box (reported by Grester).
+- In a Custom or RGB theme, the green, red and amber used for online, do not disturb, warnings and delete buttons turned with the picked color, so a blue theme showed online people with a red dot. They now keep their own colors (reported by Grester).
+- Two channels whose names differ only in capitals (#Bug-Reports and #bug-reports) both linked to the same one. A #channel link now goes to the channel spelled the way it was typed (reported by Grester).
+- Settings search in a browser showed Desktop Shortcuts (push to talk and the rest), which only work in Haven Desktop, with buttons that did nothing. Search now leaves out sections you cannot use. In Haven Desktop those settings have their own page, Shortcuts & desktop app, instead of sitting under Plugins & advanced (reported by QUAKEMAN).
+- In a channel with text turned off and media left on, a picture or file you attached could not be sent from a browser or the desktop app: the message box and the send button were both hidden. The send button now stays there, also for people who chose to hide it (#5880, reported by TheStutterNerd).
+- A server with no GIF key had no way to add one: the GIF button hides itself until a key is set, and the only place to enter the key was inside the picker that button opens (reported by Aphexamine). Admins, and anyone who can manage the server, now keep the button so they can set it up, and there is a GIF Search section under Settings > Admin > Content to add or remove the key. Members' GIF buttons appear as soon as a key is saved, without a reload.
+- In a DM with a short name, the lock menu (Verify Encryption and the rest) opened partly under the left sidebar. Menus from the chat header now stay inside the chat area.
+- In a narrow window, or with search open next to the app pills, the chat header ran on under the right sidebar: Join Voice, the search box and its filters were cut off and the channel name shrank to nothing. The header now wraps onto a second row instead.
+- Leaving a call while Haven was still joining it (after a reconnect, for example) let the join finish and put the microphone back on, and a second click on a voice channel you were already in left and rejoined, opening the mic again (#5850).
+- Pressing the voice message button twice quickly started two recordings, and the first one's microphone stayed on until Haven was closed.
+- A message you had already sent could come back in the message box the next time you opened Haven, mostly in Haven Desktop. Sending now forgets the saved draft for that channel.
+- Timestamps (and other text) could show as raw names like "utils.today_at" for a whole visit when Haven's language file failed to load once, for example while the server restarted for an update. It is tried again, and the page fixes itself when it arrives.
+- A DM deleted while it was open in the pop-out DM window could come back, with its messages, after switching servers or reloading (#5848). The delete is now confirmed by the server before the app drops the conversation, and a fresh channel list no longer puts a DM the server no longer has back in the sidebar.
+- A call's camera or screen share in fullscreen paused when clicked. Fullscreen now goes on the stream's frame instead of the bare video, in the call grid and in popped-out streams.
+- Everyone could stop hearing you for the rest of a call, with Haven still showing you connected, after your microphone went away mid-call (a headset unplugged or reconnecting, for example). Only leaving and rejoining brought your voice back. Haven now opens the microphone again by itself, falling back to the default one, and tries again when a device appears (thanks Amnibro, #5851).
+- Scrolling up through older messages could snap you back to where you were when they loaded, again and again for a while, as their pictures and link previews finished loading. It stays where you scroll now (thanks Amnibro and reverb256, #5858).
+- The last plain browser pop-ups are Haven's own themed dialogs now: moving a channel under another, leaving a channel, deleting a webhook, bot or member, backups, invite links and more. The password box for signing out other sessions hides what you type.
+- A `/tts` message with a line break or a slash in it (a link, "and/or") posted as plain text with `/tts` showing and never spoke. The same went for other slash commands.
+- Clicking the ... button on a voice-only channel also joined its voice. It only opens the menu now (thanks dlmorgan999, #5846).
+- A spoiler's text showed in the places a message is previewed as plain text: reply previews, the Replying to bar, the Threads list, forum post titles and snippets, pop-up notifications and phone notifications. It's hidden in all of them now (thanks birdycrazy).
+- On a phone, an uploaded video's controls squeezed its file name into a column one letter wide. The controls sit in their own shaded box now, so they no longer read as part of the name, and move below the name when the row is narrow (#5855).
+- Opening a picture from an encrypted DM on a phone, in an installed app window or in the Android app showed a white page. It opens in Haven's own picture viewer there now (#5853).
+
+### Security
+- Add all members (new in this version) could be used by a member with Invite Users on a hidden-code channel, or on a sub-channel of a private one, which put everyone on the server into it. Both are refused now, as inviting one person there already was, and guests are only added when the admin does it.
+- The libraries the backup zip writer leans on (glob and minimatch) are moved to their fixed versions. Haven never handed them anything a user typed, so this closes two Dependabot alerts rather than a hole anyone could use.
+
+## [4.28.0] - 2026-11-06
+
+### Added
+- Settings are split into a few pages, so each one is short: Appearance, Chat & media, Notifications and so on for you, and Server, People & roles, Safety, Content, Network & scale and Bots & data for admins. Longer explanations fold behind an ⓘ button (thanks Amnibro, #5838).
+- AutoMod Quarantine, an experimental plugin (thanks Amnibro, #5836): holds links in chat until they are checked, by an AI model on your own server or a cloud AI a moderator picks. Off unless a member turns the plugin on and, for the server parts, an admin turns on Settings > Safety > Auto-Mod > AI link checks. Only the link is ever sent to an AI, never the message. See docs/automod.md.
+- Send later takes files: attach them in the Send later window, and files already waiting in the message box come along.
+- Blocked file types under Settings > Admin > Content > Uploads & Limits (#5833): list types such as exe, bat or dll, and nobody can upload files of those types. Empty by default.
+- Listen Together plays Spotify playlists and albums: sharing one queues its songs in order, found on YouTube like single Spotify songs. It used to play one song named after the playlist.
+- What's new after an update: a popup with the release notes since the version you last saw. Settings > What's New picks which updates bring it up (every update, new features, big updates only, or never), with the parts of the version number that count underlined. The notes come from the server's own changelog.
+- A Copy button on code blocks (thanks Roolk, #5844).
+- Channel types: save a set of Channel Functions (text, pictures and files, reactions, read only, voice, screen share, music, soundboard) under a name and an icon, in Settings > Server > Channel Types. Right-click a channel and pick Channel Type to give it those functions; the sidebar then shows the type's icon instead of separate ones. Editing a type updates every channel that has it, and changing a function on one channel by hand takes it out of its type. Voice only, Text only and Announcements are there to start from.
+
+### Changed
+- One click on a voice-only channel joins its voice, like on Discord. A channel is voice-only when Channel Functions has text and media switched off and voice on; other channels still join on a double-click (thanks Keagan for the idea).
+- Login session length moved from Uploads & Limits to Settings > Admin > Safety > Security, where people look for it (#5834).
+
+### Fixed
+- Changing camera quality or device several times quickly could leave an older camera running or showing, and stopping the camera during a change could leave it on (thanks Roolk, #5843).
+- Installing the voice relay failed in Docker and Podman on a host with Linux kernel 7, such as a current Fedora, with "npm error command failed" (#5845). The relay's build for that kernel needs newer system libraries than the image has, so the install now falls back to the kernel 6 build, which runs fine there.
+- In a narrow window, the Get the Desktop App and Android App pills pushed the Join Voice button off the edge. They now shrink to their icons, then hide.
+- With a camera and a screen share on at the same time, the camera could show up as the screen share or the other way round, and people could disagree about which was which. Each one is now told apart by its own stream (thanks Roolk, #5841).
+- Changing camera quality left your own camera preview blank (thanks Roolk, #5842). People who join after the change also see the new camera now.
+- Ctrl+V with nothing focused (after clicking a message or the channel list) dropped the pasted picture. It now goes into the message box (thanks Amnibro, #5839).
+- Buttons labelled with a symbol, like the + for Add Server, the × that closes a window, or ‹ and ›, showed it a little below the middle. Fonts draw these symbols low, by a different amount in each font and theme, so they are now drawn as icons that sit exactly in the middle.
+- Skipping or replacing an uploaded file playing in Listen Together could pause the next track for everyone.
+- The check of the uploads folder after a start, and once a day, paused the whole server until it had looked at every file. On a big or slow disk that could freeze it for seconds. It now lets other work run as it goes.
+- A name in a reply preview had a different color from the same name on the message itself. It now uses the role color too.
+- A link inside `single backticks` still turned into a clickable link. Text in backticks now stays exactly as typed, which is the way to post a URL as plain text.
+- A file name in brackets, like [720p], no longer counts as posting a link (thanks Amnibro, #5832).
+- In a blog post's thread, the author's reply box said the wrong thing while answering a comment (thanks Amnibro, #5831).
+- Opening a bot's webhook link in a browser said only "Not found", which looked like a broken webhook. It now explains that webhooks take POST requests and points to the bot guide.
+- On a phone or tablet browser, Enter now starts a new line in the message box, thread replies, DM pop-outs and message edits, and the Send button sends, as in the mobile apps. Shift+Enter and Ctrl+Enter still work, and with a keyboard on a desktop or laptop Enter still sends. Turn on Hide the Send button and Enter sends everywhere.
+- An unread count on the channel you had open could stay stuck after you scrolled back down to the newest messages, until the window lost and regained focus. Reaching the bottom, or clicking or typing there, now clears it.
+- Bot (webhook) posts sent no push notifications, so phones, and browsers with push turned on, heard nothing when a bot posted.
+- Text typed in the message box followed you into the next channel or DM. Each one now keeps its own unsent message, also after a reload.
+- A temporary channel lasted until the server's date changed instead of the hours it was set for, so a 1 hour channel could stay up most of a day. Mutes made through the bot or HTTP API had the same problem.
+- The microphone could stay on after leaving a call, until Haven was closed: when changing the mic device overlapped with leaving, or when joining failed partway. Both let go of it now (#5850).
+- The Settings button that opens the Discord import read "Import Selected". It says Import from Discord again.
+
+### Security
+- Updated multer and body-parser, which read uploads and requests, for two advisories that let one bad request slow the server down.
+- Fixes from a full line-by-line review of recent contributions: AutoMod's link filter and the AI link checks plugin are tightened, links in end-to-end encrypted DMs are never sent for an AI check, and banned accounts can no longer use the AI check routes.
+
+## [4.27.1] - 2026-10-29
+
+### Fixed
+- An app could delete a whole DM, for both people, from a plain "close" without asking first. The server now deletes a DM only when the app confirms the person agreed to it. The web and desktop apps already ask, so nothing changes there; other apps show an error until they are updated.
+- Every YouTube playlist shared in Listen Together failed with "Could not fetch playlist or it is empty". YouTube changed how it lists a playlist's videos; both the new and the old way are read now (thanks iJordRob, #5840).
+
+## [4.27.0] - 2026-10-28
+
+### Added
+- Optional external storage for uploads (thanks KamdenB, #5813): pictures, files, avatars, emoji, stickers and sounds can live in an S3-compatible bucket, such as MinIO or Garage on your own NAS, or a hosted one. It's off unless you turn it on, and the S3 library it needs is downloaded only on servers that do. See "External Media Storage" in GUIDE.md.
+- Importing from Discord now copies pictures and files into Haven, so they don't turn into dead links when Discord's links expire. It's a checkbox on the import screen, on by default (#5811).
+- Right-click a forum topic and choose "Move to forum…" to move it, replies and all, to another forum, blog mode forums included. It keeps the tags the new forum also has (#5809).
+- The "N new" badge in the Threads window turns into a Mark read button when you point at it.
+- Typing `:` and a couple of letters now suggests matching stickers too, and picking one sends it (#5812).
+- Videos can be marked as spoilers when you upload them, like pictures.
+- A 🔁 Loop button on uploaded videos and sounds (#5817), and on YouTube cards.
+- Login page branding under Settings > Branding (#5819): show the server icon and banner on the login page, a short message under the title, and custom CSS for the login and registration page (admin only; add `?nocss` to the address to skip it).
+- Stereo stream audio, an experiment under Settings > Debug: plays the sound of screen shares in stereo at a music bitrate. Each listener turns it on; on servers using the voice relay, the person sharing does too.
+- A 📌 Keep playing pin lets one video or sound keep playing when you scroll away from it.
+- Camera Quality in voice settings: 480p (as before), 720p or 1080p, at 30 or 60 frames a second. A camera that's on switches straight away.
+- Escape closes an open thread or forum topic, unless something in front of it (a menu, picker or window) is open or a reply is half typed in it.
+- Twemoji as an emoji style: Settings > Accessibility > Emoji draws emoji the same on every device instead of with the device's own (Windows' included). The font ships with Haven, so nothing is fetched from anywhere else.
+- Listen Together plays audio files uploaded to the server (#5826): a 🎶 button on an uploaded sound plays it for everyone in your voice channel, straight from the server, so no outside service can refuse it for one listener and not another. A link to an uploaded file works in the share box too.
+- A Shut Down Server button under Settings > Admin > Server Updates stops Haven cleanly, the same as Ctrl+C, for servers Ctrl+C can no longer reach (for example after an in-app update restarted Haven outside tmux).
+- Two switches per role (#5822): "Can be @mentioned" keeps cosmetic and game roles out of the @ list and stops them pinging, and "Show on profile cards" leaves a role off profile cards for everyone but the people who manage roles.
+- Replies cross the Ferry bridge to Discord. A Discord reply to a message from Haven shows up in Haven as a reply, and the person it answers is notified. A Haven reply shows on Discord with a small line naming the message it answers and a link to it (and pings its Discord author when Ferry's "Allow mentions" is on).
+- Create Channel has a More options section: topic, read only, slow mode, uploads and voice.
+- French is now fully translated.
+- Server templates keep a channel's setting for disconnecting idle people from voice.
+- A 🧹 Remove messages button on the banned users list deletes everything a banned member wrote in the server's channels, for a ban made without "Scrub messages". Protected messages and DMs stay.
+
+### Changed
+- Clicking a video plays or pauses it, right-clicking gives the browser's own video menu (with Loop), and tall, narrow videos get enough room for their controls (#5808).
+- Forwarded Discord messages now come through, quoted under "Forwarded", and escaped text like `3\.1K` reads the way Discord shows it. This covers the importer and the live Ferry bridge (#5811).
+- Emoji suggestions list names that start with what you typed first.
+- The role assignment window offers Server-wide to anyone who holds Promote Users server-wide, not only the owner.
+- Add all members is available to anyone who can invite people, and hidden from those who can't.
+- Pictures sent together in a blog forum become one post, and authors can combine their own blog posts.
+- A smaller Docker image.
+- Transfer Admin moved out of the member right-click menu, where it sat next to Kick and Ban, to Settings > Members.
+- The kick window only offers to scrub messages server-wide to admins, since only an admin's kick does that.
+- Someone who joins a group DM later is no longer shown locked messages from before they joined, which they could never open.
+- The audit log records every admin and moderator action: handing over admin, deleting accounts, deleting, pinning and protecting other people's messages, channel settings, removing someone from voice or a channel, bots, the whitelist, invite codes, emoji, stickers, sounds, tags, backups and restores, imports and updates. A role edit shows only what changed (including which role new members get), a setting shows its old and new value, every entry reads in plain words, and Export saves the whole log instead of the rows on screen.
+- Uploaded videos are never drawn bigger than their real size, so small pixel art stays sharp (#5817).
+- Closed forum topics are easier to tell apart: no card fill, a dashed edge, a grey picture and a muted title.
+
+### Fixed
+- Pictures didn't open after you edited their message (thanks KamdenB, #5810, #5815).
+- More options in Create Channel was cut off at the bottom (thanks KamdenB, #5814).
+- The screen share and camera buttons stayed off after you moved from a voice room that doesn't allow streams to one that does (Desktop #66).
+- Pasting a link copied with Chrome or Edge's "Copy link" also posted the site's logo above it (#5816).
+- The jump to bottom button disappeared after you opened a forum, until you reloaded.
+- Links to channels with punctuation in their names, like #Art_&_Music, didn't work.
+- When exiftool stopped on one file, other uploads waiting behind it failed too.
+- "Scrub messages" on a kick or ban deleted the messages but left them on everyone's screen until a reload, and deleting them by hand then failed with a permission error or did nothing. Scrubbed messages now leave every screen right away, and deleting messages that are already gone just clears them.
+- The audit log could show a moderator's kick scrubbing messages server-wide when only that channel had been scrubbed.
+- Deleted attachments could be purged up to 7 days early (thanks KamdenB).
+- Replaced or removed profile pictures and borders stayed in uploads forever (thanks KamdenB).
+- Link cards turned see-through when you pointed at them, so their buttons were hard to see over a background picture. They stay solid now, and their top bar buttons are evenly sized.
+- Copy link and Mark NSFW were missing from the toolbar slot order setting (#5821).
+- The theme picker could be scrolled far past its content, into empty space (#5823).
+- Clicking a link in a full-width forum topic seemed to do nothing: the "you're leaving Haven" warning opened behind the topic. It opens on top of everything now.
+- The 🔔 thread mention bell could ring for a thread you had already read, days later. It is kept per device, so a device that was open when you were mentioned, or opened later, still had it after you read the thread elsewhere. Reading a thread now clears its bell on all your devices, and a device catching up after being closed drops the ones you have read.
+- In DMs, links from admins and from people at or above "Skip filtering at role level" were still marked "blocked link" (they always sent fine). The check a DM's readers run now skips them, the same as everywhere else.
+- When YouTube refuses to play a shared track (embedding turned off, video removed, or blocked in that country), Listen Together now says so instead of sitting silent (#5826).
+- A # in an unquoted .env value cuts the value off there, which broke a TURN secret on a server run without Docker while the same file worked in Docker (#5824). Haven now names any setting this happens to when it starts, and .env.example says to use quotes.
+- Videos and sounds in encrypted DMs had no 🔁 Loop or 📌 Keep playing button, and clicking a video there didn't play it (#5825).
+- Big channels: member list updates go out in one broadcast instead of one per member. With 2,000 people connected to one channel, everyone reconnecting after a restart took 8 seconds of server time and 1.8 GB of memory and left messages arriving seconds late; it now takes 3 seconds and 270 MB, with messages arriving in about a tenth of a second.
+- On the desktop app, a thin strip of the member list, with its resize edge, showed under an open thread panel. The panel now ends exactly at the status bar.
+- A computer left on with Haven open kept your phone from getting notifications for as long as the window stayed open. Once that window goes away (after a few idle minutes), your phone gets them again.
+- New members were struck and then muted by auto-mod for sending GIFs from the GIF picker, because the wait before new accounts can post links counted them. GIFs from GIPHY, Tenor and KLIPY now go through; pasted links still wait. KLIPY's GIFs are also on the starter link allowlist now.
+
+### Security
+- Updated follow-redirects, used by the tunnel feature, for two security advisories.
+
+## [4.26.4] - 2026-10-22
+
+A security fix.
+
+### Security
+- Link previews no longer ask websites for Brotli compression or decode it, closing a way in through a Node.js bug (CVE-2026-111497) that a page someone linked to could use to run code on the server.
+- The Docker image is rebuilt on Node.js 22.23.4, which has the fix. If you run Haven without Docker, update Node.js to 22.23.4, 24.22.1 or 26.12.1 (or newer).
+
+## [4.26.3] - 2026-10-21
+
+### Added
+- Early access updates: under Settings > Admin, a server can opt in to pre-releases and try new versions before everyone else. Docker users can use the `:beta` image instead. Stable releases keep coming about once a week for everyone else.
+
 ## [4.26.2] - 2026-10-17
 
 Two fixes on top of 4.26.1.

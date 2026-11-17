@@ -6,6 +6,522 @@ export default {
 
 // NS slider is handled directly via the input event listener in _setupUI
 
+_createFullscreenCallToolbar(tile) {
+  const toolbar = document.createElement('div');
+  toolbar.className = 'fullscreen-call-toolbar';
+  toolbar.hidden = true;
+  toolbar.setAttribute('role', 'group');
+  toolbar.setAttribute('aria-label', t('voice.panel.call_controls'));
+
+  const addButton = (className, titleKey, icon, action) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `fullscreen-call-control ${className}`;
+    button.title = t(titleKey);
+    button.setAttribute('aria-label', button.title);
+    button.textContent = icon;
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      return action();
+    });
+    toolbar.appendChild(button);
+    return button;
+  };
+
+  addButton('fullscreen-call-mute', 'voice.mute', '🎙️', () => this._toggleMute?.());
+  addButton('fullscreen-call-deafen', 'voice.deafen', '🔊', () => this._toggleDeafen?.());
+  addButton('fullscreen-call-camera', 'voice.panel.camera', '📷', () => this._toggleWebcam?.());
+  addButton('fullscreen-call-share', 'voice.screen_share', '🖥️', () => this._toggleScreenShare?.());
+
+  const picker = document.createElement('select');
+  picker.className = 'fullscreen-stream-select';
+  picker.title = t('voice_runtime.stream');
+  picker.setAttribute('aria-label', t('voice_runtime.stream'));
+  picker.addEventListener('click', event => event.stopPropagation());
+  picker.addEventListener('change', (event) => {
+    event.stopPropagation();
+    this._selectFullscreenStream(tile, picker.value);
+  });
+  toolbar.appendChild(picker);
+  if (!this._fullscreenStreamPickers) this._fullscreenStreamPickers = new Map();
+  this._fullscreenStreamPickers.set(picker, tile);
+
+  const audioPopover = document.createElement('div');
+  audioPopover.className = 'fullscreen-audio-popover';
+  audioPopover.hidden = true;
+  audioPopover.setAttribute('role', 'group');
+  audioPopover.setAttribute('aria-label', t('voice.panel.call_settings'));
+  const audioTrigger = addButton('fullscreen-call-audio', 'voice.panel.call_settings', '⚙️', () => {
+    this._toggleFullscreenAudioPopover(tile, audioPopover, audioTrigger);
+  });
+  audioTrigger.setAttribute('aria-expanded', 'false');
+  const addDeviceSelect = (kind, labelKey, id) => {
+    const label = document.createElement('label');
+    label.textContent = t(labelKey);
+    const select = document.createElement('select');
+    select.id = `${tile.id || 'fullscreen'}-${kind}-device`;
+    select.className = `fullscreen-device-select fullscreen-device-${kind}`;
+    select.dataset.deviceKind = kind;
+    select.setAttribute('aria-label', t(labelKey));
+    select.addEventListener('click', event => event.stopPropagation());
+    select.addEventListener('change', (event) => {
+      event.stopPropagation();
+      this._applyVoiceDeviceSelection?.(kind, select.value);
+    });
+    label.appendChild(select);
+    audioPopover.appendChild(label);
+    select.dataset.sourceId = id;
+  };
+  addDeviceSelect('input', 'voice_settings.input', 'voice-input-device');
+  addDeviceSelect('camera', 'voice_settings.camera', 'voice-cam-device');
+  addDeviceSelect('output', 'voice_settings.output', 'voice-output-device');
+  const volumeLabel = document.createElement('label');
+  volumeLabel.textContent = t('settings.sounds_section.volume');
+  const volume = document.createElement('input');
+  volume.type = 'range';
+  volume.min = '0';
+  volume.max = '200';
+  volume.className = 'fullscreen-call-volume';
+  volume.setAttribute('aria-label', t('settings.sounds_section.volume'));
+  volume.addEventListener('click', event => event.stopPropagation());
+  volume.addEventListener('input', (event) => {
+    event.stopPropagation();
+    const value = Number(volume.value) / 100;
+    this.voice?.setVoiceMasterVolume?.(value);
+    const mainSlider = document.getElementById('voice-master-volume');
+    if (mainSlider) mainSlider.value = volume.value;
+    this._syncFullscreenCallVolume();
+  });
+  volumeLabel.appendChild(volume);
+  audioPopover.appendChild(volumeLabel);
+  audioPopover.addEventListener('click', event => event.stopPropagation());
+  audioPopover.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
+    audioTrigger.focus();
+  });
+  toolbar.appendChild(audioPopover);
+  toolbar.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || audioPopover.hidden) return;
+    event.preventDefault();
+    this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
+    audioTrigger.focus();
+  });
+  addButton('fullscreen-call-leave', 'voice.disconnect', '✕', () => {
+    if (!this.voice?.inVoice) return;
+    this._leaveVoice?.();
+    this._exitFullscreenCallControls();
+  });
+  addButton('fullscreen-call-exit', 'media.exit_fullscreen', '⛶', () => this._exitFullscreenCallControls());
+
+  tile.appendChild(toolbar);
+  if (!this._fullscreenCallToolbars) this._fullscreenCallToolbars = new Set();
+  this._fullscreenCallToolbars.add(toolbar);
+  this._bindFullscreenCallTile(tile, toolbar);
+  this._refreshFullscreenStreamPicker();
+  this._syncFullscreenCallControls();
+  return toolbar;
+},
+
+_bindFullscreenCallTile(tile, toolbar) {
+  if (!this._fullscreenCallTileBindings) this._fullscreenCallTileBindings = new Map();
+  if (this._fullscreenCallTileBindings.has(tile)) return;
+  const onFullscreenChange = () => {
+    const active = this._fullscreenElement() === tile;
+    toolbar.hidden = !active;
+    tile.classList.toggle('is-fullscreen', active);
+    if (active) {
+      // Browsers can report the same fullscreen state more than once (and the
+      // WebKit-prefixed event may arrive as well). Setting up again would save
+      // the already-suffixed label as the original and reset the chosen source.
+      if (this._fullscreenCallActiveTile === tile) return;
+      // Fullscreen moved straight from another tile: put that one back first,
+      // since its own listener may not have run yet.
+      if (this._fullscreenCallActiveTile) this._endFullscreenCallTile(this._fullscreenCallActiveTile);
+      this._fullscreenCallActiveTile = tile;
+      this._fullscreenCallOriginalStream = tile._fullscreenCallSourceStream || tile.querySelector('video')?.srcObject || null;
+      this._fullscreenCallSelectedTile = tile;
+      tile._fullscreenCallOriginalLabel = this._fullscreenStreamLabelNode(tile)?.textContent ?? null;
+      this._setFullscreenVideoSource(tile, tile, this._fullscreenCallOriginalStream);
+      this._revealFullscreenCallControls(tile);
+      this._refreshFullscreenStreamPicker?.();
+    } else {
+      this._endFullscreenCallTile(tile);
+    }
+  };
+  const onActivity = () => this._revealFullscreenCallControls(tile);
+  // Controls are up only while the pointer is over the screen: hide them the
+  // moment it leaves, unless the settings popup is open.
+  const onPointerLeave = () => {
+    if (this._fullscreenElement() !== tile) return;
+    clearTimeout(tile._fullscreenControlsTimer);
+    if (tile.classList.contains('fullscreen-popup-open')) return;
+    const focused = document.activeElement;
+    // A focused button would keep the toolbar showing (:focus-within). A
+    // dropdown is left alone so it does not close under the user.
+    if (focused && toolbar.contains?.(focused) && focused.matches?.('button')) focused.blur?.();
+    tile.classList.add('fullscreen-controls-idle');
+  };
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+  tile.addEventListener('mouseleave', onPointerLeave);
+  tile.addEventListener('mousemove', onActivity);
+  tile.addEventListener('touchstart', onActivity, { passive: true });
+  tile.addEventListener('focusin', onActivity);
+  toolbar.addEventListener('focusin', onActivity);
+  toolbar.addEventListener('click', event => event.stopPropagation());
+  toolbar.addEventListener('dblclick', event => event.stopPropagation());
+  this._fullscreenCallTileBindings.set(tile, { toolbar, onFullscreenChange, onActivity, onPointerLeave });
+},
+
+// The element in fullscreen, including the WebKit-prefixed API older Safari uses.
+_fullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+},
+
+_exitDocumentFullscreen() {
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  if (!exit) return;
+  try {
+    Promise.resolve(exit.call(document)).catch(() => { /* fullscreen refused or already exited */ });
+  } catch { /* fullscreen refused or already exited */ }
+},
+
+// Puts a tile back as it was before fullscreen: its own stream and label, the
+// settings popup closed, no idle state. Safe to call more than once.
+_endFullscreenCallTile(tile) {
+  if (this._fullscreenCallActiveTile !== tile) return;
+  this._setFullscreenVideoSource(tile, tile, this._fullscreenCallOriginalStream);
+  this._restoreFullscreenStreamLabel(tile);
+  const toolbar = this._fullscreenCallTileBindings?.get(tile)?.toolbar;
+  const audioPopover = toolbar?.querySelector('.fullscreen-audio-popover');
+  const audioTrigger = toolbar?.querySelector('.fullscreen-call-audio');
+  if (audioPopover && audioTrigger) this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
+  this._fullscreenCallActiveTile = null;
+  this._fullscreenCallOriginalStream = null;
+  this._fullscreenCallSelectedTile = null;
+  tile._fullscreenCallOriginalLabel = null;
+  clearTimeout(tile._fullscreenControlsTimer);
+  tile.classList.remove('fullscreen-controls-idle');
+},
+
+_revealFullscreenCallControls(tile) {
+  tile.classList.remove('fullscreen-controls-idle');
+  clearTimeout(tile._fullscreenControlsTimer);
+  if (this._fullscreenElement() !== tile) return;
+  tile._fullscreenControlsTimer = setTimeout(() => {
+    const binding = this._fullscreenCallTileBindings?.get(tile);
+    const hasFocus = !!(binding?.toolbar && document.activeElement &&
+      binding.toolbar.contains?.(document.activeElement));
+    const hovering = !!binding?.toolbar.matches?.(':hover');
+    const popupOpen = tile.classList.contains('fullscreen-popup-open');
+    if (!hasFocus && !hovering && !popupOpen && this._fullscreenElement() === tile) {
+      tile.classList.add('fullscreen-controls-idle');
+    }
+  }, 3200);
+},
+
+_toggleTileFullscreen(tile) {
+  if (this._fullscreenElement()) {
+    this._exitDocumentFullscreen();
+    return;
+  }
+  const request = tile.requestFullscreen || tile.webkitRequestFullscreen;
+  if (!request) return;
+  try {
+    Promise.resolve(request.call(tile)).catch(() => { /* fullscreen unavailable in this context */ });
+  } catch { /* fullscreen unavailable in this context */ }
+},
+
+_exitFullscreenCallControls() {
+  if (!this._fullscreenElement() || !this._fullscreenCallActiveTile) return;
+  this._exitDocumentFullscreen();
+},
+
+_toggleFullscreenAudioPopover(tile, popover, trigger) {
+  if (!popover.hidden) {
+    this._closeFullscreenAudioPopover(tile, popover, trigger);
+    return;
+  }
+  popover.hidden = false;
+  tile.classList.add('fullscreen-popup-open');
+  trigger.setAttribute('aria-expanded', 'true');
+  this._populateFullscreenAudioPopover(popover);
+},
+
+_closeFullscreenAudioPopover(tile, popover, trigger) {
+  popover.hidden = true;
+  tile.classList.remove('fullscreen-popup-open');
+  trigger.setAttribute('aria-expanded', 'false');
+},
+
+async _populateFullscreenAudioPopover(popover) {
+  try { await this._populateAudioDevices?.(); } catch { /* existing device panel owns enumeration errors */ }
+  for (const select of popover.querySelectorAll('select[data-device-kind]')) {
+    const source = document.getElementById(select.dataset.sourceId);
+    if (!source) continue;
+    const options = Array.from(source.options || []).map(option => option.cloneNode(true));
+    select.replaceChildren(...options);
+    select.value = source.value;
+    select.disabled = !!source.disabled;
+    select.title = source.title || '';
+  }
+  this._syncFullscreenCallVolume();
+},
+
+_syncFullscreenCallVolume() {
+  const mainSlider = document.getElementById('voice-master-volume');
+  const volume = this.voice?._voiceMasterLevel?.() ??
+    (mainSlider ? Number(mainSlider.value) / 100 : 1);
+  for (const toolbar of this._fullscreenCallToolbars || []) {
+    const slider = toolbar.querySelector('.fullscreen-call-volume');
+    if (slider) slider.value = String(Math.round(volume * 100));
+  }
+},
+
+_syncFullscreenCallControls() {
+  const voice = this.voice;
+  const inVoice = !!voice?.inVoice;
+  const channel = this.channels?.find(item => item.code === voice?.currentChannel);
+  const streamsDisabled = !!channel && channel.streams_enabled === 0;
+  for (const toolbar of this._fullscreenCallToolbars || []) {
+    const mute = toolbar.querySelector('.fullscreen-call-mute');
+    if (mute) {
+      const muted = !!voice?.isMuted;
+      mute.disabled = !inVoice;
+      mute.classList.toggle('muted', muted);
+      mute.title = t(muted ? 'voice.unmute' : 'voice.mute');
+      mute.setAttribute('aria-label', mute.title);
+      mute.setAttribute('aria-pressed', String(muted));
+    }
+    const camera = toolbar.querySelector('.fullscreen-call-camera');
+    if (camera) {
+      const active = !!voice?.isWebcamActive;
+      camera.disabled = !inVoice || streamsDisabled;
+      camera.classList.toggle('sharing', active);
+      camera.textContent = active ? '🛑' : '📷';
+      camera.title = t(streamsDisabled ? 'voice.streams_disabled' : active ? 'voice.stop_camera' : 'voice.panel.camera');
+      camera.setAttribute('aria-label', camera.title);
+      camera.setAttribute('aria-pressed', String(active));
+    }
+    const deafen = toolbar.querySelector('.fullscreen-call-deafen');
+    if (deafen) {
+      const deafened = !!voice?.isDeafened;
+      deafen.disabled = !inVoice;
+      deafen.classList.toggle('deafened', deafened);
+      deafen.textContent = deafened ? '🔇' : '🔊';
+      deafen.title = t(deafened ? 'voice.undeafen' : 'voice.deafen');
+      deafen.setAttribute('aria-label', deafen.title);
+      deafen.setAttribute('aria-pressed', String(deafened));
+    }
+    const share = toolbar.querySelector('.fullscreen-call-share');
+    if (share) {
+      const active = !!voice?.isScreenSharing;
+      share.disabled = !inVoice || streamsDisabled;
+      share.classList.toggle('sharing', active);
+      share.textContent = active ? '🛑' : '🖥️';
+      share.title = t(streamsDisabled ? 'voice.streams_disabled' : active ? 'voice.stop_share' : 'voice.screen_share');
+      share.setAttribute('aria-label', share.title);
+      share.setAttribute('aria-pressed', String(active));
+    }
+    const leave = toolbar.querySelector('.fullscreen-call-leave');
+    if (leave) leave.disabled = !inVoice;
+  }
+},
+
+_listLiveFullscreenStreams(excludeTile = null) {
+  const tiles = document.querySelectorAll('.webcam-tile, .screen-share-tile');
+  return Array.from(tiles).flatMap(tile => {
+    const isCamera = (tile.className || '').split(/\s+/).includes('webcam-tile');
+    const container = isCamera ? document.getElementById('webcam-container') : null;
+    if (tile === excludeTile || !tile.parentNode || tile.dataset.hidden === 'true' ||
+        tile.classList.contains('webcam-minimized') || tile.classList.contains('stream-hidden') ||
+        (container && (container.hidden || container.style.display === 'none'))) return [];
+    const video = tile.querySelector('video');
+    const stream = tile._fullscreenCallSourceStream || video?.srcObject;
+    const track = stream?.getVideoTracks?.().find(item => item.readyState === 'live');
+    if (!track) return [];
+    const labelNode = this._fullscreenStreamLabelNode(tile);
+    const originalLabel = tile === this._fullscreenCallActiveTile ? tile._fullscreenCallOriginalLabel : null;
+    const tileUserId = tile._fullscreenCallUserId;
+    const isOwnStream = tileUserId == null ||
+      (this.user?.id != null && String(tileUserId) === String(this.user.id));
+    const who = (isOwnStream && this.user?.username) || originalLabel ||
+      labelNode?.textContent || this.voice?.peerName?.(tileUserId) || t('voice.someone');
+    return [{ tile, video, stream, label: `${who} · ${t(isCamera ? 'voice.panel.camera' : 'voice.screen_share')}` }];
+  });
+},
+
+_fullscreenStreamLabelNode(tile) {
+  const isCamera = (tile?.className || '').split(/\s+/).includes('webcam-tile');
+  return tile?.querySelector(isCamera ? '.webcam-tile-label' : '.screen-share-tile-label') || null;
+},
+
+_restoreFullscreenStreamLabel(tile) {
+  const label = this._fullscreenStreamLabelNode(tile);
+  if (label && tile._fullscreenCallOriginalLabel != null) {
+    label.textContent = tile._fullscreenCallOriginalLabel;
+  }
+},
+
+_updateFullscreenTileSource(tile, stream) {
+  for (const { track, handler } of tile._fullscreenCallTrackHandlers || []) {
+    track.removeEventListener?.('ended', handler);
+  }
+  tile._fullscreenCallTrackHandlers = [];
+  tile._fullscreenCallSourceStream = stream;
+  for (const track of stream?.getVideoTracks?.() || []) {
+    if (track.readyState !== 'live' || !track.addEventListener) continue;
+    const handler = () => {
+      if (tile._fullscreenCallSourceStream !== stream) return;
+      const video = tile.querySelector('video');
+      this._updateFullscreenTileSource(tile, null);
+      if (video?.srcObject === stream) video.srcObject = null;
+      this._handleFullscreenSourceEnded(tile);
+    };
+    track.addEventListener('ended', handler, { once: true });
+    tile._fullscreenCallTrackHandlers.push({ track, handler });
+  }
+  const activeTile = this._fullscreenCallActiveTile;
+  if (!activeTile) return;
+  if (tile === activeTile) {
+    this._fullscreenCallOriginalStream = stream;
+    if (this._fullscreenCallSelectedTile && this._fullscreenCallSelectedTile !== tile) {
+      const selected = this._fullscreenCallSelectedTile;
+      const selectedStream = selected._fullscreenCallSourceStream || selected.querySelector('video')?.srcObject;
+      this._setFullscreenVideoSource(activeTile, selected, selectedStream || null);
+    } else {
+      this._setFullscreenVideoSource(activeTile, tile, stream);
+    }
+  } else if (this._fullscreenCallSelectedTile === tile && stream) {
+    this._setFullscreenVideoSource(activeTile, tile, stream);
+  }
+},
+
+_setFullscreenVideoSource(targetTile, sourceTile, stream) {
+  const video = targetTile?.querySelector('video');
+  if (!video) return;
+  video.srcObject = stream;
+  video.style.transform = sourceTile?._fullscreenCallMirrored ? 'scaleX(-1)' : '';
+  const selectedSource = this._listLiveFullscreenStreams().find(item => item.tile === sourceTile);
+  const label = this._fullscreenStreamLabelNode(targetTile);
+  if (selectedSource && label) label.textContent = selectedSource.label;
+},
+
+_handleFullscreenSourceEnded(tile) {
+  const activeTile = this._fullscreenCallActiveTile;
+  if (activeTile && this._fullscreenCallSelectedTile === tile) {
+    const fallback = this._listLiveFullscreenStreams(tile)[0];
+    if (fallback) {
+      this._setFullscreenVideoSource(activeTile, fallback.tile, fallback.stream);
+      this._fullscreenCallSelectedTile = fallback.tile;
+    } else {
+      this._exitFullscreenCallControls();
+    }
+  }
+  this._refreshFullscreenStreamPicker();
+},
+
+_refreshFullscreenStreamPicker() {
+  const streams = this._listLiveFullscreenStreams();
+  // Rebuilding an open dropdown closes it, and this runs on many events, so
+  // the options are only rebuilt when a stream or its label actually changed.
+  const signature = streams.map(item => `${item.tile.id}\u0000${item.label}`).join('\u0001');
+  for (const [picker] of this._fullscreenStreamPickers || []) {
+    const currentValue = this._fullscreenCallSelectedTile?.id || this._fullscreenCallActiveTile?.id || '';
+    if (picker._fullscreenStreamSignature !== signature) {
+      picker.replaceChildren();
+      for (const item of streams) {
+        const option = document.createElement('option');
+        option.value = item.tile.id;
+        option.textContent = item.label;
+        picker.appendChild(option);
+      }
+      picker._fullscreenStreamSignature = signature;
+    }
+    const nextValue = streams.some(item => item.tile.id === currentValue) ? currentValue : streams[0]?.tile.id;
+    if (nextValue !== undefined && picker.value !== nextValue) picker.value = nextValue;
+    picker.disabled = streams.length < 2;
+  }
+},
+
+_selectFullscreenStream(fullscreenTile, sourceTileId) {
+  if (this._fullscreenElement() !== fullscreenTile || !fullscreenTile.parentNode) return;
+  const sourceTile = document.getElementById(sourceTileId);
+  if (!sourceTile || !sourceTile.parentNode) return;
+  const stream = this._listLiveFullscreenStreams().find(item => item.tile === sourceTile)?.stream;
+  if (!stream || !fullscreenTile.querySelector('video')) {
+    this._refreshFullscreenStreamPicker();
+    return;
+  }
+  if (!this._fullscreenCallOriginalStream) this._fullscreenCallOriginalStream = fullscreenTile.querySelector('video').srcObject;
+  this._setFullscreenVideoSource(fullscreenTile, sourceTile, stream);
+  this._fullscreenCallActiveTile = fullscreenTile;
+  this._fullscreenCallSelectedTile = sourceTile;
+  this._refreshFullscreenStreamPicker();
+},
+
+_handleFullscreenTileRemoval(tile) {
+  if (!tile) return;
+  const activeTile = this._fullscreenCallActiveTile;
+  if (activeTile === tile) {
+    this._exitFullscreenCallControls();
+    this._endFullscreenCallTile(tile);
+  } else if (activeTile && this._fullscreenCallSelectedTile === tile) {
+    const fallback = this._listLiveFullscreenStreams(tile)[0];
+    if (fallback) {
+      this._setFullscreenVideoSource(activeTile, fallback.tile, fallback.stream);
+      this._fullscreenCallSelectedTile = fallback.tile;
+    } else {
+      this._exitFullscreenCallControls();
+    }
+  }
+  const binding = this._fullscreenCallTileBindings?.get(tile);
+  if (binding) {
+    binding.toolbar.hidden = true;
+    tile.classList.remove('is-fullscreen');
+    const audioPopover = binding.toolbar.querySelector('.fullscreen-audio-popover');
+    const audioTrigger = binding.toolbar.querySelector('.fullscreen-call-audio');
+    if (audioPopover && audioTrigger) this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
+    document.removeEventListener?.('fullscreenchange', binding.onFullscreenChange);
+    document.removeEventListener?.('webkitfullscreenchange', binding.onFullscreenChange);
+    tile.removeEventListener?.('mouseleave', binding.onPointerLeave);
+    tile.removeEventListener?.('mousemove', binding.onActivity);
+    tile.removeEventListener?.('touchstart', binding.onActivity);
+    tile.removeEventListener?.('focusin', binding.onActivity);
+    this._fullscreenCallTileBindings.delete(tile);
+    clearTimeout(tile._fullscreenControlsTimer);
+    this._fullscreenCallToolbars?.delete(binding.toolbar);
+    this._fullscreenStreamPickers?.forEach((owner, picker) => {
+      if (owner === tile) this._fullscreenStreamPickers.delete(picker);
+    });
+  }
+  this._refreshFullscreenStreamPicker();
+},
+
+_handleFullscreenTileHidden(tile) {
+  const activeTile = this._fullscreenCallActiveTile;
+  if (activeTile === tile) {
+    this._exitFullscreenCallControls();
+  } else if (activeTile && this._fullscreenCallSelectedTile === tile) {
+    const fallback = this._listLiveFullscreenStreams(tile)[0];
+    if (fallback) {
+      this._setFullscreenVideoSource(activeTile, fallback.tile, fallback.stream);
+      this._fullscreenCallSelectedTile = fallback.tile;
+    } else {
+      this._exitFullscreenCallControls();
+    }
+  }
+  this._refreshFullscreenStreamPicker();
+},
+
+_cleanupFullscreenCallTiles() {
+  for (const tile of [...(this._fullscreenCallTileBindings?.keys() || [])]) {
+    this._handleFullscreenTileRemoval(tile);
+  }
+},
+
 // ── Screen Share ──────────────────────────────────────
 
 async _toggleScreenShare() {
@@ -71,6 +587,7 @@ async _doToggleScreenShare() {
       this._showToast(t('voice.screen_share_cancelled'), 'error');
     }
   }
+  this._syncFullscreenCallControls();
 },
 
 async _toggleWebcam() {
@@ -96,6 +613,7 @@ async _toggleWebcam() {
       this._showToast(t('voice.camera_error'), 'error');
     }
   }
+  this._syncFullscreenCallControls();
 },
 
 _handleWebcamStream(userId, stream) {
@@ -110,6 +628,8 @@ _handleWebcamStream(userId, stream) {
       tile = document.createElement('div');
       tile.id = tileId;
       tile.className = 'webcam-tile';
+      tile._fullscreenCallUserId = userId;
+      tile._fullscreenCallMirrored = userId === this.user.id;
 
       const vid = document.createElement('video');
       vid.autoplay = true;
@@ -120,9 +640,7 @@ _handleWebcamStream(userId, stream) {
       // reconnect.
       vid.muted = true;
       // Mirror own camera (like a mirror), but show others normally
-      if (userId === this.user.id) {
-        vid.style.transform = 'scaleX(-1)';
-      }
+      if (tile._fullscreenCallMirrored) vid.style.transform = 'scaleX(-1)';
       tile.appendChild(vid);
 
       const lbl = document.createElement('div');
@@ -156,15 +674,10 @@ _handleWebcamStream(userId, stream) {
       fsBtnWC.textContent = '⛶';
       fsBtnWC.addEventListener('click', (e) => {
         e.stopPropagation();
-        const vid = tile.querySelector('video');
-        const target = vid || tile;
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
-        } else {
-          (target.requestFullscreen || target.webkitRequestFullscreen).call(target).catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
-        }
+        this._toggleTileFullscreen(tile);
       });
       tile.appendChild(fsBtnWC);
+      this._createFullscreenCallToolbar(tile);
 
       // Minimize button: collapses tile but keeps in grid
       const minBtn = document.createElement('button');
@@ -184,6 +697,8 @@ _handleWebcamStream(userId, stream) {
           tile.style.height = '';
           tile.style.minHeight = '';
         }
+        if (tile.classList.contains('webcam-minimized')) this._handleFullscreenTileHidden(tile);
+        else this._refreshFullscreenStreamPicker();
       });
       tile.appendChild(minBtn);
 
@@ -195,6 +710,8 @@ _handleWebcamStream(userId, stream) {
       closeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const vidEl = tile.querySelector('video');
+        this._handleFullscreenTileRemoval(tile);
+        this._updateFullscreenTileSource(tile, null);
         if (vidEl) vidEl.srcObject = null;
         tile.remove();
         this._updateWebcamVisibility();
@@ -214,13 +731,20 @@ _handleWebcamStream(userId, stream) {
       tile.appendChild(closeBtn);
 
       grid.appendChild(tile);
+      this._refreshFullscreenStreamPicker();
     }
 
     container.style.display = 'flex';
 
     const videoEl = tile.querySelector('video');
+    tile._fullscreenCallMirrored = userId === this.user.id;
+    if (this._fullscreenCallActiveTile !== tile || this._fullscreenCallSelectedTile === tile) {
+      videoEl.style.transform = tile._fullscreenCallMirrored ? 'scaleX(-1)' : '';
+    }
     if (videoEl.srcObject === stream) videoEl.srcObject = null;
     videoEl.srcObject = stream;
+    this._updateFullscreenTileSource(tile, stream);
+    this._refreshFullscreenStreamPicker();
     videoEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
     videoEl.onloadedmetadata = () => { videoEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ }); };
 
@@ -259,6 +783,8 @@ _handleWebcamStream(userId, stream) {
     const tile = document.getElementById(tileId);
     if (tile) {
       const vid = tile.querySelector('video');
+      this._handleFullscreenTileRemoval(tile);
+      this._updateFullscreenTileSource(tile, null);
       if (vid) vid.srcObject = null;
       tile.remove();
     }
@@ -275,6 +801,8 @@ _handleWebcamStream(userId, stream) {
     const pipEl = document.getElementById(`webcam-pip-${userId || 'self'}`);
     if (pipEl) pipEl.remove();
 
+    this._refreshFullscreenStreamPicker();
+    this._syncFullscreenCallControls();
     this._updateWebcamVisibility();
   }
 },
@@ -338,10 +866,13 @@ _closeWebcam() {
   if (grid) {
     grid.querySelectorAll('.webcam-tile').forEach(t => {
       const vid = t.querySelector('video');
+      this._handleFullscreenTileRemoval(t);
+      this._updateFullscreenTileSource(t, null);
       if (vid) vid.srcObject = null;
       t.remove();
     });
   }
+  this._refreshFullscreenStreamPicker();
   // Remove any PiP overlays
   document.querySelectorAll('.webcam-pip-overlay').forEach(p => p.remove());
   container.style.display = 'none';
@@ -475,8 +1006,10 @@ _popOutWebcamOverlay(tile, userId) {
   pip.querySelector('.stream-pip-close').addEventListener('click', closePip);
   pip.querySelector('.stream-pip-fullscreen').addEventListener('click', (e) => {
     e.stopPropagation();
-    const vid = pip.querySelector('video');
-    const target = vid || pip;
+    // The video's frame goes fullscreen, not the video itself: a video in
+    // fullscreen gets the browser's own controls, and a click on it paused
+    // the stream.
+    const target = pip.querySelector('.stream-pip-video') || pip;
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
     } else {
@@ -543,6 +1076,7 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       tile = document.createElement('div');
       tile.id = tileId;
       tile.className = 'screen-share-tile';
+      tile._fullscreenCallUserId = userId;
 
       const vid = document.createElement('video');
       vid.autoplay = true;
@@ -640,22 +1174,17 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       });
       tile.appendChild(popoutBtn);
 
-      // Fullscreen button: makes the video element fill the screen
+      // Fullscreen the tile so controls can remain inside its fullscreen subtree.
       const fsBtn = document.createElement('button');
       fsBtn.className = 'stream-fullscreen-btn';
       fsBtn.title = t('media.fullscreen');
       fsBtn.textContent = '⛶';
       fsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const vid = tile.querySelector('video');
-        const target = vid || tile;
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
-        } else {
-          (target.requestFullscreen || target.webkitRequestFullscreen).call(target).catch(() => { /* fullscreen refused (needs a click, or not allowed here): nothing changes */ });
-        }
+        this._toggleTileFullscreen(tile);
       });
       tile.appendChild(fsBtn);
+      this._createFullscreenCallToolbar(tile);
 
       // Minimize button: hides tile but KEEPS audio playing
       const minBtn = document.createElement('button');
@@ -680,7 +1209,9 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       tile.appendChild(closeBtn);
 
       grid.appendChild(tile);
+      this._refreshFullscreenStreamPicker();
     }
+    tile._fullscreenCallMirrored = false;
 
     // A share the viewer had to accept may have had its audio parked while
     // the Join prompt was up. The tile exists now, so let it play (#5636).
@@ -723,6 +1254,8 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       }
       videoEl.srcObject = stream;
     }
+    this._updateFullscreenTileSource(tile, stream);
+    this._refreshFullscreenStreamPicker();
     videoEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ });
     // Also re-play when metadata loads (handles late-arriving tracks)
     videoEl.onloadedmetadata = () => { videoEl.play().catch(() => { /* autoplay blocked until the next click; nothing to recover */ }); };
@@ -790,6 +1323,8 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
     const tile = document.getElementById(tileId);
     if (tile) {
       const vid = tile.querySelector('video');
+      this._handleFullscreenTileRemoval(tile);
+      this._updateFullscreenTileSource(tile, null);
       if (vid) vid.srcObject = null;
       tile.remove();
     }
@@ -808,6 +1343,8 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       this.socket.emit('stream-unwatch', { code: this.voice.currentChannel, sharerId: userId });
     }
     this._updateHiddenStreamsBar();
+    this._refreshFullscreenStreamPicker();
+    this._syncFullscreenCallControls();
     this._updateScreenShareVisibility();
   }
 },

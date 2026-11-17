@@ -212,10 +212,6 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
       this._hideUserContextMenu();
       this._confirmAdminResetPassword(targetUserId, targetName);
     }, true);
-    if (isAdmin) addBtn(`🔑 ${t('users.gear_menu.transfer_admin')}`, () => {
-      this._hideUserContextMenu();
-      this._confirmTransferAdmin(targetUserId, targetName);
-    }, true);
   }
   this._addGroupMemberActions(targetUserId, targetName, addBtn, addDivider);
 
@@ -536,6 +532,12 @@ _setupNotifications() {
     upArrowEditToggle.addEventListener('change', () => {
       localStorage.setItem('haven_up_arrow_edit', String(upArrowEditToggle.checked));
     });
+  }
+
+  const emoteWordsToggle = document.getElementById('emote-words-toggle');
+  if (emoteWordsToggle) {
+    emoteWordsToggle.checked = localStorage.getItem('haven-emote-words') === 'true';
+    emoteWordsToggle.addEventListener('change', () => localStorage.setItem('haven-emote-words', String(emoteWordsToggle.checked)));
   }
 
   // Profile card on hover (on by default). The hover handler reads the flag
@@ -1457,6 +1459,20 @@ _startStatusBar() {
     if (sb && localStorage.getItem('haven_show_statusbar') === 'true') {
       sb.style.setProperty('display', 'flex', 'important');
     }
+  }
+  // The docked thread panel stops at the top of the status bar. It used a
+  // fixed 35px, taller than the bar, so a strip of the member list and its
+  // resize edge showed under the panel. It follows the bar's real height now.
+  const sb = document.getElementById('status-bar');
+  if (sb && typeof ResizeObserver === 'function' && !this._statusBarObserver) {
+    const follow = () => {
+      // 0 while the bar is hidden.
+      const h = sb.getBoundingClientRect().height;
+      document.documentElement.style.setProperty('--thread-footer-offset', `${h}px`);
+    };
+    this._statusBarObserver = new ResizeObserver(follow);
+    this._statusBarObserver.observe(sb);
+    follow();
   }
   this._updateClock();
   if (this._clockInterval) clearInterval(this._clockInterval);

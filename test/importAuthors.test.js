@@ -58,6 +58,6 @@ test('it runs once', () => {
 test('new imports are stored with no account, and unread counts include account-less messages', () => {
   const importRoute = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'import.js'), 'utf8');
   assert.match(importRoute, /INSERT OR IGNORE INTO messages \(channel_id, user_id, content,[^)]*\)\s*VALUES \(\?, NULL,/);
-  const handlers = fs.readFileSync(path.join(__dirname, '..', 'src', 'socketHandlers', 'index.js'), 'utf8');
+  const handlers = fs.readFileSync(path.join(__dirname, '..', 'src', 'socketHandlers', 'channelList.js'), 'utf8');
   assert.match(handlers, /AND \(user_id IS NULL OR user_id != \?\) AND thread_id IS NULL /);
 });

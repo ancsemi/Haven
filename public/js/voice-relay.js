@@ -169,6 +169,10 @@
         opts.encodings = [{ maxBitrate }];
       }
       if (source === 'mic') opts.codecOptions = { opusStereo: false, opusDtx: true, opusFec: true };
+      // Stereo stream audio, the Debug experiment (voice.js _stereoSdp).
+      let stereo = false;
+      try { stereo = localStorage.getItem('haven_stereo_stream_audio') === '1'; } catch { /* private mode: the default, mono */ }
+      if (source === 'screen-audio' && stereo) opts.codecOptions = { opusStereo: true, opusMaxAverageBitrate: 128000 };
       const producer = await this.sendTransport.produce(opts);
       this.producers.set(source, producer);
       return producer;

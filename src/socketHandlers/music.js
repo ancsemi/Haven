@@ -2,10 +2,25 @@
 
 const crypto = require('crypto');
 const { isString, isInt } = require('./helpers');
+const { findOnYouTube, fetchSpotifyTrackList } = require('./musicResolver');
 
 // The most tracks a call's queue holds. Every change sends the whole queue to
 // everyone in the call, so without a cap one person could grow it forever.
 const MAX_QUEUE = 200;
+
+// Songs from a Spotify playlist looked up on YouTube at the same time.
+const SPOTIFY_LOOKUPS = 4;
+
+// An /uploads/ path to an audio file on this server, or null (#5826).
+const AUDIO_EXT = /\.(mp3|ogg|oga|wav|m4a|aac|flac|opus|weba)$/i;
+function serverAudioPath(url) {
+  const m = /^\/uploads\/([^?#\s]+)$/.exec(String(url || ''));
+  if (!m || !AUDIO_EXT.test(m[1])) return null;
+  const rel = m[1];
+  if (rel.split('/').some(part => !part || part === '..' || part === '.')) return null;
+  if (/^(deleted-attachments|bot-audio)\//i.test(rel)) return null;
+  return `/uploads/${rel}`;
+}
 
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission,
@@ -21,7 +36,9 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.code, 8, 8)) return;
     if (!isString(data.url, 1, 500)) return;
-    if (!/^https?:\/\//i.test(data.url)) return socket.emit('error-msg', 'Invalid URL');
+    // An audio file uploaded to this server plays straight from it (#5826).
+    const serverFile = serverAudioPath(data.url);
+    if (!serverFile && !/^https?:\/\//i.test(data.url)) return socket.emit('error-msg', 'Invalid URL');
     const voiceRoom = voiceUsers.get(data.code);
     if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
 
@@ -30,11 +47,24 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Music sharing is disabled in this channel');
     }
 
+    // A Spotify playlist or album queues its songs, not a song named after it.
+    const spotifyList = !serverFile && /open\.spotify\.com\/(playlist|album)\/([a-zA-Z0-9]+)/.exec(data.url);
+    if (spotifyList) return shareSpotifyList(data.code, spotifyList[1], spotifyList[2]);
+
     let playUrl = stripYouTubePlaylistParam(data.url);
     let resolvedFrom = null;
     let title = trimMusicText(data.title, 200);
 
-    const isSpotify = /open\.spotify\.com\/(track|album|playlist|episode|show)\/[a-zA-Z0-9]+/.test(data.url);
+    const isSpotify = !serverFile && /open\.spotify\.com\/(track|album|playlist|episode|show)\/[a-zA-Z0-9]+/.test(data.url);
+    if (serverFile) {
+      playUrl = serverFile;
+      if (!title) {
+        const base = serverFile.split('/').pop();
+        let shown = base;
+        try { shown = decodeURIComponent(base); } catch { /* not percent-encoded: the name as it is */ }
+        title = trimMusicText(shown.replace(/^\d{10,}-[0-9a-f]+[-_.]?/i, ''), 200);
+      }
+    }
     if (isSpotify) {
       const resolved = await resolveSpotifyToYouTube(data.url);
       if (resolved?.url) {
@@ -46,7 +76,7 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    if (!title) {
+    if (!title && !serverFile) {
       const resolvedMeta = await resolveMusicMetadata(playUrl);
       title = trimMusicText(resolvedMeta.title, 200);
     }
@@ -76,6 +106,68 @@ module.exports = function register(socket, ctx) {
       type: 'info'
     });
   });
+
+  // ── Share a Spotify playlist or album ───────────────────
+  // Each song is found on YouTube, like a single Spotify song, and queued in
+  // the playlist's order. They are looked up a few at a time, so the first
+  // one plays while the rest are still being found.
+  async function shareSpotifyList(code, kind, id) {
+    if (socket._spotifyListBusy) return socket.emit('error-msg', 'Still adding your last playlist. Try again when it is done.');
+    socket._spotifyListBusy = true;
+    try {
+      socket.emit('toast', { message: 'Fetching playlist…', type: 'info' });
+      const tracks = await fetchSpotifyTrackList(kind, id, MAX_QUEUE);
+      if (!tracks.length) {
+        return socket.emit('error-msg', 'Could not read that Spotify playlist. It may be private or empty.');
+      }
+
+      let added = 0;
+      let full = false;
+      for (let i = 0; i < tracks.length && !full; i += SPOTIFY_LOOKUPS) {
+        const room = voiceUsers.get(code);
+        if (!room || !room.has(socket.user.id)) return;
+        const batch = tracks.slice(i, i + SPOTIFY_LOOKUPS);
+        // findOnYouTube never throws: a failed search comes back as null.
+        const found = await Promise.all(batch.map(t =>
+          findOnYouTube(t.artist ? `${t.title} - ${t.artist}` : t.title)));
+        for (const hit of found) {
+          if (!hit) continue;
+          const entry = sanitizeQueueEntry({
+            id: crypto.randomBytes(12).toString('hex'),
+            url: hit.url,
+            title: trimMusicText(hit.title, 200) || 'Untitled track',
+            userId: socket.user.id,
+            username: socket.user.displayName,
+            resolvedFrom: 'spotify'
+          });
+          if (!entry) continue;
+          if (!activeMusic.get(code) && added === 0) {
+            startQueuedMusic(code, entry);
+          } else {
+            const queue = musicQueues.get(code) || [];
+            if (queue.length >= MAX_QUEUE) { full = true; break; }
+            queue.push(entry);
+            musicQueues.set(code, queue);
+          }
+          added++;
+        }
+        if (added) broadcastMusicQueue(code);
+      }
+
+      if (added > 0) {
+        const missed = tracks.length - added;
+        io.to(`voice:${code}`).emit('toast', {
+          message: `${socket.user.displayName} added ${added} track${added !== 1 ? 's' : ''} from a Spotify playlist`
+            + (missed > 0 && !full ? ` (${missed} not found on YouTube)` : ''),
+          type: 'info'
+        });
+      } else {
+        socket.emit('error-msg', 'None of the playlist\'s songs could be found on YouTube');
+      }
+    } finally {
+      socket._spotifyListBusy = false;
+    }
+  }
 
   // ── Share a playlist ────────────────────────────────────
   socket.on('music-share-playlist', async (data) => {

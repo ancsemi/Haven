@@ -85,4 +85,23 @@ function setMute(db, userId, topicId, muted) {
   else db.prepare('DELETE FROM forum_topic_mutes WHERE user_id = ? AND topic_id = ?').run(userId, topicId);
 }
 
-module.exports = { ensureTable, count, countCached, forget, mutedIn, setMute };
+async function countAsync(db, userId, channelId) {
+  // SQLite retains its existing signature cache and synchronous reads.
+  if (db.async.kind === 'sqlite') return countCached(db, userId, channelId);
+  const row = await db.async.prepare(`
+    SELECT COUNT(*) AS n FROM (
+      SELECT 1 FROM messages m
+      LEFT JOIN thread_reads tr ON tr.thread_id = m.id AND tr.user_id = ?
+      WHERE m.channel_id = ? AND m.thread_id IS NULL
+        AND NOT EXISTS (SELECT 1 FROM forum_topic_mutes f WHERE f.user_id = ? AND f.topic_id = m.id)
+        AND (CASE WHEN tr.thread_id IS NULL
+               THEN (COALESCE(m.user_id, 0) != ? OR EXISTS (SELECT 1 FROM messages r WHERE r.thread_id = m.id))
+               ELSE COALESCE((SELECT MAX(r.id) FROM messages r WHERE r.thread_id = m.id), 0) > tr.last_read_reply_id
+             END)
+      LIMIT ${CAP}
+    ) AS unread_topics
+  `).get(userId, channelId, userId, userId);
+  return row ? row.n : 0;
+}
+
+module.exports = { ensureTable, count, countAsync, countCached, forget, mutedIn, setMute };

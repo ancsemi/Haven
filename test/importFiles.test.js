@@ -26,7 +26,11 @@ const fakeFetch = async (url) => {
   return new Response(body, { status: 200, headers: { 'content-length': String(body.length) } });
 };
 // The privacy pass is tested on its own; here it only has to move the file in.
-const admit = async (tmp, dest) => fs.renameSync(tmp, dest);
+const admit = async (tmp, rel) => {
+  const dest = path.join(UPLOADS_DIR, rel);
+  fs.renameSync(tmp, dest);
+  return { size: fs.statSync(dest).size };
+};
 const opts = (state = {}) => ({ capBytes: 1024, state, fetchImpl: fakeFetch, admit });
 
 test('only Discord file links count', () => {

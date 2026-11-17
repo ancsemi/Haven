@@ -62,8 +62,15 @@ function createHarness(port, name) {
     return { token: r.token, id: r.user.id };
   }
 
-  function connect(token) {
-    const s = io(BASE, { auth: { token }, transports: ['websocket'], forceNew: true });
+  // `options.auth` is merged into the handshake (a per-tab id, for example).
+  // Reconnection stays on unless a test asks to keep a kicked socket down.
+  function connect(token, options = {}) {
+    const s = io(BASE, {
+      auth: Object.assign({ token }, options.auth),
+      transports: ['websocket'],
+      forceNew: true,
+      reconnection: options.reconnection !== false,
+    });
     sockets.push(s);
     return new Promise((res, rej) => { s.on('connect', () => res(s)); s.on('connect_error', rej); });
   }

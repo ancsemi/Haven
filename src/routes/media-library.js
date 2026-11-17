@@ -6,10 +6,28 @@ const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
 const privacyPass = require('../privacyPass');
-const { DATA_DIR } = require('../paths');
+const storage = require('../storage');
+const { auditHttp } = require('../httpAudit');
+const { DATA_DIR, STAGING_DIR } = require('../paths');
 const { verifyToken } = require('../auth');
 const { sanitizeSoundName } = require('../socketHandlers');
+const createPermissions = require('../socketHandlers/asyncPermissions');
+const { lockUserPreferences } = require('../db/userPreferences');
 const ROOT = path.join(__dirname, '..', '..');
+
+function customSound(db, name) {
+  const lock = db.kind === 'postgres' ? ' FOR SHARE' : '';
+  return db.prepare('SELECT 1 FROM custom_sounds WHERE name = ?' + lock).get(name);
+}
+
+function saveSoundVolume(db, name, volume) {
+  if (volume === 100) return db.prepare('DELETE FROM sound_volumes WHERE sound_name = ?').run(name);
+  return db.prepare('INSERT INTO sound_volumes (sound_name, volume) VALUES (?, ?) ON CONFLICT(sound_name) DO UPDATE SET volume = excluded.volume').run(name, volume);
+}
+
+function soundPreferenceUpsert(db) {
+  return db.prepare('INSERT INTO sound_preferences (user_id, sound_name, hidden, custom_order) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, sound_name) DO UPDATE SET hidden = excluded.hidden, custom_order = excluded.custom_order');
+}
 
 module.exports = function registerMediaLibrary(deps) {
   const { uploadDiskGuard, app, verifyAdminFromDb, userHasPermission, uploadDir, uploadStorage, uploadLimiter } = deps;
@@ -51,43 +69,47 @@ module.exports = function registerMediaLibrary(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_soundboard')) return res.status(403).json({ error: 'Requires admin or Manage Soundboard permission' });
 
-    createSoundUpload().single('sound')(req, res, (err) => {
+    createSoundUpload().single('sound')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
       let name = sanitizeSoundName(req.body.name || '');
       if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
 
+      try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const { getDb } = require('../database');
       try {
         getDb().prepare(
           'INSERT OR REPLACE INTO custom_sounds (name, filename, uploaded_by) VALUES (?, ?, ?)'
         ).run(name, req.file.filename, user.id);
+        auditHttp(user, 'sound_add', { target_name: name });
         broadcastLibraryUpdate(req, 'sounds');
         res.json({ name, url: `/uploads/${req.file.filename}` });
       } catch { res.status(500).json({ error: 'Failed to save sound' }); }
     });
   });
 
-  app.get('/api/sounds', (req, res) => {
+  app.get('/api/sounds', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    const { getDb } = require('../database');
+    const { getAsyncDb } = require('../database');
     try {
-      const disabledRows = getDb().prepare('SELECT name FROM disabled_builtin_sounds').all();
+      const db = getAsyncDb();
+      const disabledRows = await db.prepare('SELECT name FROM disabled_builtin_sounds').all();
       const disabledSet = new Set(disabledRows.map(r => r.name));
       const enabledBuiltins = BUILTIN_SOUNDS.filter(s => !disabledSet.has(s.name));
-      const custom = getDb().prepare('SELECT name, filename FROM custom_sounds ORDER BY name').all();
+      const custom = await db.prepare('SELECT name, filename FROM custom_sounds ORDER BY name').all();
       const customList = custom.map(s => ({ name: s.name, url: `/uploads/${s.filename}` }));
       // Each sound's soundboard volume (#5804), sent only where it is not 100.
-      const volumes = new Map(getDb().prepare('SELECT sound_name, volume FROM sound_volumes').all().map(r => [r.sound_name, r.volume]));
+      const volumeRows = await db.prepare('SELECT sound_name, volume FROM sound_volumes').all();
+      const volumes = new Map(volumeRows.map(r => [r.sound_name, r.volume]));
       const withVolume = (s) => (volumes.has(s.name) && volumes.get(s.name) !== 100 ? { ...s, volume: volumes.get(s.name) } : s);
       res.json({ sounds: [...enabledBuiltins, ...customList].map(withVolume) });
     } catch { res.json({ sounds: [...BUILTIN_SOUNDS] }); }
   });
 
-  app.delete('/api/sounds/:name', (req, res) => {
+  app.delete('/api/sounds/:name', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -98,16 +120,16 @@ module.exports = function registerMediaLibrary(deps) {
       // Built-in sounds are disabled by adding them to a blocklist (they can't be physically deleted)
       if (BUILTIN_SOUNDS.some(s => s.name === name)) {
         getDb().prepare('INSERT OR IGNORE INTO disabled_builtin_sounds (name) VALUES (?)').run(name);
+        auditHttp(user, 'sound_delete', { target_name: name });
         broadcastLibraryUpdate(req, 'sounds');
         return res.json({ ok: true });
       }
       const row = getDb().prepare('SELECT filename FROM custom_sounds WHERE name = ?').get(name);
       if (row) {
-        try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch (err) {
-          if (err.code !== 'ENOENT') console.warn(`[sounds] Could not delete file for sound "${name}":`, err.message);
-        }
+        await storage.remove(row.filename);
         getDb().prepare('DELETE FROM custom_sounds WHERE name = ?').run(name);
         getDb().prepare('DELETE FROM sound_volumes WHERE sound_name = ?').run(name);
+        auditHttp(user, 'sound_delete', { target_name: name });
       }
       broadcastLibraryUpdate(req, 'sounds');
       res.json({ ok: true });
@@ -131,6 +153,7 @@ module.exports = function registerMediaLibrary(deps) {
       if (existing) return res.status(409).json({ error: 'Name already taken' });
       getDb().prepare('UPDATE custom_sounds SET name = ? WHERE name = ?').run(newName, oldName);
       getDb().prepare('UPDATE sound_volumes SET sound_name = ? WHERE sound_name = ?').run(newName, oldName);
+      auditHttp(user, 'sound_rename', { target_name: newName, details: { from: oldName } });
       broadcastLibraryUpdate(req, 'sounds');
       res.json({ ok: true, name: newName });
     } catch { res.status(500).json({ error: 'Failed to rename sound' }); }
@@ -139,20 +162,34 @@ module.exports = function registerMediaLibrary(deps) {
   // How loud one sound plays on the soundboard, for everyone (#5804): the
   // person playing it sends it at this level, so turning a loud sound down
   // here quiets it in every call. 0 to 100 percent; 100 removes the row.
-  app.put('/api/sounds/:name/volume', (req, res) => {
+  app.put('/api/sounds/:name/volume', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_soundboard')) return res.status(403).json({ error: 'Requires admin or Manage Soundboard permission' });
     const name = req.params.name;
-    const volume = Number(req.body && req.body.volume);
-    if (!Number.isInteger(volume) || volume < 0 || volume > 100) return res.status(400).json({ error: 'Volume must be a whole number from 0 to 100' });
     const { getDb } = require('../database');
     try {
-      const known = BUILTIN_SOUNDS.some(s => s.name === name) || !!getDb().prepare('SELECT 1 FROM custom_sounds WHERE name = ?').get(name);
-      if (!known) return res.status(404).json({ error: 'Sound not found' });
-      if (volume === 100) getDb().prepare('DELETE FROM sound_volumes WHERE sound_name = ?').run(name);
-      else getDb().prepare('INSERT INTO sound_volumes (sound_name, volume) VALUES (?, ?) ON CONFLICT(sound_name) DO UPDATE SET volume = excluded.volume').run(name, volume);
+      const db = getDb();
+      const allowed = req.postgresUser
+        ? user.isAdmin || await createPermissions(db).userHasPermission(user.id, 'manage_soundboard')
+        : verifyAdminFromDb(user) || userHasPermission(user.id, 'manage_soundboard');
+      if (!allowed) return res.status(403).json({ error: 'Requires admin or Manage Soundboard permission' });
+      const volume = Number(req.body && req.body.volume);
+      if (!Number.isInteger(volume) || volume < 0 || volume > 100) return res.status(400).json({ error: 'Volume must be a whole number from 0 to 100' });
+      const builtin = BUILTIN_SOUNDS.some(s => s.name === name);
+      if (req.postgresUser) {
+        const saved = await db.withTransaction(async tx => {
+          if (!builtin && !await customSound(tx, name)) return false;
+          await saveSoundVolume(tx, name, volume);
+          return true;
+        });
+        if (!saved) return res.status(404).json({ error: 'Sound not found' });
+      } else {
+        if (!builtin && !customSound(db, name)) return res.status(404).json({ error: 'Sound not found' });
+        saveSoundVolume(db, name, volume);
+      }
+      const audit = auditHttp(user, 'sound_volume', { target_name: name, details: { volume } });
+      if (req.postgresUser) await audit;
       broadcastLibraryUpdate(req, 'sounds');
       res.json({ ok: true, name, volume });
     } catch (err) {
@@ -162,31 +199,44 @@ module.exports = function registerMediaLibrary(deps) {
   });
 
   // -- User sound preferences ---------------------------------------------------
-  app.get('/api/user-sound-prefs', (req, res) => {
+  app.get('/api/user-sound-prefs', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    const { getDb } = require('../database');
+    const { getAsyncDb } = require('../database');
     try {
-      const rows = getDb().prepare('SELECT sound_name, hidden, custom_order FROM sound_preferences WHERE user_id = ?').all(user.id);
+      const rows = await getAsyncDb().prepare('SELECT sound_name, hidden, custom_order FROM sound_preferences WHERE user_id = ?').all(user.id);
       const prefs = {};
       rows.forEach(r => { prefs[r.sound_name] = { hidden: !!r.hidden, customOrder: r.custom_order }; });
       res.json({ prefs });
     } catch { res.json({ prefs: {} }); }
   });
 
-  app.post('/api/user-sound-prefs', (req, res) => {
+  app.post('/api/user-sound-prefs', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     const { prefs } = req.body || {};
     if (!prefs || typeof prefs !== 'object') return res.status(400).json({ error: 'Invalid prefs' });
     const { getDb } = require('../database');
     try {
       const db = getDb();
-      const upsert = db.prepare('INSERT INTO sound_preferences (user_id, sound_name, hidden, custom_order) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, sound_name) DO UPDATE SET hidden = excluded.hidden, custom_order = excluded.custom_order');
-      const runMany = db.transaction(() => { Object.entries(prefs).forEach(([name, pref]) => { upsert.run(user.id, name, pref.hidden ? 1 : 0, pref.customOrder ?? null); }); });
-      runMany();
+      if (req.postgresUser) {
+        await db.withTransaction(async tx => {
+          await lockUserPreferences(tx, user.id);
+          const upsert = soundPreferenceUpsert(tx);
+          for (const [name, pref] of Object.entries(prefs)) {
+            await upsert.run(user.id, name, pref.hidden ? 1 : 0, pref.customOrder ?? null);
+          }
+        });
+      } else {
+        const upsert = soundPreferenceUpsert(db);
+        db.transaction(() => {
+          for (const [name, pref] of Object.entries(prefs)) {
+            upsert.run(user.id, name, pref.hidden ? 1 : 0, pref.customOrder ?? null);
+          }
+        })();
+      }
       res.json({ ok: true });
     } catch { res.status(500).json({ error: 'Failed to save prefs' }); }
   });
@@ -211,19 +261,21 @@ module.exports = function registerMediaLibrary(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
 
-    createEmojiUpload().single('emoji')(req, res, (err) => {
+    createEmojiUpload().single('emoji')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-      let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+      let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
       if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
       if (name.length > 30) name = name.slice(0, 30);
 
+      try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const { getDb } = require('../database');
       try {
         getDb().prepare(
           'INSERT OR REPLACE INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)'
         ).run(name, req.file.filename, user.id);
+        auditHttp(user, 'emoji_add', { target_name: name });
         broadcastLibraryUpdate(req, 'emojis');
         res.json({ name, url: `/uploads/${req.file.filename}` });
       } catch { res.status(500).json({ error: 'Failed to save emoji' }); }
@@ -237,7 +289,7 @@ module.exports = function registerMediaLibrary(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
 
-    createEmojiUpload().array('emojis', 50)(req, res, (err) => {
+    createEmojiUpload().array('emojis', 50)(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
 
@@ -249,9 +301,10 @@ module.exports = function registerMediaLibrary(deps) {
 
       for (const file of req.files) {
         let name = path.basename(file.originalname, path.extname(file.originalname))
-          .replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+          .replace(/[^a-zA-Z0-9_-]/g, '');
         if (!name) name = path.basename(file.filename, path.extname(file.filename));
         if (name.length > 30) name = name.slice(0, 30);
+        try { await storage.admitUpload(file); } catch (e) { errors.push({ name, error: 'Failed to store the upload' }); continue; }
         try {
           insert.run(name, file.filename, user.id);
           results.push({ name, url: `/uploads/${file.filename}` });
@@ -259,18 +312,21 @@ module.exports = function registerMediaLibrary(deps) {
           errors.push({ name, error: e.message });
         }
       }
-      if (results.length) broadcastLibraryUpdate(req, 'emojis');
+      if (results.length) {
+        auditHttp(user, 'emoji_add', { target_name: results.map(r => r.name).join(', ').slice(0, 200), details: { count: results.length } });
+        broadcastLibraryUpdate(req, 'emojis');
+      }
       res.json({ uploaded: results, errors });
     });
   });
 
-  app.get('/api/emojis', (req, res) => {
+  app.get('/api/emojis', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    const { getDb } = require('../database');
+    const { getAsyncDb } = require('../database');
     try {
-      const emojis = getDb().prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all();
+      const emojis = await getAsyncDb().prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all();
       res.json({ emojis: emojis.map(e => ({ name: e.name, url: `/uploads/${e.filename}` })) });
     } catch { res.json({ emojis: [] }); }
   });
@@ -279,7 +335,7 @@ module.exports = function registerMediaLibrary(deps) {
   // with the OS font. Falls back to the client's built-in list when unavailable.
   app.get('/api/standard-emojis', (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    if (!token || !verifyToken(token)) return res.status(401).json({ error: 'Unauthorized' });
+    if (!req.postgresUser && (!token || !verifyToken(token))) return res.status(401).json({ error: 'Unauthorized' });
     res.json(require('../emoji').getEmojiData() || { categories: {}, names: {}, modifierBase: [] });
   });
 
@@ -383,7 +439,7 @@ module.exports = function registerMediaLibrary(deps) {
     res.status(404).end();
   });
 
-  app.delete('/api/emojis/:name', (req, res) => {
+  app.delete('/api/emojis/:name', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -393,10 +449,9 @@ module.exports = function registerMediaLibrary(deps) {
     try {
       const row = getDb().prepare('SELECT filename FROM custom_emojis WHERE name = ?').get(name);
       if (row) {
-        try { fs.unlinkSync(path.join(uploadDir, row.filename)); } catch (err) {
-          if (err.code !== 'ENOENT') console.warn(`[emojis] Could not delete file for emoji "${name}":`, err.message);
-        }
+        await storage.remove(row.filename);
         getDb().prepare('DELETE FROM custom_emojis WHERE name = ?').run(name);
+        auditHttp(user, 'emoji_delete', { target_name: name });
       }
       broadcastLibraryUpdate(req, 'emojis');
       res.json({ ok: true });
@@ -410,9 +465,6 @@ module.exports = function registerMediaLibrary(deps) {
   // Stored under uploads/stickers/<file> so message rendering can detect
   // them by URL prefix and render at sticker dimensions.
   const STICKERS_DIR = path.join(uploadDir, 'stickers');
-  try { fs.mkdirSync(STICKERS_DIR, { recursive: true }); } catch (err) {
-    console.error('[stickers] Could not create the stickers folder; sticker uploads will fail:', err.message);
-  }
 
   // (#5335) Seed a small starter pack on first run so the picker isn't empty
   // out of the box. Files in public/starter-stickers/ are copied into
@@ -420,7 +472,7 @@ module.exports = function registerMediaLibrary(deps) {
   // "Starter" pack, but only if there are zero stickers in the DB. Once
   // any sticker exists we leave things alone so admin uploads or deletions
   // aren't trampled on next restart.
-  function seedStarterStickers() {
+  async function seedStarterStickers() {
     try {
       const { getDb } = require('../database');
       const db = getDb();
@@ -439,8 +491,12 @@ module.exports = function registerMediaLibrary(deps) {
           const baseName = path.basename(file, ext).toLowerCase().replace(/[^a-z0-9_-]/g, '');
           if (!baseName) continue;
           const destName = `starter-${baseName}${ext}`;
-          const destPath = path.join(STICKERS_DIR, destName);
-          if (!fs.existsSync(destPath)) fs.copyFileSync(path.join(seedDir, file), destPath);
+          const rel = `stickers/${destName}`;
+          if (!(await storage.head(rel))) {
+            const staged = path.join(STAGING_DIR, destName);
+            fs.copyFileSync(path.join(seedDir, file), staged);
+            await storage.admit(rel, staged);
+          }
           insert.run(baseName, 'Starter', destName);
           seeded++;
         } catch (err) {
@@ -480,7 +536,7 @@ module.exports = function registerMediaLibrary(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_stickers') && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Stickers permission' });
 
-    createStickerUpload().single('sticker')(req, res, (err) => {
+    createStickerUpload().single('sticker')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -491,11 +547,13 @@ module.exports = function registerMediaLibrary(deps) {
       let pack = (req.body.pack_name || '').trim().slice(0, 40);
       if (!pack) pack = 'General';
 
+      try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const { getDb } = require('../database');
       try {
         getDb().prepare(
           'INSERT OR REPLACE INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, ?)'
         ).run(name, pack, req.file.filename, user.id);
+        auditHttp(user, 'sticker_add', { target_name: name, details: { pack } });
         broadcastLibraryUpdate(req, 'stickers');
         res.json({ name, pack_name: pack, url: `/uploads/stickers/${req.file.filename}` });
       } catch { res.status(500).json({ error: 'Failed to save sticker' }); }
@@ -508,7 +566,7 @@ module.exports = function registerMediaLibrary(deps) {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_stickers') && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Stickers permission' });
 
-    createStickerUpload().array('stickers', 50)(req, res, (err) => {
+    createStickerUpload().array('stickers', 50)(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
 
@@ -526,6 +584,7 @@ module.exports = function registerMediaLibrary(deps) {
           .replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
         if (!name) name = path.basename(file.filename, path.extname(file.filename));
         if (name.length > 40) name = name.slice(0, 40);
+        try { await storage.admitUpload(file); } catch (e) { errors.push({ name, error: 'Failed to store the upload' }); continue; }
         try {
           insert.run(name, pack, file.filename, user.id);
           results.push({ name, pack_name: pack, url: `/uploads/stickers/${file.filename}` });
@@ -534,7 +593,10 @@ module.exports = function registerMediaLibrary(deps) {
         }
       }
 
-      if (results.length) broadcastLibraryUpdate(req, 'stickers');
+      if (results.length) {
+        auditHttp(user, 'sticker_add', { target_name: results.map(r => r.name).join(', ').slice(0, 200), details: { count: results.length } });
+        broadcastLibraryUpdate(req, 'stickers');
+      }
       res.json({ uploaded: results, errors });
     });
   });
@@ -550,7 +612,7 @@ module.exports = function registerMediaLibrary(deps) {
     } catch { res.json({ stickers: [] }); }
   });
 
-  app.delete('/api/stickers/:name', (req, res) => {
+  app.delete('/api/stickers/:name', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -560,10 +622,9 @@ module.exports = function registerMediaLibrary(deps) {
     try {
       const row = getDb().prepare('SELECT filename FROM stickers WHERE name = ?').get(name);
       if (row) {
-        try { fs.unlinkSync(path.join(STICKERS_DIR, row.filename)); } catch (err) {
-          if (err.code !== 'ENOENT') console.warn(`[stickers] Could not delete file for sticker "${name}":`, err.message);
-        }
+        await storage.remove(`stickers/${row.filename}`);
         getDb().prepare('DELETE FROM stickers WHERE name = ?').run(name);
+        auditHttp(user, 'sticker_delete', { target_name: name });
       }
       broadcastLibraryUpdate(req, 'stickers');
       res.json({ ok: true });

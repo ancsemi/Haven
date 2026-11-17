@@ -25,6 +25,7 @@ _renderBanList(bans) {
       </div>
       <div class="ban-actions">
         <button class="btn-sm btn-unban" data-uid="${b.user_id}">${t('settings.admin.unban_btn')}</button>
+        <button class="btn-sm btn-scrub-user" data-uid="${b.user_id}" data-uname="${this._escapeHtml(b.username)}" title="${t('settings.admin.scrub_title')}">🧹 ${t('settings.admin.scrub_btn')}</button>
         ${b.appeal ? `<button class="btn-sm btn-dismiss-appeal" data-uid="${b.user_id}" title="${t('settings.admin.dismiss_appeal_title')}">${t('settings.admin.dismiss_appeal_btn')}</button>` : ''}
         <button class="btn-sm btn-delete-user" data-uid="${b.user_id}" data-uname="${this._escapeHtml(b.username)}" title="${t('settings.admin.delete_user_title')}">🗑️</button>
       </div>
@@ -37,6 +38,23 @@ _renderBanList(bans) {
     });
   });
 
+  // For a ban made without "Scrub messages": everything they wrote in the
+  // server's channels goes, protected messages and DMs aside.
+  list.querySelectorAll('.btn-scrub-user').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.uname;
+      const ok = await this._showConfirmModal(t('settings.admin.scrub_confirm', { name }), t('settings.admin.scrub_confirm_hint'),
+        { danger: true, confirmLabel: t('settings.admin.scrub_btn') });
+      if (!ok) return;
+      btn.disabled = true;
+      this.socket.emit('scrub-user-messages', { userId: parseInt(btn.dataset.uid) }, (res) => {
+        btn.disabled = false;
+        if (!res || res.error) return this._showToast(res?.error || t('settings.admin.scrub_failed'), 'error');
+        this._showToast(res.deleted ? t('settings.admin.scrub_done', { n: res.deleted }) : t('settings.admin.scrub_none'), 'success');
+      });
+    });
+  });
+
   list.querySelectorAll('.btn-dismiss-appeal').forEach(btn => {
     btn.addEventListener('click', () => {
       this.socket.emit('dismiss-ban-appeal', { userId: parseInt(btn.dataset.uid) });
@@ -44,9 +62,9 @@ _renderBanList(bans) {
   });
 
   list.querySelectorAll('.btn-delete-user').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const name = btn.dataset.uname;
-      if (confirm(t('settings.admin.confirm_delete_user', { name }))) {
+      if (await this._confirm(t('settings.admin.confirm_delete_user', { name }), { danger: true })) {
         this.socket.emit('delete-user', { userId: parseInt(btn.dataset.uid) });
       }
     });
@@ -320,10 +338,10 @@ _openBulkCleanup() {
     });
   });
 
-  confirmBtn.addEventListener('click', () => {
+  confirmBtn.addEventListener('click', async () => {
     const ids = selectedIds();
     if (ids.length === 0) return;
-    if (!confirm(t('modals.bulk_cleanup.confirm').replace('{n}', ids.length))) return;
+    if (!await this._confirm(t('modals.bulk_cleanup.confirm').replace('{n}', ids.length), { danger: true })) return;
     confirmBtn.disabled = true;
     confirmBtn.textContent = t('modals.bulk_cleanup.working');
     this.socket.emit('bulk-remove-users', {
@@ -742,9 +760,11 @@ _showAdminActionModal(action, userId, username) {
   const hasScrub = ['kick', 'ban', 'delete-user'].includes(action);
   scrubGroup.style.display = hasScrub ? 'block' : 'none';
   scrubCheckbox.checked = false;
-  // Kick gets scope dropdown (channel vs server), ban/delete are server-wide only
+  // Kick gets scope dropdown (channel vs server), ban/delete are server-wide only.
+  // Only an admin can scrub server-wide (the server holds everyone else to the
+  // channel), so only an admin is offered the choice.
   scrubScopeRow.style.display = 'none';
-  if (action === 'kick') {
+  if (action === 'kick' && this.user?.isAdmin) {
     scrubCheckbox.onchange = () => { scrubScopeRow.style.display = scrubCheckbox.checked ? 'block' : 'none'; };
   } else {
     scrubCheckbox.onchange = null;
@@ -868,8 +888,7 @@ _confirmAdminResetPassword(userId, username) {
           return;
         }
         const msg = resp?.error || t('modals.admin_reset_pw.errors.generic');
-        if (this._showToast) this._showToast(msg, 'error', 8000);
-        else alert(msg);
+        this._showToast(msg, 'error', 8000);
         return;
       }
       this._showAdminResetPwReveal(resp.username, resp.tempPassword);
@@ -954,6 +973,42 @@ _showAdminResetPwReveal(username, tempPassword) {
     } catch {
       if (this._showToast) this._showToast(t('modals.common.copy_failed'), 'error');
     }
+  });
+},
+
+// Handing the server over lives in Settings > Members, admin only. It used to
+// sit in every member's right-click menu next to Kick and Ban, one slip of a
+// finger away on a phone. The member is picked by name here, and the same
+// password-confirmed window follows.
+_setupTransferAdminRow() {
+  const row = document.getElementById('transfer-admin-row');
+  const input = document.getElementById('transfer-admin-member');
+  const btn = document.getElementById('transfer-admin-btn');
+  const list = document.getElementById('transfer-admin-members');
+  if (!row || !input || !btn || !list) return;
+  row.style.display = this.user?.isAdmin ? '' : 'none';
+  let members = [];
+  const load = () => {
+    if (members.length || !this.user?.isAdmin) return;
+    this.socket.emit('get-all-members', {}, (res) => {
+      if (!res || res.error) return;
+      members = (res.members || []).filter(m => m.id !== this.user.id && !m.banned);
+      list.textContent = '';
+      for (const m of members) {
+        const opt = document.createElement('option');
+        opt.value = m.username;
+        if (m.displayName && m.displayName !== m.username) opt.label = m.displayName;
+        list.appendChild(opt);
+      }
+    });
+  };
+  input.addEventListener('focus', load);
+  btn.addEventListener('click', () => {
+    load();
+    const name = input.value.trim().toLowerCase();
+    const m = members.find(x => x.username.toLowerCase() === name || (x.displayName || '').toLowerCase() === name);
+    if (!m) return this._showToast(t('settings.admin.transfer_pick'), 'error');
+    this._confirmTransferAdmin(m.id, m.displayName || m.username);
   });
 },
 

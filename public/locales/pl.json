@@ -285,6 +285,7 @@
       "logout": "Wyloguj się",
       "invite": "Zaproś użytkowników",
       "change_display_name": "Zmień wyświetlaną nazwę",
+      "mentions": "Wzmianki i odpowiedzi",
       "close_sidebar": "Zamknij panel boczny",
       "message_actions": "Akcje wiadomości",
       "organize_channels": "Organizuj kanały",
@@ -665,7 +666,14 @@
       "soundboard": "Panel dźwięków",
       "listen_together": "Słuchaj razem",
       "settings": "Ustawienia głosu"
-    }
+    },
+    "music_file_platform": "Plik audio",
+    "music_file_listen": "Odtwórz dla wszystkich na głosowym",
+    "music_file_join_voice": "Dołącz do kanału głosowego, aby odtworzyć to dla wszystkich",
+    "music_file_failed": "Nie udało się odtworzyć tego pliku audio",
+    "music_yt_gone": "YouTube podaje, że tego filmu już nie ma",
+    "music_yt_blocked": "YouTube nie odtworzy tu tego filmu (osadzanie wyłączone lub zablokowany w tym kraju)",
+    "music_yt_failed": "YouTube nie mógł odtworzyć tego filmu"
   },
   "calls": {
     "incoming": "Połączenie przychodzące",
@@ -712,7 +720,8 @@
     "member_removed": "Usunięto {{name}} z grupy",
     "leave_confirm": "Opuścić {{group}}? Nie będziesz mógł(-a) czytać nowych wiadomości, dopóki ktoś cię nie zaprosi ponownie.",
     "key_changed": "Klucz szyfrowania użytkownika {{name}} się zmienił. Zweryfikuj go, zanim klucz grupy zostanie ponownie udostępniony.",
-    "no_key": "🔒 Wysłano, zanim dołączyłeś(-aś), lub czeka na udostępnienie klucza przez członka grupy",
+    "no_key": "🔒 Czeka, aż inny członek grupy otworzy Haven i udostępni klucz",
+    "before_join": "🔒 Wysłano przed twoim dołączeniem (lub przed zresetowaniem twoich kluczy), więc nie da się tego tu otworzyć",
     "cannot_verify": "⚠️ Nie można zweryfikować tej wiadomości, więc nie została wyświetlona",
     "already_exists": "Masz już grupę z tymi osobami: {{name}}",
     "keys_changed_title": "Klucze szyfrowania w tej grupie się zmieniły",
@@ -1067,6 +1076,7 @@
     "uploads_disabled": "Przesyłanie mediów jest wyłączone na tym kanale",
     "soundboard_disabled": "Panel dźwięków jest wyłączony na tym kanale",
     "file_too_large": "Plik zbyt duży (maks. {{maxMb}} MB)",
+    "file_type_blocked": "Plików .{{ext}} nie można przesyłać na tym serwerze",
     "image_too_large": "Obraz zbyt duży (maks. {{maxMb}} MB)",
     "max_images": "Maks. 5 obrazów naraz",
     "max_files": "Maks. 5 plików naraz",
@@ -1432,7 +1442,9 @@
     "frame_rate": "Liczba klatek",
     "bitrate": "Bitrate",
     "bitrate_unlimited": "Bez limitu",
-    "camera_fallback": "Kamera {{n}}"
+    "camera_fallback": "Kamera {{n}}",
+    "camera_quality": "Jakość kamery",
+    "camera_quality_hint": "Wyższa jakość jest ostrzejsza, ale zużywa więcej łącza, u ciebie i u oglądających. Twoja kamera może nie sięgać tak wysoko."
   },
   "notifications_runtime": {
     "title": "{{sender}} w {{channel}}",
@@ -1591,7 +1603,26 @@
       "debug": "Debugowanie",
       "backup": "Kopia zapasowa",
       "template": "Szablon serwera",
-      "audit_log": "Dziennik audytu"
+      "audit_log": "Dziennik audytu",
+      "whats_new": "Co nowego"
+    },
+    "pages": {
+      "look": "Wygląd",
+      "chat": "Czat i multimedia",
+      "alerts": "Powiadomienia",
+      "profile": "Profil i aktywność",
+      "security": "Konto i bezpieczeństwo",
+      "language": "Język",
+      "access": "Dostępność",
+      "advanced": "Wtyczki i zaawansowane",
+      "server": "Serwer",
+      "people": "Ludzie i role",
+      "safety": "Bezpieczeństwo",
+      "content": "Treści",
+      "network": "Sieć i skalowanie",
+      "tools": "Boty i dane",
+      "more": "Więcej",
+      "more_info": "Więcej informacji"
     },
     "localization_section": {
       "title": "Lokalizacja"
@@ -1713,6 +1744,12 @@
         "underline_links": "Podkreślaj linki",
         "large_targets": "Większe cele kliknięcia",
         "large_targets_hint": "Większe przyciski i wyższe wiersze na paskach bocznych, w polu wiadomości i w akcjach wiadomości."
+      },
+      "emoji": {
+        "title": "Emoji",
+        "system": "Emoji twojego urządzenia",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji rysuje emoji tak samo na każdym urządzeniu, czcionką udostępnianą przez sam Haven."
       }
     },
     "reaction_size": {
@@ -2135,6 +2172,8 @@
       "listener_only_hint": "Dołączaj do kanałów głosowych bez prośby o dostęp do mikrofonu. Słyszysz wszystkich, ale nie możesz mówić. Przydatne, jeśli nie masz mikrofonu, nie możesz teraz przyznać uprawnienia do mikrofonu lub chcesz tylko posłuchać. Haven przełączy się też automatycznie na tryb tylko słuchania, jeśli mikrofonu nie uda się otworzyć z jakiegokolwiek powodu. (#5380)",
       "screen_share_voice_proc": "Stosuj przetwarzanie głosu do dźwięku udostępnianego ekranu",
       "screen_share_voice_proc_hint": "Włącz ponownie usuwanie echa, redukcję szumów i automatyczną regulację wzmocnienia dla dźwięku przechwytywanego z udostępnianego ekranu. Domyślnie wyłączone od wersji 3.17.3, ponieważ te filtry psują muzykę i dźwięk z gier. Włącz, jeśli udostępniasz treści głosowe (narrację samouczka, podcast, spotkanie), gdzie oczyszczanie faktycznie pomaga. Nie dotyczy mikrofonu, który zawsze ma pełne przetwarzanie głosu.",
+      "stereo_stream_audio": "Dźwięk stereo w transmisjach (eksperymentalne)",
+      "stereo_stream_audio_hint": "Odtwarza dźwięk udostępniania ekranu w stereo, z wyższym bitrate dla muzyki i gier. Włącz, aby słyszeć transmisje w stereo; na serwerach z przekaźnikiem głosu musi to włączyć także osoba udostępniająca. Zużywa więcej łącza. Po zmianie dołącz ponownie do głosu. Eksperymentalne: jeśli głos szwankuje, wyłącz.",
       "screen_audio_webaudio": "Miksowanie Web Audio dla dźwięku udostępnianego ekranu",
       "screen_audio_webaudio_hint": "Domyślnie Haven odtwarza przychodzący dźwięk udostępnianego ekranu bezpośrednio przez element audio, co utrzymuje go zsynchronizowanym z obrazem przy połączeniu TURN/przekaźnikowym. Włącz, aby zamiast tego kierować go przez mikser Web Audio w Haven, co odblokowuje wzmocnienie głośności pojedynczego strumienia powyżej 100%, ale może powodować zacinanie dźwięku i desynchronizację dźwięku z obrazem przy przekaźniku (w sieci lokalnej jest w porządku). Zostaw wyłączone, jeśli dźwięk udostępnianego ekranu się zacina lub rozjeżdża. (#5426)",
       "screen_relay_profile": "Łagodniejsze udostępnianie ekranu dla połączeń przekaźnikowych",
@@ -2160,6 +2199,10 @@
       "update_hint": "Sprawdzaj nowe wydania Haven i stosuj je na miejscu. Serwer automatycznie utworzy kopię zapasową przed aktualizacją i uruchomi się ponownie.",
       "update_check_btn": "Sprawdź aktualizacje",
       "update_run_btn": "Aktualizuj teraz",
+      "shutdown_btn": "Wyłącz serwer",
+      "shutdown_hint": "Zatrzymuje Haven czysto, tak jak Ctrl+C. Uruchom go potem jak zwykle. Jeśli Docker lub menedżer usług sam uruchamia Haven ponownie, to go zrestartuje.",
+      "shutdown_confirm": "Wyłączyć serwer teraz? Wszyscy zostaną rozłączeni do ponownego uruchomienia.",
+      "shutdown_sent": "Serwer się wyłącza.",
       "update_checking": "Sprawdzanie…",
       "update_run_on_host": "Uruchom na hoście:",
       "update_copy_command": "Kopiuj polecenie",
@@ -2181,6 +2224,11 @@
       "view_ip_bans_btn": "Pokaż bany IP",
       "admin_pw_reset_label": "Zezwól administratorom na reset hasła",
       "admin_pw_reset_hint": "⚠️ Po włączeniu administratorzy mogą zresetować hasło dowolnego użytkownika do jednorazowej wartości tymczasowej. Użytkownik musi je zmienić przy następnym logowaniu. Reset hasła usuwa też historię wiadomości prywatnych E2E tego użytkownika (jego klucz opakowujący wynika z hasła). Informacja, że ta opcja jest włączona, jest udostępniana przez /api/public-config, aby użytkownicy widzieli, czy administratorzy tego serwera mają taką możliwość.",
+      "transfer_title": "Przekaż serwer komuś innemu",
+      "transfer_hint": "Robi innego członka adminem, a ty przestajesz nim być. Potwierdzisz hasłem.",
+      "transfer_placeholder": "Nazwa członka…",
+      "transfer_btn": "Przekaż admina…",
+      "transfer_pick": "Najpierw wybierz członka z listy",
       "oidc_group": "Jednokrotne logowanie (OIDC)",
       "oidc_desc": "Pozwól członkom logować się kontem od Twojego własnego dostawcy tożsamości (Authentik, Keycloak, Authelia, Auth0 i każdego innego, który obsługuje OpenID Connect) zamiast hasłem Haven. Wpisz tu adres wystawcy i identyfikator klienta, a następnie umieść sekret klienta w pliku .env jako OIDC_CLIENT_SECRET i uruchom ponownie. Sekret celowo nie trafia do bazy danych, więc Twoje kopie zapasowe nigdy go nie zawierają. Zarejestruj ten adres u dostawcy jako URI przekierowania: <code>https://your-haven-address/api/auth/oidc/callback</code>",
       "oidc_e2e_note": "Zaszyfrowane wiadomości prywatne są odblokowywane kluczem wyprowadzanym z tego, co wpisujesz przy logowaniu, a członek logujący się przez SSO nigdy nie wpisuje tu hasła. Przy pierwszym logowaniu jest proszony o ustawienie osobnej frazy szyfrowania, a potem o jej podanie na każdym nowym urządzeniu. Nikt, także Ty, nie może zresetować tej frazy za niego.",
@@ -2255,6 +2303,9 @@
       "automod_log_channel_placeholder": "kod kanału (opcjonalnie)",
       "automod_activity_group": "Ostatnia aktywność",
       "automod_refresh": "Odśwież",
+      "automod_ai_group": "Sprawdzanie linków przez AI (eksperymentalne)",
+      "automod_ai_enabled": "Pozwól wtyczce AutoMod Quarantine korzystać z tego serwera",
+      "automod_ai_hint": "Eksperymentalne. Domyślnie wyłączone. Włącza serwerową część wtyczki AutoMod Quarantine: sprawdzanie linków modelem AI działającym na tym serwerze (instalowanym przez scripts/setup-automod-ai.sh) oraz przekazywanie zapytań moderatorów do chmurowych usług AI, które odrzucają przeglądarki. Do AI trafia zawsze tylko link, nigdy wiadomość. Członkowie nadal sami decydują, czy włączyć wtyczkę w Wtyczkach i motywach.",
       "bulk_preview_failed": "Podgląd nie powiódł się",
       "mention_everyone_desc": "Powiadom wszystkich na kanale",
       "mention_here_desc": "Powiadom członków online",
@@ -2420,7 +2471,6 @@
       "upload_btn": "Prześlij",
       "remove_btn": "Usuń",
       "server_banner_hint": "Baner serwera (szeroki, maks. 4 MB)",
-      "server_banner_display_hint": "Ustawienia wyświetlania banera (wysokość, przesunięcie, styl nagłówka) znajdują się w Ustawieniach użytkownika.",
       "appearance_welcome": "Wygląd i powitanie",
       "welcome_message": "Wiadomość powitalna",
       "welcome_message_placeholder": "np. Witaj, {user}!",
@@ -2643,6 +2693,12 @@
       "save_hint": "Zmiany są stosowane dopiero po kliknięciu Zapisz. Zamknij (✕), aby anulować.",
       "save_notice": "Poniższe zmiany wymagają kliknięcia <strong>Zapisz ustawienia</strong>, aby zostały zastosowane.",
       "login_title_hint": "Niestandardowy tytuł wyświetlany na ekranie logowania pod logo HAVEN.",
+      "login_show_icon": "Pokaż ikonę serwera na stronie logowania",
+      "login_show_banner": "Użyj banera serwera jako tła strony logowania",
+      "login_message": "Wiadomość na stronie logowania",
+      "login_message_hint": "Krótka notka pod tytułem, np. powitanie albo jak dostać zaproszenie.",
+      "login_css": "CSS strony logowania",
+      "login_css_hint": "Zmienia wygląd tylko strony logowania i rejestracji. Jeśli styl ukryje formularz, dodaj ?nocss na końcu adresu strony logowania, aby go pominąć. Obraz lub czcionka z innej strony pozwala tej stronie zobaczyć, kto odwiedza.",
       "server_icon_hint": "Ikona serwera (kwadratowa, maks. 2 MB)",
       "default_theme_hint": "Nowi użytkownicy widzą ten motyw przy pierwszej wizycie. Mogą wybrać własny.",
       "default_locale": "Język domyślny",
@@ -2722,6 +2778,9 @@
       "max_avatar_hint": "Największe zdjęcie profilowe, ramka lub obraz persony, jakie można przesłać (od 1 do 10 MB, domyślnie 2). Animowane GIF-y często mają ponad 2 MB, a każdy obraz jest ładowany obok każdej wiadomości jego właściciela, więc utrzymaj to możliwie nisko.",
       "max_emoji_hint": "Maks. rozmiar przesyłania niestandardowego emoji (64–1024 KB, domyślnie 256)",
       "max_poll_hint": "Maksymalna liczba opcji odpowiedzi na ankietę (2–25, domyślnie 10)",
+      "blocked_upload_types": "Zablokowane typy plików",
+      "blocked_upload_types_hint": "Nikt nie może przesyłać plików tych typów. Oddziel je przecinkami. Częste ryzykowne: exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar. Zostaw puste, aby zezwolić na wszystkie.",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_message_chars_hint": "Maksymalna liczba znaków na wiadomość, post lub DM (200–100000, domyślnie 2000)",
       "max_invite_uses": "Maksymalna liczba użyć linku zaproszenia",
       "max_invite_uses_hint": "Maksymalna liczba użyć, jaką można ustawić dla linku zaproszenia. Administratorzy i użytkownicy z uprawnieniem do zarządzania serwerem ignorują ten limit. (0 = bez ograniczeń)",
@@ -2871,6 +2930,13 @@
       "no_banned_users": "Brak zbanowanych użytkowników",
       "no_reason": "Brak powodu",
       "unban_btn": "Odbanuj",
+      "scrub_btn": "Usuń wiadomości",
+      "scrub_title": "Usuń wszystko, co ta osoba napisała na kanałach tego serwera",
+      "scrub_confirm": "Usunąć wszystkie wiadomości użytkownika {{name}}?",
+      "scrub_confirm_hint": "Wszystko, co ta osoba napisała na kanałach tego serwera, zostanie usunięte dla wszystkich. Chronione wiadomości i DM zostają. Tego nie da się cofnąć.",
+      "scrub_done": "Usunięto wiadomości: {{n}}",
+      "scrub_none": "Nie ma już wiadomości do usunięcia",
+      "scrub_failed": "Nie udało się usunąć wiadomości",
       "ban_appeal_label": "Odwołanie",
       "dismiss_appeal_btn": "Odrzuć odwołanie",
       "dismiss_appeal_title": "Wyczyść to odwołanie bez odblokowania",
@@ -3030,6 +3096,11 @@
         "style_preview_name": "Nazwa roli",
         "transparent": "Przezroczysta",
         "transparent_hint": "Gdy włączone, ta rola nigdy nie koloruje swoich posiadaczy. Kolor ustawia im następna niższa rola, która nie jest przezroczysta, a jeśli jej nie ma, wyświetlają się bez koloru.",
+        "mentionable": "Można @wspomnieć",
+        "mentionable_hint": "Widoczna na liście @, a @Nazwa powiadamia wszystkich z tą rolą. Wyłącz dla ról ozdobnych i gier.",
+        "show_on_profile": "Pokazuj na kartach profilu",
+        "show_on_profile_hint": "Wyłączone: roli nie ma na kartach profilu. Zarządzający rolami nadal ją widzą, przygaszoną.",
+        "hidden_on_profile_title": "Tylko zarządzający rolami widzą ją na kartach profilu",
         "auto_assign": "Automatyczne przypisywanie nowym członkom",
         "auto_assign_hint": "Nowi użytkownicy automatycznie otrzymają tę rolę po rejestracji lub dołączeniu do kanału.",
         "channel_access": "Dostęp do kanałów",
@@ -3105,7 +3176,17 @@
       "blur": "Rozmywaj tematy i wiadomości NSFW do czasu kliknięcia",
       "blur_hint": "Tematy i wiadomości oznaczone 🔞 są za rozmyciem, jak spoiler. Wyłącz, aby widzieć je bez rozmycia."
     },
-    "search_placeholder": "Szukaj w ustawieniach (Ctrl+F)"
+    "search_placeholder": "Szukaj w ustawieniach (Ctrl+F)",
+    "whats_new": {
+      "title": "Co nowego",
+      "show_label": "Pokazuj nowości po",
+      "all": "Każdej aktualizacji",
+      "minor": "Nowych funkcjach",
+      "major": "Tylko dużych aktualizacjach",
+      "off": "Nigdy",
+      "hint": "Numer wersji ma trzy części: duża aktualizacja zmienia pierwszą, nowe funkcje drugą, a poprawki trzecią. Gdy zmieni się podkreślona część, pokażą się informacje o wydaniu. Zapisane na tym urządzeniu.",
+      "show_now": "Zobacz nowości w tej wersji"
+    }
   },
   "modals": {
     "timezone": {
@@ -3447,7 +3528,9 @@
       "not_here": "Wysyłanie później nie jest dostępne w wiadomościach prywatnych",
       "scheduled": "Zaplanowano na {{when}}",
       "updated": "Zaktualizowano, wysłanie o {{when}}",
-      "sent": "Twoja zaplanowana wiadomość została wysłana na #{{channel}}"
+      "sent": "Twoja zaplanowana wiadomość została wysłana na #{{channel}}",
+      "attach": "📎 Dołącz pliki",
+      "remove_file": "Usuń"
     },
     "self_destruct": {
       "title": "Wiadomość samoniszcząca się",
@@ -3596,7 +3679,7 @@
     "donors": {
       "title": "Dziękujemy",
       "subtitle": "Haven jest tworzony z miłością i utrzymywany dzięki hojności takich ludzi jak ty. Każda darowizna — duża czy mała — wiele dla nas znaczy.",
-      "sponsors_title": "Sponsorzy",
+      "sponsors_title": "Wspierający co miesiąc",
       "donors_title": "Darczyńcy",
       "note": "Nowi darczyńcy będą dodawani przy każdym wydaniu. Jeśli dokonałeś darowizny i nie widzisz swojej nazwy, pojawi się w następnej aktualizacji!",
       "kofi_btn": "Wesprzyj Haven na Ko-fi",
@@ -4792,5 +4875,10 @@
       "none": "Nie ma jeszcze odznak nadawanych ręcznie. Utwórz jedną w Ustawienia, Administrator, Odznaki.",
       "switched_off": "wyłączona"
     }
+  },
+  "whats_new": {
+    "title": "Co nowego w Haven {{version}}",
+    "settings_hint": "W Ustawienia > Co nowego wybierasz, kiedy to się pokazuje.",
+    "unavailable": "Informacje o wydaniu nie są dostępne na tym serwerze."
   }
 }

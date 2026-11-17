@@ -14,6 +14,11 @@
   src: url('/fonts/twemoji-15.0.3.woff2') format('woff2');
   unicode-range: U+200D, U+2194-21AA, U+231A-23FF, U+25AA-27BF, U+2934-2935, U+2B05-2B55, U+3030, U+303D, U+3297, U+3299, U+FE0F, U+1F000-1FAFF, U+E0020-E007F;
 }
+/* Twemoji everywhere, when picked under Settings > Accessibility > Emoji:
+   the same font first instead of last, so it draws every emoji it has. */
+:root[data-emoji-style="twemoji"] {
+  --font-emoji: 'Haven Emoji', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji';
+}
 @font-face {
   font-family: 'Share Tech Mono';
   font-style: normal;

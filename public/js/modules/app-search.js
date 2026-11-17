@@ -19,6 +19,8 @@ const SEARCH_PAGE_SIZE = 25;
 // has: options the server understands. Seeded here so adding one is a one-liner.
 const SEARCH_HAS_OPTIONS = ['image', 'file', 'link', 'video', 'audio'];
 
+import { keepInColumn } from './keep-in-column.js?v=4.29.18';
+
 export default {
 
 _searchInit() {
@@ -360,7 +362,7 @@ _searchFilterInit() {
   document.getElementById('search-filter-btn')?.addEventListener('click', (e) => {
     e.stopPropagation();
     const hidden = pop.style.display === 'none' || !pop.style.display;
-    if (hidden) { this._sfpShowRoot(); pop.style.display = 'block'; }
+    if (hidden) { this._sfpShowRoot(); pop.style.display = 'block'; keepInColumn(pop); }
     else pop.style.display = 'none';
   });
   // Clicking into the text box reopens the popover too (parity with the filter
@@ -372,6 +374,7 @@ _searchFilterInit() {
     if (pop.style.display === 'none' || !pop.style.display) {
       this._sfpShowRoot();
       pop.style.display = 'block';
+      keepInColumn(pop);
     }
   });
   // Click outside the search box hides the popover (without closing search).
@@ -393,7 +396,7 @@ _sfpSync() {
   const show = open && !(ch && ch.is_dm);
   const btn = document.getElementById('search-filter-btn');
   if (btn) btn.style.display = show ? '' : 'none';
-  if (show) { this._sfpShowRoot(); pop.style.display = 'block'; }
+  if (show) { this._sfpShowRoot(); pop.style.display = 'block'; keepInColumn(pop); }
   else pop.style.display = 'none';
 },
 
@@ -618,6 +621,7 @@ _searchRenderPanel() {
     if (st.filters.before) tags.push(`<span class="search-filter-tag">before:${this._escapeHtml(st.filters.before)}</span>`);
     if (st.filters.during) tags.push(`<span class="search-filter-tag">during:${this._escapeHtml(st.filters.during)}</span>`);
     if (st.filters.tag)    tags.push(`<span class="search-filter-tag">tag:${this._escapeHtml(st.filters.tag)}</span>`);
+    if (st.filters.mentions) tags.push('<span class="search-filter-tag">mentions:me</span>');
     if (tags.length) filterInfo = `<div class="search-filter-tags">${tags.join(' ')}</div>`;
   }
   const localTag = st.isDM ? ` <span class="search-filter-tag">${t('header.search_dm_local_tag')}</span>` : '';
@@ -626,7 +630,7 @@ _searchRenderPanel() {
   // Highlight the plain text (all filter tokens stripped).
   const highlightQuery = (st.query || '')
     .replace(/\btag:"[^"]*"/gi, '')
-    .replace(/\b(?:from|in|has|pinned|before|after|during|tag):\S+/gi, '')
+    .replace(/\b(?:from|in|has|pinned|before|after|during|tag|mentions):\S+/gi, '')
     .trim();
 
   list.innerHTML = total === 0

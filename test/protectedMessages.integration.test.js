@@ -148,7 +148,7 @@ test('protected messages survive every delete path', async () => {
   await protect(A, ev.code, sdKept);
   await protect(A, ev.code, sdReply);
   assert.ok(await until(() => !row(sdGone), 6000), 'the unprotected self-destruct message went');
-  await wait(4000);
+  assert.ok(await until(() => row(sdKept)?.destruct_at === null && row(sdHead)?.destruct_at === null, 5000), 'protected-message timers were turned off at their deadlines');
   assert.ok(row(sdKept), 'the protected self-destruct message stayed');
   assert.strictEqual(row(sdKept).destruct_at, null);
   assert.ok(row(sdHead), 'the timed head holding a protected reply stayed');

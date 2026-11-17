@@ -16,6 +16,8 @@ const ADMIN_ONLY_SETTINGS = new Set([
   'turn_password', 'turnstile_secret_key',
   // A channel code, and usually a private staff channel's.
   'automod_log_channel',
+  // Words blocked from names (src/blockedNames.js): the admin's list only.
+  'blocked_name_words',
   // Voice relay setup: only the admin screen needs these.
   'voice_relay_mode', 'voice_relay_port', 'voice_relay_workers', 'voice_relay_address',
 ]);
@@ -68,7 +70,7 @@ function createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onRe
     if (key === 'referrer_policy') onReferrerPolicyChange(value);
   }
 
-  function auditSettingChange(actor, key, value) {
+  function auditSettingChange(actor, key, value, previous) {
     // Audit: log the setting change. Skip per-user UI prefs that the
     // organize modal syncs constantly to avoid log spam.
     const _quietKeys = new Set(['channel_cat_order', 'channel_cat_sort', 'channel_tag_sorts', 'channel_sort_mode']);
@@ -78,7 +80,11 @@ function createSettingEffects({ io, automod, channelUsers, emitOnlineUsers, onRe
       logAudit({
         actor, action: 'server_setting_update',
         target_type: 'setting', target_name: key,
-        details: { key, value: _secret ? (value ? '(hidden)' : '') : _short(value) }
+        details: {
+          key,
+          from: previous === undefined || _secret ? undefined : _short(previous),
+          value: _secret ? (value ? '(hidden)' : '') : _short(value),
+        }
       });
     }
   }

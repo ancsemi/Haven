@@ -36,6 +36,7 @@ module.exports = function registerExtensionUpdates(deps) {
       // io is initialized before the server accepts requests. Notify clients
       // after replacement; they keep their running extensions until reload.
       late.io.emit('extensions-updated');
+      require('../httpAudit').auditHttp(user, 'extensions_update', { details: { version: result && result.version } });
       res.json(result);
     } catch (err) {
       res.status(400).json({ error: err.message });

@@ -186,11 +186,11 @@ _bindMediaGallery() {
     this._refreshMediaGalleryToolbar();
     this._renderMediaGalleryTab(tab);
   });
-  if (delBtn) delBtn.addEventListener('click', () => {
+  if (delBtn) delBtn.addEventListener('click', async () => {
     if (!this._mediaGallerySelected || this._mediaGallerySelected.size === 0) return;
     if (!this.currentChannel) return;
     const count = this._mediaGallerySelected.size;
-    const ok = confirm(t('media_gallery.confirm_delete', { count }));
+    const ok = await this._confirm(t('media_gallery.confirm_delete', { count }), { danger: true });
     if (!ok) return;
     // Build messageIds (one delete per message; bulk endpoint dedupes
     // server-side too). Group attachment URLs per message id so E2E DM
@@ -211,8 +211,7 @@ _bindMediaGallery() {
     }, (res) => {
       delBtn.disabled = false;
       if (!res || res.error) {
-        if (this._showToast) this._showToast(res?.error || t('media_gallery.delete_failed'), 'error');
-        else alert(res?.error || t('media_gallery.delete_failed'));
+        this._showToast(res?.error || t('media_gallery.delete_failed'), 'error');
         return;
       }
       if (this._showToast) this._showToast(res.skipped

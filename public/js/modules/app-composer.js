@@ -4,6 +4,10 @@
 
 export default {
 
+_enterSends(e) {
+  return e.ctrlKey || e.metaKey || document.documentElement.hasAttribute('data-hide-send-btn') || !window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+},
+
 _bindComposer() {
   const msgInput = document.getElementById('message-input');
 
@@ -122,16 +126,7 @@ _bindComposer() {
     // Lists: Shift+Enter continues one, Tab nests (app-composer-lists.js).
     if (this._composerListKey(e, msgInput)) return;
 
-    // Ctrl + Enter opens scheduled send modal
-    // Just Enter sends the message
-    if (e.key === 'Enter' && !e.shiftKey) {
-      if (e.ctrlKey) {
-        this._openScheduleModal();
-      } else {
-        e.preventDefault();
-        this._sendMessage();
-      }
-    }
+    if (e.key === 'Enter' && !e.shiftKey && this._enterSends(e)) e.ctrlKey ? this._openScheduleModal() : (e.preventDefault(), this._sendMessage());
 
     // Up arrow on empty input → edit last own message (toggleable)
     if (e.key === 'ArrowUp' && !msgInput.value && localStorage.getItem('haven_up_arrow_edit') !== 'false') {
@@ -671,6 +666,18 @@ _voiceMimeChoice() {
 
 async _toggleVoiceMessage() {
   if (this._voiceRec) { this._stopVoiceMessage(true); return; }
+  // A second press while the mic was still opening started a second
+  // recording, and the first one's microphone was never let go.
+  if (this._voiceRecStarting) return;
+  this._voiceRecStarting = true;
+  try {
+    await this._startVoiceMessage();
+  } finally {
+    this._voiceRecStarting = false;
+  }
+},
+
+async _startVoiceMessage() {
   const ch = this.channels.find(c => c.code === this.currentChannel);
   if (!ch) return;
   if (ch.media_enabled === 0) { this._showToast(t('media.uploads_disabled'), 'error'); return; }
@@ -917,6 +924,8 @@ _openScheduleModal(prefill = '') {
   if (!ch || ch.is_dm) { this._showToast(t('modals.schedule.not_here'), 'error'); return; }
   const text = document.getElementById('schedule-text');
   text.value = prefill || document.getElementById('message-input')?.value || '';
+  // Files waiting in the message box come along (app-schedule-files.js).
+  this._scheduleFilesReset(!prefill);
   text.maxLength = parseInt(this.serverSettings?.max_message_chars) || 2000;
   // Default to one hour out, on the whole minute, seeded in the user's zone.
   const d = new Date(Date.now() + 60 * 60 * 1000);
@@ -991,7 +1000,7 @@ _renderScheduledList(items) {
     <div class="schedule-item-main">
       <span class="schedule-item-when">${this._escapeHtml(this._fmtDateTime(it.sendAt))}</span>
       <span class="schedule-item-chan">#${this._escapeHtml(it.channelName || '')}</span>
-      <div class="schedule-item-text">${this._escapeHtml(it.content)}</div>
+      <div class="schedule-item-text">${this._escapeHtml(this._schedulePreviewText(it.content))}</div>
     </div>
     <div class="schedule-item-actions">
       <button type="button" class="btn-sm" data-act="edit">${t('msg_toolbar.edit')}</button>
@@ -1007,6 +1016,7 @@ _renderScheduledList(items) {
       return;
     }
     this._scheduleEditingId = id;
+    this._scheduleFilesReset(false);
     document.getElementById('schedule-text').value = it.content;
     this._wireScheduleFields();
     this._seedScheduleFields(new Date(it.sendAt));
@@ -1014,24 +1024,39 @@ _renderScheduledList(items) {
   }));
 },
 
-_submitSchedule() {
+async _submitSchedule() {
+  if (this._scheduleUploading) return;
   const textEl = document.getElementById('schedule-text');
-  const content = textEl.value.trim();
+  const typed = textEl.value.trim();
   // Read the wall-clock in the user's confirmed zone (device fallback), so the
   // absolute instant sent to the server is the moment the user actually meant,
   // not whatever the browser's clock/zone claims. toISOString() below is still
   // a plain UTC handoff; only the zone the fields are read in has changed.
   const at = this._tsmBuildDate(this._schScope());
-  if (!content) { textEl.focus(); return; }
+  if (!typed && !this._scheduleFiles?.length) { textEl.focus(); return; }
   if (!at || isNaN(at.getTime()) || at.getTime() < Date.now() + 30000) { this._showToast(t('modals.schedule.in_past'), 'error'); return; }
   const editing = this._scheduleEditingId;
+  // Files go up now and wait on the server with the message.
+  let fileLines = [];
+  if (this._scheduleFiles?.length) {
+    const save = document.getElementById('schedule-save');
+    this._scheduleUploading = true;
+    if (save) save.disabled = true;
+    try { fileLines = await this._uploadScheduleFiles(); } finally {
+      this._scheduleUploading = false;
+      if (save) save.disabled = false;
+    }
+    if (!fileLines) return;
+  }
+  const content = [typed, ...fileLines].filter(Boolean).join('\n');
   const done = (r) => {
     if (!r || r.error) { this._showToast((r && r.error) || t('toasts.role_server_no_response'), 'error'); return; }
     this._showToast(t(editing ? 'modals.schedule.updated' : 'modals.schedule.scheduled', { when: this._fmtDateTime(at) }), 'success');
     if (!editing) {
       const input = document.getElementById('message-input');
-      if (input && input.value.trim() === content) { input.value = ''; input.style.height = 'auto'; }
+      if (input && input.value.trim() === typed) { input.value = ''; input.style.height = 'auto'; }
     }
+    this._scheduleFilesSent();
     this._scheduleEditingId = null;
     textEl.value = '';
     document.getElementById('schedule-save').textContent = t('modals.schedule.schedule_btn');

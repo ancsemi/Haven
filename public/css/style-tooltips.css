@@ -1,0 +1,26 @@
+/* Hover tooltips (public/js/modules/tooltips.js): wrapped, inside the window,
+   in the theme's colors. A popover, so the browser's own popover box rules
+   are reset here. */
+.haven-tooltip {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  z-index: 2147483000;
+  max-width: min(20rem, calc(100vw - 16px));
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--border-light, var(--border));
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  white-space: pre-line;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.haven-tooltip[hidden] { display: none; }

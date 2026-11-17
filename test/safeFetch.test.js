@@ -75,6 +75,23 @@ test('the connection goes to the address that was checked, not a fresh lookup', 
   } finally { server.close(); }
 });
 
+test('Brotli is never asked for, and a Brotli reply is not decoded', async () => {
+  const brotli = zlib.brotliCompressSync(Buffer.from('<html>hi</html>'));
+  let asked = null;
+  const server = await serve((req, res) => {
+    asked = req.headers['accept-encoding'];
+    res.setHeader('content-encoding', 'br');
+    res.end(brotli);
+  });
+  const port = server.address().port;
+  const resolve = async (url) => ({ url: new URL(url), address: '127.0.0.1', family: 4 });
+  try {
+    const r = await safeGet(`http://a.test:${port}/`, { resolve });
+    assert.doesNotMatch(asked, /br/);
+    assert.deepEqual(r.body, brotli);
+  } finally { server.close(); }
+});
+
 test('bodies stop at the byte ceiling, compressed or not', async () => {
   const big = Buffer.alloc(300 * 1024, 'a');
   const server = await serve((req, res) => {

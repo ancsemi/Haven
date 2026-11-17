@@ -423,7 +423,15 @@ async _groupDecrypt(code, content, senderId, msgId = 0) {
   try { env = JSON.parse(content); } catch { return { ok: false, reason: 'malformed' }; }
   if (this._groupNeedsKeys(st, env.e)) await this._groupFetchKeys(code);
   const key = st.keys.get(env.e);
-  if (!key) return { ok: false, reason: 'no-key' };
+  if (!key) {
+    // Older than every key this member holds: sent before they joined (or
+    // before their keys were reset). Each membership gets a new key that the
+    // members of the time alone receive, so nobody can share this one.
+    // Otherwise the key is on its way: another member's app shares it.
+    const held = [...st.keys.keys()];
+    const before = held.length > 0 && Number.isInteger(env.e) && env.e < Math.min(...held);
+    return { ok: false, reason: before ? 'before-join' : 'no-key' };
+  }
   const channelId = this._groupChannelId(code);
   let opened = null;
   // Fail closed: a message that verifies under none of its author's
@@ -441,6 +449,7 @@ async _groupDecrypt(code, content, senderId, msgId = 0) {
 },
 async _decryptGroupMessages(messages, ch) {
   const fail = (r, id) => (r.reason === 'no-key' ? t('groups.no_key')
+    : r.reason === 'before-join' ? t('groups.before_join')
     : r.reason === 'signer-changed' ? t('groups.signer_changed', { name: this._groupMemberName(ch.code, id) })
     : t('groups.cannot_verify'));
   // A message open in both the main view and a pop-out comes through here
@@ -716,7 +725,7 @@ async _groupIsMineAlone(code) {
 },
 async _leaveGroup(code) {
   const ch = this.channels.find(c => c.code === code);
-  if (!ch || !confirm(t('groups.leave_confirm', { group: this._groupName(ch) }))) return;
+  if (!ch || !await this._confirm(t('groups.leave_confirm', { group: this._groupName(ch) }))) return;
   this._leavingGroup = code;
   // The last one out deletes the group, so its encrypted attachments are
   // gathered first for the server to remove with it.

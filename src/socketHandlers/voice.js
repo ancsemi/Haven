@@ -11,6 +11,7 @@ module.exports = function register(socket, ctx) {
           activeScreenSharers, activeScreenSessions, activeWebcamUsers,
           streamViewers, pendingTempDelete,
           pendingVoiceLeave } = state;
+  const activeWebcamStreamIds = state.activeWebcamStreamIds || (state.activeWebcamStreamIds = new Map());
 
   // Direct (peer to peer) or through the voice relay. Settled by whoever
   // starts the call and kept until it empties (see src/voiceRelay).
@@ -31,6 +32,7 @@ module.exports = function register(socket, ctx) {
         username: user.username,
         transport: 'browser',
         hasAudio: !!session?.hasAudio,
+        streamId: session?.streamId || null,
       } : null;
     }).filter(Boolean);
   }
@@ -241,6 +243,16 @@ module.exports = function register(socket, ctx) {
         // fix already in voice-rejoin's stale-entry path.)
         voiceUsers.get(code).delete(socket.user.id);
         clearScreenState(code, socket.user.id);
+        const staleCamUsers = activeWebcamUsers.get(code);
+        if (staleCamUsers) {
+          staleCamUsers.delete(socket.user.id);
+          if (staleCamUsers.size === 0) activeWebcamUsers.delete(code);
+        }
+        const staleCamStreamIds = activeWebcamStreamIds.get(code);
+        if (staleCamStreamIds) {
+          staleCamStreamIds.delete(socket.user.id);
+          if (staleCamStreamIds.size === 0) activeWebcamStreamIds.delete(code);
+        }
         clearViewerState(code, socket.user.id);
         const remaining = voiceUsers.get(code);
         if (remaining) {
@@ -332,7 +344,7 @@ module.exports = function register(socket, ctx) {
         channelCode: code,
         users: Array.from(camUsers).map(uid => {
           const u = voiceUsers.get(code)?.get(uid);
-          return u ? { id: uid, username: u.username } : null;
+          return u ? { id: uid, username: u.username, streamId: activeWebcamStreamIds.get(code)?.get(uid) || null } : null;
         }).filter(Boolean)
       });
       setTimeout(() => {
@@ -460,6 +472,8 @@ module.exports = function register(socket, ctx) {
 
     const camUsersSet = activeWebcamUsers.get(data.code);
     if (camUsersSet) { camUsersSet.delete(data.userId); if (camUsersSet.size === 0) activeWebcamUsers.delete(data.code); }
+    const camStreamIds = activeWebcamStreamIds.get(data.code);
+    if (camStreamIds) { camStreamIds.delete(data.userId); if (camStreamIds.size === 0) activeWebcamStreamIds.delete(data.code); }
 
     for (const [key, viewers] of streamViewers) {
       if (key.startsWith(data.code + ':')) {
@@ -482,6 +496,12 @@ module.exports = function register(socket, ctx) {
 
     broadcastVoiceUsers(data.code);
     broadcastStreamInfo(data.code);
+    if (typeof ctx.logAudit === 'function') {
+      const vch = channelId ? db.prepare('SELECT name FROM channels WHERE id = ?').get(channelId) : null;
+      ctx.logAudit({ actor: socket.user, action: 'voice_kick',
+        target_type: 'user', target_id: data.userId, target_name: target.username,
+        details: { channel: vch ? vch.name : null } });
+    }
     socket.emit('error-msg', `Kicked ${target.username} from voice`);
   });
 
@@ -518,6 +538,7 @@ module.exports = function register(socket, ctx) {
       sessionId: null,
       codec: null,
       hasAudio: !!data.hasAudio,
+      streamId: isString(data.streamId, 1, 128) ? data.streamId : null,
     });
     for (const [uid, user] of voiceRoom) {
       if (uid !== socket.user.id) {
@@ -526,6 +547,7 @@ module.exports = function register(socket, ctx) {
           username: socket.user.displayName,
           channelCode: data.code,
           hasAudio: !!data.hasAudio,
+          streamId: isString(data.streamId, 1, 128) ? data.streamId : null,
           transport: 'browser'
         });
       }
@@ -593,13 +615,24 @@ module.exports = function register(socket, ctx) {
 
     if (!activeWebcamUsers.has(data.code)) activeWebcamUsers.set(data.code, new Set());
     activeWebcamUsers.get(data.code).add(socket.user.id);
+    if (isString(data.streamId, 1, 128)) {
+      if (!activeWebcamStreamIds.has(data.code)) activeWebcamStreamIds.set(data.code, new Map());
+      activeWebcamStreamIds.get(data.code).set(socket.user.id, data.streamId);
+    } else {
+      const streamIds = activeWebcamStreamIds.get(data.code);
+      if (streamIds) {
+        streamIds.delete(socket.user.id);
+        if (streamIds.size === 0) activeWebcamStreamIds.delete(data.code);
+      }
+    }
 
     for (const [uid, user] of voiceRoom) {
       if (uid !== socket.user.id) {
         io.to(user.socketId).emit('webcam-started', {
           userId: socket.user.id,
           username: socket.user.displayName,
-          channelCode: data.code
+          channelCode: data.code,
+          streamId: isString(data.streamId, 1, 128) ? data.streamId : null,
         });
       }
     }
@@ -615,6 +648,11 @@ module.exports = function register(socket, ctx) {
     if (camUsersSet) {
       camUsersSet.delete(socket.user.id);
       if (camUsersSet.size === 0) activeWebcamUsers.delete(data.code);
+    }
+    const camStreamIds = activeWebcamStreamIds.get(data.code);
+    if (camStreamIds) {
+      camStreamIds.delete(socket.user.id);
+      if (camStreamIds.size === 0) activeWebcamStreamIds.delete(data.code);
     }
     ctx.closeRelaySources?.(data.code, socket.user.id, ['webcam']);
 
@@ -1102,7 +1140,7 @@ module.exports = function register(socket, ctx) {
         channelCode: code,
         users: Array.from(camUsers).map(uid => {
           const u = voiceUsers.get(code)?.get(uid);
-          return u ? { id: uid, username: u.username } : null;
+          return u ? { id: uid, username: u.username, streamId: activeWebcamStreamIds.get(code)?.get(uid) || null } : null;
         }).filter(Boolean)
       });
       setTimeout(() => {

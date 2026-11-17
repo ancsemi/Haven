@@ -48,6 +48,19 @@ async function restore(zipPath, dataDir) {
     throw err;
   }
 
+  // The restored database's media index describes the files of the server
+  // the backup came from. Haven rebuilds it from the restored files on its
+  // next start, and sends them on to its bucket first if it keeps media in one.
+  try {
+    const restored = new (require('better-sqlite3'))(stagedDb);
+    try {
+      restored.prepare("DELETE FROM server_settings WHERE key = 'media_index_built'").run();
+      restored.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('media_restore_pending', '1')").run();
+    } finally { restored.close(); }
+  } catch (err) {
+    console.warn('[Restore] Could not mark the media index for rebuilding; run scripts/reconcile-media.js after Haven starts:', err.message);
+  }
+
   // Keep whatever was there before. SQLite looks for a database's journal at
   // "<file>-wal", so the journal moves with it under the matching name.
   const moved = [];

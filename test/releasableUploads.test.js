@@ -23,6 +23,7 @@ function fixture() {
     CREATE TABLE custom_sounds (id INTEGER PRIMARY KEY, filename TEXT);
     CREATE TABLE custom_emojis (id INTEGER PRIMARY KEY, filename TEXT);
     CREATE TABLE stickers (id INTEGER PRIMARY KEY, filename TEXT);
+    CREATE TABLE scheduled_messages (id INTEGER PRIMARY KEY, content TEXT);
   `);
   const own = db.prepare('INSERT INTO upload_ownership (rel_path, user_id, bytes, scope) VALUES (?, ?, 0, ?)');
   own.run('mine.png', 1, 'channel');
@@ -68,4 +69,10 @@ test('a protected message keeps its files, even one posted after the deleted mes
   assert.deepEqual(releasableUploads(db, ['mine.png'], [1], { ignoreMessagesAfter: sent }), []);
   db.prepare('UPDATE messages SET is_archived = 0').run();
   assert.deepEqual(releasableUploads(db, ['mine.png'], [1], { ignoreMessagesAfter: sent }), ['mine.png']);
+});
+
+test('a file waiting in a scheduled message is kept', () => {
+  const db = fixture();
+  db.prepare('INSERT INTO scheduled_messages (content) VALUES (?)').run('later\n[file:a.txt](/uploads/mine.png|1 KB)');
+  assert.deepEqual(releasableUploads(db, ['mine.png'], [1]), []);
 });

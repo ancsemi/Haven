@@ -89,6 +89,7 @@ _bindChannelMenu() {
   // ── Channel context menu ("..." on hover) ──────────
   this._initChannelContextMenu();
   this._initDmContextMenu();
+  this._initDmSortMenu();
   // Delete channel: themed confirm (issue #5307: was using two chained native confirm() calls)
   document.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
@@ -123,6 +124,12 @@ _bindChannelMenu() {
     this.unreadCounts[code] = 0;
     this._updateBadge(code);
     this.socket.emit('mark-read-channel', { code });
+    // In a forum the unread things are replies in its topics, which have
+    // read positions of their own: this used to leave the forum's dot on.
+    if (this.channels?.find(c => c.code === code)?.is_forum) {
+      this.socket.emit('mark-forum-read', { code });
+      this._forumMarkAllRead?.(code);
+    }
   });
   // Mute channel toggle
   document.querySelector('#channel-ctx-menu [data-action="mute"]')?.addEventListener('click', () => {
@@ -150,6 +157,13 @@ _bindChannelMenu() {
     this._closeChannelCtxMenu();
     this._copyChannelLink(code);
   });
+  // Add people to this channel or take them out (app-channel-add-members.js).
+  document.querySelector('#channel-ctx-menu [data-action="add-members"]')?.addEventListener('click', () => {
+    const code = this._ctxMenuChannel;
+    if (!code) return;
+    this._closeChannelCtxMenu();
+    this._openAddChannelMembers(code);
+  });
   // Join voice from context menu
   document.querySelector('[data-action="join-voice"]')?.addEventListener('click', () => {
     const code = this._ctxMenuChannel;
@@ -160,13 +174,13 @@ _bindChannelMenu() {
     setTimeout(() => this._joinVoice(), 300);
   });
   // Leave channel
-  document.querySelector('[data-action="leave-channel"]')?.addEventListener('click', () => {
+  document.querySelector('[data-action="leave-channel"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
     this._closeChannelCtxMenu();
     const ch = this.channels.find(c => c.code === code);
     const name = ch ? ch.name : code;
-    if (!confirm(t('confirm.leave_channel', { name }))) return;
+    if (!await this._confirm(t('confirm.leave_channel', { name }))) return;
     this.socket.emit('leave-channel', { code }, (res) => {
       if (res && res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('toasts.left_channel', { name }), 'success');
@@ -592,13 +606,13 @@ _bindChannelMenu() {
     this._openReparentModal(code);
   });
   // Promote sub-channel to top-level
-  document.querySelector('[data-action="promote-channel"]')?.addEventListener('click', () => {
+  document.querySelector('[data-action="promote-channel"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
     this._closeChannelCtxMenu();
     const ch = this.channels.find(c => c.code === code);
     if (!ch || !ch.parent_channel_id) return;
-    if (confirm(t('confirm.promote_channel', { name: ch.name }))) {
+    if (await this._confirm(t('confirm.promote_channel', { name: ch.name }))) {
       this.socket.emit('reparent-channel', { code, newParentCode: null });
     }
   });
@@ -738,7 +752,8 @@ _bindChannelMenu() {
   });
   document.getElementById('dm-organize-sort')?.addEventListener('change', () => {
     const mode = document.getElementById('dm-organize-sort').value;
-    localStorage.setItem('haven_dm_sort_mode', mode);
+    this._pickDmSortMode(mode);
+    if (mode === 'manual') this._dmOrganizeList = this._orderDms(this._dmOrganizeList || [], null, 'manual');
     this._renderDmOrganizeList();
   });
   document.getElementById('dm-organize-move-up')?.addEventListener('click', () => {

@@ -57,7 +57,7 @@ async _sendMessage() {
     const code = this.currentChannel;
     const files = [...this._imageQueue];
     this._clearImageQueue();
-    input.value = '';
+    input.value = ''; this._draftSent?.();
     input.style.height = 'auto';
     input.focus();
     this._clearReply();
@@ -95,7 +95,7 @@ async _sendMessage() {
     if (sticker && sticker.url && destructAt) {
       content = sticker.url;
     } else if (sticker && sticker.url) {
-      input.value = '';
+      input.value = ''; this._draftSent?.();
       input.style.height = 'auto';
       this._clearReply();
       this._hideMentionDropdown();
@@ -112,7 +112,7 @@ async _sendMessage() {
     if (content.trim().toLowerCase() === '/tts:stop') {
       this.notifications?.stopTTS();
       this._showToast(t('toasts.tts_stopped'), 'info');
-      input.value = '';
+      input.value = ''; this._draftSent?.();
       input.style.height = 'auto';
       this._hideMentionDropdown();
       this._hideSlashDropdown();
@@ -124,7 +124,7 @@ async _sendMessage() {
       const arg = (parts[2] || '').trim();
       if (cmd === 'clear') {
         document.getElementById('messages').innerHTML = '';
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -132,7 +132,7 @@ async _sendMessage() {
       }
       if (cmd === 'nick' && arg) {
         this.socket.emit('rename-user', { username: arg });
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -151,7 +151,7 @@ async _sendMessage() {
           this.socket.emit('music-search', { query: arg, offset: 0 });
           this._showToast(t('toasts.searching'), 'info');
         }
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -160,7 +160,7 @@ async _sendMessage() {
       if (cmd === 'gif') {
         if (!arg) { this._showToast(t('commands.gif_usage'), 'error'); }
         else { this._showGifSlashResults(arg); }
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -170,7 +170,7 @@ async _sendMessage() {
         // No argument opens the picker modal; the toast is kept for input
         // that was typed but could not be parsed.
         if (!arg) {
-          input.value = '';
+          input.value = ''; this._draftSent?.();
           input.style.height = 'auto';
           this._hideMentionDropdown();
           this._hideSlashDropdown();
@@ -196,7 +196,7 @@ async _sendMessage() {
       }
       if (cmd === 'schedule') {
         // Send later (#5638): the text after the command is the message.
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -204,7 +204,7 @@ async _sendMessage() {
         return;
       }
       if (cmd === 'poll') {
-        input.value = '';
+        input.value = ''; this._draftSent?.();
         input.style.height = 'auto';
         this._hideMentionDropdown();
         this._hideSlashDropdown();
@@ -214,6 +214,7 @@ async _sendMessage() {
     }
   }
 
+  content = this._autoEmoteWords(content);
   const payload = { code: this.currentChannel, content };
   // Discord display names are not unique, so a "=>@Name" DM has to carry the
   // resolved Discord user id rather than leaving the server to guess.
@@ -248,7 +249,7 @@ async _sendMessage() {
   let groupPartner = null;
 
   // Clear UI immediately (before any async E2E work)
-  input.value = '';
+  input.value = ''; this._draftSent?.();
   input.style.height = 'auto';
   input.focus();
   this._clearReply();
@@ -661,12 +662,14 @@ _prependMessages(messages) {
   container.insertBefore(fragment, container.firstChild);
 
   // 5. Realign anchor immediately after insert
+  let placed = container.scrollTop;
   const realign = () => {
     if (!anchorEl) return;
     const cr = container.getBoundingClientRect();
     const ar = anchorEl.getBoundingClientRect();
     const drift = (ar.top - cr.top) - anchorOffset;
     if (Math.abs(drift) > 0.5) container.scrollTop += drift;
+    placed = container.scrollTop;
   };
   realign();
 
@@ -722,19 +725,25 @@ _prependMessages(messages) {
 
   // 7. Keep anchor stable while async content (images, embeds, link previews)
   //    loads in the prepended area above the viewport.
+  placed = container.scrollTop;
+  let live = true;
+  const late = () => {
+    live = live && Math.abs(container.scrollTop - placed) <= 1;
+    live ? this._coupledToBottom || realign() : mo.disconnect();
+  };
   for (const el of addedEls) {
     if (!container.contains(el)) continue;
     el.querySelectorAll('img').forEach(img => {
       if (!img.complete) {
-        img.addEventListener('load', () => { if (!this._coupledToBottom) realign(); }, { once: true });
-        img.addEventListener('error', () => { if (!this._coupledToBottom) realign(); }, { once: true });
+        img.addEventListener('load', late, { once: true });
+        img.addEventListener('error', late, { once: true });
       }
     });
   }
 
   // Watch for DOM changes in prepended messages (link previews, YouTube
   // embeds, E2E image decryption) that add height above the anchor.
-  const mo = new MutationObserver(() => { if (!this._coupledToBottom) realign(); });
+  const mo = new MutationObserver(late);
   for (const el of addedEls) {
     if (!container.contains(el)) continue;
     mo.observe(el, { childList: true, subtree: true });
@@ -1035,11 +1044,12 @@ _createMessageEl(msg, prevMsg) {
     this._highlightGroups(msg, prevMsg) &&
     this._groupsWithPrevious(prevMsg, msg);
 
+  // The role menu first: it decides which reactions and lines it stands in for.
+  const roleMenuHtml = msg.roleMenu ? this._renderRoleMenu(msg.id, msg.roleMenu) : '';
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
   const tagsHtml = this._renderAttachmentTags(msg.attachmentTags);
   const pollHtml = msg.poll ? this._renderPollWidget(msg.id, msg.poll) : '';
   const destructHtml = this._selfDestructHtml(msg.destruct_at);
-  const roleMenuHtml = msg.roleMenu ? this._renderRoleMenu(msg.id, msg.roleMenu) : '';
   const threadHtml = isDmContext ? ''
     : (msg.thread ? this._renderThreadPreview(msg.id, msg.thread, { forum: isForum })
       : (isForum ? this._renderThreadPreview(msg.id, { count: 0 }, { forum: true }) : ''));
@@ -1120,6 +1130,7 @@ _createMessageEl(msg, prevMsg) {
     toolbarActions.push({ key: 'delete', html: `<button data-action="delete" title="${t('msg_toolbar.delete')}">${iDelete}</button>` });
   }
 
+  // Settings > Appearance lists the same keys for reordering (app-appearance.js).
   const defaultToolbarOrder = ['react', 'reply', 'quote', 'thread', 'copy-link', 'pin', 'archive', 'nsfw', 'edit', 'delete'];
   let savedToolbarOrder = [];
   try {
@@ -1192,7 +1203,7 @@ _createMessageEl(msg, prevMsg) {
     el.innerHTML = `
       <span class="compact-time">${this._fmtTime(msg.created_at)}</span>
       <div class="message-body">
-        <div class="message-content">${pinnedTag}${archivedTag}${ephemeralTag}${this._formatContent(msg.content)}${editedHtml}${statusSlotHtml}</div>
+        <div class="message-content">${pinnedTag}${archivedTag}${ephemeralTag}${this._formatContent(this._roleMenuText(msg.id, msg.content), { e2e: !!msg._e2e })}${editedHtml}${statusSlotHtml}</div>
         ${pollHtml}${roleMenuHtml}${destructHtml}
         ${reactionsHtml}
         ${tagsHtml}
@@ -1341,7 +1352,7 @@ _createMessageEl(msg, prevMsg) {
           ${statusSlotHtml}
           <span class="message-header-spacer"></span>
         </div>
-        <div class="message-content">${this._formatContent(msg.content)}${editedHtml}</div>
+        <div class="message-content">${this._formatContent(this._roleMenuText(msg.id, msg.content), { e2e: !!msg._e2e })}${editedHtml}</div>
         ${pollHtml}${roleMenuHtml}${destructHtml}
         ${reactionsHtml}
         ${tagsHtml}

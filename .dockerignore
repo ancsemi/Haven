@@ -20,6 +20,8 @@ public/uploads/*
 .gitignore
 .vscode/
 *.md
+# The "What's new" popup reads the release notes (src/changelog.js).
+!CHANGELOG.md
 LICENSE
 Start Haven.bat
 start.sh

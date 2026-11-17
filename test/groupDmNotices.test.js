@@ -163,3 +163,43 @@ test('notices are not unread messages', async () => {
   assert.ok(g, 'group is listed');
   assert.strictEqual(g.unreadCount, 0);
 });
+
+test('someone who joins later is sent nothing from before they joined', async () => {
+  const code = await makeGroup('bob', ['carol', 'dave']);
+  const envelope = (ct) => JSON.stringify({ v: 3, e: 1, prev: null, iv: 'AAAAAAAAAAAAAAAA', ct, sig: 'c2ln' });
+  socks.bob.emit('send-message', { code, content: envelope('b2xk') });
+  await wait(400);
+  socks.bob.emit('pin-message', { messageId: readDb('SELECT MAX(m.id) AS id FROM messages m JOIN channels c ON c.id = m.channel_id WHERE c.code = ?', code)[0].id });
+  // Join times are kept to the second.
+  await wait(1200);
+  socks.bob.emit('invite-group-dm', { code, userIds: [users.erin.user.id] });
+  const joined = next(socks.erin, 'group-dm-opened', (d) => d.code === code);
+  socks.erin.emit('accept-group-dm', { code });
+  assert.ok(await joined);
+  await wait(1200);
+  socks.bob.emit('send-message', { code, content: envelope('bmV3') });
+  await wait(400);
+
+  const history = next(socks.erin, 'message-history', (d) => d.channelCode === code);
+  socks.erin.emit('get-messages', { code });
+  const got = await history;
+  const cts = got.messages.filter((m) => m.type !== 'notice').map((m) => JSON.parse(m.content).ct);
+  assert.deepStrictEqual(cts, ['bmV3']);
+  assert.ok(got.messages.some((m) => m.type === 'notice' && JSON.parse(m.content).event === 'joined'));
+
+  const older = next(socks.erin, 'message-history', (d) => d.channelCode === code);
+  socks.erin.emit('get-messages', { code, before: got.messages[0].id });
+  assert.deepStrictEqual((await older).messages, []);
+
+  const pins = next(socks.erin, 'pinned-messages', (d) => d.channelCode === code);
+  socks.erin.emit('get-pinned-messages', { code });
+  assert.deepStrictEqual((await pins).pins, []);
+
+  const list = next(socks.erin, 'channels-list');
+  socks.erin.emit('get-channels');
+  assert.strictEqual((await list).find((c) => c.code === code).unreadCount, 1);
+
+  const carolHistory = next(socks.carol, 'message-history', (d) => d.channelCode === code);
+  socks.carol.emit('get-messages', { code });
+  assert.strictEqual((await carolHistory).messages.filter((m) => m.type !== 'notice').length, 2, 'earlier members keep everything');
+});

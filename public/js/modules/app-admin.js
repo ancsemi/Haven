@@ -397,6 +397,7 @@ _applyServerSettings() {
     if (welcomeInput) {
       welcomeInput.value = this.serverSettings.welcome_message || '';
     }
+    this._fillLoginBranding?.();
     const cleanupEnabled = document.getElementById('cleanup-enabled');
     if (cleanupEnabled) {
       cleanupEnabled.checked = this.serverSettings.cleanup_enabled === 'true';
@@ -452,6 +453,8 @@ _applyServerSettings() {
     if (maxPollOpts) {
       maxPollOpts.value = this.serverSettings.max_poll_options || '10';
     }
+    const blockedTypes = document.getElementById('blocked-upload-types');
+    if (blockedTypes) blockedTypes.value = (this.serverSettings.blocked_upload_extensions || '').split(',').filter(Boolean).join(', ');
     const sessionDur = document.getElementById('session-duration-days');
     if (sessionDur) {
       // Default to '0' (never) for new installs. Existing servers seeded with
@@ -565,6 +568,8 @@ _applyServerSettings() {
   if (tokenToggle) tokenToggle.checked = this.serverSettings.registration_token_enabled === 'true';
   const invBpsTokenToggle = document.getElementById('invites-bypass-registration-token');
   if (invBpsTokenToggle) invBpsTokenToggle.checked = this.serverSettings.invites_bypass_registration_token === 'true';
+  const automodAiToggle = document.getElementById('automod-ai-enabled');
+  if (automodAiToggle) automodAiToggle.checked = this.serverSettings.automod_ai_enabled === 'true';
 
   // These save with the Save button, so leave them alone while the panel is
   // open: the token switches above save at once, and the refresh that follows
@@ -635,8 +640,9 @@ _applyServerSettings() {
   const bannerPreview = document.getElementById('server-banner-preview');
   const mainEl = document.querySelector('.main');
   const headerMode = localStorage.getItem('haven_banner_header_mode') || 'full';
-  const bannerHeight = parseInt(localStorage.getItem('haven_banner_height')) || 180;
-  const bannerOffset = parseInt(localStorage.getItem('haven_banner_offset')) || 0;
+  const bannerPrefs = this._bannerDisplayPrefs();
+  const bannerHeight = bannerPrefs.height;
+  const bannerOffset = bannerPrefs.offset;
   const hasBanner = !!this.serverSettings.server_banner;
   // Show/hide the banner display section in user settings
   const bannerSection = document.getElementById('section-banner-display');
@@ -677,6 +683,7 @@ _applyServerSettings() {
     offsetSlider.value = bannerOffset;
     if (offsetValue) offsetValue.textContent = bannerOffset + '%';
   }
+  this._syncBannerDefaultControls(bannerPrefs);
 
   // Role icon display checkboxes
   const riSidebar = document.getElementById('role-icon-sidebar');
@@ -709,6 +716,7 @@ _applyServerSettings() {
   if (!modalOpen && this.user && (this.user.isAdmin || this._hasPerm('manage_server'))) {
     this.socket.emit('get-whitelist');
   }
+  if (!modalOpen) this._loadBlockedNames?.();
 },
 
 /* ── Admin settings save / cancel ───────────────────── */
@@ -742,6 +750,7 @@ _syncSettingsNav() {
     'section-update':       [],
     'section-extension-updates': [],
     'section-branding':     ['manage_server'],
+    'section-channel-types': ['manage_server'],
     'section-presence':     [],
     'section-members':      ['manage_server'],
     // Idle-online oversight (v3.46.0): moderators who can act on it see it too,
@@ -770,6 +779,7 @@ _syncSettingsNav() {
     'section-modmode':      ['manage_server'],
     'section-emojis':       ['manage_emojis'],
     'section-stickers':     ['manage_stickers'],
+    'section-gifs':         ['manage_server'],
     'section-sounds-admin': ['manage_soundboard'],
     'section-roles':        ['manage_roles'],
     'section-badges':       ['manage_badges'],
@@ -921,6 +931,7 @@ _snapshotAdminSettings() {
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
     max_sticker_kb: this.serverSettings.max_sticker_kb || '1024',
     max_poll_options: this.serverSettings.max_poll_options || '10',
+    blocked_upload_extensions: this.serverSettings.blocked_upload_extensions || '',
     session_duration_days: this.serverSettings.session_duration_days || '7',
     max_message_chars: this.serverSettings.max_message_chars || '2000',
     auto_away_visible_minutes: this.serverSettings.auto_away_visible_minutes || '5',
@@ -1133,6 +1144,19 @@ _saveAdminSettings() {
   if (maxPollOpts !== (snap.max_poll_options || '10')) {
     this.socket.emit('update-server-setting', { key: 'max_poll_options', value: maxPollOpts });
     changed = true;
+  }
+
+  // Blocked names save themselves; this catches an edit left unsaved.
+  if (this._saveBlockedNamesIfChanged?.()) changed = true;
+
+  // Blocked file types (#5833): the server cleans the list up
+  const blockedTypesEl = document.getElementById('blocked-upload-types');
+  if (blockedTypesEl) {
+    const blockedTypes = blockedTypesEl.value.split(/[\s,;]+/).map(s => s.toLowerCase().replace(/^\*?\./, '')).filter(Boolean).join(',');
+    if (blockedTypes !== (snap.blocked_upload_extensions || '')) {
+      this.socket.emit('update-server-setting', { key: 'blocked_upload_extensions', value: blockedTypes });
+      changed = true;
+    }
   }
 
   // session_duration_days: 0 means "never expire"; 1 to 365 days otherwise (#5391)
@@ -1374,6 +1398,8 @@ _cancelAdminSettings() {
     if (mstk) mstk.value = snap.max_sticker_kb || '1024';
     const mpo = document.getElementById('max-poll-options');
     if (mpo) mpo.value = snap.max_poll_options || '10';
+    const but = document.getElementById('blocked-upload-types');
+    if (but) but.value = (snap.blocked_upload_extensions || '').split(',').filter(Boolean).join(', ');
     const sdd = document.getElementById('session-duration-days');
     if (sdd) sdd.value = snap.session_duration_days ?? '0';
     const mmc = document.getElementById('max-message-chars');

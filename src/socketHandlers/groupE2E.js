@@ -14,9 +14,11 @@ const { isInt, NEW_DMS_PER_HOUR } = require('./helpers');
 
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { CONVERSATION_REFUSAL } = require('../protectedMessages');
+const createEncryptionKeyReads = require('../db/encryptionKeys');
 module.exports = function register(socket, ctx) {
-  ctx.leaveGroupDm = (code, userId, attachments) => { const ch = groupOf(code); if (ch && isMember(ch.id, userId)) { leaveGroup(ch, userId, attachments); return true; } return false; };
+  ctx.leaveGroupDm = async (code, userId, attachments) => { const ch = groupOf(code); if (ch && isMember(ch.id, userId)) { await leaveGroup(ch, userId, attachments); return true; } return false; };
   const { io, db, generateUniqueSharedCode } = ctx;
+  const keyReads = createEncryptionKeyReads(db);
   const { refuseYoungAccount } = require('./postingWait')(socket, ctx);
 
   // Group invites a member may send per hour, by call. A group invite lands
@@ -177,17 +179,21 @@ module.exports = function register(socket, ctx) {
    * A user's current signing key, plus every key they have published before
    * (newest first), so history signed before a key reset still verifies.
    */
-  socket.on('get-signing-key', (data) => {
+  socket.on('get-signing-key', async (data) => {
     const userId = isInt(data && data.userId) ? data.userId : null;
     if (!userId) return;
-    const row = db.prepare('SELECT signing_key FROM users WHERE id = ?').get(userId);
-    const keys = db.prepare('SELECT jwk FROM user_signing_keys WHERE user_id = ? ORDER BY rowid DESC LIMIT 50').all(userId)
-      .map((r) => JSON.parse(r.jwk));
-    socket.emit('signing-key-result', {
-      userId,
-      jwk: row && row.signing_key ? JSON.parse(row.signing_key) : null,
-      keys,
-    });
+    try {
+      const { row, keys: history } = await keyReads.signingKeys(userId);
+      const keys = history.map((r) => JSON.parse(r.jwk));
+      socket.emit('signing-key-result', {
+        userId,
+        jwk: row && row.signing_key ? JSON.parse(row.signing_key) : null,
+        keys,
+      });
+    } catch (err) {
+      console.error('Get signing key error:', err);
+      socket.emit('error-msg', 'Failed to get signing key');
+    }
   });
 
   /* ── Group creation ─────────────────────────────── */
@@ -345,7 +351,7 @@ module.exports = function register(socket, ctx) {
     io.to(`channel:${ch.code}`).emit('group-dm-updated', payload);
     postNotice(ch, socket.user.id, 'invited', ids);
   });
-  function leaveGroup(ch, userId, attachments, removedBy = null) {
+  async function leaveGroup(ch, userId, attachments, removedBy = null) {
     db.transaction(() => {
       db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(ch.id, userId);
       db.prepare('DELETE FROM dm_group_invites WHERE channel_id = ? AND user_id = ?').run(ch.id, userId);
@@ -360,7 +366,7 @@ module.exports = function register(socket, ctx) {
       // files may still be linked from encrypted messages elsewhere, which the
       // server cannot read to check. A group holding protected messages is
       // kept; the auto-cleanup sweep clears the rest of it.
-      if (ctx.purgeDmChannel(ch, attachments, [userId])) clearChannelRuntimeState(ctx.state, ch.code);
+      if (await ctx.purgeDmChannel(ch, attachments, [userId])) clearChannelRuntimeState(ctx.state, ch.code);
       else console.log(`[protected] Kept group DM "${ch.code}" after its last member left: it holds protected messages`);
     } else {
       const user = db.prepare('SELECT COALESCE(display_name, username) AS username FROM users WHERE id = ?').get(userId);
@@ -370,16 +376,16 @@ module.exports = function register(socket, ctx) {
     }
     if (ctx.broadcastChannelLists) ctx.broadcastChannelLists();
   }
-  socket.on('leave-group-dm', (data) => {
+  socket.on('leave-group-dm', async (data) => {
     const ch = groupOf(data && data.code);
     if (!ch || !isMember(ch.id, socket.user.id)) return;
-    leaveGroup(ch, socket.user.id, data.attachments);
+    await leaveGroup(ch, socket.user.id, data.attachments);
   });
   // The person who started the group can remove people from it (#5740). It
   // works like a moderator's kick: the removed person loses the group on
   // every device at once and the rest replace the key they hold. The creator
   // leaves with Leave group, not this.
-  socket.on('remove-group-member', (data) => {
+  socket.on('remove-group-member', async (data) => {
     if (!data || typeof data !== 'object') return;
     const ch = groupOf(data.code);
     if (!ch || !isMember(ch.id, socket.user.id)) return socket.emit('error-msg', 'Group not found');
@@ -394,7 +400,7 @@ module.exports = function register(socket, ctx) {
     const target = db.prepare('SELECT COALESCE(display_name, username) AS username FROM users WHERE id = ?').get(targetId);
     // Told first, while their app still knows the group's name.
     for (const s of socketsOf([targetId])) s.emit('kicked', { channelCode: ch.code, group: true, reason: '' });
-    leaveGroup(ch, targetId, [], socket.user.id);
+    await leaveGroup(ch, targetId, [], socket.user.id);
     socket.emit('group-dm-member-removed', { code: ch.code, user: { id: targetId, username: target && target.username } });
   });
   // The server admin can delete a group for everyone in it, the way a 1:1 DM
@@ -407,7 +413,7 @@ module.exports = function register(socket, ctx) {
     const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(socket.user.id);
     return !!(row && row.is_admin);
   };
-  function deleteGroupForEveryone(code, attachments) {
+  async function deleteGroupForEveryone(code, attachments) {
     const ch = groupOf(code);
     if (!ch) return void socket.emit('error-msg', 'Group not found');
     if (!isServerAdmin()) return void socket.emit('error-msg', 'Only the server admin can delete a group for everyone');
@@ -415,7 +421,7 @@ module.exports = function register(socket, ctx) {
     // Every member's own uploads go with it. Encrypted files the members sent
     // are also released by the messages they were attached to (#5699); the
     // list from the admin's app covers files from before that.
-    if (!ctx.purgeDmChannel(ch, Array.isArray(attachments) ? attachments : [])) {
+    if (!(await ctx.purgeDmChannel(ch, Array.isArray(attachments) ? attachments : []))) {
       return void socket.emit('error-msg', CONVERSATION_REFUSAL);
     }
     clearChannelRuntimeState(ctx.state, ch.code);
@@ -434,9 +440,9 @@ module.exports = function register(socket, ctx) {
     if (ctx.broadcastChannelLists) ctx.broadcastChannelLists();
   }
   ctx.deleteGroupDmForEveryone = deleteGroupForEveryone;
-  socket.on('delete-group-dm-for-everyone', (data) => {
+  socket.on('delete-group-dm-for-everyone', async (data) => {
     if (!data || typeof data !== 'object') return;
-    deleteGroupForEveryone(data.code, data.attachments);
+    await deleteGroupForEveryone(data.code, data.attachments);
   });
   /* ── Epoch publication ──────────────────────────── */
 

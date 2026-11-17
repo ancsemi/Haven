@@ -9,11 +9,39 @@ _avatarMaxMb() {
   return n >= 1 && n <= 10 ? n : 2;
 },
 
+// Your own picture in the account bar at the top of the sidebar, in your
+// chosen shape, or your initial on your color when you have none.
+_renderUserBarAvatar() {
+  const face = document.getElementById('user-bar-face');
+  if (!face || !this.user || !this.user.username) return;
+  face.className = 'user-bar-face avatar-' + (this.user.avatarShape || 'circle');
+  const initial = this.user.username.charAt(0).toUpperCase();
+  const color = this._getUserColor(this.user.username);
+  const showInitial = () => {
+    face.textContent = initial;
+    face.style.backgroundColor = color;
+  };
+  if (!this.user.avatar) { showInitial(); return; }
+  face.style.backgroundColor = '';
+  face.innerHTML = `<img ${this._imgSrcAttr(this.user.avatar)}${this._animAttr(this.user.animateProfile)} alt="">`;
+  const img = face.querySelector('img');
+  img.addEventListener('error', showInitial, { once: true });
+  this._freezePfpImg(img);
+},
+
 _bindPeople() {
   // Rename username
   document.getElementById('rename-btn').addEventListener('click', () => {
     this._openRenameModal();
   });
+  // Your picture in the account bar opens the same window, and plays an
+  // animated picture while hovered, like avatars in chat.
+  const barAvatar = document.getElementById('user-bar-avatar');
+  if (barAvatar) {
+    barAvatar.addEventListener('click', () => this._openRenameModal());
+    barAvatar.addEventListener('mouseenter', () => this._setPfpAnimation(barAvatar, true));
+    barAvatar.addEventListener('mouseleave', () => this._setPfpAnimation(barAvatar, false));
+  }
 
   // A name or avatar in the thread panel: a reply's, or the starter's in the
   // header. Webhook and imported replies have no account, so no card.
@@ -26,6 +54,29 @@ _bindPeople() {
     if (!msgEl || !msgEl.dataset.userId) return null;
     return { el, userId: parseInt(msgEl.dataset.userId, 10) };
   };
+
+  // ── Profile popup: click on an @mention of a person, wherever the message
+  // is shown (channel, thread, pop-out DM). Role and @everyone mentions have
+  // no account behind them. (#5878)
+  document.addEventListener('click', (e) => {
+    const mention = e.target.closest?.('.mention[data-mention-user]');
+    if (!mention) return;
+    const userId = parseInt(mention.dataset.mentionUser, 10);
+    if (isNaN(userId)) return;
+    clearTimeout(this._hoverProfileTimer);
+    clearTimeout(this._hoverCloseTimer);
+    clearTimeout(this._hoverAutoCloseTimer);
+    clearTimeout(this._hoverFadeTimeout);
+    const existingPopup = document.getElementById('profile-popup');
+    if (this._openProfileUserId === userId && existingPopup && !this._isHoverPopup) {
+      this._closeProfilePopup();
+      return;
+    }
+    this._isHoverPopup = false;
+    this._hoverTarget = null;
+    this._profilePopupAnchor = mention;
+    this.socket.emit('get-user-profile', { userId });
+  });
 
   // ── Profile popup: click on message author name or avatar ──
   document.getElementById('messages').addEventListener('click', (e) => {
@@ -874,7 +925,7 @@ _renderPersonasList() {
       const id = parseInt(btn.dataset.id);
       const persona = (this._personas || []).find(p => p.id === id);
       if (!persona) return;
-      if (!confirm(t('personas.delete_confirm', { name: persona.name }))) return;
+      if (!await this._confirm(t('personas.delete_confirm', { name: persona.name }), { danger: true })) return;
       try {
         const res = await fetch(`/api/personas/${id}`, {
           method: 'DELETE',

@@ -2,11 +2,12 @@
 
 const bcrypt = require('bcryptjs');
 const OTPAuth = require('otpauth');
-const { isString, isInt, VALID_ROLE_PERMS, ROLE_MENU_EMOJI_RE, roleMenuContent } = require('./helpers');
+const { isString, isInt, VALID_ROLE_PERMS, roleMenuContent } = require('./helpers');
 const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('../roleDefaults');
 const createRoleRefresh = require('./roleRefresh');
 const { reachableChannel } = require('./channelAccess');
 const picks = require('../roleMenuPicks');
+const { isUsableEmoji } = require('../builtinEmojis');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -119,12 +120,31 @@ module.exports = function register(socket, ctx) {
       }).filter(Boolean);
     } catch { return []; }
   }
+  // Who picked each role, for the button tooltip: the first 20 names and a
+  // count. A role hidden on profile cards (#5822) keeps its holders hidden
+  // here too, since everyone in the channel sees this list.
+  const PICKERS_FROM = 'FROM reactions x JOIN user_roles ur ON ur.user_id = x.user_id AND ur.role_id = ? AND ur.channel_id IS NULL JOIN users u ON u.id = x.user_id WHERE x.message_id = ? AND x.emoji = ?';
+  const rolePickers = (row) => {
+    const roles = readRoleMenu(row);
+    if (!roles.length) return {};
+    const hidden = new Set(db.prepare(`SELECT id FROM roles WHERE show_on_profile = 0 AND id IN (${roles.map(() => '?').join(',')})`).all(...roles.map(r => r.id)).map(r => r.id));
+    const names = db.prepare(`SELECT COALESCE(u.display_name, u.username) AS name ${PICKERS_FROM} ORDER BY x.id LIMIT 20`);
+    const count = db.prepare(`SELECT COUNT(*) AS n ${PICKERS_FROM}`);
+    return Object.fromEntries(roles.filter(r => !hidden.has(r.id)).map(r => {
+      const args = [r.id, row.message_id, r.emoji];
+      return [r.id, { names: names.all(...args).map(x => x.name), total: count.get(...args).n }];
+    }));
+  };
+  ctx.emitRolePickers = (code, messageId) => {
+    const row = db.prepare('SELECT * FROM role_menus WHERE message_id = ?').get(messageId);
+    if (row) io.to(`channel:${code}`).emit('role-menu-pickers', { channelCode: code, messageId, pickers: rolePickers(row) });
+  };
   ctx.buildRoleMenu = (row, viewerId) => {
     const roles = readRoleMenu(row);
     if (!roles.length) return null;
     const held = db.prepare('SELECT role_id FROM user_roles WHERE user_id = ? AND channel_id IS NULL').all(viewerId).map(r => r.role_id);
     const maxPicks = picks.maxPicksOf(row);
-    return { title: row.title || '', roles, held: roles.filter(r => held.includes(r.id)).map(r => r.id), ...(maxPicks ? { maxPicks } : {}) };
+    return { title: row.title || '', roles, held: roles.filter(r => held.includes(r.id)).map(r => r.id), pickers: rolePickers(row), ...(maxPicks ? { maxPicks } : {}) };
   };
 
   // Taking a role from a menu with a pick limit (#5800, src/roleMenuPicks.js):
@@ -288,14 +308,14 @@ module.exports = function register(socket, ctx) {
     return { roles: entries.map(e => ({ roleId: e.roleId, emoji: e.emoji })), ...(limit ? { maxPicks: limit } : {}) };
   }
   function roleMenuEntries(raw) {
-    const emojiOk = ROLE_MENU_EMOJI_RE;
     const wanted = Array.isArray(raw) ? raw.slice(0, 20) : [];
     const myLevel = socket.user.isAdmin ? 100 : getUserEffectiveLevel(socket.user.id);
     const seen = new Set();
     const entries = [];
     for (const e of wanted) {
       const roleId = isInt(e && e.roleId) ? e.roleId : null;
-      const emoji = isString(e && e.emoji, 1, 8) && emojiOk.test(e.emoji) ? e.emoji : null;
+      // A Unicode emoji, or a named one (Haven's own or the server's custom).
+      const emoji = isString(e && e.emoji, 1, 32) && isUsableEmoji(db, e.emoji) ? e.emoji : null;
       if (!roleId || !emoji || seen.has(roleId) || seen.has(emoji)) continue;
       const role = db.prepare('SELECT id, name, level FROM roles WHERE id = ?').get(roleId);
       if (!role) continue;
@@ -513,6 +533,7 @@ module.exports = function register(socket, ctx) {
     `).all(messageId);
     const ch = db.prepare('SELECT code FROM channels WHERE id = ?').get(row.channel_id);
     if (ch) io.to(`channel:${ch.code}`).emit('reactions-updated', { channelCode: ch.code, messageId, reactions });
+    if (ch) ctx.emitRolePickers(ch.code, messageId);
     notifySelfRole(socket.user.id, messageId, roleId, held);
     cb({ success: true, held });
   });
@@ -655,9 +676,10 @@ module.exports = function register(socket, ctx) {
       });
 
       cb({ success: true, roleId: result.lastInsertRowid });
+      const granted = db.prepare('SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1').all(result.lastInsertRowid).map(r => r.permission);
       _audit({ actor: socket.user, action: 'role_create',
         target_type: 'role', target_id: result.lastInsertRowid, target_name: name,
-        details: { level, scope, color, color2, shimmer: !!shimmer, autoAssign: !!autoAssign, permissions: perms } });
+        details: { level, scope, color, color2, shimmer: !!shimmer, autoAssign: !!autoAssign, permissions: granted } });
     } catch (err) {
       console.error('Create role error:', err);
       cb({ error: 'Failed to create role' });
@@ -677,6 +699,8 @@ module.exports = function register(socket, ctx) {
 
     const role = db.prepare('SELECT * FROM roles WHERE id = ?').get(roleId);
     if (!role) return cb({ error: 'Role not found' });
+    const permsBefore = db.prepare('SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1').all(roleId).map(r => r.permission);
+    const autoBefore = db.prepare('SELECT name FROM roles WHERE auto_assign = 1 AND id != ?').get(roleId);
 
     // Role hierarchy: a non-admin may only edit roles strictly below their own
     // level, and may never raise a role to or above their level. This is the
@@ -734,6 +758,12 @@ module.exports = function register(socket, ctx) {
       }
       if (data.transparent !== undefined) {
         updates.push('transparent = ?'); values.push(data.transparent ? 1 : 0);
+      }
+      if (data.mentionable !== undefined) {
+        updates.push('mentionable = ?'); values.push(data.mentionable ? 1 : 0);
+      }
+      if (data.showOnProfile !== undefined) {
+        updates.push('show_on_profile = ?'); values.push(data.showOnProfile ? 1 : 0);
       }
       if (data.icon !== undefined) {
         const safeIcon = (isString(data.icon, 1, 512) && /^\/uploads\//i.test(data.icon)) ? data.icon : null;
@@ -810,20 +840,36 @@ module.exports = function register(socket, ctx) {
 
     refreshRoleHolders([roleId]);
 
-    const nameChanged = data.name !== undefined && isString(data.name, 1, 30) && data.name.trim() !== role.name;
-    const levelChanged = data.level !== undefined && newLevel !== role.level;
-    const newPermissions = permissionsChanged ? (newLevel === 0 ? [] : data.permissions): undefined;
 
     socket.broadcast.except('bot-sockets').emit('roles-updated');
     cb({ success: true, roles: freshRoles });
-    _audit({ actor: socket.user, action: 'role_update',
-      target_type: 'role', target_id: roleId, target_name: role.name,
-      details: {
-        nameChanged,
-        levelChanged,
-        permissionsChanged,
-        permissions: newPermissions
-      } });
+    // The log records what changed, not the whole role.
+    const after = db.prepare('SELECT * FROM roles WHERE id = ?').get(roleId);
+    const permsAfter = new Set(db.prepare('SELECT permission FROM role_permissions WHERE role_id = ? AND allowed = 1').all(roleId).map(r => r.permission));
+    const details = {};
+    if (after.name !== role.name) details.name = { from: role.name, to: after.name };
+    if (after.level !== role.level) details.level = { from: role.level, to: after.level };
+    const added = [...permsAfter].filter(p => !permsBefore.includes(p));
+    const removed = permsBefore.filter(p => !permsAfter.has(p));
+    if (added.length) details.added = added;
+    if (removed.length) details.removed = removed;
+    if (!!after.auto_assign !== !!role.auto_assign) {
+      // Only one role is handed to new members, so turning it on here took
+      // it from the role that had it.
+      details.autoAssign = !!after.auto_assign;
+      if (after.auto_assign && autoBefore) details.autoAssignTakenFrom = autoBefore.name;
+    }
+    if (after.color !== role.color || after.color2 !== role.color2) details.color = after.color2 ? `${after.color} → ${after.color2}` : after.color;
+    if (!!after.transparent !== !!role.transparent) details.transparent = !!after.transparent;
+    if (!!after.mentionable !== !!role.mentionable) details.mentionable = !!after.mentionable;
+    if (!!after.show_on_profile !== !!role.show_on_profile) details.showOnProfile = !!after.show_on_profile;
+    if (after.icon !== role.icon) details.icon = after.icon ? 'changed' : 'removed';
+    if (after.link_channel_access !== role.link_channel_access) details.linkChannelAccess = !!after.link_channel_access;
+    if (after.max_upload_mb !== role.max_upload_mb) details.maxUploadMb = after.max_upload_mb;
+    if (Object.keys(details).length) {
+      _audit({ actor: socket.user, action: 'role_update',
+        target_type: 'role', target_id: roleId, target_name: role.name, details });
+    }
   });
 
   // ── Delete role ─────────────────────────────────────────
@@ -1088,6 +1134,7 @@ module.exports = function register(socket, ctx) {
       }
       io.except('bot-sockets').emit('roles-updated');
       cb({ success: true });
+      _audit({ actor: socket.user, action: 'roles_reset' });
     } catch (err) {
       cb({ error: 'Failed to reset roles: ' + err.message });
     }
@@ -1514,6 +1561,18 @@ module.exports = function register(socket, ctx) {
         throw err;
       }
       cb({ success: true });
+      const access = db.prepare(`
+        SELECT c.name, rca.grant_on_promote AS g, rca.revoke_on_demote AS r
+        FROM role_channel_access rca JOIN channels c ON c.id = rca.channel_id WHERE rca.role_id = ?
+      `).all(roleId);
+      const roleRow = db.prepare('SELECT name, link_channel_access FROM roles WHERE id = ?').get(roleId);
+      _audit({ actor: socket.user, action: 'role_channel_access',
+        target_type: 'role', target_id: roleId, target_name: roleRow ? roleRow.name : null,
+        details: {
+          grants: access.filter(a => a.g).map(a => a.name),
+          revokes: access.filter(a => a.r).map(a => a.name),
+          linked: roleRow ? !!roleRow.link_channel_access : undefined,
+        } });
     } catch (err) {
       console.error('Update role channel access error:', err);
       cb({ error: 'Failed to update channel access' });
@@ -1553,6 +1612,9 @@ module.exports = function register(socket, ctx) {
 
     broadcastChannelLists();
     cb({ success: true, affected: roleUsers.length });
+    _audit({ actor: socket.user, action: 'role_access_reapply',
+      target_type: 'role', target_id: roleId, target_name: role.name,
+      details: { members: roleUsers.length, channels: grantChannels.length } });
   });
 
   // ── Promote user ────────────────────────────────────────
@@ -1820,6 +1882,8 @@ module.exports = function register(socket, ctx) {
           grantAdminRole(db, userId);
         });
         transferTxn();
+        _audit({ actor: socket.user, action: 'admin_transfer',
+          target_type: 'user', target_id: userId, target_name: targetUser.username });
 
         for (const [, s] of io.sockets.sockets) {
           if (s.user && s.user.id === userId) {

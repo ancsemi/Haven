@@ -2,8 +2,9 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { getDb } = require('./database');
+const { getDb, getAsyncDb } = require('./database');
 const { grantAdminRole } = require('./roleDefaults');
+const { nameRefusal } = require('./blockedNames');
 const OTPAuth = require('otpauth');
 const QRCode = require('qrcode');
 const https = require('https');
@@ -44,6 +45,29 @@ function _sessionExpiresIn() {
 // jsonwebtoken throws on { expiresIn: null }, so we must omit the field entirely.
 function _sessionSignOptions() {
   const exp = _sessionExpiresIn();
+  return exp ? { expiresIn: exp } : {};
+}
+
+// The password-login path uses the same expiry rules through the async driver.
+async function _sessionExpiresInAsync() {
+  try {
+    const row = await getAsyncDb().prepare("SELECT value FROM server_settings WHERE key = 'session_duration_days'").get();
+    const n = parseInt(row && row.value);
+    if (n === 0) return null;
+    if (Number.isFinite(n) && n >= 1 && n <= 365) return `${n}d`;
+  } catch (err) {
+    // If the setting cannot be read, do not hand out a token that never
+    // expires; fall back to the old 7 day default instead.
+    console.warn('[auth] Could not read session duration, using 7 days:', err.message);
+    return '7d';
+  }
+  return null;
+}
+
+// Build the options object for jwt.sign() respecting the never-expire setting.
+// jsonwebtoken throws on { expiresIn: null }, so we must omit the field entirely.
+async function _sessionSignOptionsAsync() {
+  const exp = await _sessionExpiresInAsync();
   return exp ? { expiresIn: exp } : {};
 }
 
@@ -254,12 +278,12 @@ async function downloadSSOAvatar(url) {
   if (!validMagic) throw new Error('File content does not match image type');
 
   const filename = Date.now() + crypto.randomBytes(8).toString('hex') + ext;
-  const { UPLOADS_DIR, UNPROCESSED_DIR } = require('./paths');
+  const { UNPROCESSED_DIR } = require('./paths');
   const path = require('path');
   // Cleaned of location data before it goes anywhere it can be seen.
   const tmp = path.join(UNPROCESSED_DIR, filename);
   require('fs').writeFileSync(tmp, buffer);
-  await require('./privacyPass').admitFile(tmp, path.join(UPLOADS_DIR, filename));
+  await require('./privacyPass').admitFile(tmp, filename);
   return `/uploads/${filename}`;
 }
 
@@ -268,19 +292,22 @@ async function downloadSSOAvatar(url) {
 // (#5344) Public endpoint that tells the registration page which
 // gates the admin has enabled. Only booleans are exposed; the
 // actual token value never leaves the server here.
-router.get('/registration-info', (req, res) => {
+router.get('/registration-info', async (req, res) => {
   try {
-    const db = getDb();
-    const tokenEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token_enabled'").get();
-    const inviteBypassTokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'invites_bypass_registration_token'").get();
-    const tokenRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token'").get();
+    const db = getAsyncDb();
+    const tokenFlags = await db.prepare(
+      "SELECT key, value FROM server_settings WHERE key IN ('registration_token_enabled', 'invites_bypass_registration_token')"
+    ).all();
+    const tokenEnabledRow = tokenFlags.find(row => row.key === 'registration_token_enabled');
+    const inviteBypassTokenRow = tokenFlags.find(row => row.key === 'invites_bypass_registration_token');
+    const tokenRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'registration_token'").get();
     const requiresToken = !!(tokenEnabledRow && tokenEnabledRow.value === 'true' && tokenRow && tokenRow.value);
     const invitesBypassToken = !!(inviteBypassTokenRow && inviteBypassTokenRow.value === 'true');
     // Opt-in Turnstile CAPTCHA. Only the public site key is exposed (safe by
     // design); the secret key never leaves the server. Gated on a site key
     // being present so the page never tries to render a keyless widget.
-    const capEnabledRow = db.prepare("SELECT value FROM server_settings WHERE key = 'registration_captcha_enabled'").get();
-    const siteKeyRow = db.prepare("SELECT value FROM server_settings WHERE key = 'turnstile_site_key'").get();
+    const capEnabledRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'registration_captcha_enabled'").get();
+    const siteKeyRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'turnstile_site_key'").get();
     const turnstileSiteKey = (siteKeyRow && typeof siteKeyRow.value === 'string') ? siteKeyRow.value.trim() : '';
     const captchaEnabled = !!(capEnabledRow && capEnabledRow.value === 'true' && turnstileSiteKey);
     res.json({ requiresToken, invitesBypassToken, captchaEnabled, turnstileSiteKey: captchaEnabled ? turnstileSiteKey : '' });
@@ -291,10 +318,10 @@ router.get('/registration-info', (req, res) => {
 
 // (#5381) Public endpoint that tells the login page whether the admin
 // has enabled the Join-as-Guest button.
-router.get('/guest-info', (req, res) => {
+router.get('/guest-info', async (req, res) => {
   try {
-    const db = getDb();
-    const row = db.prepare("SELECT value FROM server_settings WHERE key = 'guests_enabled'").get();
+    const db = getAsyncDb();
+    const row = await db.prepare("SELECT value FROM server_settings WHERE key = 'guests_enabled'").get();
     res.json({ guestsEnabled: !!(row && row.value === 'true') });
   } catch {
     res.json({ guestsEnabled: false });
@@ -332,6 +359,8 @@ router.post('/guest-login', authLimiter, async (req, res) => {
     if (username.toLowerCase() === ADMIN_USERNAME) {
       return res.status(400).json({ error: 'That username is reserved' });
     }
+    const blockedName = nameRefusal(db, username);
+    if (blockedName) return res.status(400).json({ error: blockedName });
     if (!eulaVersion) {
       return res.status(400).json({ error: 'You must accept the Terms of Service & Release of Liability Agreement' });
     }
@@ -487,6 +516,12 @@ function provisionNewUser(db, userId, username, io) {
 }
 
 router.post('/register', authLimiter, async (req, res) => {
+  if (getAsyncDb().kind === 'postgres') {
+    return require('./db/postgres/register').registerPostgres(req, res, {
+      db: getAsyncDb(), sanitizeString, adminUsername: ADMIN_USERNAME,
+      verifyTurnstile, downloadSSOAvatar, signOptions: _sessionSignOptionsAsync, secret: JWT_SECRET
+    });
+  }
   try {
     const username = sanitizeString(req.body.username, 20);
     const password = typeof req.body.password === 'string' ? req.body.password : '';
@@ -509,6 +544,9 @@ router.post('/register', authLimiter, async (req, res) => {
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       return res.status(400).json({ error: 'Username: letters, numbers, underscores only' });
     }
+    // Words the admin has blocked from names (src/blockedNames.js).
+    const blockedName = nameRefusal(getDb(), username);
+    if (blockedName) return res.status(400).json({ error: blockedName });
     if (password.length < 8 || password.length > 128) {
       return res.status(400).json({ error: 'Password must be 8-128 characters' });
     }
@@ -714,7 +752,8 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     const db = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const asyncDb = getAsyncDb();
+    const user = await asyncDb.prepare(`SELECT * FROM users WHERE ${asyncDb.sql.caseInsensitiveEqual('username')}`).get(username);
 
     if (!user) {
       // Spend the time a real check would, so how fast "invalid" comes back
@@ -760,7 +799,7 @@ router.post('/login', authLimiter, async (req, res) => {
     // only revealed to whoever actually owns the account, never on a bare
     // username guess. The client shows the reason and an appeal box; the
     // /ban-appeal endpoint re-verifies these same credentials before storing.
-    const ban = db.prepare('SELECT reason FROM bans WHERE user_id = ?').get(user.id);
+    const ban = await asyncDb.prepare('SELECT reason FROM bans WHERE user_id = ?').get(user.id);
     if (ban) {
       return res.status(403).json({
         error: 'You have been banned from this server',
@@ -770,13 +809,18 @@ router.post('/login', authLimiter, async (req, res) => {
       });
     }
 
+    if (asyncDb.kind === 'postgres' && process.env.HAVEN_POSTGRES_PREVIEW === '1' && (user.totp_enabled || user.temp_password_hash || user.must_change_password)) {
+      return res.status(501).json({ error: 'This sign-in flow is not available on this server yet', code: 'postgres_preview_unsupported' });
+    }
+
     // Bootstrap admin from ADMIN_USERNAME env only when NO admin exists
     // (first run or recovery). Prevents overriding explicit admin transfers.
-    const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
+    const anyAdmin = await asyncDb.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
     if (!anyAdmin && user.username.toLowerCase() === ADMIN_USERNAME && !user.is_admin) {
-      db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(user.id);
-      grantAdminRole(db, user.id);
-      user.is_admin = 1;
+      // The awaited check is only a hint. Recheck and grant without yielding
+      // so an admin registered or transferred meanwhile is never overwritten.
+      if (asyncDb.kind !== 'sqlite') throw new Error('PostgreSQL admin bootstrap is not migrated yet');
+      user.is_admin = require('./adminBootstrap')(db, user.id, ADMIN_USERNAME);
     }
 
     const displayName = user.display_name || user.username;
@@ -802,14 +846,14 @@ router.post('/login', authLimiter, async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName, pwv: user.password_version || 1 },
       JWT_SECRET,
-      _sessionSignOptions()
+      await _sessionSignOptionsAsync()
     );
 
     // Record EULA acceptance
     if (eulaVersion) {
       try {
-        db.prepare(
-          'INSERT OR IGNORE INTO eula_acceptances (user_id, version, ip_address, age_verified) VALUES (?, ?, ?, ?)'
+        await asyncDb.prepare(
+          'INSERT INTO eula_acceptances (user_id, version, ip_address, age_verified) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, version) DO NOTHING'
         ).run(user.id, eulaVersion, req.ip || req.socket.remoteAddress || '', ageVerified ? 1 : 0);
       } catch (err) {
         console.warn('[login] Failed to record EULA acceptance:', err.message);
@@ -969,20 +1013,25 @@ router.post('/change-password-required', authLimiter, async (req, res) => {
 });
 
 // ── Validate token (lightweight, for SSO consent page) ───
-router.get('/validate', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const decoded = token ? verifyToken(token) : null;
-  if (!decoded) return res.status(401).json({ error: 'Invalid token' });
+router.get('/validate', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    const decoded = token ? await verifyTokenAsync(token) : null;
+    if (!decoded) return res.status(401).json({ error: 'Invalid token' });
 
-  const db = getDb();
-  const user = db.prepare('SELECT username, display_name, avatar FROM users WHERE id = ?').get(decoded.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
+    const db = getAsyncDb();
+    const user = await db.prepare('SELECT username, display_name, avatar FROM users WHERE id = ?').get(decoded.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-  res.json({
-    username: user.username,
-    displayName: user.display_name || user.username,
-    avatar: user.avatar || null
-  });
+    res.json({
+      username: user.username,
+      displayName: user.display_name || user.username,
+      avatar: user.avatar || null
+    });
+  } catch (err) {
+    console.error('Validate token error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // ── TOTP Validate (second step of login) ─────────────────
@@ -1258,18 +1307,18 @@ router.post('/totp/disable', authLimiter, async (req, res) => {
 });
 
 // ── TOTP Status ──────────────────────────────────────────
-router.get('/totp/status', (req, res) => {
+router.get('/totp/status', async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    const decoded = verifyToken(token);
+    const decoded = await verifyTokenAsync(token);
     if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
 
-    const db = getDb();
-    const user = db.prepare('SELECT totp_enabled FROM users WHERE id = ?').get(decoded.id);
+    const db = getAsyncDb();
+    const user = await db.prepare('SELECT totp_enabled FROM users WHERE id = ?').get(decoded.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const remaining = db.prepare(
+    const remaining = await db.prepare(
       'SELECT COUNT(*) as count FROM totp_backup_codes WHERE user_id = ? AND used = 0'
     ).get(decoded.id);
 
@@ -1459,11 +1508,11 @@ router.post('/revoke-sessions', authLimiter, async (req, res) => {
 // per-account limit.
 router.post('/verify-password', authLimiter, async (req, res) => {
   try {
-    const session = verifyToken(req.headers.authorization?.split(' ')[1]);
+    const session = await verifyTokenAsync(req.headers.authorization?.split(' ')[1]);
     if (!session) return res.status(401).json({ valid: false, error: 'Unauthorized' });
     const password = typeof req.body.password === 'string' ? req.body.password : '';
     if (!password) return res.status(400).json({ valid: false, error: 'Password required' });
-    const user = getDb().prepare('SELECT id, password_hash FROM users WHERE id = ?').get(session.id);
+    const user = await getAsyncDb().prepare('SELECT id, password_hash FROM users WHERE id = ?').get(session.id);
     if (!user || !hasLocalPassword(user)) return res.status(401).json({ valid: false, error: 'Invalid credentials' });
     if (_pwBlocked(user.id, req.ip)) return res.status(429).json({ valid: false, error: PW_BLOCKED_MSG });
     const valid = await bcrypt.compare(password, user.password_hash);
@@ -1531,6 +1580,29 @@ function verifyToken(token, opts = {}) {
   }
 }
 
+// Converted async routes check the selected backend directly. Do not fill the
+// legacy cache from an awaited read: a password change could invalidate it
+// while that read is pending.
+async function verifyTokenAsync(token, opts = {}) {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded && (decoded.purpose || decoded.scope) && !opts.allowScoped) return null;
+    if (decoded && decoded.id && !decoded.purpose) {
+      let row;
+      try {
+        row = await getAsyncDb().prepare('SELECT password_version FROM users WHERE id = ?').get(decoded.id);
+      } catch (err) {
+        console.warn('[auth] could not check the session, refusing it:', err.message);
+        return null;
+      }
+      if (!row || (decoded.pwv || 1) !== (row.password_version || 1)) return null;
+    }
+    return decoded;
+  } catch {
+    return null; // a bad or expired token: an everyday answer, not worth a log
+  }
+}
+
 // Called right after password_version is written so the change takes effect
 // immediately instead of waiting out the cache.
 function _forgetPwv(userId) { _pwvCache.delete(userId); }
@@ -1545,10 +1617,10 @@ router.get('/recovery-codes/status', async (req, res) => {
   try {
     // A session token only: the two-factor challenge token is signed with the
     // same key, and it once got recovery codes here without the second factor.
-    const decoded = verifyToken(auth.slice(7));
+    const decoded = await verifyTokenAsync(auth.slice(7));
     if (!decoded) return res.status(401).json({ error: 'Invalid token' });
-    const db = getDb();
-    const count = db.prepare(
+    const db = getAsyncDb();
+    const count = await db.prepare(
       'SELECT COUNT(*) as count FROM account_recovery_codes WHERE user_id = ? AND used = 0'
     ).get(decoded.id);
     res.json({ count: count?.count || 0 });
@@ -1741,6 +1813,8 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
     db.prepare('DELETE FROM mutes WHERE user_id = ?').run(user.id);
 
     const displayName = user.display_name || user.username;
+    require('./httpAudit').auditHttp({ id: user.id, username: user.username, displayName }, 'admin_recover',
+      { target_type: 'user', target_id: user.id, target_name: displayName });
     const token = jwt.sign(
       { id: user.id, username: user.username, isAdmin: true, displayName, pwv: user.password_version || 1 },
       JWT_SECRET,
@@ -1764,6 +1838,11 @@ function generateToken(payload) {
     if (typeof pwv === 'number') payload = { ...payload, pwv };
   }
   return jwt.sign(payload, JWT_SECRET, _sessionSignOptions());
+}
+
+async function generateTokenAsync(payload) {
+  // Callers refreshing an existing session supply its verified password version.
+  return jwt.sign(payload, JWT_SECRET, await _sessionSignOptionsAsync());
 }
 
 /**
@@ -1799,12 +1878,12 @@ function generateChannelCode() {
 
 router.get('/user-servers', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
-  const decoded = token ? verifyToken(token) : null;
+  const decoded = token ? await verifyTokenAsync(token) : null;
   if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    const db = getDb();
-    const row = db.prepare('SELECT encrypted_servers FROM users WHERE id = ?').get(decoded.id);
+    const db = getAsyncDb();
+    const row = await db.prepare('SELECT encrypted_servers FROM users WHERE id = ?').get(decoded.id);
     res.json({ blob: row?.encrypted_servers || null });
   } catch (err) {
     console.error('Get user-servers error:', err);
@@ -1814,7 +1893,7 @@ router.get('/user-servers', async (req, res) => {
 
 router.put('/user-servers', express.json({ limit: '96kb' }), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
-  const decoded = token ? verifyToken(token) : null;
+  const decoded = token ? await verifyTokenAsync(token) : null;
   if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
 
   const blob = typeof req.body.blob === 'string' ? req.body.blob : null;
@@ -1823,8 +1902,8 @@ router.put('/user-servers', express.json({ limit: '96kb' }), async (req, res) =>
   }
 
   try {
-    const db = getDb();
-    db.prepare('UPDATE users SET encrypted_servers = ? WHERE id = ?').run(blob, decoded.id);
+    const db = getAsyncDb();
+    await db.prepare('UPDATE users SET encrypted_servers = ? WHERE id = ?').run(blob, decoded.id);
     res.json({ ok: true });
   } catch (err) {
     console.error('Put user-servers error:', err);
@@ -2367,7 +2446,8 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
       try {
         const { normalizeDisplayName } = require('./socketHandlers/helpers');
         const dn = normalizeDisplayName(claims.name);
-        if (dn && dn.value) {
+        // A provider name with a blocked word in it is not used either.
+        if (dn && dn.value && !nameRefusal(db, dn.value)) {
           db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(dn.value, user.id);
           user.display_name = dn.value;
         }
@@ -2419,4 +2499,4 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
   }
 });
 
-module.exports = { router, verifyToken, generateChannelCode, generateToken, generateConnectToken, authLimiter, acceptTotpCode, totpLimited, noteTotpFail };
+module.exports = { router, verifyToken, verifyTokenAsync, generateChannelCode, generateToken, generateTokenAsync, generateConnectToken, authLimiter, acceptTotpCode, totpLimited, noteTotpFail };

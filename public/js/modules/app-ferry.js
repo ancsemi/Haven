@@ -626,8 +626,8 @@ export default {
       input.value = '';
     });
 
-    body.querySelector('#ferry-token-clear')?.addEventListener('click', () => {
-      if (!confirm(t('modals.ferry.remove_token_confirm'))) return;
+    body.querySelector('#ferry-token-clear')?.addEventListener('click', async () => {
+      if (!await this._confirm(t('modals.ferry.remove_token_confirm'), { danger: true, confirmLabel: t('modals.common.remove') })) return;
       this.socket.emit('ferry:clear-token');
     });
 
@@ -662,8 +662,8 @@ export default {
     });
 
     body.querySelectorAll('[data-ferry-delete]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (!confirm(t('modals.ferry.remove_pairing_confirm'))) return;
+      btn.addEventListener('click', async () => {
+        if (!await this._confirm(t('modals.ferry.remove_pairing_confirm'), { danger: true, confirmLabel: t('modals.common.remove') })) return;
         this.socket.emit('ferry:delete-link', { id: parseInt(btn.dataset.ferryDelete) });
       });
     });
@@ -703,14 +703,14 @@ export default {
     havenSel?.addEventListener('change', refreshDiscordChannels);
     dChanSel?.addEventListener('change', refreshHiddenHint);
 
-    body.querySelector('#ferry-add-btn')?.addEventListener('click', () => {
+    body.querySelector('#ferry-add-btn')?.addEventListener('click', async () => {
       const channelCode = body.querySelector('#ferry-add-channel')?.value;
       const guildId = guildSel?.value;
       const discordChannelId = dChanSel?.value;
       if (!channelCode || !guildId || !discordChannelId) {
         return this._showToast(t('modals.ferry.pairing_required'), 'warning');
       }
-      if (pickedHidden() && !confirm(t('modals.ferry.hidden_confirm'))) return;
+      if (pickedHidden() && !await this._confirm(t('modals.ferry.hidden_confirm'))) return;
       this.socket.emit('ferry:create-link', {
         channelCode, guildId, discordChannelId,
         direction: body.querySelector('#ferry-add-direction')?.value,

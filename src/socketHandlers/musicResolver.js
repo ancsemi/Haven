@@ -15,25 +15,60 @@ async function resolveSpotifyToYouTube(spotifyUrl) {
     const title = oembed.title; // e.g. "Thank You - Dido"
     if (!title) return null;
 
-    // 2. Search YouTube: try refined query first, then broader
-    const queries = [
-      title + ' official audio',
-      title + ' audio',
-      title
-    ];
-    for (const q of queries) {
-      const results = await searchYouTube(q, 1);
-      if (results.length > 0) {
-        return {
-          url: `https://www.youtube.com/watch?v=${results[0].videoId}`,
-          title,
-          duration: results[0].duration || ''
-        };
-      }
-    }
-    return null;
+    // 2. Search YouTube for it
+    return await findOnYouTube(title);
   } catch {
     return null;
+  }
+}
+
+// A song's YouTube video, by its "Title - Artist" name: the refined search
+// first, then broader ones. { url, title, duration } or null.
+async function findOnYouTube(title) {
+  const queries = [
+    title + ' official audio',
+    title + ' audio',
+    title
+  ];
+  for (const q of queries) {
+    const results = await searchYouTube(q, 1);
+    if (results.length > 0) {
+      return {
+        url: `https://www.youtube.com/watch?v=${results[0].videoId}`,
+        title,
+        duration: results[0].duration || ''
+      };
+    }
+  }
+  return null;
+}
+
+// The songs on a Spotify playlist or album, in order, as [{ title, artist }].
+// Spotify's embed page carries the list in its page data, so no account or
+// key is needed. Private playlists and podcast episodes are not included.
+async function fetchSpotifyTrackList(kind, id, maxTracks = 200) {
+  if (!/^(playlist|album)$/.test(kind) || !/^[A-Za-z0-9]+$/.test(id)) return [];
+  try {
+    const res = await fetch(`https://open.spotify.com/embed/${kind}/${id}`, {
+      headers: { 'User-Agent': YT_UA },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const m = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.+?)<\/script>/s);
+    if (!m) return [];
+    const list = JSON.parse(m[1])?.props?.pageProps?.state?.data?.entity?.trackList;
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter(t => t && typeof t.title === 'string' && t.title.trim() && (!t.entityType || t.entityType === 'track'))
+      .slice(0, maxTracks)
+      .map(t => ({
+        title: t.title.trim(),
+        artist: typeof t.subtitle === 'string' ? t.subtitle.replace(/\s+/g, ' ').trim() : ''
+      }));
+  } catch (err) {
+    console.warn('[Music] could not read the Spotify list:', err.message);
+    return [];
   }
 }
 
@@ -145,12 +180,19 @@ function getYouTubeClientContext() {
 }
 
 function parseYouTubePlaylistPage(data) {
-  const listRenderer = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]
-    ?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]
-    ?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer;
-  const items = Array.isArray(listRenderer?.contents) ? listRenderer.contents : [];
-  const continuation = listRenderer?.continuations?.[0]?.nextContinuationData?.continuation || null;
-  return { items, continuation };
+  const section = data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]
+    ?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer;
+  const listRenderer = section?.contents?.[0]?.playlistVideoListRenderer;
+  if (listRenderer) {
+    const items = Array.isArray(listRenderer.contents) ? listRenderer.contents : [];
+    const continuation = listRenderer.continuations?.[0]?.nextContinuationData?.continuation
+      || getContinuationTokenFromItems(items);
+    return { items, continuation };
+  }
+  // Since October 2026 the videos sit straight in the section as lockupViewModels,
+  // with the next page's token on a continuationItemViewModel at the end (#5840).
+  const items = Array.isArray(section?.contents) ? section.contents : [];
+  return { items, continuation: getContinuationTokenFromItems(items) };
 }
 
 function getContinuationItemsFromAppendAction(data) {
@@ -167,8 +209,12 @@ function getContinuationItemsFromAppendAction(data) {
 
 function getContinuationTokenFromItems(items) {
   if (!Array.isArray(items)) return null;
-  const continuationItem = items.find(item => item?.continuationItemRenderer);
-  return continuationItem?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token || null;
+  for (const item of items) {
+    const token = item?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token
+      || item?.continuationItemViewModel?.continuationCommand?.innertubeCommand?.continuationCommand?.token;
+    if (token) return token;
+  }
+  return null;
 }
 
 function getContinuationItemsFromPlaylistContents(data) {
@@ -202,8 +248,11 @@ function appendYouTubePlaylistTracks(tracks, items, maxTracks) {
   if (!Array.isArray(items)) return;
   for (const item of items) {
     const v = item?.playlistVideoRenderer;
-    if (!v?.videoId) continue;
-    tracks.push({ videoId: v.videoId, title: v.title?.runs?.[0]?.text || '' });
+    const l = item?.lockupViewModel;
+    if (v?.videoId) tracks.push({ videoId: v.videoId, title: v.title?.runs?.[0]?.text || '' });
+    else if (l?.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO' && l.contentId) {
+      tracks.push({ videoId: l.contentId, title: l.metadata?.lockupMetadataViewModel?.title?.content || '' });
+    } else continue;
     if (tracks.length >= maxTracks) break;
   }
 }
@@ -284,5 +333,6 @@ async function resolveMusicMetadata(url) {
 
 module.exports = {
   resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist,
-  extractYouTubeVideoId, resolveMusicMetadata
+  extractYouTubeVideoId, resolveMusicMetadata,
+  findOnYouTube, fetchSpotifyTrackList
 };

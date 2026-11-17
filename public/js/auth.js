@@ -111,6 +111,28 @@
     if (el && d.version) el.textContent = 'v' + d.version;
   }).catch(() => { /* the version label is cosmetic: leave it blank */ });
 
+  // The login page's look (#5819), from Settings > Branding: the server icon
+  // as a logo, the banner as the background, a message, and the admin's CSS.
+  // Adding ?nocss to the address skips the CSS, for when a style has hidden
+  // the form. The CSS goes in as text, never markup, so it cannot add tags.
+  function applyLoginBranding(d) {
+    const skipCss = new URLSearchParams(location.search).has('nocss');
+    const logo = document.getElementById('auth-server-logo');
+    if (logo && d.login_logo) { logo.src = d.login_logo; logo.hidden = false; }
+    const msg = document.getElementById('auth-login-message');
+    if (msg && d.login_message) { msg.textContent = d.login_message; msg.hidden = false; }
+    if (d.login_background && /^\/uploads\//.test(d.login_background)) {
+      document.body.classList.add('auth-has-background');
+      document.body.style.setProperty('--auth-background', `url("${d.login_background.replace(/["\\]/g, '')}")`);
+    }
+    if (d.login_css && !skipCss) {
+      const style = document.createElement('style');
+      style.id = 'login-custom-css';
+      style.textContent = d.login_css;
+      document.head.appendChild(style);
+    }
+  }
+
   // ── Apply server default theme for first-time visitors ──
   // Only applies when the user has no personal theme preference stored locally.
   // Also fetch server title for login page branding.
@@ -137,6 +159,7 @@
       const titleEl = document.getElementById('server-title');
       if (titleEl) titleEl.textContent = d.server_title;
     }
+    applyLoginBranding(d);
     // Tab branding for the login page (issue #5284). Mirrors what the
     // authenticated app does so multi-server tabs stay distinguishable
     // even before signing in.

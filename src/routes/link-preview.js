@@ -106,16 +106,27 @@ module.exports = function registerLinkPreview(deps) {
     } catch { return true; }
   }
   app.set('mediaProxyEnabled', mediaProxyEnabled);
+  async function mediaProxyEnabledAsync() {
+    const current = require('../database').getDb();
+    if (current.kind !== 'postgres') return mediaProxyEnabled();
+    const row = await current.prepare("SELECT value FROM server_settings WHERE key = 'media_proxy_enabled'").get();
+    return !row || row.value !== 'false';
+  }
 
   // Hands the client its short-lived media token. Authenticated normally; the
   // token it returns is what <img> tags carry, since they cannot send headers.
-  app.get('/api/media-token', (req, res) => {
+  app.get('/api/media-token', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     // Issued even with the proxy off: Discord emotes from the Ferry bridge are
     // served only to holders of a media token.
-    res.json({ enabled: mediaProxyEnabled(), token: mediaProxy.issueToken(user.id, user.pwv) });
+    try {
+      res.json({ enabled: await mediaProxyEnabledAsync(), token: mediaProxy.issueToken(user.id, user.pwv) });
+    } catch (err) {
+      logPreviewFailure('media-proxy', err);
+      res.status(500).json({ error: PREVIEW_FAILED });
+    }
   });
 
   // Per-user rate limit. Generous, because opening a busy channel legitimately
@@ -134,9 +145,14 @@ module.exports = function registerLinkPreview(deps) {
   }, 5 * 60 * 1000).unref?.();
 
   app.get('/api/media-proxy', async (req, res) => {
-    if (!mediaProxyEnabled()) return res.status(404).json({ error: 'Media proxy disabled' });
+    try {
+      if (!await mediaProxyEnabledAsync()) return res.status(404).json({ error: 'Media proxy disabled' });
+    } catch (err) {
+      logPreviewFailure('media-proxy', err);
+      return res.status(500).json({ error: PREVIEW_FAILED });
+    }
 
-    const userId = mediaProxy.verifyToken((req.query.mt || '').trim());
+    const userId = await mediaProxy.verifyTokenAsync((req.query.mt || '').trim());
     if (!userId) return res.status(401).json({ error: 'Invalid or expired media token' });
     if (!_mediaRateOk(userId)) return res.status(429).json({ error: 'Rate limited' });
 

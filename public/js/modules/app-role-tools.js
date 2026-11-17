@@ -294,6 +294,16 @@ export default {
   // so wording added by hand survives (#5644).
   _openRoleMenuBuilder(existing = null) {
     const defaults = ['🎮', '🎨', '🎵', '📚', '🎬', '⚽', '💻', '🍕', '🌙', '☀️', '🐱', '🐶', '🚀', '🧪', '🎲', '📷', '🌍', '🔥', '💜', '🍀'];
+    // A role named after a platform starts with Haven's picture of it.
+    const platform = (name) => {
+      const n = String(name || '').toLowerCase();
+      if (/\bwin(dows)?\b|\bpc\b/.test(n)) return ':os_windows:';
+      if (/\b(mac|macos|osx|macbook|imac)\b/.test(n)) return ':os_mac:';
+      if (/\b(ios|iphone|ipad)\b/.test(n)) return ':os_ios:';
+      if (/\bandroid\b/.test(n)) return ':os_android:';
+      if (/\b(linux|ubuntu|fedora|debian|arch)\b/.test(n)) return ':os_linux:';
+      return null;
+    };
     const build = (menu) => this._roleEmit('get-roles', {}, (res) => {
       const roles = (res.roles || []).filter(r => r.scope !== 'channel');
       const chans = this.channels.filter(c => !c.is_dm);
@@ -318,15 +328,15 @@ export default {
         <div class="rm-roles">${roles.map((r, i) => `
           <div class="rm-row">
             <label class="toggle-row"><span><span class="role-color-dot" style="background:${this._roleFill(r, '#aaa')}"></span> ${this._escapeHtml(r.name)} <span class="muted-text">Lv.${r.level}</span></span><input type="checkbox" class="rm-role" value="${r.id}"${saved.has(r.id) ? ' checked' : ''}></label>
-            <input class="rm-emoji settings-text-input" maxlength="8" value="${this._escapeHtml(saved.get(r.id) || defaults[i % defaults.length])}" title="${this._escapeHtml(t('settings.admin.role_menu.emoji'))}">
+            ${(() => { const e = saved.get(r.id) || platform(r.name) || defaults[i % defaults.length]; return `<button type="button" class="rm-emoji-btn" data-emoji="${this._escapeHtml(e)}" title="${this._escapeHtml(t('settings.admin.role_menu.emoji_pick'))}" aria-label="${this._escapeHtml(t('settings.admin.role_menu.emoji_pick'))}">${this._emojiGlyphHtml(e, 22)}</button>`; })()}
           </div>`).join('')}</div>`;
-      this._openToolModal({
+      const ov = this._openToolModal({
         title: menu ? t('settings.admin.role_menu.edit') : t('settings.admin.role_menu.post'), body,
         confirmText: menu ? t('modals.common.save') : t('settings.admin.role_menu.post'),
         onConfirm: (ov) => {
           const entries = [...ov.querySelectorAll('.rm-row')]
             .filter(row => row.querySelector('.rm-role').checked)
-            .map(row => ({ roleId: parseInt(row.querySelector('.rm-role').value, 10), emoji: row.querySelector('.rm-emoji').value.trim() }));
+            .map(row => ({ roleId: parseInt(row.querySelector('.rm-role').value, 10), emoji: row.querySelector('.rm-emoji-btn').dataset.emoji }));
           if (!entries.length) { this._showToast(t('settings.admin.role_menu.pick_one'), 'error'); return false; }
           const maxPicks = Math.max(0, parseInt(ov.querySelector('#rm-max-picks').value, 10) || 0);
           if (menu) {
@@ -342,6 +352,16 @@ export default {
           });
         }
       });
+      // Each role's emoji: any emoji, Haven's own and the server's custom
+      // ones included, picked from a searchable list.
+      ov.querySelectorAll('.rm-emoji-btn').forEach(btn => btn.addEventListener('click', async () => {
+        const picked = await this._chooseEmoji(btn);
+        if (!picked) return;
+        btn.dataset.emoji = picked;
+        btn.innerHTML = this._emojiGlyphHtml(picked, 22);
+        const box = btn.closest('.rm-row')?.querySelector('.rm-role');
+        if (box) box.checked = true;
+      }));
     });
     if (existing && existing.messageId) {
       this.socket.emit('get-role-menu', { messageId: existing.messageId }, (r) => {
@@ -353,25 +373,54 @@ export default {
     }
   },
 
+  // The buttons are the menu. The message text also lists each role (for apps
+  // that show no buttons) and the poster's reactions sit under it, so on
+  // screen both are dropped for the menu's roles and each shows once.
+  _roleMenuText(msgId, content) {
+    const menu = this._roleMenus?.get(String(msgId));
+    if (!menu || typeof content !== 'string') return content;
+    const norm = (s) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+    const listed = new Set(menu.roles.map(r => norm(`${r.emoji} ${r.name}`)));
+    return content.split('\n').filter(line => !listed.has(norm(line))).join('\n');
+  },
+
+  _roleMenuHidesReaction(msgId, emoji) {
+    const menu = this._roleMenus?.get(String(msgId));
+    return !!menu && menu.roles.some(r => r.emoji === emoji);
+  },
+
   _renderRoleMenu(msgId, menu) {
     if (!menu || !Array.isArray(menu.roles) || !menu.roles.length) return '';
+    (this._roleMenus ||= new Map()).set(String(msgId), menu);
     const held = new Set((menu.held || []).map(Number));
     // A menu with a pick limit says so above its buttons (#5800).
     const limit = Number.isInteger(menu.maxPicks) && menu.maxPicks > 0 ? menu.maxPicks : 0;
     const note = limit ? `<div class="role-menu-limit">${this._escapeHtml(limit === 1 ? t('role_menu.pick_one_only') : t('role_menu.pick_up_to', { count: limit }))}</div>` : '';
     return `<div class="role-menu-widget" data-msg-id="${msgId}">${note}${menu.roles.map(r => `
-      <button class="role-menu-btn${held.has(r.id) ? ' held' : ''}" type="button" data-msg-id="${msgId}" data-role-id="${r.id}" style="--role-c:${this._safeColor(r.color, '#aaa')};--role-fill:${this._roleFill(r, this._safeColor(r.color, '#aaa'))}" title="${this._escapeHtml(t(held.has(r.id) ? 'role_menu.leave' : 'role_menu.join', { name: r.name }))}">
-        <span class="rm-emoji">${this._escapeHtml(r.emoji)}</span><span class="rm-name">${this._escapeHtml(r.name)}</span><span class="rm-state">${held.has(r.id) ? '✓' : '+'}</span>
+      <button class="role-menu-btn${held.has(r.id) ? ' held' : ''}" type="button" data-msg-id="${msgId}" data-role-id="${r.id}" style="--role-c:${this._safeColor(r.color, '#aaa')};--role-fill:${this._roleFill(r, this._safeColor(r.color, '#aaa'))}" title="${this._escapeHtml(this._roleMenuTitle(msgId, r.id, held.has(r.id)))}">
+        <span class="rm-emoji">${this._emojiGlyphHtml(r.emoji, 18)}</span><span class="rm-name">${this._escapeHtml(r.name)}</span><span class="rm-state">${held.has(r.id) ? '✓' : '+'}</span>
       </button>`).join('')}</div>`;
   },
 
+  _roleMenuTitle(msgId, roleId, held) {
+    const menu = this._roleMenus?.get(String(msgId));
+    const role = menu?.roles.find(r => r.id === Number(roleId));
+    const { names = [], total = 0 } = menu?.pickers?.[Number(roleId)] || {};
+    const who = !names.length ? '' : total > names.length ? t('role_menu.picked_by_more', { names: names.join(', '), count: total - names.length }) : t('role_menu.picked_by', { names: names.join(', ') });
+    return role ? t(held ? 'role_menu.leave' : 'role_menu.join', { name: role.name }) + (who ? `\n${who}` : '') : '';
+  },
+  _refreshRoleMenuPickers(msgId, pickers) {
+    const menu = this._roleMenus?.get(String(msgId));
+    if (!menu || !pickers) return;
+    menu.pickers = pickers;
+    document.querySelectorAll(`.role-menu-btn[data-msg-id="${msgId}"]`).forEach(b => { b.title = this._roleMenuTitle(msgId, b.dataset.roleId, b.classList.contains('held')); });
+  },
   _markSelfRole(roleId, held) {
     document.querySelectorAll(`.role-menu-btn[data-role-id="${roleId}"]`).forEach(b => {
       b.classList.toggle('held', held);
       const s = b.querySelector('.rm-state');
       if (s) s.textContent = held ? '✓' : '+';
-      const name = b.querySelector('.rm-name')?.textContent || '';
-      b.title = t(held ? 'role_menu.leave' : 'role_menu.join', { name });
+      b.title = this._roleMenuTitle(b.dataset.msgId, roleId, held);
     });
   },
 };

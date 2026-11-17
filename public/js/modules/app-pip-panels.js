@@ -37,7 +37,7 @@ _bindThreadAndDmPanels() {
     // Autocomplete navigation/insert hijacks first. (#5296)
     if (this._handleAutocompleteKeydown(e)) return;
     if (this._composerListKey(e, dmPipInput)) return;
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && this._enterSends(e)) {
       e.preventDefault();
       this._sendDMPiPMessage?.();
       return;
@@ -262,7 +262,7 @@ _bindThreadAndDmPanels() {
       // Autocomplete navigation/insert hijacks first. (#5296)
       if (this._handleAutocompleteKeydown(e)) return;
       if (this._composerListKey(e, threadInput)) return;
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter' && !e.shiftKey && this._enterSends(e)) {
         e.preventDefault();
         this._sendThreadMessage();
         return;
@@ -654,6 +654,8 @@ _openDMPiPBody(ch, code, panel) {
 
 _closeDMPiP() {
   this._activeDMPip = null;
+  // A reaction picker opened on one of its messages floats on <body>.
+  this._closeReactionPickers?.();
   this._dmPipReplyingTo = null;
   this._pipImageQueue = [];
   this._pipImageQueueTarget = null;
@@ -827,7 +829,7 @@ _setDMPiPReply(msgEl, msgId) {
     }
   }
   author = author || t('voice.someone');
-  const content = msgEl.querySelector('.message-content')?.textContent || '';
+  const content = this._replyPreviewText(msgEl.dataset.rawContent || msgEl.querySelector('.message-content')?.textContent || '');
   const preview = content.length > 60 ? content.substring(0, 60) + '…' : content;
   this._dmPipReplyingTo = { id: msgId, username: author, content };
   const bar = document.getElementById('dm-pip-reply-bar');
@@ -959,6 +961,7 @@ _sendDMPiPMessage() {
       }
     }
 
+    content = this._autoEmoteWords(content);
     const payload = { code, content };
     if (replyTo) payload.replyTo = replyTo;
     const quoteOf = this._takePendingQuote('_dmPipPendingQuote', code, typed);

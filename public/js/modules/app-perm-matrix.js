@@ -39,6 +39,12 @@ _initPermMatrix() {
   document.getElementById('perm-open-classic-btn')?.addEventListener('click', async () => {
     if (await this._requestClosePermMatrix()) this._openRoleModal();
   });
+  // A click anywhere in a box's cell ticks the box, not only on the box itself.
+  document.getElementById('perm-matrix-table')?.addEventListener('click', (e) => {
+    if (e.target.closest('input, label, button')) return;
+    const box = e.target.closest('td')?.querySelector('input[type="checkbox"]:not(:disabled)');
+    if (box) box.click();
+  });
   document.getElementById('perm-user-search')?.addEventListener('input', (e) => {
     this._permPanel.filter = e.target.value || '';
     this._renderPermUsersList();
@@ -182,9 +188,12 @@ _renderPermMatrix() {
   for (const role of roles) {
     head += `<th class="perm-matrix-role">
       <div class="perm-matrix-role-top">
-        <span class="perm-matrix-swatch" style="background:${esc(role.color || '#888')}"></span>
-        <span class="perm-matrix-role-name">${esc(role.name)}</span>
-        <span class="perm-matrix-level" title="${esc(t('settings.admin.perm_matrix.level_hint'))}">${esc(t('settings.admin.perm_matrix.level', { level: role.level }))}</span>
+        <button type="button" class="perm-matrix-edit" data-edit-role="${role.id}" title="${esc(t('settings.admin.perm_matrix.edit_role'))}">
+          <span class="perm-matrix-swatch" style="background:${esc(role.color || '#888')}"></span>
+          <span class="perm-matrix-role-name">${esc(role.name)}</span>
+          <span class="perm-matrix-level">${esc(t('settings.admin.perm_matrix.level', { level: role.level }))}</span>
+          <span class="perm-matrix-edit-icon" aria-hidden="true">✎</span>
+        </button>
         <button type="button" class="perm-matrix-remove" data-remove-role="${role.id}" title="${esc(t('settings.admin.perm_matrix.remove_role'))}">−</button>
       </div>
       ${role.scope === 'channel'
@@ -225,6 +234,15 @@ _renderPermMatrix() {
   table.querySelectorAll('input[name="perm-auto-role"]').forEach(radio => {
     radio.addEventListener('change', () => {
       if (radio.checked) this._draftSetAutoRole(parseInt(radio.value, 10));
+    });
+  });
+  // The full role editor opens on top, so ticks waiting for Save stay put;
+  // when it saves, roles-updated redraws this table with the new name,
+  // level and color.
+  table.querySelectorAll('[data-edit-role]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      this._selectedRoleId = parseInt(btn.dataset.editRole, 10);
+      this._openRoleModal();
     });
   });
   table.querySelectorAll('[data-remove-role]').forEach(btn => {

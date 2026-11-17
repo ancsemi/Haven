@@ -13,7 +13,10 @@ async switchChannel(code) {
 
   // Voice persists across channel switches, no auto-disconnect
 
+  // Each channel keeps its own unsent text (app-drafts.js).
+  this._draftStash(this.currentChannel);
   this.currentChannel = code;
+  this._draftRestore(code);
   this._typingRender?.();
   // Search panel persists per-context: hide/show it for the channel we just
   // entered (public channels share one, each DM keeps its own). (search-overhaul)
@@ -151,6 +154,10 @@ async switchChannel(code) {
   // send was then refused. (#5468)
   const _isReadOnly = channel && channel.read_only === 1 && !this.user?.isAdmin && !channel.canOverrideReadOnly;
   if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
+  // A media-only channel has no text box to press Enter in, so the send
+  // button is the only way to post an attachment: it stays, even for
+  // someone who chose to hide it (#5880).
+  if (msgInputArea) msgInputArea.classList.toggle('media-only', !!_textOff && !_mediaOff);
   this._updateReadOnlyNote(channel);
   // Text-only elements
   const _msgInput = document.getElementById('message-input');
@@ -159,7 +166,7 @@ async switchChannel(code) {
   const _gifBtn = document.getElementById('gif-btn');
   const _pollBtn = document.getElementById('poll-btn');
   if (_msgInput) _msgInput.style.display = _textOff ? 'none' : '';
-  if (_sendBtn) _sendBtn.style.display = _textOff ? 'none' : '';
+  if (_sendBtn) _sendBtn.style.display = (_textOff && _mediaOff) ? 'none' : '';
   if (_emojiBtn) _emojiBtn.style.display = _textOff ? 'none' : '';
   if (_gifBtn) _gifBtn.style.display = _textOff ? 'none' : '';
   if (_pollBtn) _pollBtn.style.display = _textOff ? 'none' : '';
@@ -197,6 +204,7 @@ async switchChannel(code) {
   this._updateBadge(code);
   // Refresh thread-mention pill for the channel we just entered
   this._updateThreadMentionsPill?.();
+  this._mentionsSeenInChannel?.(code);
 
   document.getElementById('status-channel').textContent = isDm && channel.is_group ? this._groupName(channel) : isDm && channel.dm_target
     ? t('channels.dm_status', { name: channel.dm_target.username }) : channel ? channel.name : code;
@@ -513,13 +521,22 @@ _renderChannels() {
       arr.sort((a, b) => sortByMode(a, b, globalSortMode));
     }
 
-    // Secondary sort: subscribed (not muted) sub-channels appear before unsubscribed (muted)
-    const _subMuted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-    arr.sort((a, b) => {
-      const aMuted = _subMuted.includes(a.code) ? 1 : 0;
-      const bMuted = _subMuted.includes(b.code) ? 1 : 0;
-      return aMuted - bMuted; // stable sort preserves original order within same group
-    });
+    // Muted (unsubscribed) sub-channels go after the others, but inside
+    // their own category. Sinking them to the bottom of the whole list took
+    // them out of their category, which then showed twice: once for its
+    // channels and again further down for its muted ones.
+    const _subMuted = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+    const byCategory = new Map();
+    for (const c of arr) {
+      const key = (c.category || '').toLowerCase();
+      if (!byCategory.has(key)) byCategory.set(key, []);
+      byCategory.get(key).push(c);
+    }
+    const regrouped = [];
+    for (const group of byCategory.values()) {
+      regrouped.push(...group.filter(c => !_subMuted.has(c.code)), ...group.filter(c => _subMuted.has(c.code)));
+    }
+    arr.splice(0, arr.length, ...regrouped);
   });
 
   // Sort parent channels: respect server-level sort mode & per-tag overrides
@@ -601,10 +618,14 @@ _renderChannels() {
 
     // Build small status indicators for channel features
     const _badges = [];
+    // A channel with a type shows the type's icon instead of the crossed-out
+    // function icons (app-channel-types.js).
+    const _typeBadge = this._channelTypeBadge?.(ch) || '';
+    if (_typeBadge) _badges.push(_typeBadge);
     if (!isSub) {
       // An admin can hide the crossed-out icons for everyone (#5615): on a
       // server where most channels have these off they were only clutter.
-      const showOff = !this.serverSettings || this.serverSettings.hide_disabled_channel_badges !== 'true';
+      const showOff = !_typeBadge && (!this.serverSettings || this.serverSettings.hide_disabled_channel_badges !== 'true');
       if (showOff && ch.streams_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.screen_share_not_allowed')}">🖥️</span>`);
       if (showOff && ch.music_enabled === 0) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.music_not_allowed')}">🎵</span>`);
       if (ch.slow_mode_interval > 0) _badges.push(`<span title="${t('channels.slow_mode_title', { seconds: ch.slow_mode_interval })}" style="opacity:0.5;font-size:0.65rem">🐢</span>`);
@@ -679,16 +700,24 @@ _renderChannels() {
       el.appendChild(bell);
     }
 
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
       // Clicking the forum you are already in, with one of its topics open,
       // goes back to the topic list (#5688).
       if (ch.code === this.currentChannel && this._activeThreadParent && this._isForumChannel?.(ch.code)) this._closeThread();
       this.switchChannel(ch.code);
+      // A voice-only channel has nothing else to do there, so one click joins.
+      // Not from its ... button, which is there to change the channel (#5846).
+      if (!e.target.closest('.channel-more-btn') && this._isVoiceOnlyChannel(ch.code) && this._canUseVoice() &&
+          !(this.voice?.inVoice && this.voice.currentChannel === ch.code)) {
+        setTimeout(() => this._joinVoice(), 300);
+      }
     });
-    // Double-click to join voice in the channel (blocked for text-only)
+    // Double-click to join voice in the channel (blocked for text-only;
+    // a voice-only channel already joined on the first click)
     el.addEventListener('dblclick', () => {
       const _dblCh = this.channels.find(c => c.code === ch.code);
       if (_dblCh && _dblCh.voice_enabled === 0) return;
+      if (this._isVoiceOnlyChannel(ch.code)) return;
       if (!this.user?.isAdmin && !this.user?.isGuest && !this._hasPerm('use_voice')) return;
       this.switchChannel(ch.code);
       setTimeout(() => this._joinVoice(), 300);
@@ -994,7 +1023,7 @@ _renderChannels() {
     if (!this._dmToggleBound) {
       this._dmToggleBound = true;
       document.getElementById('dm-toggle-header')?.addEventListener('click', (e) => {
-        if (e.target.closest('#organize-dms-btn')) return;
+        if (e.target.closest('#organize-dms-btn, #dm-sort-btn')) return;
         const nowCollapsed = dmList.style.display !== 'none';
         dmList.style.display = nowCollapsed ? 'none' : '';
         const arrow = document.getElementById('dm-toggle-arrow');
@@ -1042,28 +1071,17 @@ _renderChannels() {
     // ── DM categorization (client-side localStorage) ──
     const dmAssignments = JSON.parse(localStorage.getItem('haven_dm_assignments') || '{}');
     const dmCategories = JSON.parse(localStorage.getItem('haven_dm_categories') || '{}');
-    const dmSortMode = localStorage.getItem('haven_dm_sort_mode') || 'manual';
-    const dmOrder = JSON.parse(localStorage.getItem('haven_dm_order') || '[]');
 
     const getDmName = (ch) => ch.is_group ? this._groupName(ch) : ch.dm_target ? this._getNickname(ch.dm_target.id, ch.dm_target.username) : t('channels.unknown_user');
 
-    // Sort DMs by saved order first, then append any new ones
-    let sortedDms = [];
-    if (dmSortMode === 'manual' && dmOrder.length) {
-      for (const code of dmOrder) {
-        const ch = dmChannels.find(c => c.code === code);
-        if (ch) sortedDms.push(ch);
-      }
-      for (const ch of dmChannels) {
-        if (!sortedDms.includes(ch)) sortedDms.push(ch);
-      }
-    } else if (dmSortMode === 'alpha') {
-      sortedDms = [...dmChannels].sort((a, b) => getDmName(a).localeCompare(getDmName(b)));
-    } else if (dmSortMode === 'recent') {
-      sortedDms = [...dmChannels].sort((a, b) => (b.last_activity || 0) - (a.last_activity || 0));
-    } else {
-      sortedDms = [...dmChannels];
-    }
+    // Latest message first, by name, or the order you dragged them into
+    // (app-dm-sort.js).
+    let sortedDms = this._orderDms(dmChannels, getDmName);
+
+    // Pinned DMs sit above everything else, whatever the sort or tags, and
+    // the rest keep their order (app-dm-pins.js).
+    const { pinned: pinnedDms, rest: unpinnedDms } = this._splitPinnedDms(sortedDms);
+    sortedDms = unpinnedDms;
 
     // Collect active tag names from assigned DMs
     const activeTags = [...new Set(sortedDms.map(c => dmAssignments[c.code]).filter(Boolean))].sort();
@@ -1078,6 +1096,14 @@ _renderChannels() {
         <span class="channel-hash">${ch.is_group ? '👥' : '@'}</span>
         <span class="channel-name">${this._escapeHtml(dmName)}</span>
       `;
+      if (pinnedDms.includes(ch)) {
+        el.classList.add('dm-pinned');
+        const pin = document.createElement('span');
+        pin.className = 'dm-pin-mark';
+        pin.textContent = '📌';
+        pin.title = t('channels.dm_pinned_mark');
+        el.appendChild(pin);
+      }
       const count = (ch.code in this.unreadCounts) ? this.unreadCounts[ch.code] : (ch.unreadCount || 0);
       if (count > 0) {
         const bdg = document.createElement('span');
@@ -1129,6 +1155,8 @@ _renderChannels() {
       });
       return el;
     };
+
+    pinnedDms.forEach(ch => dmList.appendChild(renderDmItem(ch)));
 
     if (hasDmTags) {
       // Render by category groups
@@ -1216,6 +1244,18 @@ _renderChannels() {
  * Get all visible channels in visual (DOM) order.
  * Returns array of channel codes matching the sidebar ordering.
  */
+// Voice on, and text and media both off under Channel Functions.
+_isVoiceOnlyChannel(code) {
+  const ch = this.channels?.find(c => c.code === code);
+  return !!ch && !ch.is_dm && ch.voice_enabled !== 0 && ch.text_enabled === 0 && ch.media_enabled === 0;
+},
+
+// The same checks _joinVoice makes, without its error toasts.
+_canUseVoice() {
+  if (this.user?.isGuest) return this.serverSettings?.guests_allow_voice !== 'false';
+  return !!(this.user?.isAdmin || this._hasPerm('use_voice'));
+},
+
 _getVisualChannelOrder() {
   const codes = [];
   // Channels section

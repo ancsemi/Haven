@@ -36,6 +36,9 @@
  *   every click and message waited that long behind the server's other work.
  *   "sent to clients" is everything the server pushed to all the fake people
  *   during the phase, with the event types that made up most of it.
+ *   "server used" is the server's own memory (the most it held during the
+ *   phase) and processor time as a share of one processor core: 25% means a
+ *   quarter of one core was busy on average. The fake people are not counted.
  *   "message delay" is how long a chat message took to reach everyone.
  *   "pushes" is how many notifications reached the stand-in push service,
  *   how many of the away members got at least one, and how long after the
@@ -86,6 +89,7 @@ const SERVER_CHANNELS = args['server-channels'] !== undefined ? Math.max(0, pars
 const OFFLINE = Math.max(0, parseInt(args.offline, 10) || 0);
 const PUSH_PORT = PORT + 1;
 const BASE = `http://127.0.0.1:${PORT}`;
+const QUIET_SECONDS = 5;
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -119,7 +123,8 @@ function startPushSink() {
 
 function startServer() {
   const log = fs.openSync(path.join(dataDir, 'server.log'), 'a');
-  server = spawn(process.execPath, ['server.js'], {
+  startedAt = Date.now();
+  server = spawn(process.execPath, ['--require', path.join(__dirname, 'loadtest-probe.js'), 'server.js'], {
     cwd: ROOT,
     env: {
       ...process.env,
@@ -129,10 +134,42 @@ function startServer() {
       JWT_SECRET: jwtSecret,
       ...(pushCaFile ? { NODE_EXTRA_CA_CERTS: pushCaFile } : {}),
     },
-    stdio: ['ignore', log, log],
+    stdio: ['ignore', log, log, 'ipc'],
     windowsHide: true,
   });
+  server.on('message', m => { if (m && m.loadtestStats) usage.push(m.loadtestStats); });
   server.on('exit', code => { if (!stopping) console.error(`\nThe test server stopped unexpectedly (exit ${code}). Its log: ${path.join(dataDir, 'server.log')}`); });
+}
+
+// What the server reports about itself (scripts/loadtest-probe.js): memory
+// held and total processor time used, twice a second.
+const usage = [];
+let startedAt = 0;
+let startupMs = null;
+
+// Memory and processor use between two moments. Processor time is a running
+// total, so the average stays right even when a busy server reports late.
+function serverUse(from, to) {
+  // Start from the last report before the window, so work done between two
+  // reports at the start of a short phase is still counted.
+  let start = 0;
+  while (start < usage.length - 1 && usage[start + 1].at <= from) start++;
+  const rows = usage.slice(start).filter(u => u.at <= to);
+  if (rows.length < 2) return null;
+  const first = rows[0], last = rows[rows.length - 1];
+  const share = (a, b) => (b.cpuMicros - a.cpuMicros) / 1000 / Math.max(1, b.at - a.at) * 100;
+  // Busiest stretch of about a second.
+  let busiest = 0;
+  for (let i = 0, j = 0; i < rows.length; i++) {
+    while (j < rows.length - 1 && rows[j].at - rows[i].at < 1000) j++;
+    if (rows[j].at - rows[i].at >= 900) busiest = Math.max(busiest, share(rows[i], rows[j]));
+  }
+  return {
+    memoryPeak: rows.reduce((m, u) => Math.max(m, u.rss), 0),
+    memoryEnd: last.rss,
+    cpuAverage: +share(first, last).toFixed(1),
+    cpuBusiestSecond: +busiest.toFixed(1),
+  };
 }
 
 let stopping = false;
@@ -147,7 +184,7 @@ async function stopServer() {
 async function waitForServer() {
   const until = Date.now() + 90000;
   while (Date.now() < until) {
-    try { if ((await fetch(BASE + '/api/health')).ok) return; } catch { /* not up yet */ }
+    try { if ((await fetch(BASE + '/api/health')).ok) { startupMs = Date.now() - startedAt; return; } } catch { /* not up yet */ }
     await sleep(300);
   }
   throw new Error('The test server did not start within 90 seconds');
@@ -326,17 +363,20 @@ function summarize(p) {
     serverDelay: { p50: pct(p.health, 50), p95: pct(p.health, 95), max: p.health.length ? p.health.reduce((m, v) => Math.max(m, v), 0) : null },
     messages: p.sent ? { sent: p.sent, deliveries: p.msgDelays.length, expected: p.expected || null, p50: pct(p.msgDelays, 50), p95: pct(p.msgDelays, 95), max: p.msgDelays.length ? p.msgDelays.reduce((m, v) => Math.max(m, v), 0) : null } : null,
     pushes: p.pushes || p.pushesExpected ? { delivered: p.pushes, members: p.pushTargets.size, away: OFFLINE, lastAfter: p.lastPushAt && p.lastSentAt ? p.lastPushAt - p.lastSentAt : null } : null,
+    server: serverUse(p.started, p.ended || Date.now()),
     errors: Object.fromEntries(p.errors),
     note: p.note || null,
   };
 }
 
 function printReport(rows) {
-  console.log(`\nHaven load test: ${USERS} people in one channel, ${SERVER_CHANNELS + 1} channels${OFFLINE ? `, ${OFFLINE} offline with notifications on` : ''}${args.legacy ? ' (as older apps)' : ''}\n`);
+  console.log(`\nHaven load test: ${USERS} people in one channel, ${SERVER_CHANNELS + 1} channels${OFFLINE ? `, ${OFFLINE} offline with notifications on` : ''}${args.legacy ? ' (as older apps)' : ''}`);
+  console.log(`${os.cpus()[0]?.model.trim() || 'unknown processor'}, ${os.cpus().length} threads, ${(os.totalmem() / 2 ** 30).toFixed(0)} GB memory, ${os.type()} ${os.arch()}, Node ${process.versions.node}` + (startupMs ? `; the server started in ${(startupMs / 1000).toFixed(1)}s` : '') + '\n');
   for (const r of rows) {
     console.log(`▸ ${r.phase} (${r.seconds}s)`);
     console.log(`    server delay   typical ${ms(r.serverDelay.p50)}, bad moments ${ms(r.serverDelay.p95)}, worst ${ms(r.serverDelay.max)}`);
     console.log(`    sent to clients ${size(r.sentToClients)}` + (r.topEvents.length ? `, mostly ${r.topEvents.map(e => `${e.event} ${e.share}%`).join(', ')}` : ''));
+    if (r.server) console.log(`    server used    ${size(r.server.memoryPeak)} of memory, ${r.server.cpuAverage}% of one processor core (busiest second ${r.server.cpuBusiestSecond}%)`);
     if (r.messages) {
       const expected = r.messages.expected ? ` of ${r.messages.expected}` : '';
       console.log(`    messages       ${r.messages.sent} sent, ${r.messages.deliveries}${expected} deliveries, typical ${ms(r.messages.p50)}, bad ${ms(r.messages.p95)}, worst ${ms(r.messages.max)}`);
@@ -358,12 +398,22 @@ async function main() {
   console.log(`Created ${USERS} fake accounts${OFFLINE ? ` and ${OFFLINE} offline members with notifications on` : ''}. Connecting them...`);
   healthLoop();
 
+  // 0. Nobody is connected yet: what the server costs just by running.
+  newPhase('the server running with nobody connected');
+  await sleep(QUIET_SECONDS * 1000);
+  endPhase();
+
   // 1. Everyone arrives.
   newPhase(`${USERS} people connect and open the channel`);
   const all = people.map((_, i) => i);
   const connected = await connectAll(people, code, all);
   if (!(await settle(120000))) phase.note = 'still busy when the phase was cut off after 2 minutes';
   if (connected < USERS) phase.note = `${USERS - connected} could not connect`;
+  endPhase();
+
+  // 1b. Everyone is connected and nobody is doing anything.
+  newPhase(`${USERS} people connected, nobody talking`);
+  await sleep(QUIET_SECONDS * 1000);
   endPhase();
 
   // 2. Steady chat from random people.
@@ -422,7 +472,12 @@ async function main() {
   const rows = phases.map(summarize);
   printReport(rows);
   if (args.json) {
-    fs.writeFileSync(args.json, JSON.stringify({ users: USERS, when: new Date().toISOString(), phases: rows }, null, 2));
+    const whole = serverUse(0, Date.now());
+    fs.writeFileSync(args.json, JSON.stringify({
+      users: USERS, rate: RATE, when: new Date().toISOString(),
+      startupMs, memoryPeak: whole ? whole.memoryPeak : null,
+      phases: rows,
+    }, null, 2));
     console.log(`Results written to ${args.json}`);
   }
 }

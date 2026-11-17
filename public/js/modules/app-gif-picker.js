@@ -13,7 +13,48 @@ export default {
 // GIF PICKER (GIPHY)
 // ═══════════════════════════════════════════════════════
 
+// Who can give the server a GIF key: whoever may change server settings.
+_canSetUpGifs() {
+  return !!(this.user?.isAdmin || this._hasPerm?.('manage_server'));
+},
+
+// No GIF provider on this server: the button would only open an empty
+// picker, so members don't get it (#5654). Whoever can add a key still does,
+// since the picker is where it is set up, and Settings > GIF Search says
+// whether one is in place.
+_syncGifButton() {
+  const none = this.serverSettings?.gif_search_available === 'false';
+  document.documentElement.toggleAttribute('data-no-gif', none && !this._canSetUpGifs());
+  const status = document.getElementById('admin-gif-status');
+  if (status) status.textContent = t(none ? 'settings.admin.gif_status_off' : 'settings.admin.gif_status_on');
+},
+
+_saveGiphyKey(key) {
+  if (key && (key.length < 10 || key.length > 100)) {
+    this._showToast(t('settings.admin.gif_key_invalid'), 'error');
+    return false;
+  }
+  this.socket.emit('update-server-setting', { key: 'giphy_api_key', value: key });
+  return true;
+},
+
 _setupGifPicker() {
+  // Settings > GIF Search
+  const keyInput = document.getElementById('admin-giphy-key-input');
+  document.getElementById('admin-giphy-key-save')?.addEventListener('click', () => {
+    const key = keyInput?.value.trim() || '';
+    if (!key || !this._saveGiphyKey(key)) return;
+    keyInput.value = '';
+    this._showToast(t('settings.admin.gif_key_saved'), 'success');
+  });
+  keyInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('admin-giphy-key-save')?.click();
+  });
+  document.getElementById('admin-giphy-key-remove')?.addEventListener('click', () => {
+    this._saveGiphyKey('');
+    this._showToast(t('settings.admin.gif_key_removed'), 'success');
+  });
+
   const btn = document.getElementById('gif-btn');
   const picker = document.getElementById('gif-picker');
   const searchInput = document.getElementById('gif-search-input');
@@ -261,8 +302,7 @@ _searchGifs(query) {
 },
 
 _showGifSetupGuide(grid) {
-  const isAdmin = this.user && this.user.isAdmin;
-  if (isAdmin) {
+  if (this._canSetUpGifs()) {
     // GIPHY is the supported provider. Tenor is no longer offered here;
     // an existing tenor_api_key still works on the server if no GIPHY key is set.
     grid.innerHTML = `
@@ -286,8 +326,7 @@ _showGifSetupGuide(grid) {
     const input = document.getElementById('gif-provider-key-input');
     saveBtn.addEventListener('click', () => {
       const key = input.value.trim();
-      if (!key) return;
-      this.socket.emit('update-server-setting', { key: 'giphy_api_key', value: key });
+      if (!key || !this._saveGiphyKey(key)) return;
       grid.innerHTML = `<div class="gif-picker-empty">${t('gifs.setup.saved')}</div>`;
       setTimeout(() => this._loadTrendingGifs(), 500);
     });

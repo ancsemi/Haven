@@ -27,6 +27,7 @@ test.before(async () => {
   globalThis.t = globalThis.t || ((k) => k);
   F = () => Object.assign({}, mod, {
     _isImageUrl: (u) => /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(u),
+    _maskSpoilers: (s) => s,
   });
 });
 

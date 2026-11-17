@@ -42,7 +42,8 @@ function createRelayHarness() {
     id: 'sender-socket',
     user: { id: 1, username: 'sender', displayName: 'Sender', isAdmin: false },
     on(event, handler) { handlers.set(event, handler); },
-    emit() {}
+    emit(event, payload) { outgoing.push({ target: socket.id, event, payload }); },
+    join() {}
   };
   const voiceUsers = new Map([['11111111', new Map([
     [1, { id: 1, username: 'Sender', socketId: socket.id }],
@@ -63,14 +64,16 @@ function createRelayHarness() {
     voiceLastActivity: new Map(),
     activeMusic: new Map(),
     activeScreenSharers: new Map(),
+    activeScreenSessions: new Map(),
     activeWebcamUsers: new Map(),
+    activeWebcamStreamIds: new Map(),
     streamViewers: new Map(),
     pendingTempDelete: new Map(),
     pendingVoiceLeave: new Map()
   };
   registerVoice(socket, {
     io,
-    db: {},
+    db: { prepare: () => ({ get: () => ({ streams_enabled: 1 }) }) },
     state,
     userHasPermission: () => true,
     getUserEffectiveLevel: () => 0,
@@ -84,8 +87,52 @@ function createRelayHarness() {
     getActiveMusicSyncState: () => null,
     getMusicQueuePayload: () => ({})
   });
-  return { handlers, outgoing };
+  return { handlers, outgoing, state, socket };
 }
+
+test('webcam-started forwards the camera stream ID for remote track classification', () => {
+  const { handlers, outgoing } = createRelayHarness();
+
+  handlers.get('webcam-started')({ code: '11111111', streamId: 'camera-stream-1' });
+
+  assert.equal(outgoing.length, 1);
+  assert.equal(outgoing[0].event, 'webcam-started');
+  assert.equal(outgoing[0].payload.streamId, 'camera-stream-1');
+});
+
+test('screen-share-started forwards the display stream ID for remote track classification', () => {
+  const { handlers, outgoing } = createRelayHarness();
+
+  handlers.get('screen-share-started')({ code: '11111111', streamId: 'screen-stream-1' });
+
+  const start = outgoing.find(entry => entry.event === 'screen-share-started');
+  assert.ok(start);
+  assert.equal(start.payload.streamId, 'screen-stream-1');
+});
+
+test('late-join snapshots include active camera and screen stream IDs', () => {
+  const { handlers, outgoing, state } = createRelayHarness();
+  const code = '11111111';
+  state.activeWebcamUsers.set(code, new Set([1]));
+  state.activeWebcamStreamIds.set(code, new Map([[1, 'camera-stream-1']]));
+  state.activeScreenSharers.set(code, new Set([1]));
+  state.activeScreenSessions.set(code, new Map([[1, {
+    transport: 'browser', sessionId: null, hasAudio: false, streamId: 'screen-stream-1'
+  }]]));
+
+  const originalSetTimeout = global.setTimeout;
+  global.setTimeout = () => ({ unref() {} });
+  try {
+    handlers.get('voice-join')({ code });
+  } finally {
+    global.setTimeout = originalSetTimeout;
+  }
+
+  const webcamSnapshot = outgoing.find(entry => entry.event === 'active-webcam-users');
+  const screenSnapshot = outgoing.find(entry => entry.event === 'active-screen-sharers');
+  assert.equal(webcamSnapshot.payload.users[0].streamId, 'camera-stream-1');
+  assert.equal(screenSnapshot.payload.sharers[0].streamId, 'screen-stream-1');
+});
 
 test('voice relay accepts large gathered SDP and preserves offer correlation', () => {
   const { handlers, outgoing } = createRelayHarness();

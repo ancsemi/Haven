@@ -74,7 +74,7 @@ function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload }) {
     db.prepare('DELETE FROM messages WHERE id = ?').run(id);
   });
 
-  const sweep = () => {
+  const sweep = async () => {
     let rows;
     try { spare.run(new Date().toISOString()); } catch (err) {
       console.error('[self-destruct] could not stop a protected message timer:', err.message);
@@ -101,7 +101,7 @@ function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload }) {
         // Someone else's file named in the message is never touched, and a
         // file a profile or an older message still uses stays. A link posted
         // after it does not keep it, or pasting the link would beat the timer.
-        for (const rel of releasableUploads(db, paths, [row.user_id], { ignoreMessagesAfter: row.id })) dispose(rel);
+        for (const rel of releasableUploads(db, paths, [row.user_id], { ignoreMessagesAfter: row.id })) await dispose(rel);
         io.to(`channel:${row.code}`).emit('message-deleted', { channelCode: row.code, messageId: row.id });
         removed++;
       } catch (err) {
@@ -114,6 +114,7 @@ function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload }) {
   // Wait for the soonest deadline left. One already past means more than a
   // batch was due (go again now) or a row would not delete (back off).
   const rearm = (removed) => {
+    if (!run) return;   // stopped while a sweep was still running
     let at = null;
     let failed = false;
     try { at = Date.parse(next.get()?.at || ''); } catch (err) {
@@ -126,8 +127,24 @@ function start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted, removeUpload }) {
     arm(at);
   };
 
-  run = () => rearm(sweep());
-  run();
+  // Moving files is asynchronous, so a timer can fire while a sweep is still
+  // going; it then runs once more when that sweep ends instead of overlapping.
+  let sweeping = null;
+  let again = false;
+  const go = async () => {
+    do {
+      again = false;
+      rearm(await sweep());
+    } while (again);
+  };
+  run = () => {
+    if (sweeping) { again = true; return sweeping; }
+    sweeping = go()
+      .catch(err => console.error('[self-destruct] sweep error:', err.message))
+      .finally(() => { sweeping = null; });
+    return sweeping;
+  };
+  return run();
 }
 
 /** Stop the timer (tests, shutdown). */

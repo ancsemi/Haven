@@ -1,0 +1,79 @@
+/* Picking one emoji for a field, such as each role on a role menu
+   (public/js/modules/app-emoji-choose.js). */
+.emoji-chooser {
+  position: fixed;
+  z-index: 100030;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(20rem, calc(100vw - 16px));
+  max-height: min(22rem, calc(100vh - 16px));
+  padding: 8px;
+  border: 1px solid var(--border-light, var(--border));
+  border-radius: 10px;
+  background: var(--bg-secondary, var(--bg-card));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.emoji-chooser-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-input, var(--bg-primary));
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.85rem;
+}
+.emoji-chooser-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 2px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.emoji-chooser-label {
+  flex-basis: 100%;
+  margin: 6px 0 2px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.emoji-chooser-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.emoji-chooser-btn:hover,
+.emoji-chooser-btn:focus-visible { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.emoji-chooser-none { padding: 12px; color: var(--text-muted); font-size: 0.85rem; }
+
+/* Each role's emoji on the role menu builder: a button that opens the chooser. */
+.rm-row .rm-emoji-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.6rem;
+  height: 2.2rem;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-input, var(--bg-primary));
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+.rm-row .rm-emoji-btn:hover,
+.rm-row .rm-emoji-btn:focus-visible { border-color: var(--accent); }
+.role-menu-btn .rm-emoji .custom-emoji { vertical-align: middle; }

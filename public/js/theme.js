@@ -120,13 +120,18 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
   let aV = v;
   let linkV = lightBase ? 0.55 : 0.95;
   let okV = 0.72, badV = 0.94, warnV = 0.94;
+  // Green, red and amber mean something (online, do not disturb, a warning,
+  // a delete button), so they keep their own hue whatever color is picked.
+  // They used to turn with the picked hue, and a blue theme showed people
+  // who were online with a red dot.
+  const OK_H = 140, BAD_H = 355, WARN_H = 40;
   if (lightBase) {
     const bg = hsvToRgb(h, bgSat, 0.985);
     aV = _readableV(h, s, v, bg, 3);
     linkV = _readableV((h + 180) % 360, 0.5 + vib * 0.2, linkV, bg, 4.5);
-    okV = _readableV((h + 140) % 360, 0.55, okV, bg, 3);
-    badV = _readableV((h + 350) % 360, 0.70, badV, bg, 3);
-    warnV = _readableV((h + 50) % 360, 0.75, warnV, bg, 3);
+    okV = _readableV(OK_H, 0.55, okV, bg, 3);
+    badV = _readableV(BAD_H, 0.70, badV, bg, 3);
+    warnV = _readableV(WARN_H, 0.75, warnV, bg, 3);
   }
 
   return {
@@ -150,12 +155,12 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
     '--text-link':      hsvToHex((h + 180) % 360, 0.5 + vib * 0.2, linkV),
     '--border':         border,
     '--border-light':   borderLight,
-    '--success':        hsvToHex((h + 140) % 360, 0.55, okV),
-    '--danger':         hsvToHex((h + 350) % 360, 0.70, badV),
-    '--warning':        hsvToHex((h + 50) % 360, 0.75, warnV),
-    '--led-on':         hsvToHex((h + 140) % 360, 0.55, 0.72),
+    '--success':        hsvToHex(OK_H, 0.55, okV),
+    '--danger':         hsvToHex(BAD_H, 0.70, badV),
+    '--warning':        hsvToHex(WARN_H, 0.75, warnV),
+    '--led-on':         hsvToHex(OK_H, 0.55, 0.72),
     '--led-off':        '#555',
-    '--led-glow':       `rgba(${hsvToRgb((h + 140) % 360, 0.55, 0.72).join(',')}, 0.5)`,
+    '--led-glow':       `rgba(${hsvToRgb(OK_H, 0.55, 0.72).join(',')}, 0.5)`,
   };
 }
 

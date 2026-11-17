@@ -220,18 +220,31 @@ test('moving messages to another channel', async (t) => {
     assert.equal(db.prepare('SELECT channel_id FROM ferry_forum_threads WHERE topic_message_id = ?').get(topic).channel_id, talk.id, 'still paired');
   });
 
-  await t.test('not into or out of a blog forum', async () => {
+  await t.test('a blog forum takes and gives whole topics, forum to forum only (#5809)', async () => {
     const blog = await makeChannel('journal');
     for (const permission of ['forum', 'forum_blog']) {
       A.emit('toggle-channel-permission', { code: blog.code, permission });
       await wait(150);
     }
+    const shelf = await makeChannel('shelf');
+    A.emit('toggle-channel-permission', { code: shelf.code, permission: 'forum' });
+    await wait(150);
     const entry = post(blog.id, admin.id, 'a post');
+    const more = post(blog.id, admin.id, 'more of the post', entry);
+    const comment = post(blog.id, bob.id, 'a comment', entry);
     const chat = post(talk.id, bob.id, 'chat line');
-    assert.match((await move(A, blog.code, talk.code, [entry])).error || '', /blog forum/, 'out of one');
-    assert.match((await move(A, talk.code, blog.code, [chat])).error || '', /blog forum/, 'into one');
+    assert.match((await move(A, blog.code, talk.code, [entry])).error || '', /blog forum/, 'not out to a chat channel');
+    assert.match((await move(A, talk.code, blog.code, [chat])).error || '', /blog forum/, 'not in from a chat channel');
+    assert.match((await move(A, blog.code, shelf.code, [comment])).error || '', /staying put|whole topics/, 'not a reply on its own');
     assert.equal(row(entry).channel_id, blog.id);
     assert.equal(row(chat).channel_id, talk.id);
+
+    const done = await move(A, blog.code, shelf.code, [entry]);
+    assert.ok(!done.error, done.error);
+    for (const id of [entry, more, comment]) assert.equal(row(id).channel_id, shelf.id, 'the topic moves with its post and comments');
+    const back = await move(A, shelf.code, blog.code, [entry]);
+    assert.ok(!back.error, back.error);
+    assert.equal(row(comment).channel_id, blog.id, 'and back into the blog forum');
   });
 
   await t.test('a topic moved to another forum keeps only the tags that forum has (#5809)', async () => {
@@ -258,7 +271,7 @@ test('moving messages to another channel', async (t) => {
   await t.test('each move is in the audit log, naming where it went', async () => {
     await wait(100);
     const rows = db.prepare("SELECT actor_id, target_type, target_id, target_name, details FROM audit_log WHERE action = 'messages_move' ORDER BY id").all();
-    assert.equal(rows.length, 6, 'one per move that went through, none for refused ones');
+    assert.equal(rows.length, 8, 'one per move that went through, none for refused ones');
     assert.equal(rows[0].actor_id, mod.id);
     assert.equal(rows[0].target_type, 'channel');
     assert.equal(rows[0].target_id, other.id);

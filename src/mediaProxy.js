@@ -143,6 +143,46 @@ function verifyToken(token, db = null) {
   return null;
 }
 
+async function _accountPwvAsync(userId, db) {
+  try {
+    const conn = db || require('./database').getAsyncDb();
+    const row = await conn.prepare('SELECT password_version FROM users WHERE id = ?').get(userId);
+    if (!row) return null;
+    if (await conn.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(userId)) return null;
+    return Number(row.password_version) || 1;
+  } catch (err) {
+    if (Date.now() - _accountCheckWarnedAt > 60000) {
+      _accountCheckWarnedAt = Date.now();
+      console.warn('[media-proxy] account check failed, refusing token:', err.message);
+    }
+    return null;
+  }
+}
+
+async function verifyTokenAsync(token, db = null) {
+  if (typeof token !== 'string' || token.length > 128) return null;
+  const dot = token.indexOf('.');
+  if (dot <= 0) return null;
+  const userId = parseInt(token.slice(0, dot), 10);
+  const sig = token.slice(dot + 1);
+  if (!Number.isInteger(userId)) return null;
+  // HMAC tokens are base64url. Reject other bytes before timingSafeEqual,
+  // whose buffer-length error would otherwise reject this async handler.
+  if (!/^[A-Za-z0-9_-]{32}$/.test(sig)) return null;
+  const pwv = await _accountPwvAsync(userId, db);
+  if (pwv === null) return null;
+
+  for (const bucket of [_today(), _today() - 1]) {
+    const expected = _sign(userId, bucket, pwv);
+    // Constant-time compare; lengths already match by construction.
+    if (sig.length === expected.length &&
+        crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+      return userId;
+    }
+  }
+  return null;
+}
+
 // ── Cache index ─────────────────────────────────────────────────────
 // Built once at startup so eviction does not have to stat the whole directory
 // on every write. Maps cache key -> { file, size, type, ts }.
@@ -275,7 +315,7 @@ function clear() {
 }
 
 module.exports = {
-  issueToken, verifyToken,
+  issueToken, verifyToken, verifyTokenAsync,
   get, fetchAndCache, loadIndex, stats, clear,
   sniffImageType,
   CACHE_DIR, MAX_BYTES, ALLOWED_TYPES

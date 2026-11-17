@@ -35,7 +35,6 @@
  * Haven author's name in the body.
  */
 
-const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
 const { agentFor } = require('./outboundProxy');
@@ -43,6 +42,9 @@ const automod = require('./automod');
 const { stripRoleMentions } = require('./socketHandlers/helpers');
 const { accessContext, channelAccess, bits } = require('./discordPermissions');
 const { unescapeDiscord, forwardedMessage, quoteForwarded } = require('./discordText');
+const ferryReplies = require('./ferryReplies');
+const ferryReactions = require('./ferryReactions');
+const { isUsableEmoji } = require('./builtinEmojis');
 
 /**
  * The tests run Ferry against a stand-in Discord on this machine, set through
@@ -72,6 +74,7 @@ const INTENT_GUILDS          = 1 << 0;
 const INTENT_GUILD_MEMBERS   = 1 << 1;   // privileged, only requested for DM lookup
 const INTENT_GUILD_EXPRESSIONS = 1 << 3; // emote list changes, so :name: keeps matching after an admin adds one
 const INTENT_GUILD_MESSAGES  = 1 << 9;
+const INTENT_GUILD_MESSAGE_REACTIONS = 1 << 10; // reactions on bridged messages (src/ferryReactions.js)
 const INTENT_MESSAGE_CONTENT = 1 << 15;  // privileged. Without it every message body is empty
 
 // Gateway close codes that mean "stop, a human has to fix this". Reconnecting
@@ -224,7 +227,7 @@ function requestBody(payload, files = []) {
   if (!files.length) return { body: payload === undefined ? undefined : JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } };
   const form = new FormData();
   form.append('payload_json', JSON.stringify({ ...payload, attachments: files.map((f, i) => ({ id: i, filename: f.name })) }));
-  files.forEach((f, i) => form.append(`files[${i}]`, new Blob([fs.readFileSync(f.path)]), f.name));
+  files.forEach((f, i) => form.append(`files[${i}]`, new Blob([f.data]), f.name));
   return { body: form, headers: {} };
 }
 /**
@@ -317,7 +320,8 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 // ══════════════════════════════════════════════════════════════
 
 function currentIntents() {
-  let intents = INTENT_GUILDS | INTENT_GUILD_EXPRESSIONS | INTENT_GUILD_MESSAGES | INTENT_MESSAGE_CONTENT;
+  let intents = INTENT_GUILDS | INTENT_GUILD_EXPRESSIONS | INTENT_GUILD_MESSAGES | INTENT_MESSAGE_CONTENT
+    | INTENT_GUILD_MESSAGE_REACTIONS;
   // The member intent is only needed to look people up for DM autocomplete.
   // Asking for a privileged intent the admin never enabled kills the whole
   // connection with a 4014, so it is opt-in twice over: the DM setting has to
@@ -585,6 +589,19 @@ function handleDispatch(type, d) {
       relayEditToHaven(d);
       break;
 
+    case 'MESSAGE_REACTION_ADD':
+      relayReactionToHaven('add', d);
+      break;
+    case 'MESSAGE_REACTION_REMOVE':
+      relayReactionToHaven('remove', d);
+      break;
+    case 'MESSAGE_REACTION_REMOVE_ALL':
+      relayReactionToHaven('remove_all', d);
+      break;
+    case 'MESSAGE_REACTION_REMOVE_EMOJI':
+      relayReactionToHaven('remove_emoji', d);
+      break;
+
     case 'THREAD_CREATE':
       cacheThread(d);
       takePendingStarter(d && d.id);
@@ -771,6 +788,9 @@ function relayToHaven(msg) {
     const author = msg.member?.nick || msg.author?.global_name || msg.author?.username || 'Discord user';
     const avatar = discordAvatarUrl(msg.author);
 
+    // A Discord reply becomes a Haven reply when the message it answers is
+    // one Ferry carried (src/ferryReplies.js).
+    const answers = msg.type === 19 && msg.message_reference ? msg.message_reference.message_id : null;
     const targets = [];
     for (const link of links) {
       const havenId = deps.insertHavenMessage({
@@ -782,8 +802,12 @@ function relayToHaven(msg) {
         // Kept on the Haven copy (#5773): a later history import skips it,
         // and a Discord thread started from it hangs from it.
         discordMessageId: msg.id,
+        replyTo: answers ? ferryReplies.havenIdFor(deps.db, link.channel_id, answers) : null,
       });
-      if (havenId) targets.push({ havenMessageId: havenId, channelCode: link.channel_code });
+      if (havenId) {
+        targets.push({ havenMessageId: havenId, channelCode: link.channel_code });
+        ferryReplies.recordPair(deps.db, { havenMessageId: havenId, discordMessageId: msg.id, discordChannelId: msg.channel_id, discordAuthorId: msg.author && msg.author.id });
+      }
       touchLink(link.id, null);
     }
     if (targets.length) rememberRelay(msg.id, content, targets);
@@ -846,6 +870,46 @@ function relayEditToHaven(msg) {
 // rebuilding the topic, so deleting a topic in Haven keeps it deleted.
 
 const KIND_MISMATCH = 'This pairing joins a forum to a channel that is not a forum, so nothing crosses. Remove it and pair a forum with a forum.';
+
+// A reaction on a bridged Discord message, shown on its Haven copy
+// (src/ferryReactions.js). The bot's own reactions stand for Haven people and
+// are not carried back.
+function relayReactionToHaven(kind, d) {
+  try {
+    const changed = ferryReactions.fromDiscord(deps.db, kind, d, { botId: botUser && botUser.id, isUsableEmoji });
+    for (const c of changed) {
+      deps.io.to(`channel:${c.channelCode}`).emit('reactions-updated', { channelCode: c.channelCode, messageId: c.messageId, reactions: c.reactions });
+    }
+  } catch (err) {
+    console.error('Ferry reaction relay error:', err.message);
+  }
+}
+
+// Haven to Discord: the bot puts its reaction on, or takes it off, every
+// Discord copy of a Haven message. Queued with that channel's messages, so
+// Discord's limits are respected and the order holds.
+const reactionWarned = new Map();
+function reactOnDiscord(havenMessageId, emoji, on) {
+  let copies = [];
+  try { copies = ferryReactions.discordCopies(deps.db, havenMessageId); } catch (err) {
+    console.warn('[ferry] could not look up the Discord copy for a reaction:', err.message);
+    return;
+  }
+  for (const c of copies) {
+    if (!SNOWFLAKE.test(String(c.discord_channel_id)) || !SNOWFLAKE.test(String(c.discord_message_id))) continue;
+    const code = ferryReactions.discordEmojiFor(emoji, guilds.get(String(c.guild_id || ''))?.emojis);
+    if (!code) continue;
+    const path = `/channels/${c.discord_channel_id}/messages/${c.discord_message_id}/reactions/${code}/@me`;
+    enqueue(`ch:${c.discord_channel_id}`, () => discordRequest(on ? 'PUT' : 'DELETE', path)).catch((err) => {
+      // Usually the bot lacks Add Reactions there. Said once an hour per channel.
+      const last = reactionWarned.get(c.discord_channel_id) || 0;
+      if (Date.now() - last > 3600000) {
+        reactionWarned.set(c.discord_channel_id, Date.now());
+        console.warn(`[ferry] could not ${on ? 'add' : 'remove'} a reaction on Discord channel ${c.discord_channel_id}: ${err.message}`);
+      }
+    });
+  }
+}
 
 function discordAuthorName(msg) {
   return msg.member?.nick || msg.author?.global_name || msg.author?.username || 'Discord user';
@@ -1619,26 +1683,23 @@ function keepOwnUploads(content, sender) {
  * stays as a link when PUBLIC_URL is set, or becomes a short note. Files that
  * are not the sender's to relay (see mayRelayUpload) are left out altogether.
  */
-function takeUploads(content, sender) {
-  const { UPLOADS_DIR } = require('./paths');
+async function takeUploads(content, sender) {
   const own = keepOwnUploads(content, sender);
   const files = [];
   let total = 0;
+  // Sizes come from the media index, so the limits are checked before any
+  // file is read; the bytes are read once, below, for every retry.
+  const liveBytes = deps.db.prepare("SELECT bytes FROM media_objects WHERE rel_path = ? AND state = 'live'");
   // Returns null when the file goes along, or why it cannot.
   const take = (stored, shownName, spoiler = false) => {
     if (!UPLOAD_NAME_RE.test(stored)) return '(file not found)';
-    const full = path.join(UPLOADS_DIR, stored);
-    let size;
-    try {
-      const st = fs.statSync(full);
-      if (!st.isFile()) return '(file not found)';
-      size = st.size;
-    } catch { return '(file not found)'; } // deleted since it was posted
+    const size = liveBytes.get(stored)?.bytes;
+    if (size === undefined) return '(file not found)'; // deleted since it was posted
     if (files.length >= DISCORD_FILES_PER_MESSAGE || size > DISCORD_FILE_MAX || total + size > DISCORD_UPLOAD_TOTAL) {
       return '(too large to send to Discord)';
     }
     total += size;
-    files.push({ path: full, name: (spoiler ? 'SPOILER_' : '') + attachmentName(shownName || stored) });
+    files.push({ rel: stored, name: (spoiler ? 'SPOILER_' : '') + attachmentName(shownName || stored) });
     return null;
   };
   const base = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
@@ -1653,7 +1714,9 @@ function takeUploads(content, sender) {
       return !why ? pre : spoiler ? `${pre}||${base ? `${base}/uploads/${stored}` : why}||` : base ? m : `${pre}${why}`;
     });
   text = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-  return { text, files };
+  const storage = require('./storage');
+  for (const f of files) f.data = await storage.readBuffer(f.rel);
+  return { text, files: files.filter(f => f.data) };   // one deleted meanwhile is left out
 }
 
 function absolutizeUploads(content) {
@@ -1787,17 +1850,20 @@ async function ensureLinkWebhook(link) {
 /**
  * Relays one Haven message to one paired Discord channel, as the Haven author.
  */
-async function sendToDiscord(link, { username, avatar, content, sender }) {
+async function sendToDiscord(link, { username, avatar, content, sender, havenMessageId = null, replyTo = null }) {
   const guild = guilds.get(String(link.guild_id || ''));
-  const { text, files } = takeUploads(content, sender);
-  const body = outboundBody(text, guild);
+  const { text, files } = await takeUploads(content, sender);
+  const body = outboundBody(ferryReplies.replyLine(deps.db, { replyToHavenId: replyTo, link, guildId: link.guild_id }) + text, guild);
   if (!body.trim() && !files.length) return;
   if (isForumType(link.discord_channel_type)) { touchLink(link.id, KIND_MISMATCH); return; }
 
   return enqueue(`ch:${link.discord_channel_id}`, async () => {
     try {
       const hook = await ensureLinkWebhook(link);
-      await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }), { files });
+      const sent = await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }), { files });
+      if (havenMessageId && sent && sent.id) {
+        ferryReplies.recordPair(deps.db, { havenMessageId, discordMessageId: sent.id, discordChannelId: link.discord_channel_id });
+      }
       touchLink(link.id, null);
     } catch (err) {
       throw sendFailure(link, err);
@@ -1893,7 +1959,7 @@ function discordForumIsNsfw(guild, link) {
  */
 async function sendTopicToDiscord(link, { username, avatar, content, sender, title, tags, topicId, nsfw = false }) {
   const guild = guilds.get(String(link.guild_id || ''));
-  const { text, files } = takeUploads(content, sender);
+  const { text, files } = await takeUploads(content, sender);
   const body = outboundBody(text, guild);
   if (!body.trim() && !files.length) return;
   if (!isForumType(link.discord_channel_type)) { touchLink(link.id, KIND_MISMATCH); return; }
@@ -1937,7 +2003,7 @@ async function sendTopicToDiscord(link, { username, avatar, content, sender, tit
  */
 async function sendReplyToDiscord(link, { username, avatar, content, sender, topicId }) {
   const guild = guilds.get(String(link.guild_id || ''));
-  const { text, files } = takeUploads(content, sender);
+  const { text, files } = await takeUploads(content, sender);
   const body = outboundBody(text, guild);
   if (!body.trim() && !files.length) return;
   if (!isForumType(link.discord_channel_type)) return;
@@ -1982,7 +2048,7 @@ async function sendDiscordDm(discordUserId, { fromName, content, sender }) {
   const cfg = getConfig();
   if (!cfg.allowDms) throw new Error('Discord DMs are turned off for this server');
 
-  const { text, files } = takeUploads(content, sender);
+  const { text, files } = await takeUploads(content, sender);
   const body = absolutizeUploads(text).trim();
   if (!body && !files.length) throw new Error('Message is empty');
 
@@ -2288,7 +2354,8 @@ function importHeaders() {
 function inviteUrl(applicationId) {
   // 536870912 Manage Webhooks + 2048 Send Messages + 1024 View Channel
   //  + 32768 Attach Files + 16384 Embed Links + 65536 Read Message History
-  const perms = 536870912 + 2048 + 1024 + 32768 + 16384 + 65536;
+  //  + 64 Add Reactions (reactions from Haven, src/ferryReactions.js)
+  const perms = 536870912 + 2048 + 1024 + 32768 + 16384 + 65536 + 64;
   return `https://discord.com/oauth2/authorize?client_id=${applicationId}&permissions=${perms}&scope=bot`;
 }
 
@@ -2320,6 +2387,7 @@ module.exports = {
   sendTopicToDiscord,
   sendReplyToDiscord,
   sendDiscordDm,
+  reactOnDiscord,
   authorizeDmTarget,
   verifyToken,
   inviteUrl,

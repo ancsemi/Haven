@@ -518,6 +518,9 @@ module.exports = function registerImport(deps) {
     const job = { userId: user.id, state: 'running', channelsDone: 0, channelsTotal: 0, messagesDone: 0, messagesTotal: 0, filesCopied: 0, updatedAt: Date.now() };
     executeJobs.set(jobId, job);
     res.status(202).json({ jobId });
+    require('../httpAudit').auditHttp(user, 'discord_import', {
+      details: { channels: selectedChannels.length, copyFiles },
+    });
     writeImport(job, user, tempPath, selectedChannels, { copyFiles });
   });
 

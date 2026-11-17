@@ -1440,6 +1440,11 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
   border-radius: 0.75rem;
   background: var(--bg-secondary);
 }
+/* A role switched off for profile cards, as role managers see it (#5822). */
+.profile-popup-role-hidden {
+  opacity: 0.5;
+  border-style: dashed;
+}
 
 .user-group-name {
   display: flex;

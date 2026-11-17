@@ -251,6 +251,7 @@
     "actions": {
       "logout": "Abmelden",
       "change_display_name": "Anzeigename ändern",
+      "mentions": "Erwähnungen und Antworten",
       "close_sidebar": "Seitenleiste schließen",
       "message_actions": "Nachrichtenaktionen",
       "organize_channels": "Kanäle organisieren",
@@ -562,7 +563,14 @@
     "music_shared_spotify": "Spotify (über YouTube) – geteilt von {{user}}",
     "music_shared": "{{platform}} – geteilt von {{user}}",
     "music": "Musik",
-    "someone": "jemand"
+    "someone": "jemand",
+    "music_file_platform": "Audiodatei",
+    "music_file_listen": "Für alle im Sprachkanal abspielen",
+    "music_file_join_voice": "Tritt einem Sprachkanal bei, um das dort für alle abzuspielen",
+    "music_file_failed": "Diese Audiodatei konnte nicht abgespielt werden",
+    "music_yt_gone": "YouTube meldet, dass dieses Video weg ist",
+    "music_yt_blocked": "YouTube spielt dieses Video hier nicht ab (Einbetten ist abgeschaltet oder es ist in diesem Land gesperrt)",
+    "music_yt_failed": "YouTube konnte dieses Video nicht abspielen"
   },
   "channels": {
     "status_none": "Keine",
@@ -851,6 +859,7 @@
     "select_channel_first": "Zuerst einen Kanal auswählen",
     "uploads_disabled": "Medien-Uploads sind in diesem Kanal deaktiviert",
     "file_too_large": "Datei zu groß (max. {{maxMb}} MB)",
+    "file_type_blocked": ".{{ext}}-Dateien können auf diesem Server nicht hochgeladen werden",
     "server_banner_alt": "Serverbanner",
     "server_icon_alt": "Serversymbol",
     "open_fullscreen": "Im Vollbild öffnen",
@@ -1069,7 +1078,9 @@
     "output_unsupported_title": "Dein Browser unterstützt das Wechseln des Audioausgabegeräts nicht. Wähle das Ausgabegerät in den Soundeinstellungen deines Betriebssystems aus.",
     "output_unsupported_hint": "Dein Browser kann das Audioausgabegerät nicht wechseln. Nutze stattdessen die Soundeinstellungen deines Betriebssystems.",
     "bitrate": "Bitrate",
-    "bitrate_unlimited": "Unbegrenzt"
+    "bitrate_unlimited": "Unbegrenzt",
+    "camera_quality": "Kameraqualität",
+    "camera_quality_hint": "Höhere Qualität sieht schärfer aus, braucht aber mehr Bandbreite, bei dir und allen Zuschauern. Deine Kamera schafft vielleicht weniger."
   },
   "status_bar": {
     "server": "Server",
@@ -1156,7 +1167,26 @@
       "group_advanced": "Erweitert",
       "debug": "Debug",
       "backup": "Sicherung",
-      "audit_log": "Prüfprotokoll"
+      "audit_log": "Prüfprotokoll",
+      "whats_new": "Neuigkeiten"
+    },
+    "pages": {
+      "look": "Darstellung",
+      "chat": "Chat & Medien",
+      "alerts": "Benachrichtigungen",
+      "profile": "Profil & Aktivität",
+      "security": "Konto & Sicherheit",
+      "language": "Sprache",
+      "access": "Barrierefreiheit",
+      "advanced": "Plugins & Erweitert",
+      "server": "Server",
+      "people": "Personen & Rollen",
+      "safety": "Sicherheit",
+      "content": "Inhalte",
+      "network": "Netzwerk & Skalierung",
+      "tools": "Bots & Daten",
+      "more": "Mehr",
+      "more_info": "Mehr Infos"
     },
     "language_section": {
       "title": "Sprache",
@@ -1470,6 +1500,12 @@
       "save_btn": "Einstellungen speichern",
       "save_hint": "Änderungen werden erst übernommen, wenn du auf Speichern klickst. Schließen (✕) zum Abbrechen.",
       "login_title_hint": "Benutzerdefinierter Titel auf dem Anmeldebildschirm unter dem HAVEN-Logo.",
+      "login_show_icon": "Server-Symbol auf der Anmeldeseite zeigen",
+      "login_show_banner": "Server-Banner als Hintergrund der Anmeldeseite verwenden",
+      "login_message": "Nachricht auf der Anmeldeseite",
+      "login_message_hint": "Ein kurzer Hinweis unter dem Titel, etwa eine Begrüßung oder wie man eine Einladung bekommt.",
+      "login_css": "CSS der Anmeldeseite",
+      "login_css_hint": "Gestaltet nur die Anmelde- und Registrierungsseite. Wenn ein Stil das Formular versteckt, hänge ?nocss an die Adresse der Anmeldeseite an, um ihn zu überspringen. Ein Bild oder eine Schrift von einer anderen Seite lässt diese Seite sehen, wer vorbeikommt.",
       "server_icon_hint": "Serversymbol (quadratisch, max. 2 MB)",
       "default_theme_hint": "Neue Nutzer sehen dieses Theme beim ersten Besuch. Sie können ihr eigenes wählen.",
       "update_banner_hint": "Wenn aktiviert, wird das Banner „Update verfügbar“ nur Admins angezeigt",
@@ -1482,6 +1518,9 @@
       "max_sound_hint": "Max. Soundboard-Upload-Größe (256–10240 KB, Standard 1024 / 1 MB)",
       "max_emoji_hint": "Max. benutzerdefinierte Emoji-Upload-Größe (64–1024 KB, Standard 256)",
       "max_poll_hint": "Maximale Antwortmöglichkeiten pro Umfrage (2–25, Standard 10)",
+      "blocked_upload_types": "Gesperrte Dateitypen",
+      "blocked_upload_types_hint": "Dateien dieser Typen kann niemand hochladen. Mit Kommas trennen. Häufig riskant: exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar. Leer lassen, um alle Typen zu erlauben.",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_invite_uses": "Maximale Anzahl der Einladungslink-Nutzungen",
       "max_invite_uses_hint": "Die maximale Anzahl von Nutzungen, auf die ein Einladungslink festgelegt werden kann. Administratoren und Benutzer mit der Berechtigung zur Serververwaltung ignorieren dieses Limit. (0 = unbegrenzt)",
       "sounds_hint": "Audiodateien für benutzerdefinierte Benachrichtigungstöne hochladen",
@@ -1494,6 +1533,13 @@
       "no_banned_users": "Keine gesperrten Nutzer",
       "no_reason": "Kein Grund",
       "unban_btn": "Entsperren",
+      "scrub_btn": "Nachrichten entfernen",
+      "scrub_title": "Alles löschen, was diese Person in den Kanälen dieses Servers geschrieben hat",
+      "scrub_confirm": "Alle Nachrichten von {{name}} entfernen?",
+      "scrub_confirm_hint": "Alles, was diese Person in den Kanälen dieses Servers geschrieben hat, wird für alle gelöscht. Geschützte Nachrichten und DMs bleiben. Das lässt sich nicht rückgängig machen.",
+      "scrub_done": "{{n}} Nachrichten entfernt",
+      "scrub_none": "Es gibt keine Nachrichten mehr zu entfernen",
+      "scrub_failed": "Die Nachrichten konnten nicht entfernt werden",
       "delete_user_title": "Nutzer löschen",
       "confirm_delete_user": "⚠️ {{name}} dauerhaft löschen? Dies kann nicht rückgängig gemacht werden.",
       "no_deleted_users": "Keine gelöschten Nutzer",
@@ -1667,6 +1713,11 @@
         "style_preview_name": "Rollenname",
         "transparent": "Transparent",
         "transparent_hint": "Wenn diese Option aktiviert ist, färbt diese Rolle ihre Inhaber nie ein. Stattdessen bestimmt die nächstniedrigere nicht transparente Rolle ihre Farbe. Gibt es keine, wird der Name ohne Farbe angezeigt.",
+        "mentionable": "Kann @erwähnt werden",
+        "mentionable_hint": "Steht in der @-Liste, und @Name pingt alle mit der Rolle. Für Deko- und Spielrollen ausschalten.",
+        "show_on_profile": "Auf Profilkarten zeigen",
+        "show_on_profile_hint": "Aus: Die Rolle fehlt auf Profilkarten. Wer Rollen verwaltet, sieht sie dort weiter, abgeblendet.",
+        "hidden_on_profile_title": "Nur wer Rollen verwaltet, sieht diese auf Profilkarten",
         "channel_access_hint": "Welche Kanäle eine Rolle öffnet, wird im jeweiligen Kanal festgelegt: Rechtsklick auf den Kanal → Kanalfunktionen → Erforderliche Rollen. Wer die Rolle hat, ist Mitglied und wird beim Erhalt der Rolle hinzugefügt und beim Verlust entfernt.",
         "reapply_access_tooltip": "Wendet die obigen Regeln für den Kanalzugriff erneut auf alle Personen an, die diese Rolle bereits innehaben. Nützlich nach Änderungen an den Kontrollkästchen für Gewähren/Entziehen: So werden bestehende Mitglieder an die aktuelle Konfiguration angepasst, ohne dass du die Rolle neu zuweisen musst.",
         "readonly_note": "Diese Rolle liegt auf oder über deiner Berechtigungsstufe ({{level}}). Du kannst sie ansehen, aber nur jemand mit höherer Stufe kann sie ändern.",
@@ -1825,6 +1876,10 @@
       "update_hint": "Suche nach neuen Haven-Versionen und installiere sie direkt. Der Server erstellt automatisch eine Sicherung vor dem Update und startet sich anschließend neu.",
       "update_check_btn": "Nach Updates suchen",
       "update_run_btn": "Jetzt aktualisieren",
+      "shutdown_btn": "Server herunterfahren",
+      "shutdown_hint": "Beendet Haven sauber, wie Strg+C. Starte es danach wie gewohnt neu. Startet Docker oder ein Dienstmanager Haven von selbst neu, wird es stattdessen neu gestartet.",
+      "shutdown_confirm": "Server jetzt herunterfahren? Alle werden getrennt, bis er wieder gestartet wird.",
+      "shutdown_sent": "Der Server fährt herunter.",
       "update_checking": "Suche läuft …",
       "update_run_on_host": "Auf dem Host ausführen:",
       "update_copy_command": "Befehl kopieren",
@@ -1908,6 +1963,9 @@
       "automod_log_channel_placeholder": "Kanalcode (optional)",
       "automod_activity_group": "Letzte Aktivität",
       "automod_refresh": "Aktualisieren",
+      "automod_ai_group": "KI-Linkprüfung (experimentell)",
+      "automod_ai_enabled": "Dem Plugin AutoMod Quarantine erlauben, diesen Server zu nutzen",
+      "automod_ai_hint": "Experimentell. Standardmäßig aus. Schaltet die Serverseite des Plugins AutoMod Quarantine ein: Links werden mit einem KI-Modell auf diesem Server geprüft (eingerichtet mit scripts/setup-automod-ai.sh), und Anfragen von Moderatoren werden an Cloud-KI-Dienste weitergereicht, die Browser ablehnen. An eine KI geht immer nur der Link, nie die Nachricht. Mitglieder entscheiden weiterhin selbst, ob sie das Plugin unter Plugins & Themes einschalten.",
       "automod_no_domains": "Noch keine Domains eingerichtet.",
       "automod_block_badge": "GESPERRT",
       "automod_allow_badge": "ZUGELASSEN",
@@ -2016,6 +2074,11 @@
       "view_ip_bans_btn": "Gesperrte IP-Adressen anzeigen",
       "admin_pw_reset_label": "Passwortzurücksetzung durch Admins erlauben",
       "admin_pw_reset_hint": "⚠️ Wenn aktiviert, können Admins das Passwort jedes Benutzers auf einen einmalig verwendbaren temporären Wert zurücksetzen. Der Benutzer muss es bei der nächsten Anmeldung ändern. Beim Zurücksetzen wird auch der E2E-verschlüsselte Direktnachrichtenverlauf gelöscht, da der Schlüssel vom Passwort abgeleitet wird. Ob diese Funktion aktiviert ist, wird über /api/public-config offengelegt, sodass Benutzer sehen können, ob Admins auf diesem Server diese Möglichkeit haben.",
+      "transfer_title": "Server an jemand anderen übergeben",
+      "transfer_hint": "Macht ein anderes Mitglied zum Admin, und du bist es nicht mehr. Du bestätigst mit deinem Passwort.",
+      "transfer_placeholder": "Name des Mitglieds…",
+      "transfer_btn": "Admin übertragen…",
+      "transfer_pick": "Wähle zuerst ein Mitglied aus der Liste",
       "referrer_recommended": "Empfohlen",
       "referrer_advanced": "Erweitert – auf eigene Verantwortung verwenden",
       "referrer_same_origin": "Same-Origin (Standard)",
@@ -2056,7 +2119,6 @@
       "fcm_enabled_label": "Google-FCM-Push-Benachrichtigungen aktivieren",
       "login_title_placeholder": "(wird auf der Anmeldeseite angezeigt)",
       "server_banner_hint": "Serverbanner (breit, max. 4 MB)",
-      "server_banner_display_hint": "Einstellungen für die Banneranzeige (Höhe, Versatz, Kopfzeilenstil) findest du in den Benutzereinstellungen.",
       "appearance_welcome": "Darstellung und Begrüßung",
       "welcome_message": "Begrüßungsnachricht",
       "welcome_message_placeholder": "z. B. Willkommen, {user}!",
@@ -2458,6 +2520,8 @@
       "listener_only_hint": "Sprachkanälen beitreten, ohne Zugriff auf das Mikrofon anzufordern. Du hörst alle anderen, kannst aber nicht sprechen. Nützlich, wenn du kein Mikrofon besitzt, den Zugriff gerade nicht erlauben kannst oder einfach nur zuhören möchtest. Haven wechselt außerdem automatisch in den Nur-Zuhören-Modus, wenn das Mikrofon aus irgendeinem Grund nicht geöffnet werden kann. (#5380)",
       "screen_share_voice_proc": "Sprachverarbeitung auf Bildschirmfreigabe-Audio anwenden",
       "screen_share_voice_proc_hint": "Echounterdrückung, Rauschunterdrückung und automatische Verstärkungsregelung für Audio aus deiner Bildschirmfreigabe wieder aktivieren. Standardmäßig seit 3.17.3 ausgeschaltet, da diese Filter Musik und Spielaudio beeinträchtigen. Aktiviere diese Option, wenn du Sprache überträgst (Erklärungen, Podcasts, Besprechungen), bei der die Bereinigung hilft. Dein Mikrofon ist davon nicht betroffen und wird immer vollständig verarbeitet.",
+      "stereo_stream_audio": "Stereo-Ton für Streams (experimentell)",
+      "stereo_stream_audio_hint": "Spielt den Ton von Bildschirmübertragungen in Stereo, mit höherer Bitrate für Musik und Spiele. Einschalten, um Streams in Stereo zu hören; auf Servern mit Sprach-Relay muss es auch die teilende Person einschalten. Braucht mehr Bandbreite. Nach dem Ändern dem Sprachkanal neu beitreten. Experimentell: wenn der Sprachchat Probleme macht, wieder ausschalten.",
       "screen_audio_webaudio": "Web-Audio-Mischung für Bildschirmfreigabe-Audio",
       "screen_audio_webaudio_hint": "Standardmäßig gibt Haven eingehendes Bildschirmfreigabe-Audio direkt über das Audioelement wieder. So bleibt es über TURN-/Relais-Verbindungen mit dem Video synchron. Aktiviere diese Option, um das Audio stattdessen über Havens Web-Audio-Mixer zu leiten. Dadurch lässt sich die Stream-Lautstärke über 100 % anheben, aber über ein Relais können Audioaussetzer und eine Synchronisationsverschiebung zwischen Audio und Video auftreten (im lokalen Netzwerk funktioniert es problemlos). Deaktiviere die Option, wenn Audio einer Bildschirmfreigabe stottert oder nicht synchron ist. (#5426)",
       "screen_relay_profile": "Bildschirmfreigabe bei Relais-Verbindungen schonender übertragen",
@@ -2479,7 +2543,25 @@
       "blur": "NSFW-Themen bis zum Anklicken unscharf darstellen",
       "blur_hint": "Bild und Vorschau eines mit 🔞 markierten Themas werden wie ein Spoiler unscharf dargestellt. Deaktiviere diese Option, um sie direkt zu sehen."
     },
-    "search_placeholder": "Einstellungen durchsuchen (Strg+F)"
+    "search_placeholder": "Einstellungen durchsuchen (Strg+F)",
+    "accessibility": {
+      "emoji": {
+        "title": "Emoji",
+        "system": "Emoji deines Geräts",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji zeichnet Emoji auf jedem Gerät gleich, mit einer Schrift, die Haven selbst bereitstellt."
+      }
+    },
+    "whats_new": {
+      "title": "Neuigkeiten",
+      "show_label": "Neuigkeiten zeigen nach",
+      "all": "Jedem Update",
+      "minor": "Neuen Funktionen",
+      "major": "Nur großen Updates",
+      "off": "Nie",
+      "hint": "Eine Versionsnummer hat drei Teile: ein großes Update ändert den ersten, neue Funktionen den zweiten, Fehlerbehebungen den dritten. Ändert sich ein unterstrichener Teil, erscheinen die Versionshinweise. Auf diesem Gerät gespeichert.",
+      "show_now": "Neuigkeiten dieser Version ansehen"
+    }
   },
   "modals": {
     "common": {
@@ -2828,7 +2910,7 @@
     "donors": {
       "title": "Vielen Dank",
       "subtitle": "Haven wird mit Liebe entwickelt und durch die Großzügigkeit von Menschen wie dir am Leben erhalten. Jede Spende — groß oder klein — bedeutet uns die Welt.",
-      "sponsors_title": "Sponsoren",
+      "sponsors_title": "Monatliche Unterstützer",
       "donors_title": "Spender",
       "note": "Neue Spender werden mit jedem Release hinzugefügt. Falls du gespendet hast und deinen Namen nicht siehst, er wird im nächsten Update erscheinen!",
       "kofi_btn": "Haven auf Ko-fi unterstützen",
@@ -3138,7 +3220,9 @@
       "not_here": "„Später senden“ ist für Direktnachrichten nicht verfügbar",
       "scheduled": "Geplant für {{when}}",
       "updated": "Aktualisiert, Versand um {{when}}",
-      "sent": "Deine geplante Nachricht wurde in #{{channel}} gesendet"
+      "sent": "Deine geplante Nachricht wurde in #{{channel}} gesendet",
+      "attach": "📎 Dateien anhängen",
+      "remove_file": "Entfernen"
     },
     "self_destruct": {
       "title": "Selbstzerstörende Nachricht",
@@ -4198,5 +4282,14 @@
     "reply_one": "1 Antwort",
     "reply_other": "{{count}} Antworten",
     "unavailable_in_dm": "Threads sind in Direktnachrichten nicht verfügbar"
+  },
+  "groups": {
+    "no_key": "🔒 Wartet darauf, dass ein anderes Gruppenmitglied Haven öffnet und den Schlüssel teilt",
+    "before_join": "🔒 Gesendet, bevor du beigetreten bist (oder bevor deine Schlüssel zurückgesetzt wurden), kann hier nicht geöffnet werden"
+  },
+  "whats_new": {
+    "title": "Neu in Haven {{version}}",
+    "settings_hint": "Unter Einstellungen > Neuigkeiten wählst du, wann das erscheint.",
+    "unavailable": "Die Versionshinweise sind auf diesem Server nicht verfügbar."
   }
 }

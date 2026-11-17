@@ -196,7 +196,7 @@ _initDesktopAppBanner() {
     if (ua.includes('win')) platform = t('platform.desktop.windows_installer');
     else if (ua.includes('linux')) platform = t('platform.desktop.linux_installer');
     else if (ua.includes('mac')) platform = t('platform.desktop.macos_installer');
-    meta.textContent = `${platform} \u2022 v1.0.0`;
+    meta.textContent = platform;
   }
 
   const laterBtn = document.getElementById('desktop-promo-later');
@@ -1948,6 +1948,11 @@ _decryptE2EFiles(root) {
           dlBtn.title = t('platform.e2e.download_file', { name });
           dlBtn.innerHTML = '⬇';
           infoBar.appendChild(dlBtn);
+          // Loop and Keep playing, as on files outside encrypted DMs (#5825).
+          // A voice message gets neither there either.
+          if (!(isAudio && /^voice-message/i.test(name))) {
+            infoBar.insertAdjacentHTML('beforeend', this._mediaControlsHtml?.(isVideo ? 'video' : 'audio') || '');
+          }
           row.appendChild(infoBar);
 
           if (isVideo) {
@@ -1974,6 +1979,10 @@ _decryptE2EFiles(root) {
             obs.disconnect();
             this._fallbackToDownload(mediaEl);
           }, { once: true });
+          // Click to play or pause, and the rest every other video gets. Set
+          // up after the listener above, so the blob URL is kept before the
+          // shared fallback (which does nothing a second time) runs.
+          if (isVideo) this._setupVideos?.(row);
 
           btn.disabled = false;
           return;

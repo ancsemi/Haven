@@ -27,6 +27,10 @@ const { tagAccess, setTagRole } = require('../uploadTagRoles');
 
 module.exports = function register(socket, ctx) {
   const { db, io, floodCheck, userHasPermission, getChannelRoleChain } = ctx;
+  const tagName = (id) => db.prepare('SELECT name FROM upload_tags WHERE id = ?').get(id)?.name || null;
+  const auditTag = (action, name, details) => {
+    if (typeof ctx.logAudit === 'function') ctx.logAudit({ actor: socket.user, action, target_type: 'tag', target_name: name, details });
+  };
 
   const canManageTags = () =>
     socket.user.isAdmin || userHasPermission(socket.user.id, 'manage_tags');
@@ -98,7 +102,12 @@ module.exports = function register(socket, ctx) {
     if (roleId !== null && !Number.isInteger(roleId)) return respond({ error: 'bad_request' });
     if (floodCheck('tagEdit')) return respond({ error: 'rate_limited' });
     try {
-      respond(setTagRole(db, { tagId: data.tagId, roleId }));
+      const result = setTagRole(db, { tagId: data.tagId, roleId });
+      if (result && !result.error) {
+        const role = roleId ? db.prepare('SELECT name FROM roles WHERE id = ?').get(roleId)?.name : null;
+        auditTag('tag_update', tagName(data.tagId), { role: role || 'anyone' });
+      }
+      respond(result);
     } catch (e) {
       console.warn('[tags] set role failed:', e.message);
       respond({ error: 'failed' });
@@ -114,6 +123,7 @@ module.exports = function register(socket, ctx) {
       const { maxLen } = effectiveLimits(db);
       const res = createTag(db, { name: data.name, userId: socket.user.id, maxLen });
       if (res.error) return respond(res);
+      auditTag('tag_create', res.name);
       respond({ ok: true, tag: { id: res.id, name: res.name } });
     } catch (e) {
       respond({ error: 'failed' });
@@ -127,8 +137,10 @@ module.exports = function register(socket, ctx) {
     if (floodCheck('tagEdit')) return respond({ error: 'rate_limited' });
     try {
       const { maxLen } = effectiveLimits(db);
+      const before = tagName(data.tagId);
       const res = renameTag(db, { tagId: data.tagId, newName: data.newName, maxLen });
       if (res.error) return respond(res);
+      auditTag('tag_update', before, { renamedTo: String(data.newName || '').trim().slice(0, 60), merged: !!res.merged });
       rebroadcastTargets(res.targets);
       respond({ ok: true, merged: res.merged });
     } catch (e) {
@@ -142,8 +154,10 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object' || !Number.isInteger(data.tagId)) return respond({ error: 'bad_request' });
     if (floodCheck('tagEdit')) return respond({ error: 'rate_limited' });
     try {
+      const before = tagName(data.tagId);
       const res = deleteTag(db, { tagId: data.tagId });
       if (res.error) return respond(res);
+      auditTag('tag_delete', before);
       rebroadcastTargets(res.targets);
       respond({ ok: true });
     } catch (e) {

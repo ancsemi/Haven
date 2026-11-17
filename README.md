@@ -34,6 +34,15 @@ channel, share the code. The certificate warning on first load is expected, clic
 
 [One-click cloud deploy on Zeabur](https://zeabur.com/templates?repoURL=https://github.com/ancsemi/Haven) · [on RepoCloud](https://repocloud.io/details/Haven/) · [Full setup guide](GUIDE.md)
 
+**What does it need?** About 100 MB of memory and almost no processor time for a group of
+friends. In testing, 1,000 people online at once in a very busy channel used about an eighth
+of one desktop processor core. The measured numbers, and a
+one-command benchmark to check them on your own machine, are in
+[How much hardware does Haven need?](docs/hardware.md)
+
+**Prefer video?** Short [video tutorials](https://haven-app.com/tutorials.html) walk through installing and running a
+server. They are also on [YouTube](https://www.youtube.com/@Haven-App_Tutorials) and [Rumble](https://rumble.com/user/HavenApp).
+
 ---
 
 ## Three ways in
@@ -41,6 +50,7 @@ channel, share the code. The certificate warning on first load is expected, clic
 | | |
 |---|---|
 | 🖥️ **[Haven Desktop](https://github.com/ancsemi/Haven-Desktop/releases/latest)** | Windows and Linux. Per-app audio sharing (send one app’s sound, nothing else), device switching mid-call, native notifications, tray. It can also **run the server itself**. |
+| 💻 **[Haven for macOS](https://github.com/Amnibro/Haven-Desktop/releases/latest/download/Haven-Desktop-universal.dmg)** | A Mac version of Haven Desktop, built by [Amnibro](https://github.com/Amnibro). One download for Apple Silicon and Intel Macs. |
 | 📱 **[Haven for Android (Google Play)](https://play.google.com/store/apps/details?id=com.havenapp.mobile&gl=US)** <br> 💠 **[Android (via Obtainium)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://amni-scient.com/downloads/amni-haven.apk)** | On Google Play, or as a direct download through Obtainium. Native, not a web wrapper. Full chat, voice and push notifications. Built by [Amnibro](https://github.com/Amnibro). |
 | 🍎 **[Haven for iOS](https://testflight.apple.com/join/ADeG5zRq)** | In testing through TestFlight. Native, by [Amnibro](https://github.com/Amnibro) as well. Until it is on the App Store, the browser works too: open your server in Safari and Add to Home Screen. |
 | 🌐 **Any browser** | Nothing to install. Send a link, they are in. Works on phones. |
@@ -129,6 +139,9 @@ Everything in detail lives in **[GUIDE.md](GUIDE.md)**: setup, Docker, remote ac
 (port forwarding, Tailscale, Cloudflare Tunnel, reverse proxies), themes, voice and
 TURN, Discord import, Ferry, encryption, backups, configuration, translations, the
 bot API, and troubleshooting.
+
+Short how-to videos are on the [tutorials page](https://haven-app.com/tutorials.html), [YouTube](https://www.youtube.com/@Haven-App_Tutorials) and
+[Rumble](https://rumble.com/user/HavenApp).
 
 Release notes are in [CHANGELOG.md](CHANGELOG.md).
 

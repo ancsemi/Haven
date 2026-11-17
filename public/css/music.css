@@ -217,6 +217,19 @@
 .music-queue-remove-btn:hover { opacity: 0.8; }
 
 /* Overlay blocks direct clicks on the iframe; sync goes through Haven controls only */
+/* A file from this server (app-music-file.js): its name, and the player
+   itself hidden, since the panel's own controls run it. */
+.music-file-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  min-height: 3rem;
+}
+.music-file-icon { font-size: 1.25rem; }
+.music-file-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.music-file-wrapper audio { display: none; }
+
 .music-embed-wrapper {
   position: relative;
   width: 100%;

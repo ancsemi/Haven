@@ -8,6 +8,17 @@ export default {
 _listenFeatureEvents() {
   this._listenForumVotes?.();
   this._listenForumBlog?.();
+  // ── Read receipts across this account's devices ─────
+  // Another connected device (or this same tab, harmlessly) marked a
+  // channel read: drop any notification still showing for it here too, and
+  // clear its unread count and the badges built from it.
+  this.socket.on('channel-read', (data) => {
+    if (!data?.channelCode) return;
+    this._dismissChannelNotifications(data.channelCode);
+    this._applyChannelRead(data.channelCode, data.messageId);
+    this._mentionsSeenInChannel?.(data.channelCode, data.messageId);
+  });
+
   // ── Reactions ──────────────────────────────────────
   this.socket.on('reactions-updated', (data) => {
     if (data.channelCode === this.currentChannel || data.channelCode === this._activeDMPip) {
@@ -397,6 +408,7 @@ _listenMessageChanges() {
     document.getElementById('current-user').textContent = data.user.displayName || data.user.username;
     const loginEl = document.getElementById('login-name');
     if (loginEl) loginEl.textContent = `@${data.user.username}`;
+    this._renderUserBarAvatar();
     this._showToast(t('toasts.display_name_changed', { name: data.user.displayName || data.user.username }), 'success');
     // Refresh admin UI in case admin status changed
     this.user.permissions = data.user.permissions || this.user.permissions || [];
@@ -442,7 +454,8 @@ _listenMessageChanges() {
       if (!msgEls.length) return;
       // E2E: decrypt once if needed (same content for both copies)
       let displayContent = data.content;
-      if (HavenE2E.isEncrypted(data.content) || this._isGroupEnvelope?.(data.content) || this._isGroupDm?.(data.channelCode)) {
+      const wasE2E = HavenE2E.isEncrypted(data.content) || !!this._isGroupEnvelope?.(data.content) || !!this._isGroupDm?.(data.channelCode);
+      if (wasE2E) {
         const partner = this._getE2EPartnerFor(data.channelCode);
         if (partner) {
           try {
@@ -460,7 +473,7 @@ _listenMessageChanges() {
       msgEls.forEach((msgEl) => {
         const contentEl = msgEl.querySelector('.message-content, .thread-msg-content');
         if (!contentEl) return;
-        contentEl.innerHTML = this._formatContent(displayContent);
+        contentEl.innerHTML = this._formatContent(this._roleMenuText(data.messageId, displayContent), { e2e: wasE2E });
         msgEl.dataset.rawContent = displayContent;
         let editedTag = msgEl.querySelector('.edited-tag');
         if (!editedTag) {
@@ -877,9 +890,7 @@ _listenAdminAndPrefs() {
     // Which of these settings also have a value waiting in the environment,
     // so the panel can say which one is actually in effect. (#5489)
     this.serverEnvSettings = envInfo || {};
-    // No GIF provider on this server: the button would only open an empty
-    // picker, so it goes (#5654).
-    document.documentElement.toggleAttribute('data-no-gif', settings && settings.gif_search_available === 'false');
+    this._syncGifButton();
     // TEMPORARY (#5649): a one-time notice to admins that channel access moved
     // from roles to the channel's Required roles. Remove after the 4.8.x cycle.
     if (settings && settings.role_gate_notice === '1' && !this._roleGateNoticeShown &&
@@ -902,6 +913,7 @@ _listenAdminAndPrefs() {
   this.socket.on('server-setting-changed', (data) => {
     this.serverSettings[data.key] = data.value;
     if (data.key.startsWith('auto_away_')) this._refreshIdleTimeout?.();
+    if (data.key === 'gif_search_available') this._syncGifButton();
     this._applyServerSettings();
     if (data.key === 'channel_templates') this._renderChannelTemplates();
     if (data.key === 'hide_disabled_channel_badges' || data.key === 'category_layout' || data.key === 'category_short_names') this._renderChannels?.();
@@ -929,8 +941,10 @@ _listenAdminAndPrefs() {
   this.socket.on('preferences', (prefs) => {
     this._userPrefs = prefs || {};
     this._prefsReceived = true;
-    // Your own channel order may arrive after the sidebar was drawn (#5779).
-    if (this._userPrefs.channel_order && Array.isArray(this.channels) && this.channels.length) this._renderChannels();
+    // Your own channel order, pinned DMs and DM sort may arrive after the
+    // sidebar was drawn (#5779, app-dm-pins.js, app-dm-sort.js).
+    this._adoptAccountDmSort();
+    if ((this._userPrefs.channel_order || this._userPrefs.pinned_dms || this._userPrefs.dm_sort) && Array.isArray(this.channels) && this.channels.length) this._renderChannels();
     // The top-bar Android banner waits for this record before it shows (#5594).
     this._syncAndroidBanner?.();
     // Effects come back from the server like the theme does; restore them

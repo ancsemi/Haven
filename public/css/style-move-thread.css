@@ -57,3 +57,24 @@
   white-space: nowrap;
 }
 .move-msg-thread-pick:hover { color: var(--text-primary, #dbdee1); border-color: var(--accent, #5865f2); }
+
+/* Replies picked in the thread panel, docked or popped out, to take them
+   back to the channel (app-unthread.js). The thread's first message sits in
+   the panel's header, so only replies can be picked. */
+.move-selection-mode .thread-messages .thread-message {
+  cursor: pointer;
+  user-select: none;
+}
+.move-selection-mode .thread-messages .thread-message.move-selected {
+  background: var(--accent-alpha, rgba(88, 101, 242, 0.15));
+  box-shadow: inset 3px 0 0 var(--accent, #5865f2);
+}
+.move-selection-mode .thread-messages .thread-msg-toolbar,
+.move-selection-mode .thread-messages .thread-msg-more {
+  display: none !important;
+}
+.move-msg-unthread-hint {
+  margin: 0.375rem 0.875rem 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted, #949ba4);
+}

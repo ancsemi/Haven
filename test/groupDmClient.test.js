@@ -1,9 +1,10 @@
 'use strict';
 
-// What the app does when a group DM goes away for this user (#5740): a group
-// missing from a fresh channel list is dropped (a 1:1 DM the server left out
-// is still kept, as before), a kick from a group says so, and the group
-// closes in the pop-out DM window as well.
+// What the app does when a DM goes away for this user (#5740, #5848): the
+// server's channel list is authoritative, so a DM missing from it is dropped
+// (keeping the old local row put a conversation deleted from the pop-out DM
+// window back on the next list refresh), a kick from a group says so, and the
+// group closes in the pop-out DM window as well.
 //
 //   node --test test/groupDmClient.test.js
 
@@ -64,10 +65,10 @@ const lounge = { id: 1, code: 'aaaaaaaa', name: 'lounge', is_dm: 0 };
 const group = { id: 2, code: 'bbbbbbbb', name: 'Crew', is_dm: 1, is_group: 1 };
 const oneToOne = { id: 3, code: 'cccccccc', name: 'DM', is_dm: 1, dm_target: { id: 9, username: 'zed' } };
 
-test('a group missing from a fresh channel list is dropped, a 1:1 DM is kept', () => {
+test('a DM missing from a fresh channel list is dropped, so a delete cannot come back', () => {
   const { app, handlers } = makeApp({ channels: [lounge, group, oneToOne] });
   handlers['channels-list']([lounge]);
-  assert.deepEqual(app.channels.map((c) => c.code), [lounge.code, oneToOne.code]);
+  assert.deepEqual(app.channels.map((c) => c.code), [lounge.code]);
 });
 
 test('a group still in the list stays', () => {

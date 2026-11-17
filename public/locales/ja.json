@@ -256,6 +256,7 @@
       "logout": "ログアウト",
       "invite": "ユーザーを招待",
       "change_display_name": "表示名を変更",
+      "mentions": "メンションと返信",
       "close_sidebar": "サイドバーを閉じる",
       "message_actions": "メッセージの操作",
       "organize_channels": "チャンネルを整理",
@@ -581,7 +582,14 @@
       "soundboard": "サウンドボード",
       "listen_together": "一緒に聴く",
       "settings": "ボイス設定"
-    }
+    },
+    "music_file_platform": "音声ファイル",
+    "music_file_listen": "ボイスの全員に再生",
+    "music_file_join_voice": "ボイスチャンネルに参加すると全員に再生できます",
+    "music_file_failed": "この音声ファイルを再生できませんでした",
+    "music_yt_gone": "YouTube によるとこの動画は削除されています",
+    "music_yt_blocked": "YouTube はこの動画をここで再生しません（埋め込みが無効か、この国でブロックされています）",
+    "music_yt_failed": "YouTube はこの動画を再生できませんでした"
   },
   "calls": {
     "incoming": "着信",
@@ -628,7 +636,8 @@
     "member_removed": "{{name}} をグループから削除しました",
     "leave_confirm": "{{group}} から退出しますか？再び招待されない限り、新しいメッセージは読めなくなります。",
     "key_changed": "{{name}} の暗号化鍵が変更されました。グループ鍵を再び共有する前に確認してください。",
-    "no_key": "🔒 参加前に送信されたか、グループメンバーによる鍵の共有を待っています",
+    "no_key": "🔒 他のグループメンバーが Haven を開いて鍵を共有するのを待っています",
+    "before_join": "🔒 参加前（または暗号鍵のリセット前）に送信されたため、ここでは開けません",
     "cannot_verify": "⚠️ このメッセージは検証できなかったため、表示されませんでした",
     "already_exists": "このメンバーとのグループはすでにあります：{{name}}",
     "keys_changed_title": "このグループで暗号化鍵が変更されました",
@@ -942,6 +951,7 @@
     "uploads_disabled": "このチャンネルではメディアのアップロードが無効になっています",
     "soundboard_disabled": "このチャンネルではサウンドボードがオフになっています",
     "file_too_large": "ファイルが大きすぎます（最大 {{maxMb}} MB）",
+    "file_type_blocked": "このサーバーでは .{{ext}} ファイルをアップロードできません",
     "image_too_large": "画像が大きすぎます（最大 {{maxMb}} MB）",
     "max_images": "一度に送れる画像は最大 5 枚です",
     "max_files": "一度に送れるファイルは最大 5 個です",
@@ -1297,7 +1307,9 @@
     "frame_rate": "フレームレート",
     "bitrate": "ビットレート",
     "bitrate_unlimited": "無制限",
-    "camera_fallback": "カメラ {{n}}"
+    "camera_fallback": "カメラ {{n}}",
+    "camera_quality": "カメラ画質",
+    "camera_quality_hint": "画質を上げるとくっきりしますが、あなたと視聴者の通信量が増えます。カメラによっては上限が低い場合があります。"
   },
   "notifications_runtime": {
     "title": "{{channel}} の {{sender}}",
@@ -1409,7 +1421,26 @@
       "tunnel": "トンネル",
       "bots": "ボット",
       "import": "インポート",
-      "mod_mode": "モデレーターモード"
+      "mod_mode": "モデレーターモード",
+      "whats_new": "新着情報"
+    },
+    "pages": {
+      "look": "外観",
+      "chat": "チャットとメディア",
+      "alerts": "通知",
+      "profile": "プロフィールとアクティビティ",
+      "security": "アカウントとセキュリティ",
+      "language": "言語",
+      "access": "アクセシビリティ",
+      "advanced": "プラグインと詳細",
+      "server": "サーバー",
+      "people": "メンバーとロール",
+      "safety": "安全",
+      "content": "コンテンツ",
+      "network": "ネットワークと規模",
+      "tools": "ボットとデータ",
+      "more": "その他",
+      "more_info": "詳細"
     },
     "language_section": {
       "title": "言語",
@@ -1667,6 +1698,12 @@
       "save_hint": "変更は「保存」をクリックしたときにのみ適用されます。キャンセルするには閉じる (✕) を押してください。",
       "save_notice": "以下の変更を適用するには <strong>設定を保存</strong> をクリックする必要があります。",
       "login_title_hint": "ログイン画面の HAVEN ロゴの下に表示されるカスタムタイトルです。",
+      "login_show_icon": "ログインページにサーバーアイコンを表示",
+      "login_show_banner": "サーバーバナーをログインページの背景にする",
+      "login_message": "ログインページのメッセージ",
+      "login_message_hint": "タイトルの下に表示する短いメモ（歓迎の言葉や招待の受け方など）。",
+      "login_css": "ログインページの CSS",
+      "login_css_hint": "ログインと登録ページだけに適用されます。スタイルでフォームが隠れたら、ログインページのアドレスの末尾に ?nocss を付けると無視できます。他のサイトの画像やフォントを使うと、そのサイトに訪問者が見えます。",
       "server_icon_hint": "サーバーアイコン(正方形、最大 2 MB)",
       "default_theme_hint": "新しいユーザーは初回訪問時にこのテーマが表示されます。ユーザーは自分でテーマを選ぶこともできます。「新規メンバーのデフォルト」で共有したテーマはこれと同じ設定です。一方を変更すると、もう一方も変わります。",
       "update_banner_hint": "有効にすると、「アップデートがあります」バナーは管理者にのみ表示されます",
@@ -1679,6 +1716,9 @@
       "max_sound_hint": "サウンドボードの最大アップロードサイズ(256-10240 KB、デフォルト 1024 / 1 MB)",
       "max_emoji_hint": "カスタム絵文字の最大アップロードサイズ(64-1024 KB、デフォルト 256)",
       "max_poll_hint": "投票ごとの最大選択肢数(2-25、デフォルト 10)",
+      "blocked_upload_types": "ブロックするファイル形式",
+      "blocked_upload_types_hint": "これらの形式のファイルは誰もアップロードできません。カンマで区切ってください。よくある危険な形式: exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar。空欄ならすべて許可します。",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_message_chars_hint": "メッセージ、投稿、DM ごとの最大文字数(200-100000、デフォルト 2000)",
       "sounds_hint": "カスタム通知音用の音声ファイルをアップロードします",
       "emojis_hint": "サーバーのカスタム絵文字用の画像をアップロードします",
@@ -1690,6 +1730,13 @@
       "no_banned_users": "BAN されたユーザーはいません",
       "no_reason": "理由なし",
       "unban_btn": "BAN 解除",
+      "scrub_btn": "メッセージを削除",
+      "scrub_title": "このサーバーのチャンネルで書いたものをすべて削除",
+      "scrub_confirm": "{{name}} のメッセージをすべて削除しますか？",
+      "scrub_confirm_hint": "このサーバーのチャンネルで書いたものが全員から削除されます。保護されたメッセージと DM は残ります。元に戻せません。",
+      "scrub_done": "{{n}} 件のメッセージを削除しました",
+      "scrub_none": "削除するメッセージはもうありません",
+      "scrub_failed": "メッセージを削除できませんでした",
       "delete_user_title": "ユーザーを削除",
       "confirm_delete_user": "⚠️ {{name}} を完全に削除しますか？この操作は元に戻せません。",
       "no_deleted_users": "削除済みユーザーはいません",
@@ -1818,12 +1865,48 @@
         "reapply_access": "全ユーザーにアクセスを再適用",
         "reapply_access_tooltip": "このロールをすでに持っているすべてのユーザーに対して、上記のチャンネルアクセスのルールを再実行します。付与/取り消しのチェックボックスを編集した後に便利です。ロールを割り当て直さなくても、既存のメンバーを現在の設定に合わせられます。",
         "permissions": "権限",
-        "delete": "削除"
+        "delete": "削除",
+        "mentionable": "@メンションできる",
+        "mentionable_hint": "@リストに表示され、@名前 でこのロールの全員に通知します。飾りやゲーム用のロールはオフに。",
+        "show_on_profile": "プロフィールカードに表示",
+        "show_on_profile_hint": "オフ：プロフィールカードに表示しません。ロールを管理する人には薄く表示されます。",
+        "hidden_on_profile_title": "ロールを管理する人だけがプロフィールカードでこれを見られます"
       },
       "import_files_progress": "{{count}} 件のファイルをコピー済み",
       "import_files_copied": "{{count}} 件の画像とファイルを Haven にコピーしました。",
       "import_files_links": "{{count}} 件はリンクのままです（期限切れ、大きすぎる、または取得できませんでした）。",
-      "import_files_disk": "サーバーのディスク容量が少ないためコピーを停止しました。残りはリンクのままです。"
+      "import_files_disk": "サーバーのディスク容量が少ないためコピーを停止しました。残りはリンクのままです。",
+      "transfer_title": "サーバーを他の人に引き継ぐ",
+      "transfer_hint": "別のメンバーを管理者にし、あなたは管理者でなくなります。パスワードで確認します。",
+      "transfer_placeholder": "メンバー名…",
+      "transfer_btn": "管理者を移譲…",
+      "transfer_pick": "先にリストからメンバーを選んでください",
+      "shutdown_btn": "サーバーを停止",
+      "shutdown_hint": "Ctrl+C と同じように Haven を安全に停止します。いつもの方法で再起動してください。Docker やサービスマネージャーが自動で再起動する場合は、再起動になります。",
+      "shutdown_confirm": "今すぐサーバーを停止しますか？再起動するまで全員の接続が切れます。",
+      "shutdown_sent": "サーバーを停止しています。"
+    },
+    "debug_section": {
+      "stereo_stream_audio": "配信音声をステレオに（実験的）",
+      "stereo_stream_audio_hint": "画面共有の音声を、音楽やゲーム向けの高いビットレートのステレオで再生します。オンにすると配信をステレオで聞けます。ボイスリレーを使うサーバーでは、共有する人もオンにする必要があります。通信量が増えます。変更後はボイスに入り直してください。実験的機能です。ボイスの調子が悪ければオフにしてください。"
+    },
+    "accessibility": {
+      "emoji": {
+        "title": "絵文字",
+        "system": "デバイスの絵文字",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji はどのデバイスでも同じ絵文字を表示します。フォントは Haven 自身が配信します。"
+      }
+    },
+    "whats_new": {
+      "title": "新着情報",
+      "show_label": "新着情報を表示するタイミング",
+      "all": "すべての更新",
+      "minor": "新機能",
+      "major": "大型アップデートのみ",
+      "off": "表示しない",
+      "hint": "バージョン番号は3つの部分からなります。大型アップデートで1つ目、新機能で2つ目、修正で3つ目が変わります。下線の部分が変わると、リリースノートが表示されます。この端末に保存されます。",
+      "show_now": "このバージョンの新着情報を見る"
     }
   },
   "modals": {
@@ -2118,7 +2201,7 @@
     "donors": {
       "title": "ありがとうございます",
       "subtitle": "Haven は愛情を込めて作られ、皆さんのような方々の寛大なご支援によって支えられています。金額の大小にかかわらず、すべての寄付がとても大きな意味を持っています。",
-      "sponsors_title": "スポンサー",
+      "sponsors_title": "毎月のサポーター",
       "donors_title": "寄付者",
       "note": "新しい寄付者はリリースごとに追加されます。寄付したのに名前が見当たらない場合は、次のアップデートで掲載されます！",
       "kofi_btn": "Ko-fi で Haven を支援",
@@ -2306,6 +2389,10 @@
       "desc": "移動先のチャンネルを選択してください",
       "move_one": "{{n}}件のメッセージの移動先:",
       "move_many": "{{n}}件のメッセージの移動先:"
+    },
+    "schedule": {
+      "attach": "📎 ファイルを添付",
+      "remove_file": "削除"
     }
   },
   "context_menu": {
@@ -2922,5 +3009,10 @@
     "days_ago": "{{n}}日前",
     "tags_editor_title": "フォーラムタグ",
     "tags_editor_hint": "1行に1つのタグ。絵文字を付けたい場合は先頭に置きます（例:「🎨 アート」）。最大20個。"
+  },
+  "whats_new": {
+    "title": "Haven {{version}} の新着情報",
+    "settings_hint": "設定 > 新着情報 で表示するタイミングを選べます。",
+    "unavailable": "このサーバーではリリースノートを利用できません。"
   }
 }

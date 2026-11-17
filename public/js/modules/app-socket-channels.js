@@ -13,6 +13,7 @@ _listenChannelsAndMessages() {
     // show messages they no longer have access to. Invalidate the panel off
     // this already-broadcast event, so no new server plumbing. (search-overhaul)
     this._searchInvalidate?.(channels);
+    this._mentionsMerge?.(channels);
     // Fresh authoritative state: an optimistic Channel Functions toggle that
     // was still awaiting a verdict has just been accepted, so drop its undo.
     this._cfnPendingToggle = null;
@@ -33,19 +34,16 @@ _listenChannelsAndMessages() {
       this._migrateChannelCodeState(rotation.oldCode, rotation.newCode);
     }
 
-    // Preserve any DM channels that were added client-side (via dm-opened
-    // events). The server only sends server channels in channels-list, so
-    // overwriting would wipe DM entries and break E2E decryption until the
-    // user reopens the DM. A group DM only ever comes from this list, so one
-    // missing from it is a group this user is no longer in (left, removed or
-    // deleted) and goes. (#5740)
-    const existingDMs = (this.channels || []).filter(c => c.is_dm && !c.is_group);
+    // The server's list is authoritative for DMs as well as channels: it
+    // sends every 1:1 and group DM this person is still a member of. Keeping
+    // older local copies here let a deleted conversation come back on the
+    // next list refresh whenever its channel-deleted broadcast was missed
+    // (a reconnect or server switch around the delete), which is what #5848
+    // saw when the DM had been deleted from the pop-out DM window.
+    const openPiPCode = this._activeDMPip;
     this.channels = channels.map(c => c.is_group ? { ...c, dm_target: null } : c);
-    for (const dm of existingDMs) {
-      if (!this.channels.find(c => c.code === dm.code)) {
-        this.channels.push(dm);
-      }
-    }
+    // A DM that is gone from the fresh list must not stay open in the pop-out.
+    if (openPiPCode && !this.channels.some(c => c.code === openPiPCode)) this._closeDMPiP?.();
     this._persistChannelCodeMap(channels);
     // Streams or Listen Together switched on or off in the voice room you are in.
     this._applyVoiceRoomLimits?.();
@@ -137,6 +135,7 @@ _listenChannelsAndMessages() {
         // Per-channel, same reasoning as the composer gate in app-channels.js (#5468)
         const _isReadOnly = curCh.read_only === 1 && !this.user?.isAdmin && !curCh.canOverrideReadOnly;
         if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
+        if (msgInputArea) msgInputArea.classList.toggle('media-only', _textOff && !_mediaOff);
         this._updateReadOnlyNote(curCh);
         this._applyReactionLock?.();
       }
@@ -195,6 +194,7 @@ _listenChannelsAndMessages() {
     if (!data) return;
     this._markSelfRole(data.roleId, !!data.held);
   });
+  this.socket.on('role-menu-pickers', (data) => data && this._refreshRoleMenuPickers(data.messageId, data.pickers));
 
   // A role menu was edited: swap in the new buttons wherever that message is
   // on screen. The click handling is delegated, so fresh HTML just works (#5644).
@@ -353,6 +353,8 @@ _listenChannelsAndMessages() {
         // When newer messages have been trimmed, the scroll "bottom" is
         // artificial and re-coupling would yank the user forward.
         this._coupledToBottom = true;
+        // Back at the newest messages: they have been seen.
+        this._clearSeenUnread();
       } else if (st < lastScrollTop) {
         // User scrolled up: decouple immediately
         this._coupledToBottom = false;
@@ -406,6 +408,9 @@ _listenChannelsAndMessages() {
   }
 
   this.socket.on('new-message', async (data) => {
+    // (#5875) A message in the open channel means the reconnect really
+    // rejoined it, so the silence watchdog can stand down.
+    this._noteChannelDelivery?.(data?.channelCode);
     // E2E: ensure partner key is available before decrypting
     const msgCh = this.channels.find(c => c.code === data.channelCode);
     if (msgCh && msgCh.is_dm && msgCh.dm_target && !this._dmPublicKeys[msgCh.dm_target.id]) {
@@ -510,6 +515,7 @@ _listenChannelsAndMessages() {
           if (!isActivelyViewing && !_quiet) {
             this._fireNativeNotification(data.message, data.channelCode, _notifOpts);
           }
+          if (!isActivelyViewing) this._mentionsCount?.(data.message, data.channelCode);
         }
       }
       // TTS: speak the message aloud for all listeners
@@ -576,6 +582,7 @@ _listenChannelsAndMessages() {
         }
         // Fire native OS notification when tab/window is not visible
         if (!_quiet2) this._fireNativeNotification(data.message, data.channelCode, _notifOpts2);
+        this._mentionsCount?.(data.message, data.channelCode);
       }
     }
 
@@ -583,11 +590,13 @@ _listenChannelsAndMessages() {
     const msgChannel = this.channels.find(c => c.code === data.channelCode);
     if (msgChannel && data.message.id > (msgChannel.latestMessageId || 0)) {
       msgChannel.latestMessageId = data.message.id;
-      // Re-sort sidebar if this channel's parent uses dynamic sort
+      // Re-sort sidebar if this channel's parent uses dynamic sort, or it
+      // is a DM and your DMs show the latest message first (app-dm-sort.js)
       const parent = msgChannel.parent_channel_id
         ? this.channels.find(c => c.id === msgChannel.parent_channel_id)
         : null;
-      if ((parent && parent.sort_alphabetical === 4) ||
+      if ((msgChannel.is_dm && this._dmSortMode() === 'recent') ||
+          (parent && parent.sort_alphabetical === 4) ||
           (!msgChannel.parent_channel_id && (localStorage.getItem('haven_server_sort_mode') === 'dynamic' ||
             (!localStorage.getItem('haven_server_sort_mode') && this.serverSettings?.channel_sort_mode === 'dynamic')))) {
         this._renderChannels();
@@ -609,6 +618,7 @@ _listenPresenceAndVoice() {
   // channel. The server sends the whole list first, so a channel with no
   // list here yet is skipped until it does.
   this.socket.on('online-users-delta', (data) => {
+    this._noteChannelDelivery?.(data?.channelCode);
     const list = this._onlineByChannel?.get(data?.channelCode);
     if (!list) return;
     const upsert = Array.isArray(data.upsert) ? data.upsert.map(fillMember) : [];
@@ -622,6 +632,9 @@ _listenPresenceAndVoice() {
   });
 
   this.socket.on('online-users', (data) => {
+    // Re-entering a channel pushes this list to the room. Receiving it is
+    // how we know the socket is actually in that room again (#5875).
+    this._noteChannelDelivery?.(data?.channelCode);
     if (data?.slim && Array.isArray(data.users)) data = { ...data, users: data.users.map(fillMember) };
     applyOnlineUsers(data);
   });
@@ -834,10 +847,7 @@ _listenPresenceAndVoice() {
   });
 
   this.socket.on('channel-deleted', (data) => {
-    this.channels = this.channels.filter(c => c.code !== data.code);
-    this._renderChannels();
-    // A DM gone while open in the pop-out DM window closes it too.
-    if (this._activeDMPip === data.code) this._closeDMPiP?.();
+    this._removeChannelLocally(data.code);
     // Disconnect from voice if the user is in the deleted channel's voice
     if (this.voice && this.voice.inVoice && this.voice.currentChannel === data.code) {
       this._leaveVoice();
@@ -882,6 +892,7 @@ _listenPresenceAndVoice() {
     // this is the only chance to put the row back where it was.
     this._revertPendingChannelToggle();
     this._restoreRefusedDraft(msg);
+    /^You are in a timeout/.test(msg) && (this._forumRestoreDraft?.(), this._showTimeoutNotice(msg));
     this._showToast(msg, 'error');
   });
 
@@ -910,6 +921,24 @@ _listenPresenceAndVoice() {
     if (sentAt == null) return;
     document.getElementById('status-ping').textContent = Date.now() - sentAt;
   });
+},
+
+/**
+ * Drop a channel from this client for good: its sidebar row, its unread count
+ * and a pop-out DM showing it. Used both for the server's channel-deleted
+ * broadcast and for the reply to our own delete-dm, so a conversation deleted
+ * in this window goes at once even when the broadcast is missed (a reconnect
+ * or server switch around the delete) and cannot be put back by the next
+ * channel list. (#5848)
+ */
+_removeChannelLocally(code) {
+  if (!code) return;
+  this.channels = (this.channels || []).filter(c => c.code !== code);
+  if (this.unreadCounts) delete this.unreadCounts[code];
+  // A DM gone while open in the pop-out DM window closes it too.
+  if (this._activeDMPip === code) this._closeDMPiP?.();
+  this._renderChannels?.();
+  this._updateDmSectionBadge?.();
 },
 
 };

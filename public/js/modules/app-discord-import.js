@@ -125,7 +125,7 @@ _setupDiscordImport() {
   });
 
   // Execute button
-  executeBtn?.addEventListener('click', () => {
+  executeBtn?.addEventListener('click', async () => {
     if (!currentImportId || !currentPreview) return;
     const selected = [];
     channelList.querySelectorAll('.import-channel-row').forEach(row => {
@@ -139,13 +139,13 @@ _setupDiscordImport() {
       });
     });
     if (selected.length === 0) {
-      alert(t('settings.admin.import_select_channel'));
+      this._alert(t('settings.admin.import_select_channel'));
       return;
     }
     const totalMsgs = currentPreview.channels
       .filter(c => selected.some(s => (s.discordId && s.discordId === c.discordId) || s.originalName === c.name))
       .reduce((sum, c) => sum + c.messageCount, 0);
-    if (!confirm(t(selected.length === 1 ? 'settings.admin.import_confirm_one' : 'settings.admin.import_confirm_other', { count: selected.length, messages: totalMsgs.toLocaleString() }))) return;
+    if (!await this._confirm(t(selected.length === 1 ? 'settings.admin.import_confirm_one' : 'settings.admin.import_confirm_other', { count: selected.length, messages: totalMsgs.toLocaleString() }))) return;
     this._importExecute(currentImportId, selected);
   });
 
@@ -294,7 +294,7 @@ async _importUploadFile(file) {
   // Validate extension
   const ext = file.name.split('.').pop().toLowerCase();
   if (!['json', 'zip'].includes(ext)) {
-    alert(t('settings.admin.import_file_type_error'));
+    this._alert(t('settings.admin.import_file_type_error'));
     return;
   }
 
@@ -727,7 +727,7 @@ async _importExecute(importId, selectedChannels) {
     // Refresh channel list
     if (this.socket) this.socket.emit('get-channels');
   } catch (err) {
-    alert(t('settings.admin.import_failed_alert', { error: err.message }));
+    this._alert(t('settings.admin.import_failed_alert', { error: err.message }));
   } finally {
     executeBtn.disabled = false;
     executeBtn.textContent = `📦 ${t('settings.admin.import_btn')}`;

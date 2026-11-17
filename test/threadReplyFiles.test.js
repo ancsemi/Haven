@@ -132,6 +132,30 @@ test('deleting a topic moves its replies\' files out of uploads', async () => {
   assert.ok(fs.existsSync(path.join(DATA, 'uploads', 'deleted-attachments', replyPic.replace('/uploads/', ''))), 'and waits in deleted-attachments');
 });
 
+test('a deleted old attachment waits out the retention window from its deletion', async () => {
+  const { admin } = await accounts();
+  const A = await connect(admin.token);
+  const list = next(A, 'channels-list', (c) => Array.isArray(c) && c.some((x) => x.name === 'oldpics'));
+  A.emit('create-channel', { name: 'oldpics' });
+  const code = (await list).find((c) => c.name === 'oldpics').code;
+  A.emit('enter-channel', { code });
+  await wait(200);
+
+  const pic = await upload(admin.token);
+  A.emit('send-message', { code, content: `Old one\n${pic}` });
+  await wait(400);
+  const msg = readDb("SELECT id FROM messages WHERE content LIKE 'Old one%'")[0];
+  const rel = pic.replace('/uploads/', '');
+  const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  fs.utimesSync(path.join(DATA, 'uploads', rel), monthAgo, monthAgo);
+
+  A.emit('delete-message', { messageId: msg.id, channelCode: code });
+  await wait(600);
+  const moved = path.join(DATA, 'uploads', 'deleted-attachments', rel);
+  assert.ok(fs.existsSync(moved), 'the file waits in deleted-attachments');
+  assert.ok(Date.now() - fs.statSync(moved).mtimeMs < 60 * 1000, 'stamped with the deletion time, not the upload time');
+});
+
 // Builds a blog forum the way the app does: a post with a picture, the rest
 // of its gallery as the author's own replies, and a member's comment with a
 // picture of their own. Returns the channel code and every file it used.

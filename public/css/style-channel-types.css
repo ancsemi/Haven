@@ -1,0 +1,164 @@
+/* Channel types (js/modules/app-channel-types.js): the sidebar icon, the
+   list in Settings, the editor and the picker. */
+
+.ch-type-badge {
+  font-size: 0.75rem;
+  line-height: 1;
+  max-width: 6em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+/* ── Settings list ── */
+.ct-new-btn { margin: 0.5rem 0; }
+.ct-list { display: flex; flex-direction: column; gap: 0.375rem; }
+.ct-card {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.ct-card-icon {
+  flex-shrink: 0;
+  min-width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  padding: 0 0.25rem;
+}
+.ct-card-body { flex: 1; min-width: 0; }
+.ct-card-name { font-size: 0.8125rem; font-weight: 600; color: var(--text-primary); }
+.ct-card-used { font-weight: 400; font-size: 0.6875rem; color: var(--text-muted); margin-left: 0.375rem; }
+.ct-card-summary { font-size: 0.6875rem; color: var(--text-secondary); margin-top: 0.125rem; line-height: 1.4; }
+.ct-card-actions { display: flex; gap: 0.25rem; flex-shrink: 0; }
+.ct-card-actions .ct-delete { color: var(--danger); }
+.ct-card-actions .ct-delete:hover { border-color: var(--danger); }
+
+/* ── Editor ── */
+.modal.ct-editor { width: min(92%, 28rem); }
+.ct-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.875rem;
+}
+.ct-preview-label { font-size: 0.6875rem; color: var(--text-muted); white-space: nowrap; }
+.ct-preview-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.375rem 0.625rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+.ct-preview-hash { color: var(--text-muted); }
+.ct-preview-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ct-preview-icon { font-size: 0.875rem; }
+.ct-field-label {
+  display: block;
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ct-input { width: 100%; box-sizing: border-box; }
+.ct-icon-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.ct-icon-input { width: 3.25rem; text-align: center; font-size: 1rem; }
+.ct-quick-icons { display: flex; flex-wrap: wrap; gap: 0.125rem; }
+.ct-quick-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  font-size: 1rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.ct-quick-icon:hover { background: var(--bg-tertiary); }
+.ct-quick-icon.active { border-color: var(--accent); background: var(--bg-tertiary); }
+.ct-hint { display: block; margin-top: 0.25rem; font-size: 0.6875rem; color: var(--text-muted); }
+.ct-group {
+  margin-top: 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.ct-group-label {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+}
+.ct-fn {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.4375rem 0.625rem;
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+}
+.ct-group-label + .ct-fn { border-top: none; }
+.ct-fn:hover { background: var(--bg-tertiary); }
+.ct-fn-icon { width: 1.25rem; text-align: center; flex-shrink: 0; }
+.ct-fn-text { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.ct-fn-label { font-size: 0.8125rem; color: var(--text-primary); }
+.ct-fn-hint { font-size: 0.6875rem; color: var(--text-muted); }
+.ct-fn input[type="checkbox"] { accent-color: var(--accent); width: 1.0625rem; height: 1.0625rem; cursor: pointer; flex-shrink: 0; }
+.ct-fn.ct-fn-blocked { cursor: not-allowed; opacity: 0.45; }
+.ct-fn.ct-fn-blocked:hover { background: transparent; }
+.ct-fn.ct-fn-blocked input { cursor: not-allowed; }
+.ct-save-note { margin: 0.75rem 0 0; font-size: 0.75rem; color: var(--text-secondary); }
+.ct-error { margin: 0.5rem 0 0; font-size: 0.75rem; color: var(--danger); }
+
+/* ── Picker ── */
+.modal.ct-picker { width: min(92%, 26rem); }
+.ct-options { display: flex; flex-direction: column; gap: 0.375rem; }
+.ct-option {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.ct-option:hover { border-color: var(--border-light); }
+.ct-option.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.ct-option-icon { min-width: 1.75rem; text-align: center; font-size: 1.125rem; flex-shrink: 0; }
+.ct-option-text { display: flex; flex-direction: column; min-width: 0; }
+.ct-option-name { font-size: 0.8125rem; font-weight: 600; }
+.ct-option-summary { font-size: 0.6875rem; color: var(--text-secondary); line-height: 1.4; }
+.ct-picker-actions .ct-manage { margin-right: auto; }
+
+/* ── Channel menu ── */
+.ct-ctx-current { margin-left: auto; padding-left: 0.5rem; font-size: 0.6875rem; color: var(--text-muted); }
+.cfn-type-note {
+  padding: 0.375rem 0.625rem 0.5rem;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.25rem;
+}

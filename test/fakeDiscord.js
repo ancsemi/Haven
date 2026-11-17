@@ -34,6 +34,7 @@ function startFakeDiscord(port) {
   const webhooks = new Map();      // id -> { id, token, channelId }
   const executions = [];           // { webhookId, threadId, body }
   const botMessages = [];
+  const reactions = [];            // { method, channelId, messageId, emoji } the bot's own
   let seq = 0;
   let identified = 0;
 
@@ -108,7 +109,8 @@ function startFakeDiscord(port) {
         }
         if (body) body.files = files;
       } else {
-        try { body = raw ? JSON.parse(raw) : null; } catch { body = null; }
+        // JSON is UTF-8; raw above is latin1 only so file bytes keep their size.
+        try { body = raw ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : null; } catch { body = null; }
       }
 
       if (req.method === 'GET' && url.pathname === '/users/@me') {
@@ -126,6 +128,12 @@ function startFakeDiscord(port) {
           return json(res, 200, { id: hook.id, token: hook.token, application_id: BOT_ID });
         }
       }
+      // /channels/:id/messages/:id/reactions/:emoji/@me, the bot reacting
+      if ((req.method === 'PUT' || req.method === 'DELETE') && parts[0] === 'channels' && parts[2] === 'messages'
+        && parts[4] === 'reactions' && parts[6] === '@me') {
+        reactions.push({ method: req.method, channelId: parts[1], messageId: parts[3], emoji: decodeURIComponent(parts[5]) });
+        res.writeHead(204); return res.end();
+      }
       if (req.method === 'POST' && url.pathname === '/users/@me/channels') return json(res, 200, { id: newId(), type: 1, recipient_id: body && body.recipient_id });
       if (req.method === 'GET' && parts[0] === 'guilds' && parts[2] === 'members' && parts.length === 4) return json(res, 200, { user: { id: parts[3], username: 'member', bot: false } });
       if (req.method === 'POST' && parts[0] === 'channels' && parts[2] === 'messages') {
@@ -141,11 +149,12 @@ function startFakeDiscord(port) {
         if (forum && !threadId && !(body && body.thread_name)) {
           return json(res, 400, { message: 'Webhooks posted to forum channels must have a thread_name or thread_id', code: 220001 });
         }
-        executions.push({ webhookId: hook.id, threadId, body });
         const id = newId();
         // A new forum post's first message has the post's own id.
         const channelId = threadId || (body && body.thread_name ? id : hook.channelId);
-        return json(res, 200, { id, channel_id: channelId, webhook_id: hook.id, content: body && body.content });
+        const result = { id, channel_id: channelId, webhook_id: hook.id, content: body && body.content };
+        executions.push({ webhookId: hook.id, threadId, body, result });
+        return json(res, 200, result);
       }
       json(res, 404, { message: 'Not handled by the fake Discord', code: 0 });
     });
@@ -181,6 +190,7 @@ function startFakeDiscord(port) {
       forumChannel,
       executions,
       botMessages,
+      reactions,
       webhooks,
       newId,
       get identified() { return identified; },

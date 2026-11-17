@@ -134,7 +134,7 @@ _setupEmojiManagement() {
   }
 
   this._setupEmojiCropperEvents();
-  this._loadStandardEmojis();
+  this._loadStandardEmojis().finally(() => this._loadEmojiKeywords());
   this._loadCustomEmojis();
 },
 
@@ -346,14 +346,18 @@ async _loadStandardEmojis() {
     if (!res.ok) return;
     const data = await res.json();
     if (!data.categories || !Object.keys(data.categories).length) return;
-    // Keep Haven's bundled flag category (its :flag_xx: images render on every
-    // OS, unlike Unicode's regional-indicator flags) and layer the rest under it.
-    const flags = this.emojiCategories.Flags;
-    this.emojiCategories = { ...data.categories, ...(flags ? { Flags: flags } : {}) };
+    // Keep Haven's bundled categories (platform icons, and flags, whose
+    // :flag_xx: images render on every OS, unlike Unicode's regional-indicator
+    // flags) and layer the rest under them.
+    const { Platforms: platforms, Flags: flags } = this.emojiCategories;
+    this.emojiCategories = { ...data.categories, ...(platforms ? { Platforms: platforms } : {}), ...(flags ? { Flags: flags } : {}) };
     this.emojis = Object.values(this.emojiCategories).flat();
     // Built-in keywords are richer than Unicode's bare names, so let them win
     // where they exist and use the Unicode name to fill every other gap.
     this.emojiNames = { ...data.names, ...this.emojiNames };
+    // People Haven leaves out (see src/emoji.js) are not offered by search
+    // or :autocomplete either.
+    for (const glyph of data.hidden || []) delete this.emojiNames[glyph];
     if (Array.isArray(data.modifierBase) && data.modifierBase.length) {
       this._emojiModifierBase = new Set(data.modifierBase.map(h => String.fromCodePoint(parseInt(h, 16))));
     }

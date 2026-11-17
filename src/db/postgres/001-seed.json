@@ -1,0 +1,1141 @@
+{
+  "automod_domains": [
+    {
+      "domain": "youtube.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "youtu.be",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "twitch.tv",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "x.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "twitter.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "bsky.app",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "reddit.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "github.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "gitlab.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "stackoverflow.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "wikipedia.org",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "imgur.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "giphy.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "tenor.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "klipy.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "spotify.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "soundcloud.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "steamcommunity.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "steampowered.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "last.fm",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "archive.org",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    },
+    {
+      "domain": "haven-app.com",
+      "mode": "allow",
+      "include_subdomains": 1,
+      "note": "Seeded default",
+      "added_by": null
+    }
+  ],
+  "badges": [
+    {
+      "id": 1,
+      "name": "One month",
+      "description": "Has been a member for a month",
+      "icon_type": "builtin",
+      "icon": "sprout",
+      "icon_key": "builtin:sprout",
+      "kind": "account_age",
+      "threshold": 30,
+      "role_id": null,
+      "enabled": 0,
+      "position": 0,
+      "created_by": null
+    },
+    {
+      "id": 2,
+      "name": "Six months",
+      "description": "Has been a member for six months",
+      "icon_type": "builtin",
+      "icon": "clock",
+      "icon_key": "builtin:clock",
+      "kind": "account_age",
+      "threshold": 180,
+      "role_id": null,
+      "enabled": 0,
+      "position": 1,
+      "created_by": null
+    },
+    {
+      "id": 3,
+      "name": "One year",
+      "description": "Has been a member for a year",
+      "icon_type": "builtin",
+      "icon": "calendar",
+      "icon_key": "builtin:calendar",
+      "kind": "account_age",
+      "threshold": 365,
+      "role_id": null,
+      "enabled": 0,
+      "position": 2,
+      "created_by": null
+    },
+    {
+      "id": 4,
+      "name": "Chatty",
+      "description": "Posted 100 messages",
+      "icon_type": "builtin",
+      "icon": "chat",
+      "icon_key": "builtin:chat",
+      "kind": "messages",
+      "threshold": 100,
+      "role_id": null,
+      "enabled": 0,
+      "position": 3,
+      "created_by": null
+    },
+    {
+      "id": 5,
+      "name": "Regular",
+      "description": "Posted 1,000 messages",
+      "icon_type": "builtin",
+      "icon": "star",
+      "icon_key": "builtin:star",
+      "kind": "messages",
+      "threshold": 1000,
+      "role_id": null,
+      "enabled": 0,
+      "position": 4,
+      "created_by": null
+    }
+  ],
+  "role_permissions": [
+    {
+      "role_id": 1,
+      "permission": "edit_own_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "delete_own_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "send_self_destruct",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "upload_files",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "use_voice",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "use_tts",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "view_history",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "view_channel_members",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "delete_message",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "delete_lower_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "pin_message",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "archive_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "kick_user",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "mute_user",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "ban_user",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "ban_ip",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "rename_channel",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "rename_sub_channel",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "set_channel_topic",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "manage_sub_channels",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "manage_channel_settings",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "create_channel",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "create_temp_channel",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "invite_users",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "mention_everyone",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "view_all_members",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "manage_webhooks",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "use_ferry",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "manage_emojis",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "manage_stickers",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "manage_soundboard",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "manage_music_queue",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "manage_tags",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "promote_user",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "read_only_override",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "view_audit_log",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "manage_display_names",
+      "allowed": 1
+    },
+    {
+      "role_id": 1,
+      "permission": "highlight_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "kick_user",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "mute_user",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "delete_message",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "pin_message",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "manage_sub_channels",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "rename_sub_channel",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "delete_lower_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "upload_files",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "use_voice",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "view_history",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "view_channel_members",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "manage_music_queue",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "delete_own_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "edit_own_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 2,
+      "permission": "send_self_destruct",
+      "allowed": 1
+    },
+    {
+      "role_id": 3,
+      "permission": "edit_own_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 3,
+      "permission": "delete_own_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 3,
+      "permission": "send_self_destruct",
+      "allowed": 1
+    },
+    {
+      "role_id": 3,
+      "permission": "upload_files",
+      "allowed": 1
+    },
+    {
+      "role_id": 3,
+      "permission": "use_voice",
+      "allowed": 1
+    },
+    {
+      "role_id": 3,
+      "permission": "use_tts",
+      "allowed": 1
+    },
+    {
+      "role_id": 3,
+      "permission": "view_history",
+      "allowed": 1
+    },
+    {
+      "role_id": 3,
+      "permission": "view_channel_members",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "edit_own_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "delete_own_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "delete_message",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "delete_lower_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "pin_message",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "archive_messages",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "kick_user",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "mute_user",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "ban_user",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "ban_ip",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "rename_channel",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "rename_sub_channel",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "set_channel_topic",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_sub_channels",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_channel_settings",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "create_channel",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "create_temp_channel",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "invite_users",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "upload_files",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "use_voice",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "use_tts",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "send_self_destruct",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_webhooks",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "mention_everyone",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "view_history",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "use_ferry",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "view_all_members",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "view_all_channels",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "view_channel_members",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_emojis",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_stickers",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_soundboard",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_music_queue",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_tags",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_badges",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "promote_user",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "transfer_admin",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_roles",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_server",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "delete_channel",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "read_only_override",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "view_audit_log",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "manage_display_names",
+      "allowed": 1
+    },
+    {
+      "role_id": 4,
+      "permission": "highlight_messages",
+      "allowed": 1
+    }
+  ],
+  "roles": [
+    {
+      "id": 1,
+      "name": "Mod",
+      "level": 50,
+      "scope": "server",
+      "color": "#3498db",
+      "auto_assign": 0,
+      "link_channel_access": 0,
+      "icon": null,
+      "max_upload_mb": null,
+      "transparent": 0,
+      "mentionable": 1,
+      "show_on_profile": 1,
+      "color2": null,
+      "color_shimmer": 0
+    },
+    {
+      "id": 2,
+      "name": "Channel Mod",
+      "level": 25,
+      "scope": "channel",
+      "color": "#2ecc71",
+      "auto_assign": 0,
+      "link_channel_access": 0,
+      "icon": null,
+      "max_upload_mb": null,
+      "transparent": 0,
+      "mentionable": 1,
+      "show_on_profile": 1,
+      "color2": null,
+      "color_shimmer": 0
+    },
+    {
+      "id": 3,
+      "name": "Member",
+      "level": 1,
+      "scope": "server",
+      "color": "#95a5a6",
+      "auto_assign": 1,
+      "link_channel_access": 0,
+      "icon": null,
+      "max_upload_mb": null,
+      "transparent": 0,
+      "mentionable": 1,
+      "show_on_profile": 1,
+      "color2": null,
+      "color_shimmer": 0
+    },
+    {
+      "id": 4,
+      "name": "Admin",
+      "level": 99,
+      "scope": "server",
+      "color": "#e74c3c",
+      "auto_assign": 0,
+      "link_channel_access": 0,
+      "icon": null,
+      "max_upload_mb": null,
+      "transparent": 0,
+      "mentionable": 1,
+      "show_on_profile": 1,
+      "color2": null,
+      "color_shimmer": 0
+    }
+  ],
+  "server_settings": [
+    {
+      "key": "member_visibility",
+      "value": "online"
+    },
+    {
+      "key": "cleanup_enabled",
+      "value": "false"
+    },
+    {
+      "key": "cleanup_max_age_days",
+      "value": "0"
+    },
+    {
+      "key": "cleanup_max_size_mb",
+      "value": "0"
+    },
+    {
+      "key": "cleanup_max_uploads_mb",
+      "value": "0"
+    },
+    {
+      "key": "whitelist_enabled",
+      "value": "false"
+    },
+    {
+      "key": "server_name",
+      "value": ""
+    },
+    {
+      "key": "server_icon",
+      "value": ""
+    },
+    {
+      "key": "permission_thresholds",
+      "value": "{}"
+    },
+    {
+      "key": "default_join_channels",
+      "value": ""
+    },
+    {
+      "key": "registration_token_enabled",
+      "value": "false"
+    },
+    {
+      "key": "invites_bypass_registration_token",
+      "value": "false"
+    },
+    {
+      "key": "registration_captcha_enabled",
+      "value": "false"
+    },
+    {
+      "key": "turnstile_site_key",
+      "value": ""
+    },
+    {
+      "key": "turnstile_secret_key",
+      "value": ""
+    },
+    {
+      "key": "registration_rate_limit_enabled",
+      "value": "false"
+    },
+    {
+      "key": "registration_rate_limit_per_hour",
+      "value": "20"
+    },
+    {
+      "key": "max_invite_uses",
+      "value": "0"
+    },
+    {
+      "key": "max_upload_mb",
+      "value": "25"
+    },
+    {
+      "key": "max_attachments",
+      "value": "10"
+    },
+    {
+      "key": "max_tags_per_attachment",
+      "value": "3"
+    },
+    {
+      "key": "max_tag_len",
+      "value": "20"
+    },
+    {
+      "key": "automod_ai_enabled",
+      "value": "false"
+    },
+    {
+      "key": "blocked_upload_extensions",
+      "value": ""
+    },
+    {
+      "key": "max_poll_options",
+      "value": "10"
+    },
+    {
+      "key": "max_message_chars",
+      "value": "2000"
+    },
+    {
+      "key": "max_avatar_mb",
+      "value": "2"
+    },
+    {
+      "key": "max_banner_mb",
+      "value": "5"
+    },
+    {
+      "key": "max_sound_kb",
+      "value": "1024"
+    },
+    {
+      "key": "max_emoji_kb",
+      "value": "256"
+    },
+    {
+      "key": "max_sticker_kb",
+      "value": "1024"
+    },
+    {
+      "key": "unicode_emoji_auto_update",
+      "value": "false"
+    },
+    {
+      "key": "setup_wizard_complete",
+      "value": "false"
+    },
+    {
+      "key": "update_banner_admin_only",
+      "value": "false"
+    },
+    {
+      "key": "update_channel_early",
+      "value": "false"
+    },
+    {
+      "key": "media_group_layout",
+      "value": "grid"
+    },
+    {
+      "key": "allow_self_purge",
+      "value": "false"
+    },
+    {
+      "key": "session_duration_days",
+      "value": "0"
+    },
+    {
+      "key": "published_themes",
+      "value": "[]"
+    },
+    {
+      "key": "admin_password_reset_enabled",
+      "value": "false"
+    },
+    {
+      "key": "guests_enabled",
+      "value": "false"
+    },
+    {
+      "key": "guest_channels",
+      "value": ""
+    },
+    {
+      "key": "guests_allow_voice",
+      "value": "true"
+    },
+    {
+      "key": "stun_urls",
+      "value": ""
+    },
+    {
+      "key": "voice_ice_disabled",
+      "value": "false"
+    },
+    {
+      "key": "turn_url",
+      "value": ""
+    },
+    {
+      "key": "turn_username",
+      "value": ""
+    },
+    {
+      "key": "turn_password",
+      "value": ""
+    },
+    {
+      "key": "voice_force_relay",
+      "value": "false"
+    },
+    {
+      "key": "automod_link_exempt_level",
+      "value": "50"
+    },
+    {
+      "key": "automod_link_min_account_hours",
+      "value": "24"
+    },
+    {
+      "key": "automod_new_account_post_minutes",
+      "value": "0"
+    },
+    {
+      "key": "automod_escalation",
+      "value": "{\"windowHours\":24,\"warnAt\":1,\"muteAt\":3,\"muteMinutes\":60,\"banAt\":0}"
+    },
+    {
+      "key": "automod_ban_ip",
+      "value": "false"
+    },
+    {
+      "key": "automod_log_channel",
+      "value": ""
+    },
+    {
+      "key": "fcm_enabled",
+      "value": "true"
+    },
+    {
+      "key": "automod_seeded",
+      "value": "true"
+    },
+    {
+      "key": "automod_haven_site_v4170",
+      "value": "true"
+    },
+    {
+      "key": "automod_klipy_v4270",
+      "value": "true"
+    },
+    {
+      "key": "automod_enabled",
+      "value": "true"
+    },
+    {
+      "key": "automod_link_mode",
+      "value": "allowlist"
+    },
+    {
+      "key": "automod_preview_allowlist_only",
+      "value": "true"
+    },
+    {
+      "key": "automod_scan_edits",
+      "value": "true"
+    },
+    {
+      "key": "automod_scan_dms",
+      "value": "true"
+    },
+    {
+      "key": "automod_scan_profile",
+      "value": "true"
+    },
+    {
+      "key": "automod_block_ip_urls",
+      "value": "true"
+    },
+    {
+      "key": "automod_block_punycode",
+      "value": "true"
+    },
+    {
+      "key": "automod_block_obfuscated",
+      "value": "true"
+    },
+    {
+      "key": "media_proxy_enabled",
+      "value": "true"
+    },
+    {
+      "key": "automod_defaults_v343",
+      "value": "true"
+    },
+    {
+      "key": "self_dm_backfill_checked",
+      "value": "1"
+    },
+    {
+      "key": "role_links_migrated",
+      "value": "1"
+    },
+    {
+      "key": "perm_send_self_destruct",
+      "value": "1"
+    },
+    {
+      "key": "admin_role_id",
+      "value": "4"
+    },
+    {
+      "key": "admin_role_converted",
+      "value": "1"
+    },
+    {
+      "key": "perm_split_manage_channel_settings",
+      "value": "1"
+    },
+    {
+      "key": "server_name_env_reclaim",
+      "value": "1"
+    },
+    {
+      "key": "default_update_automod_escalation_2026_10",
+      "value": "done"
+    },
+    {
+      "key": "import_authors_cleared",
+      "value": "1"
+    }
+  ]
+}

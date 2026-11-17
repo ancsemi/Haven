@@ -47,6 +47,22 @@ services:
       #              running and ran. Small index, English focused, no substrings.
       # Default is unicode61, the closest match to how Discord search behaves.
       # - HAVEN_SEARCH_TOKENIZER=unicode61
+      # ── External media storage (optional) ──
+      # When true, attachments, avatars, emoji, stickers, badges and sounds are
+      # kept in an S3-compatible bucket (Garage, MinIO, RustFS, SeaweedFS, AWS)
+      # instead of /data/uploads. The database, certs and .env stay in /data.
+      # Haven refuses to start if the bucket cannot be reached.
+      # - HAVEN_EXTERNAL_STORAGE=true
+      # - HAVEN_S3_ENDPOINT=http://garage:3900
+      # - HAVEN_S3_BUCKET=haven-media
+      # - HAVEN_S3_REGION=garage            # AWS: us-east-1 etc.
+      # - HAVEN_S3_ACCESS_KEY=
+      # - HAVEN_S3_SECRET_KEY=
+      # - HAVEN_S3_PREFIX=                  # optional key prefix
+      # - HAVEN_S3_FORCE_PATH_STYLE=true    # Garage/MinIO/RustFS need this
+      # Keep serving files still in /data/uploads while migrating
+      # (docker compose exec haven node scripts/migrate-uploads-to-s3.js).
+      # - HAVEN_S3_LOCAL_FALLBACK=true
     # Uncomment to load settings from a .env file:
     # env_file: .env
     restart: unless-stopped

@@ -10,6 +10,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const { DATA_DIR } = require('../paths');
@@ -55,6 +56,8 @@ function findNpmCli() {
   return candidates.find(p => p && /npm-cli\.js$/.test(p) && fs.existsSync(p)) || null;
 }
 
+const NEEDS_KERNEL6_RETRY = () => process.platform === 'linux' && Number(os.release().split('.')[0]) > 6;
+
 const clean = (line) => String(line).replace(/\x1b\[[0-9;]*m/g, '').trim();
 
 // mediasoup's install log, turned into steps an admin can follow.
@@ -67,6 +70,42 @@ function friendlyStep(line) {
   return null;
 }
 
+// One run of npm install in the addon folder. Resolves { code, reason, tail }.
+// `reason` is the line saying why the program would not run, when there is one:
+// by the end, npm's own last lines only say that a command failed.
+function runNpm(npmCli, env, onLine) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [npmCli, 'install', '--omit=dev', '--no-audit', '--no-fund', '--foreground-scripts'], {
+      cwd: ADDON_DIR,
+      env: { ...process.env, npm_config_update_notifier: 'false', ...env },
+      windowsHide: true,
+    });
+    const tail = [];
+    let reason = null;
+    const take = (chunk) => {
+      for (const raw of String(chunk).split(/\r?\n/)) {
+        const line = clean(raw);
+        if (!line) continue;
+        tail.push(line);
+        if (tail.length > 20) tail.shift();
+        if (/GLIBC|not valid for current host/i.test(line)) reason = reason || line;
+        const step = friendlyStep(line);
+        if (step) onLine(step);
+      }
+    };
+    child.stdout.on('data', take);
+    child.stderr.on('data', take);
+    const timer = setTimeout(() => { try { child.kill(); } catch { /* installer already exited */ } }, INSTALL_TIMEOUT_MS);
+    child.on('error', (err) => { clearTimeout(timer); resolve({ code: -1, reason: err.message, tail }); });
+    child.on('close', (code) => { clearTimeout(timer); resolve({ code, reason, tail }); });
+  });
+}
+
+const failureText = ({ code, reason, tail }) => {
+  const why = tail.filter(l => /ERR!|error|failed|not supported|valid for current host/i.test(l)).slice(-3).join(' | ');
+  return [reason, why].filter(Boolean).join(' | ') || `The install stopped (exit code ${code}).`;
+};
+
 /**
  * Installs mediasoup into the data folder. `onLine` gets progress lines worth
  * showing the admin. Resolves { ok } or { error }.
@@ -74,12 +113,9 @@ function friendlyStep(line) {
 function install(onLine = () => {}) {
   if (loadMediasoup()) return Promise.resolve({ ok: true, already: true });
   if (installing) return installing;
-  installing = new Promise((resolve) => {
+  installing = (async () => {
     const npmCli = findNpmCli();
-    if (!npmCli) {
-      resolve({ error: 'npm was not found next to Node.js on this server, so the relay cannot be installed from here.' });
-      return;
-    }
+    if (!npmCli) return { error: 'npm was not found next to Node.js on this server, so the relay cannot be installed from here.' };
     try {
       fs.mkdirSync(ADDON_DIR, { recursive: true });
       fs.writeFileSync(path.join(ADDON_DIR, 'package.json'), JSON.stringify({
@@ -92,38 +128,23 @@ function install(onLine = () => {}) {
         allowScripts: { [`mediasoup@${MEDIASOUP_VERSION}`]: true },
       }, null, 2) + '\n');
     } catch (err) {
-      resolve({ error: `Could not write to the data folder: ${err.message}` });
-      return;
+      return { error: `Could not write to the data folder: ${err.message}` };
     }
 
     onLine('Downloading the relay (about 10 MB)...');
-    const child = spawn(process.execPath, [npmCli, 'install', '--omit=dev', '--no-audit', '--no-fund', '--foreground-scripts'], {
-      cwd: ADDON_DIR,
-      env: { ...process.env, npm_config_update_notifier: 'false' },
-      windowsHide: true,
-    });
-    const tail = [];
-    const take = (chunk) => {
-      for (const raw of String(chunk).split(/\r?\n/)) {
-        const line = clean(raw);
-        if (!line) continue;
-        tail.push(line);
-        if (tail.length > 20) tail.shift();
-        const step = friendlyStep(line);
-        if (step) onLine(step);
-      }
-    };
-    child.stdout.on('data', take);
-    child.stderr.on('data', take);
-    const timer = setTimeout(() => { try { child.kill(); } catch { /* installer already exited */ } }, INSTALL_TIMEOUT_MS);
-    child.on('error', (err) => { clearTimeout(timer); resolve({ error: err.message }); });
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (code === 0 && loadMediasoup()) return resolve({ ok: true });
-      const why = tail.filter(l => /ERR!|error|failed|not supported|valid for current host/i.test(l)).slice(-3).join(' | ');
-      resolve({ error: why || `The install stopped (exit code ${code}).` });
-    });
-  }).finally(() => { installing = null; });
+    const first = await runNpm(npmCli, {}, onLine);
+    if (first.code === 0 && loadMediasoup()) return { ok: true };
+
+    // A kernel newer than 6 gets a build that may need newer system libraries
+    // than this system has. Try the kernel 6 one before giving up (#5845).
+    if (!NEEDS_KERNEL6_RETRY()) return { error: failureText(first) };
+    onLine('That build does not run on this system. Trying the one for older systems...');
+    const shim = path.join(__dirname, 'kernel6Shim.js').replace(/[\\"]/g, '\\$&');
+    const options = [process.env.NODE_OPTIONS, `--require "${shim}"`].filter(Boolean).join(' ');
+    const second = await runNpm(npmCli, { NODE_OPTIONS: options }, onLine);
+    if (second.code === 0 && loadMediasoup()) return { ok: true };
+    return { error: failureText(second) };
+  })().finally(() => { installing = null; });
   return installing;
 }
 

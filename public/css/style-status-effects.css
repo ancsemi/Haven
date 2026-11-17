@@ -91,9 +91,14 @@
 .schedule-item-chan { color: var(--text-muted); margin-left: 0.3rem; }
 .schedule-item-text { color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; max-height: 4.5em; overflow: hidden; }
 .schedule-item-actions { display: flex; gap: 0.25rem; flex-shrink: 0; }
+.schedule-attach-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: 0.4rem; }
+.schedule-file-list { display: flex; flex-wrap: wrap; gap: 0.3rem; min-width: 0; }
+.schedule-file-chip { display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%; padding: 0.15rem 0.2rem 0.15rem 0.5rem; border-radius: 999px; background: var(--bg-tertiary); font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-file-remove { border: none; background: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; line-height: 1; padding: 0 0.25rem; }
+.schedule-file-remove:hover { color: var(--danger, #e74c3c); }
 
 /* User preference: no Send button, Enter sends (#5654) */
-[data-hide-send-btn] #send-btn { display: none !important; }
+[data-hide-send-btn] #message-input-area:not(.media-only) #send-btn { display: none !important; }
 /* One + button in place of the toolbar (#5654). The toolbar itself becomes
    the menu that opens above the +, with each button's title as its label. */
 .btn-composer-plus { display: none; }
@@ -1176,6 +1181,13 @@
   overflow-y: auto;
 }
 
+/* The login page scrolls as an ordinary document. The app locks html and
+   sizes body to the dynamic viewport (#5285); left on here, body became the
+   scroller and its height changed as the phone's address bar slid in and
+   out mid-scroll, so the register form kept snapping back up. */
+html.auth-root { height: auto; overflow: visible; }
+body.auth-page { height: auto; min-height: 100vh; min-height: 100dvh; overflow: visible; }
+
 .auth-container { width: 100%; max-width: 25rem; padding: 1.25rem; margin: auto 0; }
 
 .auth-card {
@@ -1200,6 +1212,11 @@
 }
 
 .auth-header .tagline { color: var(--text-secondary); font-size: 0.75rem; margin: 0.0625rem 0 0; }
+/* The login page's own look (#5819, public/js/auth.js). */
+.auth-server-logo { display: block; width: 4rem; height: 4rem; object-fit: contain; margin: 0.75rem auto 0; border-radius: 0.75rem; }
+.auth-server-logo[hidden], .auth-login-message[hidden] { display: none; }
+.auth-login-message { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4; margin: 0.5rem 0 0; white-space: pre-line; overflow-wrap: anywhere; }
+body.auth-page.auth-has-background { background-image: var(--auth-background); background-size: cover; background-position: center; background-attachment: fixed; }
 
 .auth-header .server-title {
   color: var(--text-primary);

@@ -91,8 +91,8 @@ _initRoleManagement() {
   this.socket.on('roles-updated', () => this._loadRoles());
 
   // Reset roles to default
-  document.getElementById('reset-roles-btn')?.addEventListener('click', () => {
-    if (!confirm(t('settings.admin.roles_reset_confirm'))) return;
+  document.getElementById('reset-roles-btn')?.addEventListener('click', async () => {
+    if (!await this._confirm(t('settings.admin.roles_reset_confirm'))) return;
     this._roleEmit('reset-roles-to-default', {}, (res) => {
       if (res.error) { this._showToast(res.error, 'error'); return; }
       this._showToast(t('settings.admin.roles_reset_success'), 'success');
@@ -275,6 +275,16 @@ _renderRoleDetail() {
         <input type="checkbox" id="role-edit-transparent" ${role.transparent ? 'checked' : ''}>
       </label>
       <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.transparent_hint')}</small>
+      <label class="toggle-row" style="margin-top:8px;">
+        <span>${t('settings.admin.role_form.mentionable')}</span>
+        <input type="checkbox" id="role-edit-mentionable" ${role.mentionable === 0 ? '' : 'checked'}>
+      </label>
+      <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.mentionable_hint')}</small>
+      <label class="toggle-row" style="margin-top:8px;">
+        <span>${t('settings.admin.role_form.show_on_profile')}</span>
+        <input type="checkbox" id="role-edit-show-on-profile" ${role.show_on_profile === 0 ? '' : 'checked'}>
+      </label>
+      <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.show_on_profile_hint')}</small>
       <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.upload_cap')}</label>
       <input type="number" class="settings-number-input" id="role-edit-upload-mb" value="${role.max_upload_mb || ''}" min="1" max="102400" placeholder="${this._escapeHtml(t('settings.admin.role_form.upload_cap_placeholder', { mb: parseInt(this.serverSettings?.max_upload_mb, 10) || 25 }))}">
       <small class="muted-text" style="font-size:0.6875rem;">${t('settings.admin.role_form.upload_cap_hint')}</small>
@@ -382,6 +392,8 @@ _renderRoleDetail() {
       color2: readRoleLook().color2,
       shimmer: readRoleLook().shimmer,
       transparent: document.getElementById('role-edit-transparent').checked,
+      mentionable: document.getElementById('role-edit-mentionable')?.checked !== false,
+      showOnProfile: document.getElementById('role-edit-show-on-profile')?.checked !== false,
       icon: this._pendingRoleIcon !== undefined ? this._pendingRoleIcon : role.icon,
       autoAssign: document.getElementById('role-edit-auto-assign').checked,
       // Channel access lives on the channel now, as Required roles (#5649).

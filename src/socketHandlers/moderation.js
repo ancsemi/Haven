@@ -5,6 +5,7 @@ const { utcStamp, isInt } = require('./helpers');
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { ipBanRefusal } = require('../ipBanGuard');
 const { deletableSql } = require('../protectedMessages');
+const { scrubUserMessages } = require('../scrubMessages');
 
 // A scrub or purge leaves protected messages, and thread heads holding one,
 // as they are (src/protectedMessages.js).
@@ -96,7 +97,7 @@ module.exports = function register(socket, ctx) {
   }
 
   // ── Kick user ───────────────────────────────────────────
-  socket.on('kick-user', (data) => {
+  socket.on('kick-user', async (data) => {
     if (!data || typeof data !== 'object') return;
     const kickCode = socket.currentChannel;
     const kickCh = kickCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(kickCode) : null;
@@ -154,7 +155,7 @@ module.exports = function register(socket, ctx) {
     if (groupKick) {
       // Told first, while their app still knows the group's name.
       for (const ts of targetSockets) ts.emit('kicked', { channelCode: code, group: true, reason: kickReason });
-      ctx.leaveGroupDm(code, data.userId, []);
+      await ctx.leaveGroupDm(code, data.userId, []);
     } else {
       if (kickCh) {
         db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(kickCh.id, data.userId);
@@ -205,26 +206,58 @@ module.exports = function register(socket, ctx) {
       }
     });
 
-    if (data.scrubMessages) {
-      const scrubScope = (socket.user.isAdmin && data.scrubScope === 'server') ? 'server' : 'channel';
-      if (scrubScope === 'channel' && kickCh) {
-        db.prepare(`DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT m.id FROM messages m WHERE m.channel_id = ? AND ${SCRUBBABLE})`).run(data.userId, kickCh.id);
-        db.prepare(`DELETE FROM messages WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND m.channel_id = ? AND ${SCRUBBABLE})`).run(data.userId, kickCh.id);
-      } else if (scrubScope === 'server') {
-        db.prepare(`DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE} AND m.channel_id IN (SELECT id FROM channels WHERE is_dm = 0))`).run(data.userId, data.userId);
-        db.prepare(`DELETE FROM messages WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE} AND m.channel_id IN (SELECT id FROM channels WHERE is_dm = 0))`).run(data.userId);
+    // Only an admin can scrub server-wide; anyone else's request covers this
+    // channel. The audit log records the scope that was used, not the one asked for.
+    const scrubScope = data.scrubMessages ? ((socket.user.isAdmin && data.scrubScope === 'server') ? 'server' : 'channel') : null;
+    let scrubbed = 0;
+    if (scrubScope === 'server' || (scrubScope === 'channel' && kickCh)) {
+      try {
+        scrubbed = (await scrubUserMessages({ db, io }, data.userId, { channelId: scrubScope === 'channel' ? kickCh.id : null })).deleted;
+      } catch (err) {
+        console.error('Kick scrub failed:', err);
+        socket.emit('error-msg', 'Kicked, but their messages could not all be removed');
       }
     }
 
-    socket.emit('toast', { message: `Kicked ${targetName}`, type: 'success' });
+    socket.emit('toast', { message: scrubbed ? `Kicked ${targetName} and removed ${scrubbed} message${scrubbed === 1 ? '' : 's'}` : `Kicked ${targetName}`, type: 'success' });
     _audit({ actor: socket.user, action: 'user_kick',
       target_type: 'user', target_id: data.userId, target_name: targetName,
       details: { channelCode: code, reason: data.reason || null,
-        scrubMessages: !!data.scrubMessages, scrubScope: data.scrubScope || null } });
+        scrubMessages: !!data.scrubMessages, scrubScope, scrubbed } });
     // Last, since everything above still addresses the channel by its old
     // code: a kicked person must not be able to walk back into a private
     // channel with the code they already know.
     if (kickCh && typeof ctx.rotatePrivateCodesAfterRemoval === 'function') ctx.rotatePrivateCodesAfterRemoval(kickCh.id);
+  });
+
+  // ── Scrub a banned person's messages ────────────────────
+  // From the banned list, for a ban made without "Scrub messages". It takes
+  // what the ban's own scrub would have: everything they wrote in the
+  // server's channels, protected messages and DMs aside. Only for someone
+  // who is banned, by someone who may ban, and never past their own rank.
+  socket.on('scrub-user-messages', async (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object' || !isInt(data.userId)) return cb({ error: 'Invalid request' });
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'ban_user')) {
+      return cb({ error: 'You don\'t have permission to remove their messages' });
+    }
+    const target = db.prepare('SELECT id, username, is_admin FROM users WHERE id = ?').get(data.userId);
+    if (!target) return cb({ error: 'User not found' });
+    if (!db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(target.id)) {
+      return cb({ error: 'Only a banned member\'s messages can be removed from here' });
+    }
+    if (!socket.user.isAdmin && (target.is_admin || getUserEffectiveLevel(target.id) >= getUserEffectiveLevel(socket.user.id))) {
+      return cb({ error: 'You can\'t do that to someone of equal or higher rank' });
+    }
+    try {
+      const r = await scrubUserMessages({ db, io }, target.id);
+      _audit({ actor: socket.user, action: 'user_scrub', target_type: 'user', target_id: target.id,
+        target_name: target.username, details: { deleted: r.deleted, channels: r.channels } });
+      cb({ ok: true, deleted: r.deleted });
+    } catch (err) {
+      console.error('Scrub messages failed:', err);
+      cb({ error: 'Failed to remove their messages' });
+    }
   });
 
   // ── Ban user ────────────────────────────────────────────
@@ -299,8 +332,11 @@ module.exports = function register(socket, ctx) {
     // A ban clears what they said in the server's channels. Their DMs and
     // group DMs belong to the people they talked with, and stay.
     if (data.scrubMessages) {
-      db.prepare(`DELETE FROM reactions WHERE user_id = ? AND message_id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE} AND m.channel_id IN (SELECT id FROM channels WHERE is_dm = 0))`).run(data.userId, data.userId);
-      db.prepare(`DELETE FROM messages WHERE id IN (SELECT m.id FROM messages m WHERE m.user_id = ? AND ${SCRUBBABLE} AND m.channel_id IN (SELECT id FROM channels WHERE is_dm = 0))`).run(data.userId);
+      // The rows go before this returns; the files and the notices follow.
+      scrubUserMessages({ db, io }, data.userId).catch((err) => {
+        console.error('Ban scrub failed:', err);
+        socket.emit('error-msg', 'Banned, but their messages could not all be removed');
+      });
     } else if (data.purgeMessages) {
       // Replace the user's messages with a placeholder rather than deleting
       // them. Useful when admins want a visible "this user was banned"
@@ -511,6 +547,9 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Failed to delete user');
     }
 
+    _audit({ actor: socket.user, action: 'user_delete',
+      target_type: 'user', target_id: targetUser.id, target_name: targetUser.displayName,
+      details: { reason: reason || null, scrubMessages: !!data.scrubMessages } });
     socket.emit('error-msg', `Deleted user "${targetUser.displayName}". Username is now available`);
 
     for (const [, s] of io.sockets.sockets) {

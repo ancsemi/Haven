@@ -480,12 +480,12 @@
 .toggle-row + .settings-hint,
 .select-row + .settings-hint,
 .checkbox-row + .settings-hint,
-/* A slider's value, as a percent or in dB (app-master-volume.js). */
-.vol-readout { flex: 0 0 4.2rem; text-align: right; font-size: 0.72rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.volume-row:has(> .vol-readout) > input[type="range"] { margin-left: auto; }
 .volume-row + .settings-hint {
   padding-right: 2.75rem;   /* 44px */
 }
+/* A slider's value, as a percent or in dB (app-master-volume.js). */
+.vol-readout { flex: 0 0 4.2rem; text-align: right; font-size: 0.72rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.volume-row:has(> .vol-readout) > input[type="range"] { margin-left: auto; }
 .settings-hint.error { color: #e94560; }
 .settings-hint.success { color: #43b581; }
 /* Invite Links closes out the Server Invite Code section, so it carries a
@@ -987,3 +987,46 @@
 
 .btn-delete-user:hover { opacity: 0.85; }
 
+/* What's new: the version in settings, with the parts that bring up the
+   popup underlined, and the popup itself (app-whats-new.js). */
+.whats-new-version { font-family: var(--font-mono, monospace); font-size: 1.05rem; letter-spacing: 0.02em; margin: 0.2rem 0 0.5rem; }
+.whats-new-part-on { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.whats-new-suffix { color: var(--text-muted); }
+.whats-new-modal { width: 560px; max-width: calc(100vw - 32px); }
+.whats-new-body { max-height: 60vh; overflow-y: auto; padding-right: 0.25rem; }
+.whats-new-release + .whats-new-release { border-top: 1px solid var(--border-light); margin-top: 0.6rem; padding-top: 0.4rem; }
+.whats-new-release h4 { margin: 0.3rem 0; }
+.whats-new-date { color: var(--text-muted); font-weight: normal; font-size: 0.8rem; margin-left: 0.3rem; }
+.whats-new-release h5 { margin: 0.5rem 0 0.2rem; color: var(--text-secondary); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.04em; }
+.whats-new-release ul { margin: 0; padding-left: 1.1rem; }
+.whats-new-release li { font-size: 0.85rem; margin: 0.15rem 0; line-height: 1.4; }
+.whats-new-release p { font-size: 0.85rem; margin: 0.2rem 0; }
+.whats-new-hint { display: block; margin-top: 0.6rem; }
+.settings-nav.sp-nav .settings-nav-item, .settings-nav.sp-nav .settings-nav-group-label { display: none !important; }
+.settings-nav.sp-nav { width: 11.75rem; min-width: 11.75rem; }
+.sp-list { display: flex; flex-direction: column; gap: 2px; }
+.sp-cat { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 0.8125rem; font-weight: 600; line-height: 1.25; cursor: pointer; transition: background .15s, color .15s; }
+.sp-cat:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.sp-cat.active { background: var(--accent); color: var(--accent-text); }
+.sp-cat:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sp-icon { flex: 0 0 18px; text-align: center; font-size: 0.9375rem; }
+.sp-body .settings-section.sp-off, .sp-body .admin-settings.sp-off { display: none !important; }
+.sp-body .settings-section, .sp-body #admin-mod-panel > .admin-settings[id] { margin-top: 0 !important; padding-top: 1.25rem !important; padding-bottom: 0.5rem !important; border-top: 0 !important; border-bottom: 0 !important; }
+.sp-body #admin-mod-panel > .admin-settings[id] > h5.settings-section-subtitle:first-child { font-size: 0.875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 0.25rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border); }
+.sp-body #admin-mod-panel h5.settings-section-subtitle:not(.admin-settings[id] > :first-child), .sp-body .settings-section .settings-section-title ~ .settings-section-title, .sp-body .settings-section * .settings-section-title, .sp-body h6 { margin: 0.75rem 0 0.25rem !important; padding: 0; border: 0; font-size: 0.6875rem !important; font-weight: 600 !important; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted) !important; }
+#settings-modal.sp-search .sp-body .sp-off:not(.settings-search-hidden) { display: block !important; }
+#settings-modal.sp-search .sp-cat.active { background: none; color: var(--text-secondary); }
+#settings-modal:not(.sp-search) .sp-body .sp-tip:not(.sp-tip-open) { display: none !important; }
+.sp-tip-btn { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 1.125rem; height: 1.125rem; margin: 0 auto 0 0.25rem; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-muted); font-size: 0.8125rem; font-weight: 400; line-height: 1; text-transform: none; letter-spacing: 0; vertical-align: middle; cursor: pointer; opacity: 0.7; }
+.sp-tip-btn:hover, .sp-tip-btn:focus-visible, .sp-tip-btn[aria-expanded="true"] { color: var(--accent); opacity: 1; }
+#settings-modal.sp-search .sp-tip-btn { display: none; }
+.sp-body .btn-sm.btn-accent, .sp-body .btn-sm.btn-danger { font-size: 0.75rem; padding: 0.4375rem 0.75rem; line-height: normal; }
+.sp-body .select-row > select { min-width: 0; max-width: 100%; }
+@media (max-width: 480px) {
+  .settings-layout:has(> .settings-nav.sp-nav) { flex-direction: column; }
+  .settings-nav.sp-nav { display: block !important; width: auto; min-width: 0; flex-shrink: 0; padding: 0.5rem; border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; }
+  .sp-list { flex-direction: row; gap: 0.375rem; overflow-x: auto; scrollbar-width: none; }
+  .sp-cat { flex: 0 0 auto; white-space: nowrap; padding: 0.4375rem 0.75rem; border: 1px solid var(--border); border-radius: 999px; }
+  .sp-cat.active { border-color: var(--accent); }
+}
+#login-css-row > label { display: block; margin-bottom: 0.375rem; font-size: 0.8125rem; color: var(--text-primary); }

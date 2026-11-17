@@ -156,7 +156,10 @@ _restoreRefusedDraft(msg, always = false) {
   const d = this._lastSendDraft;
   const tooLong = typeof msg === 'string' && /^Message too long/.test(msg);
   const sdRefused = typeof msg === 'string' && /self-destructing messages$/.test(msg);
-  if (!d || (!tooLong && !sdRefused && !always)) return;
+  // In a timeout nothing was posted, so the text goes back in the box
+  // instead of being lost along with the notice.
+  const inTimeout = typeof msg === 'string' && /^You are in a timeout/.test(msg);
+  if (!d || (!tooLong && !sdRefused && !inTimeout && !always)) return;
   this._lastSendDraft = null;
   const inputId = d.inputId || 'message-input';
   const open = inputId === 'dm-pip-input' ? this._activeDMPip
@@ -170,6 +173,16 @@ _restoreRefusedDraft(msg, always = false) {
   // A too-long self-destructing message keeps its timer on for the resend.
   if (tooLong && d.selfDestruct && inputId === 'message-input') this._setSelfDestructArmed?.(true);
   input.focus();
+},
+_showTimeoutNotice(msg) {
+  const bar = document.getElementById('timeout-notice');
+  const m = typeof msg === 'string' && /^You are in a timeout for (\d+) more minute/.exec(msg);
+  if (!bar || !m) return;
+  const n = Number(m[1]);
+  clearTimeout(this._timeoutNoticeTimer);
+  bar.textContent = t(n === 1 ? 'toasts.timeout_notice_one' : 'toasts.timeout_notice_other', { count: n });
+  bar.style.display = 'flex';
+  this._timeoutNoticeTimer = setTimeout(() => { bar.style.display = 'none'; }, n * 60000);
 },
 
 _setupSocketListeners() {
@@ -258,6 +271,8 @@ _listenSession() {
     if (data.version) {
       const vEl = document.getElementById('status-version');
       if (vEl) vEl.textContent = 'v' + data.version;
+      // Release notes after an update (app-whats-new.js).
+      this._whatsNewCheck(data.version);
     }
     // Refresh display name + admin UI with authoritative data
     document.getElementById('current-user').textContent = this.user.displayName || this.user.username;
@@ -332,6 +347,7 @@ _listenSession() {
     document.getElementById('status-server-text').textContent = t('app.status.connected');
     this._lastConnectTime = Date.now();
     this._authErrorStreak = 0;
+    this._refusedStreak = 0;
     this._startPingMonitor();
     // (#self-absent-voice-panel) Cancel any pending soft-leave from a brief
     // socket blip: we reconnected before the 2 s deadline, so the voice
@@ -352,6 +368,7 @@ _listenSession() {
 
     // Re-join channel after reconnect (server lost our room membership)
     this.socket.emit('visibility-change', { visible: !document.hidden });
+    this.socket.emit('reply-ping', { on: this._replyPingOn?.() !== false });
     this.voice?.deferChannelGone?.(6000);
     this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
@@ -433,6 +450,13 @@ _listenSession() {
         code: this.currentChannel,
         iAmInVoice: !!(this.voice && this.voice.inVoice && this.voice.currentChannel === this.currentChannel)
       });
+      // (#5875) channels-list only proves the handshake. After a ping
+      // timeout the socket comes back, that list arrives, and the open
+      // channel still never delivers another message. The page used to
+      // treat that as healthy, so the reload that actually recovers it
+      // never ran. Watch the channel itself, not the handshake.
+      this._channelDeliveryTries = 0;
+      this._armChannelDeliveryWatch(this.currentChannel);
     }
     // Re-join voice if we were in voice before reconnect
     if (this.voice && this.voice.inVoice && this.voice.currentChannel) {
@@ -814,6 +838,20 @@ _listenSession() {
     this._setLed('connection-led', 'danger');
     this._setLed('status-server-led', 'danger');
     document.getElementById('status-server-text').textContent = t('app.status.error');
+    // A refusal from a server middleware ("Rate limited: too many
+    // connections", "Server error, try again") is final to socket.io: it
+    // does not retry those, so the app stayed offline until the page was
+    // hidden and shown again or reloaded (#5875). Try again on a growing
+    // delay. A ban is final and is left alone.
+    if (this.socket && !this.socket.active && !/banned/i.test(err.message || '')) {
+      this._refusedStreak = (this._refusedStreak || 0) + 1;
+      const delay = Math.min(60000, 5000 * this._refusedStreak) + Math.random() * 2000;
+      clearTimeout(this._refusedRetryTimer);
+      this._refusedRetryTimer = setTimeout(() => {
+        this._refusedRetryTimer = null;
+        if (this.socket && !this.socket.connected && !this.socket.active) this.socket.connect();
+      }, delay);
+    }
   });
 
   // Password was changed on this or another session: force re-login
@@ -931,6 +969,56 @@ _lightVoiceResync(reason) {
     }
   } catch (e) {
     console.warn('[light-resync] failed:', e);
+  }
+},
+
+// The open channel has to show that it is actually receiving again after a
+// connect. online-users (sent because we re-entered) or a new message both
+// count; the channels-list handshake does not. One miss resubscribes. A
+// second miss reloads the page, which is what gets a phone unstuck. A live
+// call is left up: reloading it would drop everyone.
+_armChannelDeliveryWatch(code) {
+  if (!code) return;
+  if (this._channelDeliveryTimer) clearTimeout(this._channelDeliveryTimer);
+  this._channelDeliveryCode = code;
+  this._channelDeliverySeen = false;
+  this._channelDeliveryTimer = setTimeout(() => {
+    this._channelDeliveryTimer = null;
+    if (this._channelDeliverySeen || this.currentChannel !== code) return;
+    // A channel you are no longer in (removed or deleted while you were
+    // offline) never answers, and a reload would not change that.
+    if (!(this.channels || []).some(c => c.code === code)) return;
+    // Socket down: the next connect arms this again. Reloading would race
+    // socket.io's own reconnect.
+    if (!this.socket?.connected) return;
+    const tries = this._channelDeliveryTries || 0;
+    if (tries < 1) {
+      this._channelDeliveryTries = tries + 1;
+      console.warn(`[channel-delivery] no live traffic for ${code} after connect, resubscribing`);
+      try { this.socket.emit('enter-channel', { code }); } catch (err) { console.warn('[channel-delivery] enter-channel failed', err); }
+      try { this.socket.emit('get-messages', { code }); } catch (err) { console.warn('[channel-delivery] get-messages failed', err); }
+      try { this.socket.emit('get-channels'); } catch (err) { console.warn('[channel-delivery] get-channels failed', err); }
+      this._armChannelDeliveryWatch(code);
+      return;
+    }
+    const voiceLive = !!(this.voice && this.voice.inVoice &&
+      ((this.voice.liveVoicePeerCount?.() || 0) > 0 || this.voice.localStream));
+    if (voiceLive) {
+      console.warn('[channel-delivery] still silent during a live call, leaving the call up');
+      return;
+    }
+    console.warn('[channel-delivery] connected but silent, reloading');
+    try { window.location.reload(); } catch (err) { console.warn('[channel-delivery] reload failed', err); }
+  }, 10000);
+},
+
+_noteChannelDelivery(code) {
+  if (!this._channelDeliveryCode || code !== this._channelDeliveryCode) return;
+  this._channelDeliverySeen = true;
+  this._channelDeliveryTries = 0;
+  if (this._channelDeliveryTimer) {
+    clearTimeout(this._channelDeliveryTimer);
+    this._channelDeliveryTimer = null;
   }
 },
 

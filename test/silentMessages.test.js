@@ -45,7 +45,7 @@ test('the message box takes the prefix off before sending, an encrypted DM inclu
 // ── Against a running server ─────────────────────────────────────────────
 const relayed = [];
 let relay;
-const h = createHarness(3471, 'silent-messages');
+const h = createHarness(3515, 'silent-messages');
 
 test.before(async () => {
   relay = http.createServer((req, res) => {
@@ -154,7 +154,7 @@ test('silent messages reach everyone, marked, and push nobody', async () => {
     db.prepare('INSERT INTO webhooks (channel_id, name, token, created_by) VALUES (?, ?, ?, ?)').run(chId, 'Quiet Bot', botToken, admin.id);
   } finally { db.close(); }
   const fromBot = h.next(B, 'new-message', (d) => d.channelCode === code && d.message.is_webhook);
-  const posted = await fetch(`http://localhost:3471/api/webhooks/${botToken}`, {
+  const posted = await fetch(`http://localhost:3515/api/webhooks/${botToken}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content: '@silent bot news' }),
   });

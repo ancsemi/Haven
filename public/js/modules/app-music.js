@@ -59,6 +59,7 @@ _updateMusicModalButtons(url) {
 },
 
 _previewMusicLink(url) {
+  url = url && this._musicLocalPath(url);
   const preview = document.getElementById('music-link-preview');
   if (!url) {
     preview.innerHTML = '';
@@ -88,7 +89,7 @@ _previewMusicLink(url) {
 },
 
 _shareMusic() {
-  const url = document.getElementById('music-link-input').value.trim();
+  const url = this._musicLocalPath(document.getElementById('music-link-input').value.trim());
   if (!url) { this._showToast(t('toasts.paste_music_link'), 'error'); return; }
   if (!this._getMusicEmbed(url)) {
     this._showToast(t('toasts.unsupported_music_link'), 'error');
@@ -227,6 +228,7 @@ _handleMusicShared(data) {
   // Clean up previous player references
   this._musicYTPlayer = null;
   this._musicSCWidget = null;
+  this._stopMusicFilePlayer();
   this._musicPlatform = platform ? platform.name : null;
   this._musicPlaying = data.syncState?.isPlaying !== false;
   this._musicActive = true;
@@ -262,7 +264,9 @@ _handleMusicShared(data) {
   // default (same-origin since 3.41.0) sends no referrer cross-origin, which
   // YouTube reports as "Error 153" and other providers can reject too. The
   // origin alone is enough for them and carries no invite code.
-  container.innerHTML = `<div class="music-embed-wrapper"><iframe id="music-iframe" src="${embedUrl}" width="100%" height="${iframeH}" frameborder="0" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>${needsOverlay ? '<div class="music-embed-overlay"></div>' : ''}</div>`;
+  container.innerHTML = this._isMusicFileUrl(data.url)
+    ? this._musicFileEmbedHtml(data.url, data.title)
+    : `<div class="music-embed-wrapper"><iframe id="music-iframe" src="${embedUrl}" width="100%" height="${iframeH}" frameborder="0" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>${needsOverlay ? '<div class="music-embed-overlay"></div>' : ''}</div>`;
   const labelText = data.resolvedFrom === 'spotify'
     ? t('voice.music_shared_spotify', { user: data.username || t('voice.someone') })
     : t('voice.music_shared', {
@@ -312,6 +316,7 @@ _handleMusicShared(data) {
 
   // Initialize platform-specific APIs for volume & sync control
   const iframe = document.getElementById('music-iframe');
+  if (this._isMusicFileUrl(data.url)) this._initMusicFilePlayer(document.getElementById('music-audio'), savedVol);
   if (iframe) {
     if (data.url.includes('youtube.com') || data.url.includes('youtu.be') || data.url.includes('music.youtube.com')) {
       this._initYouTubePlayer(iframe, savedVol);
@@ -569,9 +574,9 @@ _getEffectiveMusicSyncState(syncState) {
 },
 
 _withMusicTiming(callback) {
-  if (this._musicYTPlayer && this._musicYTPlayer.getCurrentTime && this._musicYTPlayer.getDuration) {
-    const positionSeconds = this._musicYTPlayer.getCurrentTime() || 0;
-    const durationSeconds = this._musicYTPlayer.getDuration() || 0;
+  if (this._musicApiPlayer() && this._musicApiPlayer().getCurrentTime && this._musicApiPlayer().getDuration) {
+    const positionSeconds = this._musicApiPlayer().getCurrentTime() || 0;
+    const durationSeconds = this._musicApiPlayer().getDuration() || 0;
     callback(positionSeconds, durationSeconds);
     return;
   }
@@ -587,8 +592,8 @@ _withMusicTiming(callback) {
 },
 
 _withMusicDuration(callback) {
-  if (this._musicYTPlayer && this._musicYTPlayer.getDuration) {
-    callback(this._musicYTPlayer.getDuration() || 0);
+  if (this._musicApiPlayer() && this._musicApiPlayer().getDuration) {
+    callback(this._musicApiPlayer().getDuration() || 0);
     return;
   }
   if (this._musicSCWidget) {
@@ -669,8 +674,8 @@ _emitMusicSeek(positionSeconds, durationSeconds) {
 
 _seekMusicToSeconds(seconds) {
   try {
-    if (this._musicYTPlayer && this._musicYTPlayer.seekTo) {
-      this._musicYTPlayer.seekTo(Math.max(0, seconds), true);
+    if (this._musicApiPlayer() && this._musicApiPlayer().seekTo) {
+      this._musicApiPlayer().seekTo(Math.max(0, seconds), true);
     } else if (this._musicSCWidget) {
       this._musicSCWidget.seekTo(Math.max(0, seconds) * 1000);
     }
@@ -680,7 +685,7 @@ _seekMusicToSeconds(seconds) {
 _applyMusicSyncState(syncState) {
   if (!syncState) return;
   const effectiveState = this._getEffectiveMusicSyncState(syncState);
-  if (!this._musicYTPlayer && !this._musicSCWidget) {
+  if (!this._musicApiPlayer() && !this._musicSCWidget) {
     this._pendingMusicSyncState = effectiveState;
     return;
   }
@@ -732,6 +737,13 @@ _createYTPlayer(iframe, volume) {
           e.target.setVolume(volume);
           this._startMusicTimeTracking();
           this._flushPendingMusicSyncState();
+        },
+        // A video YouTube will not play here (embedding turned off, removed,
+        // or blocked in this country) left a silent player. Say so (#5826).
+        onError: (e) => {
+          const key = e.data === 100 ? 'voice.music_yt_gone' : (e.data === 101 || e.data === 150 || e.data === 153) ? 'voice.music_yt_blocked' : 'voice.music_yt_failed';
+          this._setMusicActivityHint(t(key));
+          this._showToast(t(key), 'error');
         },
         onStateChange: (e) => {
           // Sync Haven's play/pause state when user interacts with YT's native controls
@@ -821,6 +833,7 @@ _handleMusicStopped(data) {
   this._stopMusicTimeTracking();
   this._musicYTPlayer = null;
   this._musicSCWidget = null;
+  this._stopMusicFilePlayer();
   this._musicPlatform = null;
   this._musicTrackId = null;
   this._musicRequestorId = null;
@@ -934,8 +947,8 @@ _musicToggleShuffle() {
 
 _playMusicEmbed() {
   try {
-    if (this._musicYTPlayer && this._musicYTPlayer.playVideo) {
-      this._musicYTPlayer.playVideo();
+    if (this._musicApiPlayer() && this._musicApiPlayer().playVideo) {
+      this._musicApiPlayer().playVideo();
     } else if (this._musicSCWidget) {
       this._musicSCWidget.play();
     } else {
@@ -952,8 +965,8 @@ _playMusicEmbed() {
 
 _pauseMusicEmbed() {
   try {
-    if (this._musicYTPlayer && this._musicYTPlayer.pauseVideo) {
-      this._musicYTPlayer.pauseVideo();
+    if (this._musicApiPlayer() && this._musicApiPlayer().pauseVideo) {
+      this._musicApiPlayer().pauseVideo();
     } else if (this._musicSCWidget) {
       this._musicSCWidget.pause();
     } else {
@@ -974,6 +987,7 @@ _hideMusicPanel() {
     this._musicPip.remove();
     this._musicPip = null;
   }
+  this._stopMusicFilePlayer();
   const panel = document.getElementById('music-panel');
   if (panel) {
     document.getElementById('music-embed-container').innerHTML = '';
@@ -1138,7 +1152,10 @@ _moveMusicEmbed(wrapper, target) {
       console.warn('[music] moveBefore failed, reloading the player instead:', err.message);
     }
   }
+  const audio = wrapper.querySelector('audio');
+  const audioWasPlaying = !!(audio && !audio.paused);
   target.appendChild(wrapper);
+  if (audioWasPlaying) audio.play().catch(err => console.warn('[music] file did not resume after the move:', err.name));
   const iframe = wrapper.querySelector('#music-iframe');
   if (!iframe) return;
   iframe.addEventListener('load', () => {
@@ -1257,8 +1274,8 @@ _setMusicVolume(vol) {
   if (muteBtn) muteBtn.textContent = vol === 0 ? '🔇' : '🔊';
   // Apply to active player
   try {
-    if (this._musicYTPlayer && this._musicYTPlayer.setVolume) {
-      this._musicYTPlayer.setVolume(vol);
+    if (this._musicApiPlayer() && this._musicApiPlayer().setVolume) {
+      this._musicApiPlayer().setVolume(vol);
     } else if (this._musicSCWidget) {
       this._musicSCWidget.setVolume(vol);
     }
@@ -1283,8 +1300,8 @@ _toggleMusicMute() {
 // ── Seek bar & time tracking ──────────────────────────
 _seekMusic(pct) {
   try {
-    if (this._musicYTPlayer && this._musicYTPlayer.getDuration) {
-      const dur = this._musicYTPlayer.getDuration();
+    if (this._musicApiPlayer() && this._musicApiPlayer().getDuration) {
+      const dur = this._musicApiPlayer().getDuration();
       if (dur > 0) this._seekMusicToSeconds(dur * pct / 100);
     } else if (this._musicSCWidget) {
       this._musicSCWidget.getDuration((dur) => {
@@ -1303,9 +1320,9 @@ _startMusicTimeTracking() {
 
   this._musicTimeInterval = setInterval(() => {
     try {
-      if (this._musicYTPlayer && this._musicYTPlayer.getCurrentTime && this._musicYTPlayer.getDuration) {
-        const cur = this._musicYTPlayer.getCurrentTime() || 0;
-        const dur = this._musicYTPlayer.getDuration() || 0;
+      if (this._musicApiPlayer() && this._musicApiPlayer().getCurrentTime && this._musicApiPlayer().getDuration) {
+        const cur = this._musicApiPlayer().getCurrentTime() || 0;
+        const dur = this._musicApiPlayer().getDuration() || 0;
         const now = Date.now();
         if (curEl) curEl.textContent = fmt(cur);
         if (durEl) durEl.textContent = fmt(dur);
@@ -1358,6 +1375,7 @@ _stopMusicTimeTracking() {
 
 _getMusicEmbed(url) {
   if (!url) return null;
+  if (this._isMusicFileUrl(url)) return url;
   const spotifyMatch = url.match(/open\.spotify\.com\/(track|album|playlist|episode|show)\/([a-zA-Z0-9]+)/);
   if (spotifyMatch) return `https://open.spotify.com/embed/${spotifyMatch[1]}/${spotifyMatch[2]}?theme=0&utm_source=generator&autoplay=1`;
   const ytMusicMatch = url.match(/music\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
@@ -1372,6 +1390,7 @@ _getMusicEmbed(url) {
 
 _getMusicPlatform(url) {
   if (!url) return null;
+  if (this._isMusicFileUrl(url)) return { name: t('voice.music_file_platform'), icon: '🎵' };
   if (url.includes('spotify.com')) return { name: 'Spotify', icon: '🟢' };
   if (url.includes('music.youtube.com')) return { name: 'YouTube Music', icon: '🔴' };
   if (url.includes('youtube.com') || url.includes('youtu.be')) return { name: 'YouTube', icon: '🔴' };

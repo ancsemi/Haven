@@ -303,6 +303,18 @@ _reflowMediaGrid(el, layout = this._mediaGroupLayoutPref()) {
 
 // ── Sending ───────────────────────────────────────────────
 
+// A file type the admin blocked (#5833). The server refuses those, but an
+// encrypted DM file reaches it under a made-up name, so the app checks the
+// real one before encrypting. Says so and returns true when it is blocked.
+_refuseBlockedUploadType(file) {
+  const list = String(this.serverSettings?.blocked_upload_extensions || '').split(',').filter(Boolean);
+  const m = /\.([^.\\/]+)$/.exec(String(file?.name || '').replace(/[.\s]+$/, ''));
+  const ext = m ? m[1].toLowerCase() : '';
+  if (!ext || !list.includes(ext)) return false;
+  this._showToast(t('media.file_type_blocked', { ext }), 'error');
+  return true;
+},
+
 // Upload one file and return the line it takes in a message, or null when
 // it failed (already reported). In an encrypted DM the bytes are encrypted
 // first, as before, and the line is the encrypted picture or file marker.
@@ -312,6 +324,7 @@ async _mediaUploadLine(file, { partner = null, isDm = false } = {}) {
   const spoiler = file._spoiler ? 'spoiler-img:' : '';
   try {
     if (partner) {
+      if (this._refuseBlockedUploadType(file)) return null;
       const encrypted = await this._e2eEncryptBytes(partner, await file.arrayBuffer());
       const fd = new FormData();
       fd.append('scope', 'dm');

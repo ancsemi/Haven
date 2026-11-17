@@ -68,7 +68,7 @@ test('a typed placeholder cannot pull a link into an image attribute', () => {
 
 test('typed placeholders for every kind stay plain text', () => {
   const app = loadApp();
-  for (const kind of ['MDLINK_0', 'AUTOLINK_0', 'COLOR_0', 'ENDCOLOR', 'TIMESTAMP_0', 'CODEBLOCK_0']) {
+  for (const kind of ['MDLINK_0', 'AUTOLINK_0', 'COLOR_0', 'ENDCOLOR', 'TIMESTAMP_0', 'CODEBLOCK_0', 'INLINECODE_0']) {
     const html = app._formatContent(`a\u0000${kind}\u0000b https://example.com/page c#ff0000red#c`);
     assert.ok(!html.includes('\u0000'), kind + ': no NUL survives');
     assert.ok(html.includes(`a${kind}b`), kind + ': typed text stays as typed: ' + html);
@@ -105,6 +105,14 @@ test('ordinary markdown still renders', () => {
   assert.ok(/<a href="https:\/\/example\.com\/x"[^>]*data-masked-link="true">site<\/a>/.test(html), html);
   assert.ok(html.includes('<code class="inline-code">code</code>'));
   assert.ok(html.includes('<span style="color:#00ff00">green</span>'));
+});
+
+test('a link inside backticks stays plain text', () => {
+  const app = loadApp();
+  const html = app._formatContent('run `curl https://example.com/api?a=1&b=2` then see https://example.com/doc');
+  assert.ok(html.includes('<code class="inline-code">curl https://example.com/api?a=1&amp;b=2</code>'), html);
+  assert.equal((html.match(/<a href=/g) || []).length, 1, 'only the link outside the code is clickable: ' + html);
+  assert.ok(app._formatContent('`**not bold** @everyone`').includes('<code class="inline-code">**not bold** @everyone</code>'));
 });
 
 test('a file card only renders for this server\'s uploads', () => {

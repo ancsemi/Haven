@@ -1,0 +1,9 @@
+{
+  "name": "haven-postgres-addon",
+  "private": true,
+  "description": "PostgreSQL's pg client, installed into the data folder only when HAVEN_DATABASE_URL selects PostgreSQL.",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "pg": "8.23.1"
+  }
+}

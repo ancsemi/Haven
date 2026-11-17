@@ -53,12 +53,16 @@ const GAMES_ROMS_DIR = path.join(DATA_DIR, 'games', 'roms');
 // Uploads land here first and only move into uploads/ once their location
 // data is gone (src/privacyPass.js). Outside uploads/, so nothing here is served.
 const UNPROCESSED_DIR = path.join(DATA_DIR, 'unprocessed');
+// A cleaned upload waits here while its route checks it, and only reaches
+// storage once the route admits it (src/storage).
+const STAGING_DIR = path.join(UNPROCESSED_DIR, 'staging');
 
 // Ensure sub-directories exist
 fs.mkdirSync(CERTS_DIR,                { recursive: true });
 fs.mkdirSync(UPLOADS_DIR,             { recursive: true });
 fs.mkdirSync(DELETED_ATTACHMENTS_DIR, { recursive: true });
 fs.mkdirSync(UNPROCESSED_DIR,         { recursive: true });
+fs.mkdirSync(STAGING_DIR,             { recursive: true });
 
 // ── One-time migration: move data from old project-dir locations ─────
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -105,4 +109,4 @@ migrateFile('.env',           ENV_PATH);
 migrateDir('certs',           CERTS_DIR);
 migrateDir('public/uploads',  UPLOADS_DIR);
 
-module.exports = { getDataDir, DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR, GAMES_ROMS_DIR, UNPROCESSED_DIR };
+module.exports = { getDataDir, DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR, GAMES_ROMS_DIR, UNPROCESSED_DIR, STAGING_DIR };

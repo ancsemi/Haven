@@ -78,6 +78,12 @@ async function uploadFile(token, name, size, scope = 'channel') {
   const j = await r.json();
   return j && typeof j.url === 'string' ? j.url.replace('/uploads/', '') : null;
 }
+// Files written straight into uploads/ are news to the media index; the admin
+// rebuilds it, as anyone adding files by hand would.
+async function reindex(token) {
+  const r = await fetch(`${BASE}/api/admin/media/reconcile`, { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+  assert.strictEqual(r.status, 200, 'media index rebuilt');
+}
 const tagsOf = (m) => (Array.isArray(m.tags) ? m.tags : JSON.parse(m.tags || '[]'));
 
 async function bootServer() {
@@ -461,6 +467,7 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
     fs.writeFileSync(path.join(uploads, '1790000000000-aaaa1111.png'), Buffer.alloc(2048, 7));
     fs.writeFileSync(path.join(uploads, '1790000000001-bbbb2222.pdf'), Buffer.alloc(4096, 3));
     fs.writeFileSync(path.join(uploads, '1790000000002-cccc3333.mp4'), Buffer.alloc(11 * 1024 * 1024, 1));
+    await reindex(admin.token);
     // Mirror everything from the chat pairing, so a plain message goes out.
     const got = next(A, 'ferry:config');
     A.emit('ferry:get-config');
@@ -493,6 +500,7 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
     const uploads = path.join(DATA, 'uploads');
     fs.writeFileSync(path.join(uploads, '1790000000003-dddd4444.png'), Buffer.alloc(1024, 5));
     fs.writeFileSync(path.join(uploads, '1790000000004-eeee5555.png'), Buffer.alloc(512, 6));
+    await reindex(admin.token);
     const got = next(A, 'ferry:config');
     A.emit('ferry:get-config');
     const chatLink = (await got).links.find((l) => l.discord_channel_id === TEXT_ID);
@@ -509,6 +517,49 @@ test('a Discord forum and a Haven forum carry posts and replies both ways', asyn
     const spoiler = await until(() => discord.executions.slice(before).find((e) => e.body && e.body.files && e.body.files.some((f) => f.filename === 'SPOILER_1790000000004-eeee5555.png')));
     assert.ok(spoiler, 'a spoilered picture goes as a Discord spoiler');
     assert.strictEqual(spoiler.body.content, '');
+  });
+
+  // Replies cross the bridge: a Discord reply to a Haven message is a Haven
+  // reply (and tells its author), and a Haven reply names on Discord what it
+  // answers, with a jump link and the Discord author.
+  await t.test('replies cross the bridge both ways', async () => {
+    const got = next(A, 'ferry:config');
+    A.emit('ferry:get-config');
+    const chatLink = (await got).links.find((l) => l.discord_channel_id === TEXT_ID);
+    const updated = next(A, 'ferry:config', (c) => c.links.some((l) => l.id === chatLink.id && l.out_mode === 'all'));
+    A.emit('ferry:update-link', { id: chatLink.id, outMode: 'all' });
+    assert.ok(await updated);
+    A.emit('enter-channel', { code: chat.code });
+    await wait(200);
+
+    // Haven -> Discord: replying to a message that came from Discord.
+    const FROM_ALICE = discord.newId();
+    discord.dispatch('MESSAGE_CREATE', discordMessage(FROM_ALICE, TEXT_ID, ALICE, 'Who has the patch notes?'));
+    const copy = await until(async () => (await history(A, chat.code)).messages.find((m) => m.content === 'Who has the patch notes?'));
+    assert.ok(copy);
+    let before = discord.executions.length;
+    A.emit('send-message', { code: chat.code, content: 'I do, posting them now', replyTo: copy.id });
+    const out = await until(() => discord.executions.slice(before).find((e) => e.body && /posting them now/.test(e.body.content || '')));
+    assert.ok(out, 'the reply went to Discord');
+    const [line, text] = out.body.content.split('\n');
+    assert.ok(line.startsWith(`-# ↩ <@${ALICE.id}>: Who has the patch notes?`), line);
+    assert.ok(line.includes(`https://discord.com/channels/${GUILD_ID}/${TEXT_ID}/${FROM_ALICE}`), 'with a jump link');
+    assert.strictEqual(text, 'I do, posting them now');
+
+    // Discord -> Haven: a Discord reply to a message sent from Haven.
+    before = discord.executions.length;
+    A.emit('send-message', { code: chat.code, content: 'Server restarts at noon' });
+    const sent = await until(() => discord.executions.slice(before).find((e) => e.body && e.body.content === 'Server restarts at noon'));
+    assert.ok(sent);
+    const sentId = sent.result && sent.result.id;
+    const outbound = await until(async () => (await history(A, chat.code)).messages.find((m) => m.content === 'Server restarts at noon'));
+    const told = next(A, 'new-message', (d) => d && d.message && d.message.content === 'Thanks for the heads up');
+    discord.dispatch('MESSAGE_CREATE', discordMessage(discord.newId(), TEXT_ID, BOB, 'Thanks for the heads up',
+      { type: 19, message_reference: { message_id: sentId, channel_id: TEXT_ID, guild_id: GUILD_ID } }));
+    const live = await told;
+    assert.ok(live, 'the reply came across');
+    assert.strictEqual(live.message.reply_to, outbound.id, 'as a reply to the Haven message');
+    assert.strictEqual(live.message.replyContext.user_id, admin.user.id, 'so its author is told');
   });
 
   await t.test('a Discord DM carries Haven attachments as uploads', async () => {

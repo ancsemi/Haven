@@ -105,7 +105,8 @@ test('a member who shares a role name wins over the role', () => {
   const app = loadApp();
   app.channelMembers.push({ id: 3, username: 'Moderators', loginName: 'moderators' });
   const html = app._formatContent('hi @Moderators');
-  assert.match(html, /<span class="mention">@Moderators<\/span>/);
+  // The person's mention carries their id, which opens their profile card (#5878).
+  assert.match(html, /<span class="mention" data-mention-user="3">@Moderators<\/span>/);
   assert.ok(!html.includes('mention-role'));
 });
 

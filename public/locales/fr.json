@@ -294,6 +294,7 @@
       "logout": "Se déconnecter",
       "invite": "Inviter des utilisateurs",
       "change_display_name": "Changer le pseudo",
+      "mentions": "Mentions et réponses",
       "close_sidebar": "Fermer la barre latérale",
       "message_actions": "Actions sur le message",
       "organize_channels": "Organiser les salons",
@@ -676,7 +677,14 @@
       "soundboard": "Soundboard",
       "listen_together": "Écouter ensemble",
       "settings": "Paramètres vocaux"
-    }
+    },
+    "music_file_platform": "Fichier audio",
+    "music_file_listen": "Lire pour tout le monde en vocal",
+    "music_file_join_voice": "Rejoignez un salon vocal pour le lire pour tout le monde",
+    "music_file_failed": "Ce fichier audio n’a pas pu être lu",
+    "music_yt_gone": "YouTube indique que cette vidéo n’existe plus",
+    "music_yt_blocked": "YouTube ne lit pas cette vidéo ici (intégration désactivée ou bloquée dans ce pays)",
+    "music_yt_failed": "YouTube n’a pas pu lire cette vidéo"
   },
   "calls": {
     "incoming": "Appel entrant",
@@ -723,7 +731,8 @@
     "member_removed": "{{name}} a été retiré du groupe",
     "leave_confirm": "Quitter {{group}} ? Vous ne pourrez plus lire les nouveaux messages tant que quelqu'un ne vous aura pas invité à nouveau.",
     "key_changed": "La clé de chiffrement de {{name}} a changé. Vérifiez-la avant que la clé du groupe soit partagée à nouveau.",
-    "no_key": "🔒 Envoyé avant votre arrivée, ou en attente du partage de la clé par un membre du groupe",
+    "no_key": "🔒 En attente qu’un autre membre du groupe ouvre Haven et partage la clé",
+    "before_join": "🔒 Envoyé avant votre arrivée (ou avant la réinitialisation de vos clés), il ne peut pas être ouvert ici",
     "cannot_verify": "⚠️ Ce message n'a pas pu être vérifié et n'a pas été affiché",
     "already_exists": "Vous avez déjà un groupe avec ces personnes : {{name}}",
     "keys_changed_title": "Les clés de chiffrement ont changé dans ce groupe",
@@ -1078,6 +1087,7 @@
     "uploads_disabled": "Les envois de médias sont désactivés dans ce salon",
     "soundboard_disabled": "Le soundboard est désactivé pour ce salon",
     "file_too_large": "Fichier trop volumineux (max {{maxMb}} Mo)",
+    "file_type_blocked": "Les fichiers .{{ext}} ne peuvent pas être envoyés sur ce serveur",
     "image_too_large": "Image trop volumineuse (max {{maxMb}} Mo)",
     "max_images": "5 images maximum à la fois",
     "max_files": "5 fichiers maximum à la fois",
@@ -1443,7 +1453,9 @@
     "frame_rate": "Fréquence d'images",
     "bitrate": "Débit",
     "bitrate_unlimited": "Illimité",
-    "camera_fallback": "Caméra {{n}}"
+    "camera_fallback": "Caméra {{n}}",
+    "camera_quality": "Qualité de la caméra",
+    "camera_quality_hint": "Une qualité plus haute est plus nette mais utilise plus de bande passante, pour vous et ceux qui regardent. Votre caméra peut plafonner plus bas."
   },
   "notifications_runtime": {
     "title": "{{sender}} dans {{channel}}",
@@ -1602,7 +1614,26 @@
       "debug": "Débogage",
       "backup": "Sauvegarde",
       "template": "Modèle de serveur",
-      "audit_log": "Journal d'audit"
+      "audit_log": "Journal d'audit",
+      "whats_new": "Nouveautés"
+    },
+    "pages": {
+      "look": "Apparence",
+      "chat": "Chat et médias",
+      "alerts": "Notifications",
+      "profile": "Profil et activité",
+      "security": "Compte et sécurité",
+      "language": "Langue",
+      "access": "Accessibilité",
+      "advanced": "Plugins et avancé",
+      "server": "Serveur",
+      "people": "Membres et rôles",
+      "safety": "Sécurité",
+      "content": "Contenu",
+      "network": "Réseau et montée en charge",
+      "tools": "Bots et données",
+      "more": "Plus",
+      "more_info": "Plus d'infos"
     },
     "localization_section": {
       "title": "Localisation"
@@ -1724,6 +1755,12 @@
         "underline_links": "Souligner les liens",
         "large_targets": "Zones de clic plus grandes",
         "large_targets_hint": "Boutons plus grands et lignes plus hautes dans les barres latérales, la zone de message et les actions des messages."
+      },
+      "emoji": {
+        "title": "Emoji",
+        "system": "Emoji de votre appareil",
+        "twemoji": "Twemoji",
+        "hint": "Twemoji dessine les emoji de la même façon sur chaque appareil, avec une police servie par Haven lui-même."
       }
     },
     "reaction_size": {
@@ -2146,6 +2183,8 @@
       "listener_only_hint": "Rejoignez les salons vocaux sans demander l'accès au microphone. Vous entendrez tout le monde mais ne pourrez pas parler. Utile si vous n'avez pas de micro, ne pouvez pas accorder l'autorisation du micro pour le moment, ou voulez simplement écouter. Haven passera aussi automatiquement en écoute seule si le micro ne peut pas être ouvert pour une raison quelconque. (#5380)",
       "screen_share_voice_proc": "Appliquer le traitement vocal à l'audio du partage d'écran",
       "screen_share_voice_proc_hint": "Réactive l'annulation d'écho, la suppression du bruit et le contrôle automatique du gain sur l'audio capturé depuis votre partage d'écran. Désactivé par défaut depuis la 3.17.3 car ces filtres abîment la musique et l'audio des jeux. Activez-le si vous partagez du contenu vocal (narration de tutoriel, podcast, réunion) où le nettoyage aide vraiment. N'affecte pas votre microphone, qui bénéficie toujours du traitement vocal complet.",
+      "stereo_stream_audio": "Son stéréo des streams (expérimental)",
+      "stereo_stream_audio_hint": "Lit le son des partages d’écran en stéréo, avec un débit plus élevé pensé pour la musique et les jeux. Activez-le pour entendre les streams en stéréo ; sur les serveurs avec relais vocal, la personne qui partage doit aussi l’activer. Utilise plus de bande passante. Rejoignez le vocal après l’avoir changé. Expérimental : si la voix pose problème, désactivez-le.",
       "screen_audio_webaudio": "Mixage Web Audio pour l'audio du partage d'écran",
       "screen_audio_webaudio_hint": "Par défaut, Haven lit l'audio entrant du partage d'écran directement via l'élément audio, ce qui le garde synchronisé avec la vidéo sur une connexion TURN/relais. Activez pour le faire passer par le mixeur Web Audio de Haven, ce qui permet d'augmenter le volume par flux au-delà de 100 % mais peut provoquer des saccades audio et une désynchronisation audio/vidéo sur un relais (sans problème sur un réseau local). Laissez désactivé si l'audio d'un partage d'écran saccade ou se désynchronise. (#5426)",
       "screen_relay_profile": "Partage d'écran plus doux pour les connexions relayées",
@@ -2171,6 +2210,10 @@
       "update_hint": "Recherchez les nouvelles versions de Haven et appliquez-les sur place. Le serveur crée automatiquement une sauvegarde avant la mise à jour et redémarre de lui-même.",
       "update_check_btn": "Rechercher des mises à jour",
       "update_run_btn": "Mettre à jour maintenant",
+      "shutdown_btn": "Arrêter le serveur",
+      "shutdown_hint": "Arrête Haven proprement, comme Ctrl+C. Relancez-le comme d’habitude. Si Docker ou un gestionnaire de services relance Haven tout seul, cela le redémarre.",
+      "shutdown_confirm": "Arrêter le serveur maintenant ? Tout le monde est déconnecté jusqu’à son redémarrage.",
+      "shutdown_sent": "Le serveur s’arrête.",
       "update_checking": "Vérification…",
       "update_run_on_host": "À exécuter sur l'hôte :",
       "update_copy_command": "Copier la commande",
@@ -2192,6 +2235,11 @@
       "view_ip_bans_btn": "Voir les bannissements d'IP",
       "admin_pw_reset_label": "Autoriser la réinitialisation du mot de passe par un admin",
       "admin_pw_reset_hint": "⚠️ Une fois activé, les admins peuvent réinitialiser le mot de passe de n'importe quel utilisateur avec une valeur temporaire à usage unique. L'utilisateur doit le changer à sa prochaine connexion. Réinitialiser un mot de passe efface aussi l'historique des MP E2E de cet utilisateur (sa clé d'enveloppe dérive du mot de passe). L'activation de cette option est exposée via /api/public-config pour que les utilisateurs puissent voir si les admins de ce serveur ont ce pouvoir.",
+      "transfer_title": "Confier le serveur à quelqu’un d’autre",
+      "transfer_hint": "Fait d’un autre membre l’admin, et vous ne l’êtes plus. Vous confirmerez avec votre mot de passe.",
+      "transfer_placeholder": "Nom du membre…",
+      "transfer_btn": "Transférer l’admin…",
+      "transfer_pick": "Choisissez d’abord un membre dans la liste",
       "oidc_group": "Authentification unique (OIDC)",
       "oidc_desc": "Permettez aux membres de se connecter avec un compte de votre propre fournisseur d'identité (Authentik, Keycloak, Authelia, Auth0 et tout autre compatible OpenID Connect) au lieu d'un mot de passe Haven. Renseignez ici l'adresse de l'émetteur et l'ID client, puis placez le secret client dans votre fichier .env sous OIDC_CLIENT_SECRET et redémarrez. Le secret est volontairement gardé hors de la base de données pour que vos sauvegardes ne le contiennent jamais. Enregistrez cette adresse auprès de votre fournisseur comme URI de redirection : <code>https://your-haven-address/api/auth/oidc/callback</code>",
       "oidc_e2e_note": "Les MP chiffrés sont déverrouillés par une clé dérivée de ce que vous saisissez à la connexion, et un membre SSO ne saisit jamais de mot de passe ici. On lui demande de définir une phrase secrète de chiffrement distincte à sa première connexion, puis de la ressaisir sur chaque nouvel appareil. Personne, vous compris, ne peut réinitialiser cette phrase secrète pour lui.",
@@ -2266,6 +2314,9 @@
       "automod_log_channel_placeholder": "code du salon (facultatif)",
       "automod_activity_group": "Activité récente",
       "automod_refresh": "Actualiser",
+      "automod_ai_group": "Vérification des liens par IA (expérimental)",
+      "automod_ai_enabled": "Autoriser le plugin AutoMod Quarantine à utiliser ce serveur",
+      "automod_ai_hint": "Expérimental. Désactivé par défaut. Active la partie serveur du plugin AutoMod Quarantine : vérifier les liens avec un modèle d’IA qui tourne sur ce serveur (installé avec scripts/setup-automod-ai.sh) et transmettre les requêtes des modérateurs aux services d’IA en ligne qui refusent les navigateurs. Seul le lien est envoyé à une IA, jamais le message. Chaque membre choisit toujours d’activer ou non le plugin dans Plugins et thèmes.",
       "bulk_preview_failed": "Échec de l'aperçu",
       "mention_everyone_desc": "Notifier tout le monde dans le salon",
       "mention_here_desc": "Notifier les membres en ligne",
@@ -2431,7 +2482,6 @@
       "upload_btn": "Téléverser",
       "remove_btn": "Supprimer",
       "server_banner_hint": "Bannière du serveur (large, 4 Mo max)",
-      "server_banner_display_hint": "Les réglages d'affichage de la bannière (hauteur, décalage, style d'en-tête) se trouvent dans les Paramètres utilisateur.",
       "appearance_welcome": "Apparence et accueil",
       "welcome_message": "Message de bienvenue",
       "welcome_message_placeholder": "ex. Bienvenue {user} !",
@@ -2656,6 +2706,12 @@
       "save_hint": "Les modifications s'appliquent uniquement après avoir cliqué sur Sauvegarder. Fermer (✕) pour annuler.",
       "save_notice": "Les modifications ci-dessous nécessitent de cliquer sur <strong>Enregistrer les paramètres</strong> pour s'appliquer.",
       "login_title_hint": "Titre personnalisé affiché sur l'écran de connexion sous le logo HAVEN.",
+      "login_show_icon": "Afficher l’icône du serveur sur la page de connexion",
+      "login_show_banner": "Utiliser la bannière du serveur comme fond de la page de connexion",
+      "login_message": "Message de la page de connexion",
+      "login_message_hint": "Une courte note sous le titre, comme un mot d’accueil ou comment obtenir une invitation.",
+      "login_css": "CSS de la page de connexion",
+      "login_css_hint": "Ne s’applique qu’à la page de connexion et d’inscription. Si un style masque le formulaire, ajoutez ?nocss à la fin de l’adresse pour l’ignorer. Une image ou une police chargée depuis un autre site permet à ce site de voir qui visite.",
       "server_icon_hint": "Icône du serveur (carrée, max 2 Mo)",
       "default_theme_hint": "Les nouveaux utilisateurs voient ce thème à leur première visite. Ils peuvent toujours choisir le leur.",
       "default_locale": "Langue par défaut",
@@ -2735,6 +2791,9 @@
       "max_avatar_hint": "Plus grande photo de profil, bordure ou image de persona qu'une personne peut téléverser (1 à 10 Mo, 2 par défaut). Les GIF animés dépassent souvent 2 Mo, mais chaque image est chargée à côté de chaque message de son propriétaire, alors gardez cette valeur aussi basse que possible.",
       "max_emoji_hint": "Taille max des emojis personnalisés (64–1024 Ko, défaut 256)",
       "max_poll_hint": "Nombre maximum de choix par sondage (2–25, défaut 10)",
+      "blocked_upload_types": "Types de fichiers bloqués",
+      "blocked_upload_types_hint": "Personne ne peut envoyer de fichiers de ces types. Séparez-les par des virgules. Types à risque courants : exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar. Laissez vide pour tout autoriser.",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_message_chars_hint": "Nombre maximal de caractères par message, publication ou MP (200-100000, 2000 par défaut)",
       "max_invite_uses": "Nombre maximal d’utilisations du lien d’invitation",
       "max_invite_uses_hint": "Le nombre maximal d’utilisations pouvant être défini pour un lien d’invitation. Les administrateurs et les utilisateurs disposant de l’autorisation de gérer le serveur ignorent cette limite. (0 = illimité)",
@@ -2884,6 +2943,13 @@
       "no_banned_users": "Aucun utilisateur banni",
       "no_reason": "Aucune raison",
       "unban_btn": "Débannir",
+      "scrub_btn": "Supprimer les messages",
+      "scrub_title": "Supprimer tout ce que cette personne a écrit dans les salons de ce serveur",
+      "scrub_confirm": "Supprimer tous les messages de {{name}} ?",
+      "scrub_confirm_hint": "Tout ce que cette personne a écrit dans les salons de ce serveur est supprimé pour tout le monde. Les messages protégés et les MP restent. Action irréversible.",
+      "scrub_done": "{{n}} messages supprimés",
+      "scrub_none": "Plus aucun message à supprimer",
+      "scrub_failed": "Impossible de supprimer ses messages",
       "ban_appeal_label": "Appel",
       "dismiss_appeal_btn": "Rejeter l'appel",
       "dismiss_appeal_title": "Effacer cet appel sans débannir",
@@ -3043,6 +3109,11 @@
         "style_preview_name": "Nom du rôle",
         "transparent": "Transparent",
         "transparent_hint": "Activé, ce rôle ne colore jamais ses détenteurs. Leur rôle suivant qui n'est pas transparent définit leur couleur, ou ils s'affichent sans couleur s'il n'y en a pas.",
+        "mentionable": "Peut être @mentionné",
+        "mentionable_hint": "Apparaît dans la liste @, et @Nom notifie tous ceux qui ont le rôle. À désactiver pour les rôles décoratifs et de jeux.",
+        "show_on_profile": "Afficher sur les cartes de profil",
+        "show_on_profile_hint": "Désactivé : le rôle n’apparaît pas sur les cartes de profil. Ceux qui gèrent les rôles le voient encore, estompé.",
+        "hidden_on_profile_title": "Seuls ceux qui gèrent les rôles voient celui-ci sur les cartes de profil",
         "auto_assign": "Attribuer automatiquement aux nouveaux membres",
         "auto_assign_hint": "Les nouveaux utilisateurs recevront automatiquement ce rôle lors de leur inscription ou quand ils rejoignent un salon.",
         "channel_access": "Accès aux salons",
@@ -3118,7 +3189,17 @@
       "blur": "Flouter les sujets et messages NSFW jusqu'au clic",
       "blur_hint": "Les sujets et messages marqués 🔞 sont derrière un flou, comme un spoiler. Désactivez cette option pour les voir normalement."
     },
-    "search_placeholder": "Rechercher dans les paramètres (Ctrl+F)"
+    "search_placeholder": "Rechercher dans les paramètres (Ctrl+F)",
+    "whats_new": {
+      "title": "Nouveautés",
+      "show_label": "Afficher les nouveautés après",
+      "all": "Chaque mise à jour",
+      "minor": "Nouvelles fonctions",
+      "major": "Grosses mises à jour seulement",
+      "off": "Jamais",
+      "hint": "Un numéro de version a trois parties : une grosse mise à jour change la première, les nouvelles fonctions la deuxième et les correctifs la troisième. Quand une partie soulignée change, les notes de version s’affichent. Enregistré sur cet appareil.",
+      "show_now": "Voir les nouveautés de cette version"
+    }
   },
   "modals": {
     "timezone": {
@@ -3460,7 +3541,9 @@
       "not_here": "L'envoi différé n'est pas disponible dans les messages privés",
       "scheduled": "Programmé pour {{when}}",
       "updated": "Mis à jour, envoi à {{when}}",
-      "sent": "Votre message programmé est parti dans #{{channel}}"
+      "sent": "Votre message programmé est parti dans #{{channel}}",
+      "attach": "📎 Joindre des fichiers",
+      "remove_file": "Retirer"
     },
     "self_destruct": {
       "title": "Message à autodestruction",
@@ -3609,7 +3692,7 @@
     "donors": {
       "title": "Merci",
       "subtitle": "Haven est construit avec amour et maintenu en vie grâce à la générosité de personnes comme vous. Chaque donation — grande ou petite — signifie énormément.",
-      "sponsors_title": "Sponsors",
+      "sponsors_title": "Soutiens mensuels",
       "donors_title": "Donateurs",
       "note": "Les nouveaux donateurs seront ajoutés à chaque version. Si vous avez donné et ne voyez pas votre nom, il apparaîtra dans la prochaine mise à jour !",
       "kofi_btn": "Soutenir Haven sur Ko-fi",
@@ -4805,5 +4888,10 @@
       "none": "Il n'y a pas encore de badge donné à la main. Créez-en un dans Paramètres, Admin, Badges.",
       "switched_off": "désactivé"
     }
+  },
+  "whats_new": {
+    "title": "Nouveautés de Haven {{version}}",
+    "settings_hint": "Paramètres > Nouveautés choisit quand cela s’affiche.",
+    "unavailable": "Les notes de version ne sont pas disponibles sur ce serveur."
   }
 }

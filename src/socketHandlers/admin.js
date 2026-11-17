@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const path = require('node:path');
 const { utcStamp, isInt, isValidUploadPath, VALID_ROLE_PERMS, normalizeWordGroups, validEscalation } = require('./helpers');
 const { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS, createSettingEffects } = require('./settingEffects');
+const { normalizeBlockedExtensions } = require('../uploadBlocklist');
 const {
   BUILTIN_THEMES,
   compatibleThemeFiles,
@@ -34,6 +35,12 @@ module.exports = function register(socket, ctx) {
   // so an admin who set SERVER_NAME in their compose file opened Settings,
   // saw an empty box, and had no way to tell whether it had taken effect or
   // what would happen if they typed in it. (#5489)
+  // Whether the GIF picker has a provider behind it: a key saved here or one
+  // in the environment.
+  const GIF_KEYS = ['giphy_api_key', 'klipy_api_key', 'tenor_api_key'];
+  const gifSearchAvailable = (rows) => rows.some(r => GIF_KEYS.includes(r.key) && !!r.value)
+    || !!(process.env.GIPHY_API_KEY || process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY);
+
   const ENV_BACKED_SETTINGS = [
     { key: 'server_name',   env: 'SERVER_NAME' },
     { key: 'stun_urls',     env: 'STUN_URLS' },
@@ -103,9 +110,7 @@ module.exports = function register(socket, ctx) {
     // Whether the GIF picker has a provider behind it, said without the key
     // itself, so a non-admin client can hide the button when there is none
     // (#5654). Read from the rows, since the keys are stripped above.
-    const gifKeys = ['giphy_api_key', 'klipy_api_key', 'tenor_api_key'];
-    settings.gif_search_available = String(rows.some(r => gifKeys.includes(r.key) && !!r.value)
-      || !!(process.env.GIPHY_API_KEY || process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY));
+    settings.gif_search_available = String(gifSearchAvailable(rows));
 
     socket.emit('server-settings', settings, envInfo);
   });
@@ -129,14 +134,18 @@ module.exports = function register(socket, ctx) {
       'deleted_retention_days', // how long files from deleted messages and channels are kept before they are removed for good
       'keep_self_destructed_attachments', // off removes a self destructed message's files for good instead of holding them
       'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner',
+      'banner_default_height', 'banner_default_offset', // what members see until they set their own
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
       'max_tags_per_attachment', 'max_tag_len', // (#tagging phase 4) upload-tag limits
+      'blocked_upload_extensions', // (#5833) file types members cannot upload
+      'automod_ai_enabled', // experimental AutoMod Quarantine AI link checks
       'max_sound_kb', 'max_avatar_mb', 'max_banner_mb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'update_channel_early', 'hide_disabled_channel_badges',
       'category_layout', 'category_short_names', // (#5756) category tabs and short names
       'media_group_layout', // (#5799) pictures sent together: 'grid' or 'stacked'
       'allow_self_purge', // (#5686) members may delete every message they wrote
       'default_theme', 'published_themes', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
       'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code', 'default_locale',
+      'login_show_icon', 'login_show_banner', 'login_message', 'login_css', // (#5819) the login page's look
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
       'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections',
       'session_duration_days', 'max_message_chars', 'auto_away_visible_minutes', 'auto_away_hidden_minutes', 'auto_away_enabled',
@@ -209,6 +218,10 @@ module.exports = function register(socket, ctx) {
     if (key === 'automod_words') {
       value = normalizeWordGroups(value);
       if (value === null) return;
+    }
+    if (key === 'blocked_upload_extensions') {
+      value = normalizeBlockedExtensions(value);
+      if (value === null) return socket.emit('error-msg', 'Blocked file types: list types like exe, bat, dll (letters and digits, up to 100).');
     }
     // Thresholds must be coherent or the escalation ladder misbehaves in
     // ways that are very hard to debug from the outside: a ban threshold
@@ -405,8 +418,18 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'custom_tos') { if (value.length > 50000) return; }
     if (key === 'welcome_message') { if (value.length > 500) return; }
+    // The login page's look (#5819). Custom CSS reaches every visitor before
+    // they sign in, so it is the admin's alone.
+    if ((key === 'login_show_icon' || key === 'login_show_banner') && !['true', 'false'].includes(value)) return;
+    if (key === 'login_message' && value.length > 500) return;
+    if (key === 'login_css') {
+      if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only the server admin can change the login page CSS.');
+      if (value.length > 20000) return socket.emit('error-msg', 'The login page CSS can be up to 20,000 characters.');
+    }
     if (key === 'server_code') return; // managed via generate/rotate events
     if (key === 'server_banner') { if (value && !isValidUploadPath(value)) return; }
+    if (key === 'banner_default_height') { const n = parseInt(value, 10); if (String(n) !== value || n < 80 || n > 400) return; }
+    if (key === 'banner_default_offset') { const n = parseInt(value, 10); if (String(n) !== value || n < 0 || n > 100) return; }
     if (key === 'vanity_code') {
       if (value && (value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_-]+$/.test(value))) return;
       if (value) {
@@ -421,6 +444,9 @@ module.exports = function register(socket, ctx) {
       if (!['true', 'false'].includes(value)) return;
     }
     if (key === 'invites_bypass_registration_token') {
+      if (!['true', 'false'].includes(value)) return;
+    }
+    if (key === 'automod_ai_enabled') {
       if (!['true', 'false'].includes(value)) return;
     }
     if (key === 'guests_enabled' || key === 'guests_allow_voice') {
@@ -470,6 +496,7 @@ module.exports = function register(socket, ctx) {
         } catch { return; }
       }
     }
+    const previousValue = db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key)?.value ?? null;
     try {
       const save = () => {
         db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run(key, value);
@@ -500,8 +527,14 @@ module.exports = function register(socket, ctx) {
     }
 
     afterSettingSaved(key, value);
+    // A key saved or removed shows or hides everyone's GIF button straight
+    // away, not at their next reload.
+    if (GIF_KEYS.includes(key)) {
+      const gifRows = db.prepare(`SELECT key, value FROM server_settings WHERE key IN (${GIF_KEYS.map(() => '?').join(',')})`).all(...GIF_KEYS);
+      io.except('bot-sockets').emit('server-setting-changed', { key: 'gif_search_available', value: String(gifSearchAvailable(gifRows)) });
+    }
 
-    auditSettingChange(socket.user, key, value);
+    if (previousValue !== value) auditSettingChange(socket.user, key, value, previousValue);
 
     // Relay settings take effect straight away: start, stop or restart it.
     // Calls already running keep going until they empty (see voiceRelay).
@@ -611,6 +644,11 @@ module.exports = function register(socket, ctx) {
     socket.emit('whitelist-list', rows);
   });
 
+  // Admin panel actions with no setting of their own to log under.
+  const auditAdmin = (action, targetName = null, details = undefined) => {
+    if (typeof logAudit === 'function') logAudit({ actor: socket.user, action, target_name: targetName, details });
+  };
+
   socket.on('whitelist-add', (data) => {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server')) return;
     if (!data || typeof data !== 'object') return;
@@ -624,6 +662,7 @@ module.exports = function register(socket, ctx) {
 
     try {
       db.prepare('INSERT OR IGNORE INTO whitelist (username, added_by) VALUES (?, ?)').run(username, socket.user.id);
+      auditAdmin('whitelist_add', username);
       socket.emit('error-msg', `Added "${username}" to whitelist`);
       const rows = db.prepare('SELECT id, username, created_at FROM whitelist ORDER BY username').all();
       rows.forEach(r => { r.created_at = utcStamp(r.created_at); });
@@ -640,6 +679,7 @@ module.exports = function register(socket, ctx) {
     if (!username) return;
 
     db.prepare('DELETE FROM whitelist WHERE username = ?').run(username);
+    auditAdmin('whitelist_remove', username);
     socket.emit('error-msg', `Removed "${username}" from whitelist`);
     const rows = db.prepare('SELECT id, username, created_at FROM whitelist ORDER BY username').all();
     rows.forEach(r => { r.created_at = utcStamp(r.created_at); });
@@ -651,6 +691,7 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const enabled = data.enabled === true ? 'true' : 'false';
     db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('whitelist_enabled', ?)").run(enabled);
+    auditAdmin('server_setting_update', 'whitelist_enabled', { key: 'whitelist_enabled', value: enabled });
     socket.emit('error-msg', `Whitelist ${enabled === 'true' ? 'enabled' : 'disabled'}`);
   });
 
@@ -661,6 +702,7 @@ module.exports = function register(socket, ctx) {
     }
     const code = generateUniqueSharedCode();
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', code);
+    auditAdmin('server_code_new');
     emitSettingChanged('server_code', code);
     socket.emit('error-msg', `Server invite code generated: ${code}`);
   });
@@ -670,6 +712,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Only admins can manage server codes');
     }
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('server_code', '');
+    auditAdmin('server_code_clear');
     emitSettingChanged('server_code', '');
     socket.emit('error-msg', 'Server invite code cleared');
   });
@@ -870,7 +913,8 @@ module.exports = function register(socket, ctx) {
       logAudit({
         actor: socket.user, action: 'invite_code_update',
         target_type: 'invite_code', target_name: row.code,
-        details: { fields: sets.map(s => s.split(' ')[0]) }
+        // The new value of each field that was set (vals lines up with sets).
+        details: Object.fromEntries(sets.map((s, i) => [s.split(' ')[0], vals[i]]))
       });
     }
     socket.emit('toast', { message: `Invite link updated`, type: 'success' });
@@ -905,6 +949,7 @@ module.exports = function register(socket, ctx) {
     }
     const token = crypto.randomBytes(8).toString('hex');
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', token);
+    auditAdmin('registration_token_new');
     emitSettingChanged('registration_token', token);
     socket.emit('error-msg', `Registration token generated: ${token}`);
   });
@@ -914,17 +959,19 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Only admins can manage the registration token');
     }
     db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run('registration_token', '');
+    auditAdmin('registration_token_clear');
     emitSettingChanged('registration_token', '');
     socket.emit('error-msg', 'Registration token cleared');
   });
 
   // ── Run cleanup ─────────────────────────────────────────
-  socket.on('run-cleanup-now', () => {
+  socket.on('run-cleanup-now', async () => {
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'manage_server')) {
       return socket.emit('error-msg', 'Only admins can run cleanup');
     }
     if (typeof global.runAutoCleanup === 'function') {
-      global.runAutoCleanup();
+      auditAdmin('cleanup_run');
+      await global.runAutoCleanup();
       socket.emit('error-msg', 'Cleanup ran. Check server console for details');
     } else {
       socket.emit('error-msg', 'Cleanup function not available');
@@ -968,7 +1015,7 @@ module.exports = function register(socket, ctx) {
       const channelCode = typeof data.channelCode === 'string' ? data.channelCode.trim() : '';
       if (!channelCode || !/^[a-f0-9]{8}$/i.test(channelCode)) return;
 
-      const channel = db.prepare('SELECT id, code FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
+      const channel = db.prepare('SELECT id, code, name FROM channels WHERE code = ? AND is_dm = 0').get(channelCode);
       if (!channel || !canBotChannel(channel.id)) return socket.emit('error-msg', 'Channel not found');
 
       const name = typeof data.name === 'string' ? cleanWebhookName(data.name) : 'Bot';
@@ -979,6 +1026,7 @@ module.exports = function register(socket, ctx) {
         const result = db.prepare(
           'INSERT INTO webhooks (channel_id, name, token, created_by) VALUES (?, ?, ?, ?)'
         ).run(channel.id, name, token, socket.user.id);
+        auditAdmin('webhook_create', name, { channel: channel.name });
 
         socket.emit('webhook-created', {
           id: result.lastInsertRowid, channel_id: channel.id,
@@ -1007,6 +1055,7 @@ module.exports = function register(socket, ctx) {
       db.prepare(
         'INSERT INTO webhooks (channel_id, name, token, avatar_url, created_by) VALUES (?, ?, ?, ?, ?)'
       ).run(channelId, name, token, avatarUrl, socket.user.id);
+      auditAdmin('webhook_create', name, { channel: channel.name });
 
       const webhooks = visibleWebhookRows(db.prepare(`
         SELECT w.id, w.channel_id, w.name, w.token, w.avatar_url, w.is_active, w.created_at, w.created_by,
@@ -1066,7 +1115,9 @@ module.exports = function register(socket, ctx) {
     if (!ownsBot(_delWh)) return socket.emit('error-msg', 'Only the person who made this bot, or the admin, can delete it');
 
     revokeBotVoiceAccess?.(webhookId, 'Webhook was deleted');
+    const _delName = db.prepare('SELECT name FROM webhooks WHERE id = ?').get(webhookId)?.name || null;
     db.prepare('DELETE FROM webhooks WHERE id = ?').run(webhookId);
+    auditAdmin('webhook_delete', _delName);
 
     if (data.webhookId) {
       // Per-channel response
@@ -1100,6 +1151,7 @@ module.exports = function register(socket, ctx) {
     if (!ownsBot(wh)) return socket.emit('error-msg', 'Only the person who made this bot, or the admin, can turn it on or off');
     const newState = wh.is_active ? 0 : 1;
     db.prepare('UPDATE webhooks SET is_active = ? WHERE id = ?').run(newState, webhookId);
+    auditAdmin('webhook_update', db.prepare('SELECT name FROM webhooks WHERE id = ?').get(webhookId)?.name || null, { active: !!newState });
     if (!newState) revokeBotVoiceAccess?.(webhookId, 'Webhook was disabled');
 
     if (data.webhookId) {
@@ -1204,6 +1256,20 @@ module.exports = function register(socket, ctx) {
       const flag = data.can_use_voice ? 1 : 0;
       db.prepare('UPDATE webhooks SET can_use_voice = ? WHERE id = ?').run(flag, webhookId);
       if (!flag) revokeBotVoiceAccess?.(webhookId, 'Bot voice permission was revoked');
+    }
+    // What changed, with the callback secret named but never written down.
+    const whAfter = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(webhookId);
+    if (whAfter) {
+      const changed = {};
+      if (whAfter.name !== wh.name) changed.name = { from: wh.name, to: whAfter.name };
+      if (whAfter.channel_id !== wh.channel_id) changed.channel = db.prepare('SELECT name FROM channels WHERE id = ?').get(whAfter.channel_id)?.name || null;
+      if (whAfter.avatar_url !== wh.avatar_url) changed.avatar = whAfter.avatar_url ? 'changed' : 'removed';
+      if (whAfter.callback_url !== wh.callback_url) changed.callbackUrl = whAfter.callback_url || 'removed';
+      if (whAfter.callback_secret !== wh.callback_secret) changed.callbackSecret = whAfter.callback_secret ? 'changed' : 'removed';
+      if (whAfter.subscribed_events !== wh.subscribed_events) changed.events = whAfter.subscribed_events;
+      if (whAfter.can_moderate !== wh.can_moderate) changed.canModerate = !!whAfter.can_moderate;
+      if (whAfter.can_use_voice !== wh.can_use_voice) changed.canUseVoice = !!whAfter.can_use_voice;
+      if (Object.keys(changed).length) auditAdmin('webhook_update', whAfter.name, changed);
     }
 
     const webhooks = visibleWebhookRows(db.prepare(`

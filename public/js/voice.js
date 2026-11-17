@@ -26,6 +26,9 @@ class VoiceManager {
     this.rawStream = null;          // Raw mic stream (for local talk detection)
     this.screenStream = null;       // Screen share MediaStream
     this.webcamStream = null;       // Webcam video MediaStream
+    this._cameraSwitchGeneration = 0;
+    this._cameraSwitchQueue = Promise.resolve();
+    this._webcamStopping = false;
     this.isScreenSharing = false;
     this.isWebcamActive = false;
     this.peers = new Map();         // userId → { connection, stream, username }
@@ -52,6 +55,10 @@ class VoiceManager {
     this.onTalkingChange = null;    // callback(userId, isTalking)
     this.screenSharers = new Set();  // userIds currently sharing
     this.webcamUsers = new Set();    // userIds currently broadcasting webcam
+    // The stream IDs are signaled separately so camera and display tracks
+    // remain distinguishable when one peer sends both at once.
+    this.screenStreamIds = new Map(); // userId → remote display MediaStream.id
+    this.webcamStreamIds = new Map(); // userId → remote camera MediaStream.id
     // userIds whose current screen share we have actually handed to the UI.
     // Reset on every screen-share-started so a *re*share has to prove itself
     // again (see _watchForScreenStream for why "a live receiver exists" is
@@ -875,9 +882,9 @@ class VoiceManager {
             peer._queuedIceRestart = true;
           }
         }
-        await conn.setRemoteDescription(new RTCSessionDescription(offer));
+        await conn.setRemoteDescription(new RTCSessionDescription(this._stereoSdp(offer)));
         if (typeof data.offerId === 'string') peer._supportsOfferIds = true;
-        const answer = await conn.createAnswer();
+        const answer = this._stereoSdp(await conn.createAnswer());
         await conn.setLocalDescription(answer);
 
         this.socket.emit('voice-answer', {
@@ -931,7 +938,7 @@ class VoiceManager {
           // Only accept answer if we're actually waiting for one
           // (we may have rolled back our offer due to glare)
           if (peer.connection.signalingState === 'have-local-offer') {
-            await peer.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            await peer.connection.setRemoteDescription(new RTCSessionDescription(this._stereoSdp(data.answer)));
             this._clearOfferAnswerTimer(peer);
             peer._awaitingAnswer = false;
             peer._activeOfferId = null;
@@ -1020,6 +1027,8 @@ class VoiceManager {
       this._stopAnalyser(data.user.id);
       this._removePeer(data.user.id);
       this._voiceUserInfo?.delete(data.user.id);
+      this.screenStreamIds.delete(data.user.id);
+      this.webcamStreamIds.delete(data.user.id);
       // If they were screen sharing, clean up
       this._screenDelivered.delete(data.user.id);
       if (this.screenSharers.has(data.user.id)) {
@@ -1073,9 +1082,12 @@ class VoiceManager {
     this.socket.on('screen-share-started', (data) => {
       if (!data || data.channelCode !== this.currentChannel) return;
       this.screenSharers.add(data.userId);
+      if (typeof data.streamId === 'string' && data.streamId) this.screenStreamIds.set(data.userId, data.streamId);
+      else this.screenStreamIds.delete(data.userId);
       this._cancelScreenWatchdog(data.userId);
       // New share: the previous one's delivery says nothing about this one.
       this._screenDelivered.delete(data.userId);
+      this._claimScreenTrack(data.userId);
       // A deliberate new share deserves a clean renegotiation budget; the
       // cap exists to stop a loop on one stuck share, not to punish someone
       // who stopped and started again. (#5426)
@@ -1106,6 +1118,7 @@ class VoiceManager {
     this.socket.on('screen-share-stopped', (data) => {
       if (!data || data.channelCode !== this.currentChannel) return;
       this.screenSharers.delete(data.userId);
+      this.screenStreamIds.delete(data.userId);
       this._cancelScreenWatchdog(data.userId);
       this._screenDelivered.delete(data.userId);
       this._cleanupScreenPlayback(data.userId);
@@ -1115,14 +1128,19 @@ class VoiceManager {
 
     // Someone started their webcam
     this.socket.on('webcam-started', (data) => {
+      if (!data || data.channelCode !== this.currentChannel) return;
       this.webcamUsers.add(data.userId);
+      if (typeof data.streamId === 'string' && data.streamId) this.webcamStreamIds.set(data.userId, data.streamId);
+      else this.webcamStreamIds.delete(data.userId);
       this._claimWebcamTrack(data.userId);
       if (this.onWebcamStatusChange) this.onWebcamStatusChange();
     });
 
     // Someone stopped their webcam
     this.socket.on('webcam-stopped', (data) => {
+      if (!data || data.channelCode !== this.currentChannel) return;
       this.webcamUsers.delete(data.userId);
+      this.webcamStreamIds.delete(data.userId);
       if (this.onWebcamStream) this.onWebcamStream(data.userId, null);
       if (this.onWebcamStatusChange) this.onWebcamStatusChange();
     });
@@ -1135,6 +1153,7 @@ class VoiceManager {
           if (active.has(sharerId)) continue;
           if (sharerId === this.localUserId && this.isScreenSharing) continue;
           this.screenSharers.delete(sharerId);
+          this.screenStreamIds.delete(sharerId);
           this._cancelScreenWatchdog(sharerId);
           this._screenDelivered.delete(sharerId);
           this._cleanupScreenPlayback(sharerId);
@@ -1143,6 +1162,9 @@ class VoiceManager {
         data.sharers.forEach(s => {
           if (s.id === this.localUserId && !this.isScreenSharing) return;
           this.screenSharers.add(s.id);
+          if (typeof s.streamId === 'string' && s.streamId) this.screenStreamIds.set(s.id, s.streamId);
+          else this.screenStreamIds.delete(s.id);
+          this._claimScreenTrack(s.id);
           if (s.hasAudio === false && this.onScreenNoAudio) {
             this.onScreenNoAudio(s.id);
           }
@@ -1161,9 +1183,11 @@ class VoiceManager {
 
     // Late joiner: server tells us about active webcam users
     this.socket.on('active-webcam-users', (data) => {
-      if (data && data.users) {
+      if (data && data.channelCode === this.currentChannel && data.users) {
         data.users.forEach(u => {
           this.webcamUsers.add(u.id);
+          if (typeof u.streamId === 'string' && u.streamId) this.webcamStreamIds.set(u.id, u.streamId);
+          else this.webcamStreamIds.delete(u.id);
           this._claimWebcamTrack(u.id);
         });
         if (this.onWebcamStatusChange) this.onWebcamStatusChange();
@@ -1257,6 +1281,7 @@ class VoiceManager {
     const response = await this._emitScreenStart({
       code: channelCode,
       hasAudio: screenStream.getAudioTracks().length > 0,
+      streamId: screenStream.id,
       transport: 'browser',
     });
     if (!isCurrent()) return false;
@@ -1414,15 +1439,68 @@ class VoiceManager {
     };
   }
 
-  // webcam-started came in after the camera's track: show the track that
-  // arrived without a label.
+  // webcam-started came in after the camera's track: show only the track
+  // whose signaled stream ID identifies it as that peer's webcam.
   _claimWebcamTrack(userId) {
     const p = this.peers.get(userId);
     const pending = p?._unclaimedVideo;
     if (!pending) return;
+    const streamId = pending.stream?.id;
+    const webcamStreamId = this.webcamStreamIds.get(userId);
+    const screenStreamId = this.screenStreamIds.get(userId);
+    const settings = pending.track.getSettings ? pending.track.getSettings() : {};
+    if (pending.track.readyState !== 'live' || pending.track.id === p._screenTrackId) {
+      p._unclaimedVideo = null;
+      return;
+    }
+    if (settings.displaySurface ||
+        (streamId && webcamStreamId && streamId !== webcamStreamId) ||
+        (streamId && screenStreamId && streamId === screenStreamId) ||
+        (!streamId && this.screenSharers.has(userId)) ||
+        (!webcamStreamId && (screenStreamId || this.screenSharers.has(userId)))) return;
     p._unclaimedVideo = null;
-    if (pending.track.readyState !== 'live' || pending.track.id === p._screenTrackId) return;
     this._deliverWebcamTrack(userId, pending.track, pending.stream);
+  }
+
+  // screen-share-started came in after its video track. Leave unmatched
+  // tracks pending so a webcam announcement cannot claim a display track.
+  _claimScreenTrack(userId) {
+    const p = this.peers.get(userId);
+    const pending = p?._unclaimedVideo;
+    if (!pending) return;
+    const streamId = pending.stream?.id;
+    const screenStreamId = this.screenStreamIds.get(userId);
+    const settings = pending.track.getSettings ? pending.track.getSettings() : {};
+    if (pending.track.readyState !== 'live' || pending.track.id === p._webcamTrackId) {
+      p._unclaimedVideo = null;
+      return;
+    }
+    if (!settings.displaySurface && (!screenStreamId ||
+        (streamId && streamId !== screenStreamId) ||
+        (!streamId && this.webcamUsers.has(userId)))) return;
+    p._unclaimedVideo = null;
+    this._deliverScreenTrack(userId, pending.track, pending.stream);
+  }
+
+  _deliverScreenTrack(userId, track, sourceStream) {
+    const p = this.peers.get(userId);
+    if (p) p._screenTrackId = track.id;
+    const videoStream = sourceStream || new MediaStream([track]);
+    this._screenDelivered.add(userId);
+    if (this.onScreenStream) this.onScreenStream(userId, videoStream);
+    track.onunmute = () => {
+      setTimeout(() => {
+        const freshStream = new MediaStream([track]);
+        this._screenDelivered.add(userId);
+        if (this.onScreenStream) this.onScreenStream(userId, freshStream);
+      }, 150);
+    };
+    track.onended = () => {
+      this._screenDelivered.delete(userId);
+      if (!this.screenSharers.has(userId) && this.onScreenStream) {
+        this.onScreenStream(userId, null);
+      }
+    };
   }
 
   _deliverScreenFromReceivers(sharerId, { skipTrackId = null } = {}) {
@@ -1595,8 +1673,18 @@ class VoiceManager {
       // Leave existing voice channel if connected elsewhere
       if (this.inVoice) this.leave();
 
+      // Leave pressed while this join is still getting ready cancels it.
+      // Otherwise the join finished anyway and put the mic back on (#5850).
+      const leavesAtStart = this._leaveCount || 0;
+      const abandoned = () => {
+        if ((this._leaveCount || 0) === leavesAtStart) return false;
+        this._dropUnjoinedMic();
+        return true;
+      };
+
       // Refresh ICE config (TURN credentials may have expired)
       await this._fetchIceServers();
+      if (abandoned()) return false;
 
       // Create/resume AudioContext with user gesture (needed for volume boost)
       this._ensureAudioCtx();
@@ -1646,6 +1734,8 @@ class VoiceManager {
         this.isListenerOnly = true;
       }
 
+      if (abandoned()) return false;
+      if (this.rawStream) this._watchMic(this.rawStream);
       // Opt out of Windows audio ducking (Desktop app only).
       // Must be called after getUserMedia so our audio session exists.
       if (window.havenDesktop?.audio?.optOutOfDucking) {
@@ -1690,6 +1780,7 @@ class VoiceManager {
 
         // Initialize RNNoise and apply saved noise mode
         await this._initRNNoise();
+        if (abandoned()) return false;
         if (this.noiseMode === 'suppress' && this._rnnoiseWasmBytes) {
           this.setNoiseSensitivity(0);
           this._enableRNNoise();
@@ -1704,21 +1795,7 @@ class VoiceManager {
       // Do not let Socket.IO buffer a stale voice-join if the connection
       // dropped while microphone and noise processing were being prepared.
       if (this.socket && this.socket.connected === false) {
-        this._disableRNNoise();
-        this._stopNoiseGate();
-        this._stopLocalTalkDetection();
-        if (this.rawStream) {
-          this.rawStream.getTracks().forEach(track => track.stop());
-          this.rawStream = null;
-        }
-        if (this.localStream) {
-          this.localStream.getTracks().forEach(track => track.stop());
-          this.localStream = null;
-        }
-        if (this.audioCtx) {
-          this.audioCtx.close().catch(() => { /* already closed */ });
-          this.audioCtx = null;
-        }
+        this._dropUnjoinedMic();
         return false;
       }
 
@@ -1749,6 +1826,8 @@ class VoiceManager {
       return true;
     } catch (err) {
       console.error('Voice join failed:', err);
+      // The mic may already be open; nothing else would ever close it (#5850).
+      if (!this.inVoice) this._dropUnjoinedMic();
       return false;
     } finally {
       this._joinInFlight = false;
@@ -1756,7 +1835,28 @@ class VoiceManager {
     }
   }
 
+  // A join that stopped before it finished lets go of the mic and the audio
+  // processing it set up.
+  _dropUnjoinedMic() {
+    this._disableRNNoise();
+    this._stopNoiseGate();
+    this._stopLocalTalkDetection();
+    if (this.rawStream) {
+      this.rawStream.getTracks().forEach(track => track.stop());
+      this.rawStream = null;
+    }
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream = null;
+    }
+    if (this.audioCtx) {
+      this.audioCtx.close().catch(() => { /* already closed */ });
+      this.audioCtx = null;
+    }
+  }
+
   leave() {
+    this._leaveCount = (this._leaveCount || 0) + 1;
     // Breadcrumb for the maximize/resize "fake disconnect" bug: if leave()
     // runs when the user didn't click Disconnect, the stack tells us why.
     console.warn('[Voice] leave() invoked', {
@@ -1837,6 +1937,8 @@ class VoiceManager {
     this.isDeafened = false;
     this.audioBitrate = 0;
     this.screenSharers.clear();
+    this.screenStreamIds.clear();
+    this.webcamStreamIds.clear();
     this._screenDelivered.clear();
     this.screenGainNodes.clear();
     this.webcamUsers.clear();
@@ -1923,6 +2025,8 @@ class VoiceManager {
     this.isMuted = false;
     this.isDeafened = false;
     this.screenSharers.clear();
+    this.screenStreamIds.clear();
+    this.webcamStreamIds.clear();
     this._screenDelivered.clear();
     this.screenGainNodes.clear();
     this.webcamUsers.clear();
@@ -2272,7 +2376,7 @@ class VoiceManager {
       // the same user (image: tile shown, audio works, video black).
       const hasAudio = this.screenStream.getAudioTracks().length > 0;
       this.screenHasAudio = hasAudio;
-      const startResponse = await this._emitScreenStart({ code: channelCode, hasAudio });
+      const startResponse = await this._emitScreenStart({ code: channelCode, hasAudio, streamId: this.screenStream.id });
       if (!startResponse.ok || !this._isScreenStartValid(operation, channelCode, voiceGeneration)) {
         if (startResponse.ok || startResponse.error === 'timeout') {
           this._emitOrQueueScreenStop(this._screenSignalCode(channelCode, voiceGeneration));
@@ -2422,16 +2526,25 @@ class VoiceManager {
 
   // ── Webcam Video ────────────────────────────────────────
 
+  // The camera size and frame rate picked in voice settings (Camera Quality),
+  // as constraints. 480p at 30 fps unless something else was picked.
+  _webcamConstraints(deviceId) {
+    const pick = (() => {
+      try { return localStorage.getItem('haven_cam_quality') || '480'; } catch { return '480'; /* private mode: the default */ }
+    })();
+    const [height, fps] = String(pick).split('p').map(Number);
+    const sizes = { 480: 640, 720: 1280, 1080: 1920 };
+    const h = sizes[height] ? height : 480;
+    const constraints = { width: { ideal: sizes[h] }, height: { ideal: h }, frameRate: { ideal: fps === 60 ? 60 : 30 } };
+    if (deviceId) constraints.deviceId = { exact: deviceId };
+    return constraints;
+  }
+
   async startWebcam() {
     if (!this.inVoice || this.isWebcamActive) return false;
     try {
       const savedCamId = localStorage.getItem('haven_cam_device') || '';
-      const videoConstraints = {
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-        frameRate: { ideal: 30 }
-      };
-      if (savedCamId) videoConstraints.deviceId = { exact: savedCamId };
+      const videoConstraints = this._webcamConstraints(savedCamId);
 
       this.webcamStream = await navigator.mediaDevices.getUserMedia({
         video: videoConstraints,
@@ -2455,7 +2568,7 @@ class VoiceManager {
       await Promise.all(renegotiations);
 
       // Tell the server. A relayed call checks this before taking the camera.
-      this.socket.emit('webcam-started', { code: this.currentChannel });
+      this.socket.emit('webcam-started', { code: this.currentChannel, streamId: this.webcamStream.id });
       if (this._relay) await this._relay.publish('webcam', camTrack).catch(e => console.warn('[Relay] Camera not sent:', e.message));
       return true;
     } catch (err) {
@@ -2467,7 +2580,25 @@ class VoiceManager {
   }
 
   async stopWebcam({ teardown = false } = {}) {
-    if (!this.isWebcamActive || !this.webcamStream) return;
+    if (!this.isWebcamActive || !this.webcamStream || (this._webcamStopping && !teardown)) return;
+    this._webcamStopping = true;
+    this._cameraSwitchGeneration = (this._cameraSwitchGeneration || 0) + 1;
+    try {
+      await this._stopWebcamNow(teardown);
+    } finally {
+      this._webcamStopping = false;
+    }
+  }
+
+  async _stopWebcamNow(teardown) {
+    // Leaving voice does not wait for this and closes the peers right after,
+    // so that path stays synchronous up to the track stop. Otherwise, wait for
+    // any replacement already changing peer/relay tracks. Pending getUserMedia
+    // captures are invalidated and will stop themselves on return.
+    if (!teardown) {
+      await (this._cameraSwitchQueue || Promise.resolve()).catch(err => console.warn('[Voice] camera switch failed before stop:', err));
+      if (!this.isWebcamActive || !this.webcamStream) return;
+    }
     if (this._relay) await this._relay.unpublish('webcam').catch(() => { /* unpublish logs its own failures */ });
 
     const tracks = this.webcamStream.getTracks();
@@ -2511,13 +2642,10 @@ class VoiceManager {
   }
 
   async switchCamera(deviceId) {
-    if (!this.isWebcamActive) return;
-    const videoConstraints = {
-      width: { ideal: 640 },
-      height: { ideal: 480 },
-      frameRate: { ideal: 30 }
-    };
-    if (deviceId) videoConstraints.deviceId = { exact: deviceId };
+    if (!this.isWebcamActive || this._webcamStopping) return;
+    const operation = (this._cameraSwitchGeneration || 0) + 1;
+    this._cameraSwitchGeneration = operation;
+    const videoConstraints = this._webcamConstraints(deviceId);
 
     let newStream;
     try {
@@ -2527,34 +2655,56 @@ class VoiceManager {
       return;
     }
 
-    const newTrack = newStream.getVideoTracks()[0];
-
-    // Replace the track on all peers concurrently. replaceTrack needs no
-    // renegotiation and each peer is independent, so waiting on them in turn
-    // only delayed the last peer. (#5426)
-    const swaps = [];
-    for (const [, peer] of this.peers) {
-      const senders = peer.connection.getSenders();
-      const camSender = senders.find(s => s.track && s.track.kind === 'video' &&
-        this.webcamStream && this.webcamStream.getVideoTracks().includes(s.track));
-      if (camSender) {
-        swaps.push(camSender.replaceTrack(newTrack).catch(e =>
-          console.warn('[Voice] replaceTrack (cam) failed:', e)
-        ));
+    const apply = (this._cameraSwitchQueue || Promise.resolve()).catch(() => {}).then(async () => {
+      if (!this.isWebcamActive || this._webcamStopping ||
+          operation !== this._cameraSwitchGeneration || !this.webcamStream) {
+        newStream.getTracks().forEach(t => t.stop());
+        return;
       }
-    }
-    await Promise.all(swaps);
-    if (this._relay) await this._relay.replace('webcam', newTrack).catch(e => console.warn('[Relay] Camera swap failed:', e.message));
 
-    // Stop old tracks and update stream reference
-    this.webcamStream.getTracks().forEach(t => t.stop());
-    this.webcamStream = newStream;
+      const oldStream = this.webcamStream;
+      const newTrack = newStream.getVideoTracks()[0];
 
-    // Re-hook ended
-    newTrack.onended = () => this.stopWebcam();
+      // Apply replacements serially so overlapping quality/device requests
+      // cannot race over sender identity or stop a newer stream.
+      const swaps = [];
+      for (const [, peer] of this.peers) {
+        const senders = peer.connection.getSenders();
+        const camSender = senders.find(s => s.track && s.track.kind === 'video' &&
+          oldStream.getVideoTracks().includes(s.track));
+        if (camSender) {
+          swaps.push(camSender.replaceTrack(newTrack).catch(e =>
+            console.warn('[Voice] replaceTrack (cam) failed:', e)
+          ));
+        }
+      }
+      await Promise.all(swaps);
+      if (this._relay) await this._relay.replace('webcam', newTrack).catch(e => console.warn('[Relay] Camera swap failed:', e.message));
 
-    localStorage.setItem('haven_cam_device', deviceId || '');
-    console.log(`[Voice] Camera switched: ${deviceId || 'default'}`);
+      // Left voice during the swap: nothing wants this camera any more.
+      if (!this.isWebcamActive) {
+        newStream.getTracks().forEach(t => t.stop());
+        return;
+      }
+
+      // Stop old tracks and update stream reference
+      oldStream.getTracks().forEach(t => t.stop());
+      this.webcamStream = newStream;
+      if (this.onWebcamStream) this.onWebcamStream(this.localUserId, newStream);
+      // People who join from now on receive the new stream, so announce its ID
+      // or their camera tile waits for the old one forever.
+      if (this.currentChannel) this.socket.emit('webcam-started', { code: this.currentChannel, streamId: newStream.id });
+
+      // Re-hook ended
+      newTrack.onended = () => this.stopWebcam();
+      console.log(`[Voice] Camera switched: ${deviceId || 'default'}`);
+    });
+
+    this._cameraSwitchQueue = apply.catch(err => {
+      if (this.webcamStream !== newStream) newStream.getTracks().forEach(t => t.stop());
+      console.error('[Voice] Failed to apply camera switch:', err);
+    });
+    return this._cameraSwitchQueue;
   }
 
   // ── Screen Share Quality Helpers ───────────────────────
@@ -3134,7 +3284,7 @@ class VoiceManager {
           return false;
         }
       }
-      const offer = await connection.createOffer(iceRestart ? { iceRestart: true } : undefined);
+      let offer = await connection.createOffer(iceRestart ? { iceRestart: true } : undefined);
       if (connection.signalingState !== 'stable') {
         // Another incoming offer won the race while createOffer() was in flight.
         // Leave one queued retry instead of forcing a stale local offer on top.
@@ -3142,6 +3292,7 @@ class VoiceManager {
         peer._queuedIceRestart = peer._queuedIceRestart || iceRestart;
         return false;
       }
+      offer = this._stereoSdp(offer);
       await connection.setLocalDescription(offer);
       this._offerSequence = (this._offerSequence || 0) + 1;
       const offerId = `${this.localUserId ?? 'unknown'}-${Date.now().toString(36)}-${this._offerSequence.toString(36)}`;
@@ -3172,6 +3323,31 @@ class VoiceManager {
   }
 
   // ── Private: Peer connection management ─────────────────
+
+  // Stereo stream audio, an experiment (Settings > Debug, Gnomp's request).
+  // WebRTC's Opus sends mono unless the connection asks for stereo, so music
+  // and game audio on a stream arrived mono. With it on, every Opus line in
+  // our offers and answers, and in the other side's, asks for stereo at a
+  // music bitrate. A browser plays stereo only when its own side asked for
+  // it, and sends stereo whenever the other side asks, so on direct voice it
+  // is the listener who needs it on; through the relay the sharer does too.
+  _stereoAudioOn() {
+    try { return localStorage.getItem('haven_stereo_stream_audio') === '1'; } catch { return false; }
+  }
+
+  _stereoSdp(desc) {
+    if (!desc || typeof desc.sdp !== 'string' || !this._stereoAudioOn()) return desc;
+    const pts = [...desc.sdp.matchAll(/a=rtpmap:(\d+) opus\/48000\/2/gi)].map(m => m[1]);
+    if (!pts.length) return desc;
+    let sdp = desc.sdp;
+    for (const pt of new Set(pts)) {
+      sdp = sdp.replace(new RegExp(`(a=fmtp:${pt} )([^\\r\\n]*)`, 'g'), (all, head, params) => {
+        const kept = params.split(';').map(p => p.trim()).filter(p => p && !/^(stereo|sprop-stereo|maxaveragebitrate)=/i.test(p));
+        return head + [...kept, 'stereo=1', 'sprop-stereo=1', 'maxaveragebitrate=128000'].join(';');
+      });
+    }
+    return { type: desc.type, sdp };
+  }
 
   async _createPeer(userId, username, createOffer) {
     // If a peer already exists for this user (e.g. a stale entry from a
@@ -3225,14 +3401,24 @@ class VoiceManager {
       const track = event.track;
       const sourceStream = event.streams?.[0];
       if (track.kind === 'video') {
-        // Distinguish webcam from screen share:
-        // - displaySurface is only set on getDisplayMedia tracks
-        // - also check our signaling state (webcamUsers vs screenSharers)
         const settings = track.getSettings ? track.getSettings() : {};
-        const isScreenTrack =
-          (!!settings.displaySurface || this.screenSharers.has(userId));
-        const isWebcamTrack = !settings.displaySurface &&
-          this.webcamUsers.has(userId);
+        const streamId = sourceStream?.id;
+        const knownScreenId = this.screenStreamIds.get(userId);
+        const knownWebcamId = this.webcamStreamIds.get(userId);
+        // The signaling flags describe a peer, not an individual video track.
+        // Use the stream ID carried by SDP to distinguish camera and display
+        // when both are active; status flags are a fallback only when there is
+        // no stream identity and the peer has exactly one active video source.
+        // An app that does not send stream IDs (the mobile apps, or a page
+        // loaded before the server updated) gets the flags alone, as before.
+        const peerSendsIds = !!(knownScreenId || knownWebcamId);
+        const isScreenTrack = !!settings.displaySurface ||
+          (!!streamId && streamId === knownScreenId) ||
+          (!peerSendsIds && this.screenSharers.has(userId)) ||
+          (!streamId && this.screenSharers.has(userId) && !this.webcamUsers.has(userId));
+        const isWebcamTrack = (!!streamId && streamId === knownWebcamId) ||
+          (!peerSendsIds && this.webcamUsers.has(userId)) ||
+          (!streamId && this.webcamUsers.has(userId) && !this.screenSharers.has(userId));
 
         if (isWebcamTrack && !isScreenTrack) {
           this._deliverWebcamTrack(userId, track, sourceStream);
@@ -3855,8 +4041,8 @@ class VoiceManager {
    * chain, and replaces the audio track on every peer connection.
    * @param {string} deviceId - MediaDeviceInfo.deviceId (empty = system default)
    */
-  async switchInputDevice(deviceId) {
-    if (!this.inVoice) return;
+  async switchInputDevice(deviceId, remember = true) {
+    if (!this.inVoice) return false;
 
     const audioConstraints = {
       echoCancellation: true,
@@ -3870,7 +4056,13 @@ class VoiceManager {
       newRawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
     } catch (err) {
       console.error('[Voice] Failed to switch input device:', err);
-      return;
+      return false;
+    }
+    // The call ended while the new mic was opening: let it go again, or it
+    // stays open with nothing left to close it (#5850).
+    if (!this.inVoice || !this.audioCtx) {
+      newRawStream.getTracks().forEach(t => t.stop());
+      return false;
     }
 
     // Stop old raw tracks
@@ -3878,6 +4070,7 @@ class VoiceManager {
       this.rawStream.getTracks().forEach(t => t.stop());
     }
     this.rawStream = newRawStream;
+    this._watchMic(newRawStream);
 
     // Rebuild noise gate chain
     this._disableRNNoise();
@@ -3948,8 +4141,23 @@ class VoiceManager {
     }
 
     // Persist preference
-    localStorage.setItem('haven_input_device', deviceId || '');
+    if (remember) localStorage.setItem('haven_input_device', deviceId || '');
     console.log(`[Voice] Input device switched: ${deviceId || 'default'}`);
+    return true;
+  }
+
+  _watchMic(stream) {
+    stream.getAudioTracks().forEach(track => track.addEventListener('ended', () => this._reopenLostMic(stream)));
+  }
+
+  async _reopenLostMic(stream) {
+    if (!this.inVoice || this.rawStream !== stream) return;
+    console.warn('[Voice] microphone was lost, opening it again');
+    const saved = localStorage.getItem('haven_input_device') || '';
+    const settled = Date.now() - (this._micReopenedAt || 0) > 3000;
+    const reopened = settled && (await this.switchInputDevice(saved, false) || (saved && await this.switchInputDevice('', false)));
+    if (reopened) this._micReopenedAt = Date.now();
+    else navigator.mediaDevices.addEventListener('devicechange', () => this._reopenLostMic(stream), { once: true });
   }
 
   /**

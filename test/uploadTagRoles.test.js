@@ -103,7 +103,7 @@ test('setting a tag role checks the tag and the role', () => {
 });
 
 // ── Against a running server ─────────────────────────────────────────────
-const h = createHarness(3472, 'upload-tag-roles');
+const h = createHarness(3516, 'upload-tag-roles');
 test.before(() => h.start());
 test.after(() => h.stop());
 
@@ -113,7 +113,7 @@ async function upload(token) {
   const fd = new FormData();
   fd.append('scope', 'channel');
   fd.append('image', new Blob([PNG], { type: 'image/png' }), 'pic.png');
-  const r = await fetch('http://localhost:3472/api/upload', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+  const r = await fetch('http://localhost:3516/api/upload', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
   const j = await r.json();
   assert.ok(j.url, 'uploaded: ' + JSON.stringify(j));
   return j.url;

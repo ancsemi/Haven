@@ -48,7 +48,7 @@ function printReport(r) {
   console.log(`Posts: ${r.counts.posts}, role menus: ${r.counts.roleMenus}, link rules: ${r.counts.domains}, role channel access rows: ${r.counts.access}`);
   r.warnings.forEach((w) => console.warn(`warning: ${w}`));
 }
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
   if (!cmd || args.help || !['export', 'import', 'check'].includes(cmd)) return console.log(USAGE);
@@ -59,12 +59,15 @@ function main() {
   if (!args.data) throw new Error('--data <dir> is required');
   const dataDir = path.resolve(args.data);
   const themesDir = path.join(__dirname, '..', 'themes');
+  // Images are read and written through that server's storage: its uploads
+  // folder, or its bucket when HAVEN_EXTERNAL_STORAGE is set.
+  process.env.HAVEN_DATA_DIR = dataDir;
   if (cmd === 'export') {
     const Database = require('better-sqlite3');
     const db = new Database(path.join(dataDir, 'haven.db'), { readonly: true, fileMustExist: true });
     const { exportTemplate } = require('../src/serverTemplate');
-    const { template, warnings } = exportTemplate(db, {
-      uploadsDir: path.join(dataDir, 'uploads'), themesDir, posts: args.posts === 'none' ? 'none' : 'pinned', assets: !args['no-assets'],
+    const { template, warnings } = await exportTemplate(db, {
+      themesDir, posts: args.posts === 'none' ? 'none' : 'pinned', assets: !args['no-assets'],
       postAuthors: args['post-authors'] ? args['post-authors'].split(',').map((s) => s.trim()).filter(Boolean) : null,
       excludeChannels: args.multi['exclude-channel'] || [], meta: { name: args.name, description: args.description, author: args.author },
       havenVersion: require('../package.json').version,
@@ -79,19 +82,17 @@ function main() {
   const file = args._[1];
   if (!file) throw new Error('Give the template file to import');
   const tpl = readTemplate(file);
-  process.env.HAVEN_DATA_DIR = dataDir;
   const { initDatabase } = require('../src/database');
   const db = initDatabase();
   const actor = args.as
     ? db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE AND is_admin = 1').get(args.as)
     : db.prepare('SELECT id FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1').get();
   if (args.as && !actor) throw new Error(`${args.as} is not an admin on this server`);
-  const { UPLOADS_DIR } = require('../src/paths');
-  const report = require('../src/serverTemplate').applyTemplate(db, tpl, {
-    mode: args.mode === 'replace' ? 'replace' : 'merge', actorId: actor ? actor.id : null, uploadsDir: UPLOADS_DIR, themesDir,
+  const report = await require('../src/serverTemplate').applyTemplate(db, tpl, {
+    mode: args.mode === 'replace' ? 'replace' : 'merge', actorId: actor ? actor.id : null, themesDir,
     dryRun: !!args['dry-run'], posts: !args['no-posts'], webhooks: !args['no-webhooks'], joinMembers: !args['no-join'], installThemes: !!args['install-themes'],
   });
   db.close();
   printReport(report);
 }
-try { main(); } catch (err) { console.error(err.message); process.exitCode = 1; }
+main().catch((err) => { console.error(err.message); process.exitCode = 1; });

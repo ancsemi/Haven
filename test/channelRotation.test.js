@@ -141,6 +141,7 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
       { transport: 'browser', sessionId: null },
     ]])]]),
     activeWebcamUsers: new Map([[oldCode, new Set([1])]]),
+    activeWebcamStreamIds: new Map([[oldCode, new Map([[1, 'camera-stream']])]]),
     streamViewers: new Map([[`${oldCode}:1`, new Set([2])]]),
     pendingVoiceLeave: new Map([[`1:${oldCode}`, pendingVoice]]),
     pendingTempDelete: new Map([[oldCode, pendingTempTimer]]),
@@ -160,7 +161,7 @@ test('channel rotation migrates text, voice, media, stream, and pending state', 
     event: 'channel-code-rotated',
     payload: { channelId: 9, oldCode, newCode }
   }]);
-  for (const name of ['channelUsers', 'voiceUsers', 'activeMusic', 'musicQueues', 'activeScreenSharers', 'activeScreenSessions', 'activeWebcamUsers']) {
+  for (const name of ['channelUsers', 'voiceUsers', 'activeMusic', 'musicQueues', 'activeScreenSharers', 'activeScreenSessions', 'activeWebcamUsers', 'activeWebcamStreamIds']) {
     assert.equal(state[name].has(oldCode), false, `${name} kept the old code`);
     assert.equal(state[name].has(newCode), true, `${name} missed the new code`);
   }

@@ -106,10 +106,8 @@ window.HavenPluginLoader = (function () {
       },
       /** Show a simple confirm dialog; returns a Promise<boolean> */
       confirm(title, message) {
-        return new Promise(resolve => {
-          const result = window.confirm(`${title}\n\n${message}`);
-          resolve(result);
-        });
+        if (window.app && window.app._showConfirmModal) return window.app._showConfirmModal(title, message);
+        return Promise.resolve(window.confirm(`${title}\n\n${message}`));
       },
     },
 

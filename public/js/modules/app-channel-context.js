@@ -41,6 +41,13 @@ _openChannelCtxMenu(code, btnEl) {
   });
   const cfnCtxBtn = menu.querySelector('[data-action="channel-functions"]');
   if (cfnCtxBtn) cfnCtxBtn.style.display = canManageSettings ? '' : 'none';
+  const typeCtxBtn = menu.querySelector('[data-action="channel-type"]');
+  if (typeCtxBtn) {
+    typeCtxBtn.style.display = canManageSettings ? '' : 'none';
+    const current = this._channelTypeOf?.(ch);
+    const cur = typeCtxBtn.querySelector('.ct-ctx-current');
+    if (cur) cur.textContent = current ? `${current.icon} ${current.name}` : '';
+  }
   if (!canManageChannels && canManageSettings) {
     const adminSeps = menu.querySelectorAll('hr.channel-ctx-sep.admin-only');
     if (adminSeps[0]) adminSeps[0].style.display = '';
@@ -77,7 +84,9 @@ _openChannelCtxMenu(code, btnEl) {
   if (cfnArrow) cfnArrow.textContent = '▶';
   // Show/hide "Mark as Read" based on unread count
   const markReadBtn = menu.querySelector('[data-action="mark-read"]');
-  if (markReadBtn) markReadBtn.style.display = (this.unreadCounts[code] > 0) ? '' : 'none';
+  // A forum's dot comes from replies in its topics, which are counted apart
+  // from channel messages, so it needs the button too.
+  if (markReadBtn) markReadBtn.style.display = (this.unreadCounts[code] > 0 || (this.forumUnread?.[code] || 0) > 0) ? '' : 'none';
   const copyChannelLinkBtn = menu.querySelector('[data-action="copy-channel-link"]');
   if (copyChannelLinkBtn) {
     const canShare = !!(ch && !ch.is_dm && !ch.is_private && ch.code_visibility !== 'private');
@@ -140,6 +149,16 @@ _openChannelCtxMenu(code, btnEl) {
     const hasTarget = this._reparentTargets(ch).length > 0;
     moveToBtn.style.display = (sourceOk && hasTarget && !ch.is_dm && !hasChildren) ? '' : 'none';
   }
+  // "Merge into…": the admin folds a duplicate into another channel
+  // (app-channel-merge.js). One with sub-channels has them moved first.
+  const mergeBtn = menu.querySelector('[data-action="merge-channel"]');
+  if (mergeBtn && ch) {
+    const hasChildren = this.channels.some(c => c.parent_channel_id === ch.id);
+    mergeBtn.style.display = (isAdmin && !ch.is_dm && !hasChildren && this._mergeTargets(ch).length > 0) ? '' : 'none';
+  }
+  // "Manage members": add or remove people, roles or everyone (app-channel-add-members.js).
+  const addMembersBtn = menu.querySelector('[data-action="add-members"]');
+  if (addMembersBtn) addMembersBtn.style.display = this._canAddChannelMembers(ch) ? '' : 'none';
   // Show "Promote to Channel" only for sub-channels
   const promoteBtn = menu.querySelector('[data-action="promote-channel"]');
   if (promoteBtn && ch) {
@@ -166,12 +185,7 @@ _openChannelCtxMenu(code, btnEl) {
   menu.style.display = 'block';
   menu.style.top  = rect.bottom + 4 + 'px';
   menu.style.left = rect.left + 'px';
-  // Keep menu inside viewport
-  requestAnimationFrame(() => {
-    const mr = menu.getBoundingClientRect();
-    if (mr.right > window.innerWidth) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
-    if (mr.bottom > window.innerHeight) menu.style.top = (rect.top - mr.height - 4) + 'px';
-  });
+  requestAnimationFrame(() => this._fitCtxMenu(menu, rect));
 },
 
 /* ── Hidden channels (admin declutter, local-only, #5409) ─────────────
@@ -341,6 +355,7 @@ _applyReactionLock() {
 
 _updateChannelFunctionsPanel(ch) {
   if (!ch) return;
+  this._updateChannelTypeNote?.(ch);
   // Voice & text toggles
   const voiceOff = ch.voice_enabled === 0;
   const textOff = ch.text_enabled === 0;
@@ -494,6 +509,11 @@ _initDmContextMenu() {
         const codes = new Set([...Object.keys(this.unreadCounts || {}), ...(this.channels || []).map(c => c.code)]);
         codes.forEach(code => { this.unreadCounts[code] = 0; });
         (this.channels || []).forEach(c => { c.unreadCount = 0; });
+        // Forums keep their unread topics apart from channel messages, so
+        // each one with a dot is marked read as well.
+        Object.keys(this.forumUnread || {}).forEach(code => {
+          if ((this.forumUnread[code] || 0) > 0) this.socket.emit('mark-forum-read', { code });
+        });
         this._renderChannels();
         this._updateTabTitle();
         this._updateDesktopBadge();
@@ -526,6 +546,13 @@ _initDmContextMenu() {
     this._syncChannelMutePref(code, willBeMuted);
   });
 
+  // Pin to top / Unpin (app-dm-pins.js)
+  document.querySelector('[data-action="dm-pin"]')?.addEventListener('click', () => {
+    const code = this._dmCtxMenuCode;
+    this._closeDmCtxMenu();
+    if (code) this._toggleDmPin(code);
+  });
+
   document.querySelector('[data-action="dm-group-add"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._openGroupPicker({ code }); });
   document.querySelector('[data-action="dm-group-leave"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._leaveGroup(code); });
   document.querySelector('[data-action="dm-group-delete"]')?.addEventListener('click', () => { const code = this._dmCtxMenuCode; this._closeDmCtxMenu(); if (code) this._deleteGroup(code); });
@@ -538,7 +565,22 @@ _initDmContextMenu() {
     const ok = await this._showConfirmModal('⚠️ ' + t('channels.dm_delete_confirm'), '', { danger: true, confirmLabel: t('msg_toolbar.delete') });
     if (!ok) return;
     const attachments = await this._collectDmAttachments(code);
-    this.socket.emit('delete-dm', { code, attachments });
+    // Wait for the server's verdict before changing anything here. Relying on
+    // the channel-deleted broadcast alone left a conversation that had been
+    // deleted from the pop-out DM window visible in this client whenever the
+    // broadcast was missed (a reconnect or server switch around the delete),
+    // and the next list refresh could then put the stale row back. (#5848)
+    this.socket.emit('delete-dm', { code, attachments, confirmed: true }, (res) => {
+      if (res && res.error) {
+        this._showToast(res.error, 'error');
+        return;
+      }
+      this._removeChannelLocally?.(code);
+      if (this.currentChannel === code) {
+        this.currentChannel = null;
+        this._showWelcome?.();
+      }
+    });
   });
 
   // Close on outside click
@@ -612,6 +654,8 @@ _openDmCtxMenu(code, anchorEl, mouseEvent) {
   const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
   const muteBtn = menu.querySelector('[data-action="dm-mute"]');
   if (muteBtn) muteBtn.textContent = muted.includes(code) ? `🔕 ${t('channels.unmute_dm')}` : `🔔 ${t('channels.mute_dm')}`;
+  const pinBtn = menu.querySelector('[data-action="dm-pin"]');
+  if (pinBtn) pinBtn.textContent = `📌 ${t(this._isDmPinned(code) ? 'channels.unpin_dm' : 'channels.pin_dm')}`;
 
   const isGroup = !!this.channels.find(c => c.code === code)?.is_group;
   menu.querySelectorAll('[data-action="dm-group-add"], [data-action="dm-group-leave"]').forEach(b => { b.style.display = isGroup ? '' : 'none'; });
@@ -646,12 +690,35 @@ _openDmCtxMenu(code, anchorEl, mouseEvent) {
   }
   menu.style.display = 'block';
 
-  // Keep inside viewport
-  requestAnimationFrame(() => {
-    const mr = menu.getBoundingClientRect();
-    if (mr.right > window.innerWidth) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
-    if (mr.bottom > window.innerHeight) menu.style.top = (mr.top - mr.height - 4) + 'px';
-  });
+  const anchor = mouseEvent
+    ? { top: mouseEvent.clientY, bottom: mouseEvent.clientY }
+    : anchorEl.getBoundingClientRect();
+  requestAnimationFrame(() => this._fitCtxMenu(menu, anchor));
+},
+
+/* Keep a context menu on screen. Open below the anchor, flip above when
+   there is no room below, and when it fits neither way (a tall menu in a
+   short window, or a channel near the top), pin it to the top edge and let
+   it scroll instead of running off screen. */
+_fitCtxMenu(menu, anchor) {
+  const pad = 8;
+  menu.style.maxHeight = '';
+  menu.style.overflowY = '';
+  const mr = menu.getBoundingClientRect();
+  const vh = window.innerHeight;
+  if (mr.right > window.innerWidth) menu.style.left = Math.max(pad, window.innerWidth - mr.width - pad) + 'px';
+  if (mr.bottom <= vh - pad) return;
+  const above = anchor.top - 4 - pad;
+  if (mr.height <= above) {
+    menu.style.top = (anchor.top - mr.height - 4) + 'px';
+    return;
+  }
+  const top = mr.height <= vh - pad * 2 ? Math.max(pad, vh - pad - mr.height) : pad;
+  menu.style.top = top + 'px';
+  if (mr.height > vh - pad * 2) {
+    menu.style.maxHeight = (vh - pad * 2) + 'px';
+    menu.style.overflowY = 'auto';
+  }
 },
 
 _closeDmCtxMenu() {

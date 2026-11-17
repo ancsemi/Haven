@@ -46,6 +46,16 @@ _setupAccessibility() {
     });
   }
 
+  // Twemoji instead of the system's emoji (style-themes.css).
+  const emoji = document.getElementById('emoji-style-select');
+  if (emoji) {
+    emoji.value = prefs.emoji || 'system';
+    emoji.addEventListener('change', () => {
+      this._saveA11y('haven-emoji-style', emoji.value === 'system' ? null : emoji.value);
+      reapply();
+    });
+  }
+
   // [checkbox id, storage key, stored value when on, field in prefs]
   [
     ['a11y-high-contrast', 'haven-contrast', 'high', 'highContrast'],
