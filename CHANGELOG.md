@@ -24,6 +24,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Sort your DMs: the new sort button in the Direct Messages header picks Latest message, Alphabetical or Manual order. Latest message moves a DM to the top as soon as someone writes in it, and is what a list you have not arranged by hand now uses. The pick and the order you arranged by hand now follow your account to every device, and pinned DMs stay on top whatever you choose. Picking Manual order for a list you have not arranged keeps it as it is shown. Recent Activity in Organize DMs did nothing before; it now sorts by the newest message (thanks Amnibro).
 
 ### Fixed
+- Live channel updates now keep the message box and send button in sync when text or media permissions change, keeping the send button available in media-only channels without switching channels (#5880).
 - Picture borders now show on avatars in threads and on your own picture at the bottom left (reported by gitty).
 - A message or forum post refused by auto-mod (a link the server does not allow, for one) was thrown away. It now comes back to fix and send again (reported by gitty).
 - On the voice relay, one person could stay silent to someone for the rest of a call when their sound failed to connect once, usually right after a reconnect. The app now tries again, and checks every 30 seconds for anyone it is missing (reported by fbsagat, #5908).
