@@ -44,8 +44,11 @@ _createFullscreenCallToolbar(tile) {
     this._toggleFullscreenStreamPopover(tile, streamPopover, streamTrigger);
   });
   streamTrigger.setAttribute('aria-expanded', 'false');
-  // One click between one stream and all of them; see _toggleFullscreenGrid.
-  addButton('fullscreen-call-grid', 'voice_runtime.fullscreen_grid', '▦', () => this._toggleFullscreenGrid(tile));
+  // Up while one stream of the grid is shown full size.
+  const backToGrid = addButton('fullscreen-call-grid', 'voice_runtime.back_to_grid', '▦', () => {
+    this._unfocusFullscreenStream(tile);
+  });
+  backToGrid.hidden = true;
   const showAllLabel = document.createElement('label');
   showAllLabel.className = 'fullscreen-stream-choice fullscreen-stream-choice-all';
   const showAll = document.createElement('input');
@@ -209,9 +212,9 @@ _endFullscreenCallTile(tile) {
   this._fullscreenCallSelectedTiles = null;
   this._fullscreenCallFocusedTile = null;
   this._fullscreenCallShowAll = false;
-  this._fullscreenCallSingleTile = null;
   tile.classList.remove('fullscreen-stream-focused');
-  this._syncFullscreenGridButton(tile);
+  const backToGrid = tile.querySelector('.fullscreen-call-grid');
+  if (backToGrid) backToGrid.hidden = true;
   tile._fullscreenCallOriginalLabel = null;
   clearTimeout(tile._fullscreenControlsTimer);
   tile.classList.remove('fullscreen-controls-idle');
@@ -441,9 +444,8 @@ _applyFullscreenSelection() {
   }
   const focused = this._fullscreenCallFocusedTile;
   activeTile.classList.toggle('fullscreen-stream-focused', !!focused);
-  // The one ▦ goes back to from the grid.
-  if (selected.length === 1) this._fullscreenCallSingleTile = selected[0];
-  this._syncFullscreenGridButton(activeTile);
+  const backToGrid = activeTile.querySelector('.fullscreen-call-grid');
+  if (backToGrid) backToGrid.hidden = !focused;
   if (selected.length < 2 || focused) {
     // Focused: the grid keeps its cells, so going back does not restart them.
     if (focused) this._pauseFullscreenStreamGrid(activeTile);
@@ -569,47 +571,6 @@ _refreshFullscreenStreamPicker(excludeTile = null) {
       trigger.disabled = streams.length < 2;
     }
   }
-  for (const owner of new Set(this._fullscreenStreamPickers?.values() || [])) {
-    this._syncFullscreenGridButton(owner, streams.length);
-  }
-},
-
-// The ▦ button in the fullscreen bar does what fits the view: from one
-// stream it shows them all (Show all), from the grid it goes back to the
-// stream you had, and from a grid stream shown full size back to the grid.
-_toggleFullscreenGrid(fullscreenTile) {
-  if (this._fullscreenElement() !== fullscreenTile || this._fullscreenCallActiveTile !== fullscreenTile) return;
-  if (this._fullscreenCallFocusedTile) {
-    this._unfocusFullscreenStream(fullscreenTile);
-    return;
-  }
-  const selected = this._fullscreenCallSelectedTiles || [fullscreenTile];
-  if (selected.length < 2) {
-    this._setFullscreenShowAll(fullscreenTile, true);
-    return;
-  }
-  const streams = this._listLiveFullscreenStreams();
-  const back = streams.find(item => item.tile === this._fullscreenCallSingleTile) ||
-    streams.find(item => item.tile === fullscreenTile) || streams[0];
-  if (back) this._fullscreenCallSelectedTiles = [back.tile];
-  this._fullscreenCallShowAll = false;
-  this._applyFullscreenSelection();
-  this._refreshFullscreenStreamPicker();
-},
-
-_syncFullscreenGridButton(tile, liveCount = this._listLiveFullscreenStreams().length) {
-  const button = tile?.querySelector('.fullscreen-call-grid');
-  if (!button) return;
-  const isActive = tile === this._fullscreenCallActiveTile;
-  const selected = isActive ? (this._fullscreenCallSelectedTiles || [tile]) : [tile];
-  const focused = isActive && !!this._fullscreenCallFocusedTile;
-  const showingGrid = !focused && selected.length > 1;
-  button.title = t(focused ? 'voice_runtime.back_to_grid'
-    : showingGrid ? 'voice_runtime.fullscreen_grid_off' : 'voice_runtime.fullscreen_grid');
-  button.setAttribute('aria-label', button.title);
-  button.setAttribute('aria-pressed', String(showingGrid));
-  button.classList.toggle('sharing', showingGrid);
-  button.disabled = !focused && !showingGrid && liveCount < 2;
 },
 
 _setFullscreenStreamShown(fullscreenTile, sourceTileId, shown) {

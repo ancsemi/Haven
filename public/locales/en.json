@@ -1543,8 +1543,6 @@
     "you": "You",
     "camera": "Camera",
     "stream": "Stream",
-    "fullscreen_grid": "Show all streams at once",
-    "fullscreen_grid_off": "Show one stream",
     "join": "Join",
     "camera_one": "{{count}} camera",
     "camera_other": "{{count}} cameras",
