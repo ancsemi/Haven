@@ -1311,6 +1311,9 @@
     "golden_grace": "Golden Grace"
   },
   "media_runtime": {
+    "banner": {
+      "remove_failed": "Failed to remove banner"
+    },
     "none": "None",
     "delete": "Delete",
     "delete_failed": "Delete failed",
@@ -2871,6 +2874,8 @@
       "tags_role_cleared": "Anyone can use \"{{name}}\" now",
       "max_sound_hint": "Max soundboard upload size (256-10240 KB, default 1024 / 1 MB)",
       "max_avatar_hint": "Largest profile picture, border or persona picture someone can upload (1 to 10 MB, default 2). Animated GIFs are often over 2 MB, but every picture is loaded next to every message its owner sends, so keep this as low as you can.",
+      "max_banner": "Max Profile Banner Size (MB)",
+      "max_banner_hint": "Largest profile banner someone can upload (1 to 20 MB, default 5). Still pictures are cut to banner size before they upload, so this mostly limits animated banners, which load only when someone opens the profile card.",
       "max_emoji_hint": "Max custom emoji upload size (64-1024 KB, default 256)",
       "max_poll_hint": "Maximum answer choices per poll (2-25, default 10)",
       "blocked_upload_types": "Blocked file types",
@@ -3492,6 +3497,19 @@
       "shape_squircle": "Squircle",
       "shape_hexagon": "Hexagon",
       "shape_diamond": "Diamond",
+      "banner_title": "Banner",
+      "banner_hint": "JPG, PNG, GIF (animated!), WebP · Max {{max}} MB",
+      "banner_color_title": "Banner color",
+      "banner_color_pick": "Pick a banner color",
+      "banner_color_auto": "Match avatar",
+      "banner_color_following": "Following your avatar",
+      "banner_color_picked": "Your own color",
+      "theme_title": "Profile theme",
+      "theme_top": "Top color",
+      "theme_bottom": "Bottom color",
+      "theme_off": "No theme",
+      "theme_on_note": "Your profile card fades between these colors",
+      "theme_off_note": "Pick a color to turn it on",
       "display_name_desc": "Letters, numbers, underscores, and spaces (2-20 chars)",
       "display_name_label": "Display Name",
       "display_name_placeholder": "New display name...",
@@ -3513,6 +3531,13 @@
       "personas_title": "👥 Personas",
       "add_persona": "+ Add Persona",
       "personas_hint": "Type <code>::Name your message</code> in chat to send as that persona (or pick from the autocomplete that appears when you start a message with <code>::</code>). Your real account stays linked for moderation."
+    },
+    "banner_crop": {
+      "title": "Edit Banner",
+      "hint": "Drag the picture to move it, and use the slider to zoom.",
+      "frame_label": "Banner crop area. Arrow keys move the picture, plus and minus zoom.",
+      "zoom": "Zoom",
+      "done": "Done"
     },
     "border_crop": {
       "title": "Edit",
