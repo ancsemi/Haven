@@ -23,6 +23,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Fixed
 - Your green speaking ring lit up for background noise the noise gate was blocking, so it looked like people could hear you when they could not. It now lights only for sound that actually gets sent, with the gate or AI noise suppression on (reported by Raidenphantom).
+- A call to a DM or group DM that nobody answered left no trace, only a pop-up that was gone once it was dismissed (#5901). It now stays in the chat as a line, "Missed call from <name>" with the time, for everyone in the conversation, and counts as an unread message. It is added when the call rings out after 45 seconds and when the caller hangs up first, and not when someone answered or everyone declined; the caller sees "Nobody answered your call".
 - A new forum post written while in a timeout vanished with only a few seconds of red notice, and nothing said how long the timeout would last. The title and text now come back to send later, and a notice above the message box shows the time left until the timeout ends.
 - A channel's right-click menu could open partly off the top of the screen, with its first items out of reach, when it fit neither below nor above the channel (most often in voice, where the menu is longer). It now stays on screen, and scrolls if the window is too short for all of it (reported by gitty).
 - On a phone's browser, scrolling down the login and register page kept bouncing back up to the top. The page now scrolls like any other.

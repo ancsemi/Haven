@@ -711,6 +711,7 @@
     "no_answer": "No answer",
     "missed": "Missed call from {{name}}",
     "missed_title": "Missed call",
+    "missed_own": "Nobody answered your call",
     "call_back": "Call back",
     "notify_body": "{{name}} is calling you",
     "start": "📞 Call",
