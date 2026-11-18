@@ -279,6 +279,8 @@ CREATE TABLE "fcm_tokens" (
   "token" TEXT NOT NULL,
   "created_at" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
   "scope" TEXT NOT NULL DEFAULT 'all',
+  "push_p256dh" TEXT DEFAULT NULL,
+  "push_auth" TEXT DEFAULT NULL,
   PRIMARY KEY ("id")
 );
 
