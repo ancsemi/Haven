@@ -80,3 +80,34 @@ test('the picker opens with a Favorites section and both pickers bind the star g
   const en = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/locales/en.json'), 'utf8'));
   assert.ok(en.emoji.categories.favorites && en.emoji.favorites_hint);
 });
+test('the quick reaction row leads with favorites, then most-used reactions, and a hand-picked row still wins', () => {
+  const store = new Map(), prev = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, writable: true, value: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) } });
+  try {
+    const defaults = ['👍', '👎', '😂', '❤️', '🔥', '💯', '😮', '😢'];
+    const plain = app({});
+    assert.deepEqual(plain._getQuickEmojis(), defaults);
+    plain._reactionUsage('🎉');
+    plain._reactionUsage('🎉');
+    plain._reactionUsage('🔥');
+    assert.deepEqual(plain._getQuickEmojis(), ['🎉', '🔥', '👍', '👎', '😂', '❤️', '💯', '😮']);
+    const fav = app({ emoji_favorites: JSON.stringify(['🦄', '👍', ':gone:']) });
+    assert.deepEqual(fav._getQuickEmojis(), ['🦄', '👍', '👎', '😂', '❤️', '🔥', '💯', '😮']);
+    fav._findNamedEmoji = (n) => (n === 'gone' ? { name: 'gone', url: '/e.png' } : null);
+    assert.deepEqual(fav._getQuickEmojis().slice(0, 3), ['🦄', '👍', ':gone:']);
+    const picked = ['1', '2', '3', '4', '5', '6', '7', '8'];
+    store.set('haven_quick_emojis', JSON.stringify(picked));
+    assert.deepEqual(fav._getQuickEmojis(), picked);
+    store.delete('haven_quick_emojis');
+    store.set('haven_reaction_usage', '{oops');
+    assert.deepEqual(plain._getQuickEmojis(), defaults);
+  } finally {
+    if (prev) Object.defineProperty(globalThis, 'localStorage', prev); else delete globalThis.localStorage;
+  }
+});
+test('both reaction pickers count what you react with, and the row editor can go back to automatic', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-emoji-picker.js'), 'utf8');
+  assert.equal((src.match(/emit\('add-reaction', \{ messageId: msgId, emoji: value \}\);\n\s*this\._reactionUsage\(emoji\);/g) || []).length, 2);
+  assert.match(src, /localStorage\.removeItem\('haven_quick_emojis'\)/);
+  for (const f of fs.readdirSync(path.join(ROOT, 'public/locales')).filter(n => n.endsWith('.json'))) assert.ok(JSON.parse(fs.readFileSync(path.join(ROOT, 'public/locales', f), 'utf8')).emoji.customize_quick_reset, f);
+});

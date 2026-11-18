@@ -930,6 +930,10 @@
       "value": "2"
     },
     {
+      "key": "max_banner_mb",
+      "value": "5"
+    },
+    {
       "key": "max_sound_kb",
       "value": "1024"
     },

@@ -11,7 +11,7 @@ const { sendFcm, isFcmEnabled } = require('../fcm');
 const { DATA_DIR } = require('../paths');
 const HAVEN_VERSION = require('../../package.json').version;
 
-const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline, maskSpoilers, toReplyContext } = require('./helpers');
+const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme, VALID_ROLE_PERMS, filterIdleOnline, maskSpoilers, toReplyContext } = require('./helpers');
 const { socketClientIp } = require('../clientIp');
 const automod = require('../automod');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
@@ -2021,7 +2021,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
       try {
         // created_at feeds the automod new-account link gate (v3.42.0).
-        let uRow = accountDb.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio FROM users WHERE id = ?').get(user.id);
+        let uRow = accountDb.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio, banner_color, avatar_color, banner, profile_theme_top, profile_theme_bottom FROM users WHERE id = ?').get(user.id);
         if (asyncAccountReads) uRow = await uRow;
         if (!uRow || uRow.username !== user.username) {
           return next(new Error('Session expired'));
@@ -2044,6 +2044,10 @@ function setupSocketHandlers(io, db, opts = {}) {
         socket.user.birthdayHideYear = uRow.birthday_hide_year !== 0;
         socket.user.birthdayHidden = uRow.birthday_hidden !== 0;
         socket.user.bio = uRow.bio || '';
+        socket.user.bannerColor = cleanHexColor(uRow.banner_color);
+        socket.user.avatarColor = uRow.avatar ? cleanHexColor(uRow.avatar_color) : null;
+        socket.user.banner = isValidUploadPath(uRow.banner) ? uRow.banner : null;
+        socket.user.profileTheme = cleanProfileTheme(uRow.profile_theme_top, uRow.profile_theme_bottom);
         // (#12) The client needs this to ask for the right secret: an SSO
         // account unlocks E2E with its encryption passphrase, not a password.
         socket.user.isSso = !!uRow.oidc_subject;
@@ -2270,6 +2274,12 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Their own bio, the full birthday, its privacy and when it was set,
       // for Edit Profile.
       bio: socket.user.bio || '',
+      // The banner color they picked; null means it follows their avatar,
+      // whose color comes along so Edit Profile can preview it.
+      bannerColor: socket.user.bannerColor || null,
+      avatarColor: socket.user.avatarColor || null,
+      banner: socket.user.banner || null,
+      profileTheme: socket.user.profileTheme || null,
       birthday: socket.user.birthday || null,
       birthdaySetAt: socket.user.birthdaySetAt || null,
       birthdayHideYear: socket.user.birthdayHideYear !== false,

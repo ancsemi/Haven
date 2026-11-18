@@ -243,6 +243,9 @@ _listenSession() {
     // What Edit Profile opens with. Without these it opened with an empty bio
     // and birthday, and saving it wiped the bio.
     if (typeof data.bio === 'string') this.user.bio = data.bio;
+    if (data.bannerColor !== undefined) this.user.bannerColor = this._safeHexColor(data.bannerColor);
+    if (data.avatarColor !== undefined) this.user.avatarColor = this._safeHexColor(data.avatarColor);
+    if (data.profileTheme !== undefined) this.user.profileTheme = this._cleanProfileTheme(data.profileTheme);
     if (data.birthdayHidden !== undefined) {
       this.user.birthday = data.birthday || null;
       this.user.birthdaySetAt = data.birthdaySetAt || null;

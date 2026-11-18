@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayName } = require('./helpers');
+const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayName, cleanHexColor, cleanProfileTheme } = require('./helpers');
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 const { saveFcmToken } = require('../fcm');
@@ -339,6 +339,37 @@ module.exports = function register(socket, ctx) {
       socket.emit('bio-updated', { bio });
     } catch (err) {
       console.error('Set bio error:', err);
+    }
+  });
+
+  // Banner color: an exact #rrggbb, or null to go back to the avatar's
+  // color. Anything else is refused rather than quietly reset.
+  socket.on('set-banner-color', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    const color = data.color === null ? null : cleanHexColor(data.color);
+    if (data.color !== null && !color) return socket.emit('error-msg', 'Invalid banner color');
+    try {
+      await profile.setBannerColor(asyncDb, socket.user.id, color);
+      socket.user.bannerColor = color;
+      socket.emit('banner-color-updated', { color });
+    } catch (err) {
+      console.error('Set banner color error:', err);
+    }
+  });
+
+  // Profile theme: two exact #rrggbb colors, top and bottom, or both null to
+  // turn it off. Anything else is refused.
+  socket.on('set-profile-theme', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    const off = data.top === null && data.bottom === null;
+    const theme = off ? null : cleanProfileTheme(data.top, data.bottom);
+    if (!off && !theme) return socket.emit('error-msg', 'Invalid profile theme');
+    try {
+      await profile.setProfileTheme(asyncDb, socket.user.id, theme);
+      socket.user.profileTheme = theme;
+      socket.emit('profile-theme-updated', { theme });
+    } catch (err) {
+      console.error('Set profile theme error:', err);
     }
   });
 
