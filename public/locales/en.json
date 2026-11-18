@@ -4668,6 +4668,7 @@
     "all_emojis_title": "All emojis",
     "customize_quick_title": "Customize Quick Reactions",
     "customize_quick_hint": "Click a slot, then pick an emoji to replace it.",
+    "customize_quick_reset": "Reset to automatic",
     "favorites_hint": "Right-click an emoji, or press and hold it, to keep it here. On the keyboard, press Alt+Enter.",
     "skin_tone": "Skin tone",
     "skin_tones": {
