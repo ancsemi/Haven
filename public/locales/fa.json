@@ -2681,6 +2681,7 @@
     "all_emojis_title": "همه ایموجی‌ها",
     "customize_quick_title": "شخصی‌سازی واکنش‌های سریع",
     "customize_quick_hint": "روی یک جایگاه کلیک کنید، سپس یک ایموجی انتخاب کنید تا جایگزین شود",
+    "customize_quick_reset": "بازگشت به حالت خودکار",
     "skin_tone": "رنگ پوست",
     "skin_tones": {
       "default": "پیش‌فرض",
