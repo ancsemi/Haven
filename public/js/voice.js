@@ -3724,7 +3724,15 @@ class VoiceManager {
     const relay = this._relay;
     if (!relay) return;
     const mic = this.localStream?.getAudioTracks()[0];
-    if (mic && !this.isListenerOnly) await relay.publish('mic', mic).catch(err => console.warn('[Relay] Mic not sent:', err.message));
+    // A failed send would leave this person unheard for the whole call
+    // (#5908), so try a few more times while this session is still current.
+    for (let attempt = 0; mic && !this.isListenerOnly && attempt < 3; attempt++) {
+      try { await relay.publish('mic', mic); break; } catch (err) {
+        console.warn('[Relay] Mic not sent:', err.message);
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        if (this._relay !== relay || relay.closed) return;
+      }
+    }
     if (this.isScreenSharing && this.screenStream) {
       // Same guarded, serialized, fresh-cap publish as a new share: a relay
       // (re)start can race a stop or a bitrate change exactly like shareScreen
