@@ -21,6 +21,10 @@ _renderUserBarAvatar() {
     face.textContent = initial;
     face.style.backgroundColor = color;
   };
+  // Your picture border sits over the face, under the connection light.
+  face.parentElement?.querySelector(':scope > .pfp-border')?.remove();
+  const marker = this._pfpBorderMarker?.(this.user.border, this.user.borderTransform, this.user.animateProfile);
+  if (marker) face.insertAdjacentHTML('afterend', marker);
   if (!this.user.avatar) { showInitial(); return; }
   face.style.backgroundColor = '';
   face.innerHTML = `<img ${this._imgSrcAttr(this.user.avatar)}${this._animAttr(this.user.animateProfile)} alt="">`;

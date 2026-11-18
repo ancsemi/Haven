@@ -240,6 +240,8 @@ _listenSession() {
     if (data.animateProfile !== undefined) {
       this.user.animateProfile = data.animateProfile === 'disabled' ? 'disabled' : 'trigger';
     }
+    // The account bar shows the border too, so redraw it with what the server sent.
+    if (data.border !== undefined || data.borderTransform !== undefined) this._renderUserBarAvatar?.();
     // What Edit Profile opens with. Without these it opened with an empty bio
     // and birthday, and saving it wiped the bio.
     if (typeof data.bio === 'string') this.user.bio = data.bio;

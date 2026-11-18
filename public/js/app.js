@@ -4,7 +4,7 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.29.71';
+import SocketMethods   from './modules/app-socket.js?v=4.29.76';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.76';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.71';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
@@ -18,7 +18,7 @@ import VoiceControlMethods from './modules/app-voice-controls.js?v=4.29.71';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.27.52';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.29.40';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.29.64';
-import PeopleMethods from './modules/app-people.js?v=4.29.71';
+import PeopleMethods from './modules/app-people.js?v=4.29.76';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
 import AdminControlMethods from './modules/app-admin-controls.js?v=4.27.52';
 import AdminReauthMethods from './modules/app-admin-reauth.js?v=4.23.8';
@@ -67,7 +67,7 @@ import UtilityMethods  from './modules/app-utilities.js?v=4.29.71';
 import MessageContentMethods from './modules/app-message-content.js?v=4.29.55';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.50';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
-import ThreadMethods from './modules/app-threads.js?v=4.29.64';
+import ThreadMethods from './modules/app-threads.js?v=4.29.76';
 import AdminMethods    from './modules/app-admin.js?v=4.29.71';
 import BrandingMethods from './modules/app-branding.js?v=4.29.19';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.52';
