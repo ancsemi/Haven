@@ -1761,7 +1761,7 @@ ul.chat-list { list-style-type: disc; }
   position: absolute;
   left: 0.5rem;
   bottom: 0.5rem;
-  max-width: calc(100% - min(7rem, 40%) - 1.5rem);
+  max-width: calc(100% - min(7rem, 40%) - 2.5rem);
   padding: 0.125rem 0.5rem;
   overflow: hidden;
   border-radius: 0.375rem;
@@ -1812,14 +1812,25 @@ ul.chat-list { list-style-type: disc; }
   opacity: 0;
   transition: opacity 0.15s ease;
 }
+/* Haven draws every slider's track and thumb itself, so the browser's own
+   look is switched off (as on .stream-vol-slider) or its box clips the
+   rounded ends. The box is tall enough for the thumb, and a pill like the
+   name label keeps it clear of the edges and readable over the video. */
 .fullscreen-stream-cell-volume {
+  --track-bg: rgba(255,255,255,0.3);
   position: absolute;
   right: 0.5rem;
   bottom: 0.5rem;
   z-index: 3;
+  box-sizing: content-box;
   width: min(7rem, 40%);
+  height: 1.25rem;
   margin: 0;
-  accent-color: var(--accent);
+  padding: 0 0.5rem;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.6);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s ease;

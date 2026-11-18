@@ -178,3 +178,18 @@ test('a fullscreen bar button marked hidden is really hidden', () => {
   assert.match(declarationsFor('.fullscreen-call-control'), /display:\s*inline-flex/);
   assert.match(declarationsFor('.fullscreen-call-control[hidden]'), /display:\s*none/);
 });
+
+test("the volume slider draws Haven's own rounded track with room for its ends and thumb", () => {
+  const volume = declarationsFor('.fullscreen-stream-cell-volume');
+  // The browser's own slider box clips the rounded track Haven draws for
+  // every slider unless its look is switched off, as .stream-vol-slider does.
+  assert.match(volume, /-webkit-appearance:\s*none/);
+  assert.match(volume, /(^|[^-])appearance:\s*none/);
+  // The thumb is 0.875rem plus a 2px border each side, so the box is taller.
+  assert.match(volume, /height:\s*1\.25rem/);
+  assert.match(volume, /box-sizing:\s*content-box/);
+  // A pill like the stream's name label, with padding so the ends are clear.
+  assert.match(volume, /padding:\s*0 0\.5rem/);
+  assert.match(volume, /border-radius:\s*999px/);
+  assert.match(volume, /background:\s*rgba\(0,\s*0,\s*0,\s*0\.6\)/);
+});
