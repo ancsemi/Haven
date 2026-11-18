@@ -1782,7 +1782,13 @@ ul.chat-list { list-style-type: disc; }
   background: transparent;
   cursor: zoom-in;
 }
-.fullscreen-stream-cell-focus:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* An accent ring on hover and keyboard focus, drawn inside the cell so it
+   does not change the size the layout gave it. */
+.fullscreen-stream-cell:hover .fullscreen-stream-cell-focus,
+.fullscreen-stream-cell-focus:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  outline: none;
+}
 .fullscreen-stream-cell-remove {
   position: absolute;
   top: 0.5rem;

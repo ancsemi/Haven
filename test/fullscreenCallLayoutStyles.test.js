@@ -128,7 +128,17 @@ test('a grid cell is one big button that shows its stream full size', () => {
   assert.match(focus, /inset:\s*0/);
   assert.match(focus, /background:\s*transparent/);
   assert.match(focus, /cursor:\s*zoom-in/);
-  assert.match(declarationsFor('.fullscreen-stream-cell-focus:focus-visible'), /outline:/);
+});
+
+test('a grid stream is ringed in the accent color on hover and keyboard focus', () => {
+  const ring = /box-shadow:\s*inset 0 0 0 2px var\(--accent\)/;
+  for (const selector of [
+    '.fullscreen-stream-cell:hover .fullscreen-stream-cell-focus',
+    '.fullscreen-stream-cell-focus:focus-visible',
+  ]) assert.match(declarationsFor(selector), ring, selector);
+  // Cells are placed to the pixel by the layout, so the ring is drawn inside
+  // them rather than as a border that would make them bigger.
+  assert.doesNotMatch(declarationsFor('.fullscreen-stream-cell'), /border:/);
 });
 
 test('the full-size stream shows it can be clicked back to the grid', () => {
