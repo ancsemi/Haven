@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.29.71">
+  <link rel="stylesheet" href="/css/style.css?v=4.29.73">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.27.19"></script>
 </head>
@@ -1237,6 +1237,34 @@
           <button type="button" class="avatar-shape-btn" data-shape="hex" data-i18n-title="modals.edit_profile.shape_hexagon" title="Hexagon"><div class="shape-preview shape-hex"></div></button>
           <button type="button" class="avatar-shape-btn" data-shape="diamond" data-i18n-title="modals.edit_profile.shape_diamond" title="Diamond"><div class="shape-preview shape-diamond"></div></button>
         </div>
+        <!-- Banner: a picture over a color that is picked, or left to follow the avatar -->
+        <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.banner_title">Banner</h5>
+        <div class="edit-profile-banner-preview" id="banner-color-preview"></div>
+        <div class="avatar-upload-row" style="margin-bottom: 10px;">
+          <button type="button" class="btn-sm" id="banner-upload-btn" data-i18n="modals.edit_profile.upload_btn">Upload</button>
+          <button type="button" class="btn-sm" id="banner-edit-btn" data-i18n="modals.edit_profile.edit_btn" disabled>Edit</button>
+          <button type="button" class="btn-sm" id="banner-remove-btn" data-i18n="modals.edit_profile.clear_btn" disabled>Clear</button>
+          <input type="file" id="banner-file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+        </div>
+        <small class="muted-text" id="banner-hint" style="display:block;margin-top:-4px;margin-bottom:8px;opacity:0.6"></small>
+        <small class="muted-text" id="banner-edit-note" style="display:none;margin-top:-4px;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.avatar_edit_animated">Animated images can't be edited.</small>
+        <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.banner_color_title">Banner color</h5>
+        <div class="banner-color-row">
+          <input type="color" id="banner-color-input" data-i18n-title="modals.edit_profile.banner_color_pick" title="Pick a banner color">
+          <button type="button" class="btn-sm" id="banner-color-auto-btn" data-i18n="modals.edit_profile.banner_color_auto">Match avatar</button>
+          <small class="muted-text" id="banner-color-note"></small>
+        </div>
+        <!-- Profile theme: two colors the whole card fades between, top to bottom -->
+        <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.theme_title">Profile theme</h5>
+        <div class="profile-theme-preview" id="profile-theme-preview">
+          <input type="color" class="profile-theme-swatch" id="profile-theme-top" data-i18n-title="modals.edit_profile.theme_top" title="Top color" data-i18n-aria-label="modals.edit_profile.theme_top" aria-label="Top color">
+          <span class="profile-theme-sample" aria-hidden="true">Aa</span>
+          <input type="color" class="profile-theme-swatch" id="profile-theme-bottom" data-i18n-title="modals.edit_profile.theme_bottom" title="Bottom color" data-i18n-aria-label="modals.edit_profile.theme_bottom" aria-label="Bottom color">
+        </div>
+        <div class="banner-color-row">
+          <button type="button" class="btn-sm" id="profile-theme-off-btn" data-i18n="modals.edit_profile.theme_off">No theme</button>
+          <small class="muted-text" id="profile-theme-note"></small>
+        </div>
       </div>
 
       <!-- Display Name -->
@@ -1324,6 +1352,27 @@
         <span id="avatar-save-status" class="settings-hint" style="flex:1"></span>
         <button class="btn-sm" id="cancel-rename-btn" data-i18n="modals.common.cancel">Cancel</button>
         <button class="btn-sm btn-accent" id="save-rename-btn" data-i18n="modals.common.save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Banner crop: the picture fills a 5:2 frame; drag (or arrow keys) to
+       move it, slider (or wheel, + and -) to zoom. Done cuts the framed part
+       out at banner size. -->
+  <div class="modal-overlay" id="banner-crop-modal" style="display:none">
+    <div class="modal">
+      <h3 data-i18n="modals.banner_crop.title">Edit Banner</h3>
+      <p class="modal-desc" data-i18n="modals.banner_crop.hint">Drag the picture to move it, and use the slider to zoom.</p>
+      <div class="banner-crop-frame" id="banner-crop-frame" tabindex="0" role="img" data-i18n-aria-label="modals.banner_crop.frame_label" aria-label="Banner crop area. Arrow keys move the picture, plus and minus zoom.">
+        <img id="banner-crop-img" alt="" draggable="false">
+      </div>
+      <label class="select-row banner-crop-zoom">
+        <span data-i18n="modals.banner_crop.zoom">Zoom</span>
+        <input type="range" id="banner-crop-zoom" min="100" max="400" value="100">
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn-sm" id="banner-crop-cancel" data-i18n="modals.common.cancel">Cancel</button>
+        <button type="button" class="btn-sm btn-accent" id="banner-crop-done" data-i18n="modals.banner_crop.done">Done</button>
       </div>
     </div>
   </div>
@@ -3749,6 +3798,11 @@
           </label>
           <small class="settings-hint" data-i18n="settings.admin.max_avatar_hint">Largest profile picture, border or persona picture someone can upload (1 to 10 MB, default 2). Animated GIFs are often over 2 MB, but every picture is loaded next to every message its owner sends, so keep this as low as you can.</small>
           <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_banner">Max Profile Banner Size (MB)</span>
+            <input type="number" id="max-banner-mb" min="1" max="20" value="5" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_banner_hint">Largest profile banner someone can upload (1 to 20 MB, default 5). Still pictures are cut to banner size before they upload, so this mostly limits animated banners, which load only when someone opens the profile card.</small>
+          <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_emoji">Max Emoji File Size (KB)</span>
             <input type="number" id="max-emoji-kb" min="64" max="1024" value="256" class="settings-number-input">
           </label>
@@ -5548,14 +5602,14 @@
   <script src="/js/notifications.js?v=4.23.6"></script>
   <script src="/js/servers.js?v=4.23.9"></script>
   <script src="/js/voice-relay.js?v=4.27.5"></script>
-  <script src="/js/voice.js?v=4.29.71"></script>
+  <script src="/js/voice.js?v=4.29.73"></script>
   <script src="/js/modmode.js?v=4.21.0"></script>
   <script src="/js/e2e-group.js?v=4.21.0"></script>
   <script src="/js/e2e.js?v=4.21.0"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.71"></script>
+  <script type="module" src="/js/app.js?v=4.29.73"></script>
   <script src="/js/plugin-loader.js?v=4.29.63"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

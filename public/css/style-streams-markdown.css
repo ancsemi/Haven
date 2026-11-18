@@ -1734,6 +1734,55 @@ ul.chat-list { list-style-type: disc; }
 .fullscreen-audio-popover .voice-settings-divider { margin: 0.25rem 0; }
 .fullscreen-audio-popover .voice-settings-section-label { margin: 0.25rem 0 0; }
 .fullscreen-audio-popover .settings-hint { flex-basis: 100%; }
+.fullscreen-stream-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 0.375rem;
+  box-sizing: border-box;
+  padding: 0.375rem;
+  background: #000;
+}
+.fullscreen-grid-cell {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #111;
+  cursor: pointer;
+}
+.fullscreen-grid-cell:hover,
+.fullscreen-grid-cell:focus-visible { border-color: var(--accent); outline: none; }
+.fullscreen-grid-cell video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  pointer-events: none;
+}
+.fullscreen-grid-label {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  max-width: calc(100% - 1rem);
+  padding: 0.125rem 0.5rem;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  color: #fff;
+  background: rgba(0,0,0,0.65);
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.webcam-tile.fullscreen-grid-on > .webcam-tile-label,
+.screen-share-tile.fullscreen-grid-on > .screen-share-tile-label { display: none; }
 .fullscreen-controls-idle .fullscreen-call-toolbar:not(:focus-within) {
   opacity: 0;
   pointer-events: none;

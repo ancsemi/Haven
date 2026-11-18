@@ -4396,6 +4396,7 @@
     "all_emojis_title": "Tous les emojis",
     "customize_quick_title": "Personnaliser les réactions rapides",
     "customize_quick_hint": "Cliquez sur un emplacement, puis choisissez un emoji pour le remplacer.",
+    "customize_quick_reset": "Revenir au mode automatique",
     "skin_tone": "Teint",
     "skin_tones": {
       "default": "Par défaut",

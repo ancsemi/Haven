@@ -1,11 +1,12 @@
 'use strict';
 
-const { parseBorderTransform, sanitizeBorderTransform } = require('../socketHandlers/helpers');
+const { parseBorderTransform, sanitizeBorderTransform, cleanHexColor, cleanProfileTheme, isValidUploadPath } = require('../socketHandlers/helpers');
 
 function readProfile(db, userId) {
   return db.prepare(`
     SELECT u.id, u.username, COALESCE(u.display_name, u.username) AS "displayName",
            u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.status, u.status_text, u.bio, u.created_at,
+           u.banner_color, u.avatar_color, u.banner, u.profile_theme_top, u.profile_theme_bottom,
            CASE WHEN u.birthday_hidden <> 0 OR u.birthday_hidden IS NULL THEN NULL
                 WHEN u.birthday_hide_year = 0 THEN u.birthday ELSE substr(u.birthday, 6) END AS birthday
     FROM users u WHERE u.id = ?
@@ -72,6 +73,15 @@ function profileCard(row, viewerId, isOnline) {
     status: hidden ? 'offline' : (row.status || 'online'),
     statusText: row.status_text || '',
     bio: row.bio || '',
+    // The banner color they picked, else the one their avatar gives, else
+    // null and the card uses the color of their name. Checked again on the
+    // way out: it lands in a style attribute.
+    bannerColor: cleanHexColor(row.banner_color) || (row.avatar ? cleanHexColor(row.avatar_color) : null),
+    // Banner picture: only ever a local /uploads/ path, so a card can't be
+    // pointed at an outside server to see who opens it.
+    banner: isValidUploadPath(row.banner) ? row.banner : null,
+    // The two colors the card fades between, or null for none.
+    profileTheme: cleanProfileTheme(row.profile_theme_top, row.profile_theme_bottom),
     // MM-DD, or YYYY-MM-DD when the owner turned off Hide birth year.
     birthday: row.birthday || null,
     online: !hidden && isOnline,
@@ -107,6 +117,17 @@ function setBorderFit(db, userId, fit) {
 
 function setBio(db, userId, bio) {
   return db.prepare('UPDATE users SET bio = ? WHERE id = ?').run(bio, userId);
+}
+
+// An exact #rrggbb, or null to follow the avatar (cleaned by the caller).
+function setBannerColor(db, userId, color) {
+  return db.prepare('UPDATE users SET banner_color = ? WHERE id = ?').run(color, userId);
+}
+
+// { top, bottom } (cleaned by the caller), or null for no theme.
+function setProfileTheme(db, userId, theme) {
+  return db.prepare('UPDATE users SET profile_theme_top = ?, profile_theme_bottom = ? WHERE id = ?')
+    .run(theme?.top ?? null, theme?.bottom ?? null, userId);
 }
 
 // A real calendar date from 1900 up to today as YYYY-MM-DD, else null. A day
@@ -185,7 +206,7 @@ function dmPartners(db, userId) {
 
 module.exports = {
   readProfile, profileServerRoles, profileChannel, profileChannelRoles, mergeProfileRoles, visibleProfileRoles, profileCard,
-  avatarShape, animationMode, borderFit, setAvatarShape, setAnimationMode, setBorderFit, setBio,
+  avatarShape, animationMode, borderFit, setAvatarShape, setAnimationMode, setBorderFit, setBio, setBannerColor, setProfileTheme,
   cleanBirthday, birthdayForUpdate, birthdayChange, setBirthday,
   lockAccountNames, displayNameForUpdate, conflictingDisplayName, setDisplayName, dmPartners,
 };

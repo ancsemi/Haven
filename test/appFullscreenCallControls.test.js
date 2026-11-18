@@ -415,6 +415,7 @@ test('fullscreen call controls render in the same sequence as the regular voice 
     'fullscreen-call-camera',
     'fullscreen-call-share',
     'fullscreen-stream-select',
+    'fullscreen-call-grid',
     'fullscreen-call-audio',
     'fullscreen-call-leave',
     'fullscreen-call-exit',
@@ -1131,4 +1132,77 @@ test('the fullscreen toolbar is named as call controls, not voice settings', () 
   assert.equal(toolbar.attributes['aria-label'], 'voice.panel.call_controls');
   const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
   assert.equal(en.voice.panel.call_controls, 'Call controls');
+});
+
+function gridOf(tile) {
+  return tile.querySelector('.fullscreen-stream-grid');
+}
+
+test('the fullscreen grid shows every live stream at once and the toolbar button turns it on and off', () => {
+  const { document, cameraTile, shareTile, cameraStream, shareStream } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  const button = cameraTile.querySelector('.fullscreen-call-grid');
+  assert.ok(button, 'the toolbar has a grid button');
+  assert.equal(button.disabled, false);
+  assert.equal(gridOf(cameraTile), null, 'one stream at a time until the grid is asked for');
+  button.listeners.click[0]({ stopPropagation() {} });
+  const grid = gridOf(cameraTile);
+  assert.ok(grid, 'the grid is drawn over the fullscreen tile');
+  assert.deepEqual(grid.children.map(cell => cell.querySelector('video').srcObject), [cameraStream, shareStream]);
+  assert.equal(grid.style.gridTemplateColumns, 'repeat(2, minmax(0, 1fr))');
+  assert.equal(cameraTile.classList.contains('fullscreen-grid-on'), true);
+  assert.equal(button.attributes['aria-pressed'], 'true');
+  assert.equal(button.title, 'voice_runtime.fullscreen_grid_off');
+  button.listeners.click[0]({ stopPropagation() {} });
+  assert.equal(gridOf(cameraTile), null);
+  assert.equal(cameraTile.classList.contains('fullscreen-grid-on'), false);
+  assert.equal(button.attributes['aria-pressed'], 'false');
+  assert.ok(shareTile);
+});
+
+test('clicking a tile in the fullscreen grid brings that stream back to full size', () => {
+  const { document, cameraTile, shareTile, shareStream } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  cameraTile.querySelector('.fullscreen-call-grid').listeners.click[0]({ stopPropagation() {} });
+  const shareCell = gridOf(cameraTile).children[1];
+  shareCell.listeners.click[0]({ stopPropagation() {} });
+  assert.equal(gridOf(cameraTile), null);
+  assert.equal(cameraTile.querySelector('video').srcObject, shareStream);
+  assert.equal(cameraTile.querySelector('.fullscreen-stream-select').value, shareTile.id);
+});
+
+test('picking a stream in the picker leaves the fullscreen grid', () => {
+  const { document, cameraTile, shareTile, shareStream } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  cameraTile.querySelector('.fullscreen-call-grid').listeners.click[0]({ stopPropagation() {} });
+  const picker = cameraTile.querySelector('.fullscreen-stream-select');
+  picker.value = shareTile.id;
+  picker.listeners.change[0]({ stopPropagation() {} });
+  assert.equal(gridOf(cameraTile), null);
+  assert.equal(cameraTile.querySelector('video').srcObject, shareStream);
+});
+
+test('the fullscreen grid follows streams that start and stop, and goes away with fullscreen', () => {
+  const { app, document, cameraTile, shareTrack } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  cameraTile.querySelector('.fullscreen-call-grid').listeners.click[0]({ stopPropagation() {} });
+  const before = gridOf(cameraTile);
+  app._refreshFullscreenStreamPicker();
+  assert.equal(gridOf(cameraTile), before, 'an unchanged list does not rebuild the videos');
+  shareTrack.end();
+  assert.equal(gridOf(cameraTile), null, 'a single stream left is shown full size');
+  assert.equal(cameraTile.querySelector('.fullscreen-call-grid').disabled, true);
+  leaveFullscreen(document);
+  assert.equal(gridOf(cameraTile), null);
+  assert.equal(cameraTile._fullscreenGridOn, false);
+});
+
+test('leaving fullscreen while the grid is up takes the grid down', () => {
+  const { document, cameraTile } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  cameraTile.querySelector('.fullscreen-call-grid').listeners.click[0]({ stopPropagation() {} });
+  assert.ok(gridOf(cameraTile));
+  leaveFullscreen(document);
+  assert.equal(gridOf(cameraTile), null);
+  assert.equal(cameraTile.classList.contains('fullscreen-grid-on'), false);
 });

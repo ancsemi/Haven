@@ -421,6 +421,7 @@ function initDatabase() {
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2-25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200-100000)
   insertSetting.run('max_avatar_mb', '2');               // max profile picture / border / persona avatar size in MB (1-10)
+  insertSetting.run('max_banner_mb', '5');               // max profile banner size in MB (1-20)
   insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256-10240)
   insertSetting.run('max_emoji_kb', '256');               // max emoji file size in KB (64-1024)
   insertSetting.run('max_sticker_kb', '1024');            // max sticker file size in KB (256-10240), #5392
@@ -633,6 +634,18 @@ function initDatabase() {
 
   // ── Migration: bio column ─────────────────────────────────
   addColumn('users', 'bio', "TEXT DEFAULT ''");
+
+  // ── Migration: banner color the member picked, and the one their avatar
+  // gives (worked out by the client when it uploads the avatar). Both NULL
+  // means the card falls back to the color of their name.
+  addColumn('users', 'banner_color', "TEXT DEFAULT NULL");
+  addColumn('users', 'avatar_color', "TEXT DEFAULT NULL");
+  // ── Migration: banner picture (an /uploads/ path), shown over the color.
+  addColumn('users', 'banner', "TEXT DEFAULT NULL");
+  // ── Migration: profile theme, two colors the card fades between from top
+  // to bottom. Both set, or both NULL for no theme.
+  addColumn('users', 'profile_theme_top', "TEXT DEFAULT NULL");
+  addColumn('users', 'profile_theme_bottom', "TEXT DEFAULT NULL");
 
   // ── Migration: birthday (YYYY-MM-DD) and when it was set (ISO UTC).
   // A birthday is set once and never changes; birthday_hidden keeps it off

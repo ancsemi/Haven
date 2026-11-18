@@ -3970,6 +3970,7 @@
     "all_emojis_title": "Todos os emojis",
     "customize_quick_title": "Personalizar reações rápidas",
     "customize_quick_hint": "Clique em um espaço e escolha um emoji para substituí-lo.",
+    "customize_quick_reset": "Redefinir para automático",
     "skin_tone": "Tom de pele",
     "skin_tones": {
       "default": "Padrão",

@@ -226,6 +226,7 @@ _applyAvatarEdits() {
     this._avatarEditBaked = false;
     this._pendingAvatarFile = this._avatarEditFile;
     this._pendingAvatarPreviewUrl = this._avatarEditFile ? this._avatarEditSource : null;
+    this._refreshBannerColorPreview();
     if (this._avatarEditFile) { showPreview(this._avatarEditSource); this._markAvatarUnsaved(); }
     else this._updateAvatarPreview();
     return;
@@ -260,6 +261,7 @@ _applyAvatarEdits() {
       this._pendingAvatarFile = new File([blob], `avatar.${ext}`, { type: blob.type });
       this._pendingAvatarRemoved = false;
       this._avatarEditBaked = true;
+      this._refreshBannerColorPreview();
       const reader = new FileReader();
       reader.onload = (ev) => {
         this._pendingAvatarPreviewUrl = ev.target.result;
@@ -1088,6 +1090,7 @@ _setupAvatarUpload() {
       this._pendingAvatarFile = null;
       this._pendingAvatarPreviewUrl = null;
       this._pendingAvatarRemoved = true;
+      this._refreshBannerColorPreview();
       const preview = document.getElementById('avatar-upload-preview');
       if (preview) {
         const color = this._getUserColor(this.user.username);
@@ -1177,6 +1180,7 @@ _setupAvatarUpload() {
 
       this._pendingAvatarFile = file;
       this._pendingAvatarRemoved = false;
+      this._refreshBannerColorPreview();
 
       // Show local preview immediately (not sent to server yet)
       const reader = new FileReader();
@@ -1231,6 +1235,18 @@ _setupAvatarUpload() {
   console.log('[Avatar Setup v6] Ready.');
 },
 
+// The avatar's color as it will be after Save, for the default banner: a
+// newly chosen picture is sampled (once per file), a cleared one has none.
+async _pendingAvatarColor() {
+  if (this._pendingAvatarRemoved) return null;
+  const file = this._pendingAvatarFile;
+  if (!file) return this.user.avatar ? this.user.avatarColor || null : null;
+  if (this._sampledAvatar?.file !== file) {
+    this._sampledAvatar = { file, color: await this._sampleAvatarColor(file) };
+  }
+  return this._sampledAvatar.color;
+},
+
 _markAvatarUnsaved() {
   const status = document.getElementById('avatar-save-status');
   if (status) { status.textContent = t('media_runtime.avatar.unsaved'); status.style.color = 'var(--warning, orange)'; }
@@ -1244,7 +1260,10 @@ async _commitAvatarSettings() {
   try {
     // 1. Upload avatar image via HTTP if a new file was chosen
     if (this._pendingAvatarFile) {
+      // The color the default banner takes from this picture goes up with it.
+      const avatarColor = await this._pendingAvatarColor();
       const formData = new FormData();
+      if (avatarColor) formData.append('avatarColor', avatarColor);
       formData.append('avatar', this._pendingAvatarFile);
       const resp = await fetch('/api/upload-avatar', {
         method: 'POST',
@@ -1256,6 +1275,7 @@ async _commitAvatarSettings() {
 
       // Server stored the file and returned the URL path
       this.user.avatar = data.url;
+      this.user.avatarColor = avatarColor;
       localStorage.setItem('haven_user', JSON.stringify(this.user));
       this._pendingAvatarFile = null;
       this._pendingAvatarPreviewUrl = null;
@@ -1288,6 +1308,7 @@ async _commitAvatarSettings() {
       if (!resp.ok) throw new Error(t('media_runtime.avatar.remove_failed'));
 
       this.user.avatar = null;
+      this.user.avatarColor = null;
       localStorage.setItem('haven_user', JSON.stringify(this.user));
       this._pendingAvatarRemoved = false;
 
@@ -1358,6 +1379,9 @@ async _commitAvatarSettings() {
       this.user.borderTransform = null;
       localStorage.setItem('haven_user', JSON.stringify(this.user));
     }
+
+    // 2e. Banner picture: upload a new one, or remove the saved one
+    await this._commitBannerPicture();
 
     // 3. Save shape via HTTP
     if (this._pendingAvatarShape !== this._avatarShape) {
