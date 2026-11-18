@@ -112,7 +112,7 @@ _setBannerEditSource(src, pickedType = null) {
   const token = (this._bannerSourceToken = (this._bannerSourceToken || 0) + 1);
   fetch(src).then((r) => r.arrayBuffer()).then(
     (buf) => this._isAnimatedImageBytes(buf),
-    () => null
+    () => null // the picture could not be read: not known to be animated
   ).then((animated) => {
     if (token !== this._bannerSourceToken) return; // a newer source replaced this one
     this._bannerIsAnimated = animated;

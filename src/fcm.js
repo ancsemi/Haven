@@ -281,7 +281,7 @@ function cleanPushKey(key) {
   try {
     crypto.createECDH('prime256v1').setPrivateKey(crypto.randomBytes(32)).computeSecret(pub);
   } catch {
-    return null;
+    return null; // not a point on the curve: the key is refused
   }
   return { p256dh: pub.toString('base64url'), auth: auth.toString('base64url') };
 }

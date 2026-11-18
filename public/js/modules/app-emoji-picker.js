@@ -72,7 +72,7 @@ _toneEmoji(emoji) {
 
 _getEmojiFavorites() {
   // A malformed stored list reads as no favorites; the server cleans what it saves.
-  try { const list = JSON.parse(this._userPrefs?.emoji_favorites || '[]'); return Array.isArray(list) ? list : []; } catch { return []; }
+  try { const list = JSON.parse(this._userPrefs?.emoji_favorites || '[]'); return Array.isArray(list) ? list : []; } catch { return []; } // not JSON: no favorites
 },
 _toggleEmojiFavorite(emoji) {
   if (!this._prefsReceived) return;
@@ -666,8 +666,8 @@ _getQuickEmojis() {
 },
 _reactionUsage(add) {
   let counts = {};
-  try { const c = JSON.parse(localStorage.getItem('haven_reaction_usage') || '{}'); counts = c && typeof c === 'object' && !Array.isArray(c) ? c : {}; } catch { counts = {}; }
-  if (add) try { counts[add] = (Number(counts[add]) || 0) + 1; localStorage.setItem('haven_reaction_usage', JSON.stringify(counts)); } catch { return []; }
+  try { const c = JSON.parse(localStorage.getItem('haven_reaction_usage') || '{}'); counts = c && typeof c === 'object' && !Array.isArray(c) ? c : {}; } catch { counts = {}; } // private mode or bad data: start counting afresh
+  if (add) try { counts[add] = (Number(counts[add]) || 0) + 1; localStorage.setItem('haven_reaction_usage', JSON.stringify(counts)); } catch { return []; } // private mode: usage is not kept
   return Object.keys(counts).filter(k => Number(counts[k]) > 0).sort((a, b) => counts[b] - counts[a] || (a < b ? -1 : a > b ? 1 : 0));
 },
 

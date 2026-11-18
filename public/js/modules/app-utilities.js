@@ -965,7 +965,7 @@ async _sampleAvatarColor(file) {
     const hex = (v) => Math.round(v / best.n).toString(16).padStart(2, '0');
     return `#${hex(best.r)}${hex(best.g)}${hex(best.b)}`;
   } catch {
-    return null;
+    return null; // an image the browser cannot decode has no colour to offer
   }
 },
 

@@ -102,7 +102,7 @@ export function createCallSettings({ storage, getVoice } = {}) {
     try {
       return store ? store.getItem(CALL_SETTING_KEYS[id]) : null;
     } catch {
-      return null;
+      return null; // private mode: storage is unreadable, so the default applies
     }
   };
   const write = (id, value) => {
