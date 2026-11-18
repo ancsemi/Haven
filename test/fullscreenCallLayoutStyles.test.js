@@ -171,3 +171,10 @@ test('the volume slider sits above the cell button and shows like the remove but
     '.fullscreen-stream-cell:focus-within .fullscreen-stream-cell-volume',
   ]) assert.match(declarationsFor(selector), /opacity:\s*1/);
 });
+
+test('a fullscreen bar button marked hidden is really hidden', () => {
+  // .fullscreen-call-control sets a display value, which would otherwise win
+  // over the hidden attribute and leave Back to grid showing at all times.
+  assert.match(declarationsFor('.fullscreen-call-control'), /display:\s*inline-flex/);
+  assert.match(declarationsFor('.fullscreen-call-control[hidden]'), /display:\s*none/);
+});

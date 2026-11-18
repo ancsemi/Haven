@@ -1651,6 +1651,7 @@ ul.chat-list { list-style-type: disc; }
   font-size: 1.125rem;
   cursor: pointer;
 }
+.fullscreen-call-control[hidden] { display: none; }
 .fullscreen-call-control:hover,
 .fullscreen-call-control:focus-visible { background: rgba(255,255,255,0.24); }
 .fullscreen-call-control:focus-visible,
