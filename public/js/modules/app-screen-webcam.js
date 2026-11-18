@@ -40,11 +40,13 @@ _createFullscreenCallToolbar(tile) {
   picker.addEventListener('click', event => event.stopPropagation());
   picker.addEventListener('change', (event) => {
     event.stopPropagation();
+    this._setFullscreenGrid(tile, false);
     this._selectFullscreenStream(tile, picker.value);
   });
   toolbar.appendChild(picker);
   if (!this._fullscreenStreamPickers) this._fullscreenStreamPickers = new Map();
   this._fullscreenStreamPickers.set(picker, tile);
+  addButton('fullscreen-call-grid', 'voice_runtime.fullscreen_grid', '▦', () => this._toggleFullscreenGrid(tile));
 
   const audioPopover = document.createElement('div');
   audioPopover.className = 'fullscreen-audio-popover';
@@ -192,6 +194,7 @@ _exitDocumentFullscreen() {
 // settings popup closed, no idle state. Safe to call more than once.
 _endFullscreenCallTile(tile) {
   if (this._fullscreenCallActiveTile !== tile) return;
+  this._setFullscreenGrid(tile, false);
   this._setFullscreenVideoSource(tile, tile, this._fullscreenCallOriginalStream);
   this._restoreFullscreenStreamLabel(tile);
   const toolbar = this._fullscreenCallTileBindings?.get(tile)?.toolbar;
@@ -444,6 +447,70 @@ _refreshFullscreenStreamPicker() {
     if (nextValue !== undefined && picker.value !== nextValue) picker.value = nextValue;
     picker.disabled = streams.length < 2;
   }
+  if (this._fullscreenCallActiveTile) this._renderFullscreenGrid(this._fullscreenCallActiveTile);
+},
+
+_toggleFullscreenGrid(tile) {
+  this._setFullscreenGrid(tile, !tile._fullscreenGridOn);
+},
+
+_setFullscreenGrid(tile, on) {
+  tile._fullscreenGridOn = !!on && this._fullscreenElement() === tile;
+  this._renderFullscreenGrid(tile);
+},
+
+_renderFullscreenGrid(tile) {
+  const all = this._listLiveFullscreenStreams();
+  const showing = !!tile._fullscreenGridOn && all.length > 1;
+  const old = tile._fullscreenGrid;
+  const same = showing && old && old._items.length === all.length && old._items.every((item, i) => item.tile === all[i].tile && item.stream === all[i].stream && item.label === all[i].label);
+  if (!same) {
+    old?.remove();
+    tile._fullscreenGrid = null;
+    if (showing) {
+      const grid = document.createElement('div');
+      grid.className = 'fullscreen-stream-grid';
+      grid.style.gridTemplateColumns = `repeat(${Math.ceil(Math.sqrt(all.length))}, minmax(0, 1fr))`;
+      grid._items = all;
+      grid.addEventListener('click', event => event.stopPropagation());
+      grid.addEventListener('dblclick', event => event.stopPropagation());
+      for (const item of all) {
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'fullscreen-grid-cell';
+        cell.title = t('voice_runtime.fullscreen_grid_focus');
+        cell.setAttribute('aria-label', `${item.label}: ${cell.title}`);
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.srcObject = item.stream;
+        video.style.transform = item.tile._fullscreenCallMirrored ? 'scaleX(-1)' : '';
+        video.play?.()?.catch?.(() => { /* autoplay blocked until the next click; nothing to recover */ });
+        const name = document.createElement('span');
+        name.className = 'fullscreen-grid-label';
+        name.textContent = item.label;
+        cell.appendChild(video);
+        cell.appendChild(name);
+        cell.addEventListener('click', (event) => {
+          event.stopPropagation();
+          this._setFullscreenGrid(tile, false);
+          this._selectFullscreenStream(tile, item.tile.id);
+        });
+        grid.appendChild(cell);
+      }
+      tile.appendChild(grid);
+      tile._fullscreenGrid = grid;
+    }
+  }
+  tile.classList.toggle('fullscreen-grid-on', showing);
+  const button = this._fullscreenCallTileBindings?.get(tile)?.toolbar.querySelector('.fullscreen-call-grid');
+  if (!button) return;
+  button.disabled = all.length < 2;
+  button.classList.toggle('sharing', showing);
+  button.title = t(showing ? 'voice_runtime.fullscreen_grid_off' : 'voice_runtime.fullscreen_grid');
+  button.setAttribute('aria-label', button.title);
+  button.setAttribute('aria-pressed', String(showing));
 },
 
 _selectFullscreenStream(fullscreenTile, sourceTileId) {
