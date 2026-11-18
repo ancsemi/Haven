@@ -2,6 +2,7 @@ const SETTINGS_PAGES = {
   user: [
     ['look', '🎨', 'settings.pages.look', 'Appearance', ['section-layout', 'section-toolbar-icons', 'section-role-display', 'section-reaction-size', 'section-banner-display', 'section-toggle-style']],
     ['chat', '💬', 'settings.pages.chat', 'Chat & media', ['section-chat-behavior', 'section-image-display', 'section-embed-size', 'section-soundboard-mode']],
+    ['voice', '🎧', 'settings.pages.voice', 'Voice & video', ['section-call-settings']],
     ['alerts', '🔔', 'settings.pages.alerts', 'Notifications', ['section-sounds', 'section-push', 'section-whats-new']],
     ['profile', '🎮', 'settings.pages.profile', 'Profile & activity', ['section-activity', 'section-score-badges']],
     ['security', '🔒', 'settings.pages.security', 'Account & security', ['section-password', 'section-e2e-passphrase', 'section-2fa', 'section-recovery', 'section-sessions', 'section-delete-account']],

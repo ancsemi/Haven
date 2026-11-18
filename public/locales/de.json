@@ -3560,6 +3560,7 @@
     "all_emojis_title": "Alle Emojis",
     "customize_quick_title": "Schnellreaktionen anpassen",
     "customize_quick_hint": "Auf ein Feld klicken, dann ein Emoji auswählen, um es zu ersetzen.",
+    "customize_quick_reset": "Auf automatisch zurücksetzen",
     "skin_tone": "Hautton",
     "skin_tones": {
       "default": "Standard",

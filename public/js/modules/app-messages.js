@@ -1022,6 +1022,15 @@ _createMessageEl(msg, prevMsg) {
     el.textContent = this._groupNoticeText?.(msg.content) || '';
     return el;
   }
+  if (msg && msg.type === 'missed_call') {
+    const el = document.createElement('div');
+    el.className = 'system-message missed-call-notice';
+    el.dataset.type = 'missed_call';
+    if (Number.isInteger(msg.id) && msg.id > 0) el.dataset.msgId = msg.id;
+    const mine = msg.user_id === this.user?.id;
+    el.textContent = `${mine ? t('calls.missed_own') : t('calls.missed', { name: this._getNickname(msg.user_id, msg.real_username || msg.username) })} · ${this._formatTime(msg.created_at)}`;
+    return el;
+  }
   const isImage = this._isImageUrl(msg.content);
   // The channel this message is drawn in. The pop-out DM draws while another
   // channel is open in the main pane, so it goes by the DM, not by the open

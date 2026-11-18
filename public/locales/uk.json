@@ -4383,6 +4383,7 @@
     "all_emojis_title": "Усі емодзі",
     "customize_quick_title": "Налаштувати швидкі реакції",
     "customize_quick_hint": "Натисніть слот, потім виберіть емодзі, щоб замінити його.",
+    "customize_quick_reset": "Повернути автоматичний вибір",
     "skin_tone": "Тон шкіри",
     "skin_tones": {
       "default": "Типовий",

@@ -1634,6 +1634,24 @@ Response (regular): `{ "success": true, "message_id": 124 }` (plus `"thread_id":
 
 Response (ephemeral): `{ "success": true, "ephemeral": true, "recipient_id": 42, "delivered": true }`
 
+### Sending Files and Pictures
+
+A bot can attach up to 10 files to a message by sending `multipart/form-data` instead of JSON. Put the message fields in a `payload_json` part (the same fields as above) and each file in its own part named `files[0]`, `files[1]`, and so on:
+
+```
+curl -F 'payload_json={"content":"Forwarded from Discord"}' \
+     -F 'files[0]=@cat.png' \
+     -F 'files[1]=@notes.pdf' \
+     https://your-server.com/api/webhooks/<token>
+```
+
+- The files are stored on this server, so they never expire the way links to another service's files can. A bot that relays messages from somewhere else should send the files, not their links.
+- Pictures (JPG, PNG, GIF, WebP) show in the message; anything else shows as a file card people can download. Text is optional when there is a file.
+- The same rules as a member's upload apply: the server's upload size limit, the file types the admin blocked, and the privacy pass that removes location data. The upload counts toward the storage of the person who made the bot, and that person must be allowed to upload files.
+- Plain form fields (`content`, `username`, `silent`, ...) work too, if `payload_json` is left out.
+- Files cannot be sent with `ephemeral`, since an ephemeral message is never stored.
+
+
 ### Editing Messages
 
 ```

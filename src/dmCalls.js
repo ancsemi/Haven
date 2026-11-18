@@ -29,9 +29,20 @@ module.exports = function createDmCalls({ io, db, voiceUsers, sendPushNotificati
       emitToUser(call.callerId, 'dm-call-unanswered', { code, reason });
     }
   }
+  function postMissed(code, call) {
+    const content = `Missed call from ${call.callerName}`;
+    try {
+      const info = db.prepare("INSERT INTO messages (channel_id, user_id, content, type) VALUES (?, ?, ?, 'missed_call')").run(call.channelId, call.callerId, content);
+      io.to(`channel:${code}`).emit('new-message', {
+        channelCode: code,
+        message: { id: Number(info.lastInsertRowid), user_id: call.callerId, username: call.callerName, content, type: 'missed_call', system: true, silent: true, created_at: new Date().toISOString(), reply_to: null, replyContext: null, reactions: [], edited_at: null },
+      });
+    } catch (err) { console.warn('[calls] Could not record a missed call:', err.message); }
+  }
   function ringTimeout(code) {
     const call = calls.get(code);
     if (!call) return;
+    if (call.ringing.size && !call.answered) postMissed(code, call);
     for (const userId of call.ringing) emitToUser(userId, 'dm-call-ring-stop', { code, reason: 'missed', callerName: call.callerName });
     call.ringing.clear();
     tellCallerIfAlone(code, call, 'timeout');
@@ -47,7 +58,7 @@ module.exports = function createDmCalls({ io, db, voiceUsers, sendPushNotificati
     const now = Date.now();
     const call = {
       channelId: ch.id, name: ch.name, callerId: user.id, callerName: user.displayName || user.username,
-      isGroup: members.length > 2, startedAt: now, ringing: new Set(mayRing(user.id, code, now) ? members.filter(id => id !== user.id) : []), timer: null,
+      isGroup: members.length > 2, startedAt: now, answered: false, ringing: new Set(mayRing(user.id, code, now) ? members.filter(id => id !== user.id) : []), timer: null,
     };
     calls.set(code, call);
     if (call.ringing.size === 0) return;
@@ -62,6 +73,7 @@ module.exports = function createDmCalls({ io, db, voiceUsers, sendPushNotificati
     const room = inRoom(code);
     if (room.size === 0) {
       clearTimeout(call.timer);
+      if (call.ringing.size && !call.answered) postMissed(code, call);
       for (const userId of call.ringing) emitToUser(userId, 'dm-call-ring-stop', { code, reason: 'ended', callerName: call.callerName });
       calls.delete(code);
       io.to(`channel:${code}`).emit('dm-call-ended', { code });
@@ -70,6 +82,7 @@ module.exports = function createDmCalls({ io, db, voiceUsers, sendPushNotificati
     for (const userId of [...call.ringing]) {
       if (!room.has(userId)) continue;
       call.ringing.delete(userId);
+      call.answered = true;
       emitToUser(userId, 'dm-call-ring-stop', { code, reason: 'answered' });
     }
     if (call.ringing.size === 0) clearTimeout(call.timer);

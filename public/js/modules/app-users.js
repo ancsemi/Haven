@@ -786,6 +786,36 @@ _openUserMenuFromButton(btn, userId, username) {
   }, userId, username);
 },
 
+// Tint a profile banner with a #rrggbb color. The card and the Edit Profile
+// preview both go through here so they always match. Themes read
+// --profile-banner rather than having the color forced on them.
+_paintProfileBanner(el, hex) {
+  if (!el) return;
+  const color = this._safeHexColor(hex);
+  if (color) el.style.setProperty('--profile-banner', color);
+  else el.style.removeProperty('--profile-banner');
+},
+
+// Put a banner picture in a profile banner, or take it out (url null). Only a
+// local /uploads/ path is used, and it goes in as an <img> src, never a CSS
+// url(), so nothing in it can be read as style. The owner's animation
+// setting rides on data-animate as on their avatar, so animated banners
+// freeze and play by the same rules.
+_setProfileBannerImage(el, url, animate) {
+  if (!el) return;
+  el.querySelector('.profile-banner-img')?.remove();
+  const ok = typeof url === 'string' && /^\/uploads\/[\w\-.]+$/.test(url);
+  el.classList.toggle('has-banner-image', ok);
+  if (!ok) return;
+  const img = document.createElement('img');
+  img.className = 'profile-banner-img';
+  img.alt = '';
+  img.decoding = 'async';
+  img.dataset.animate = animate === 'disabled' ? 'disabled' : 'trigger';
+  img.src = url;
+  el.prepend(img);
+},
+
 _showProfilePopup(profile) {
   // If this was a hover-triggered popup but the mouse already left, abort
   if (this._isHoverPopup && !this._hoverTarget) return;
@@ -857,7 +887,7 @@ _showProfilePopup(profile) {
   popup.id = 'profile-popup';
   popup.className = 'profile-popup';
   popup.innerHTML = `
-    <div class="profile-popup-banner" style="background:linear-gradient(135deg, ${color}44, ${color}22)">
+    <div class="profile-popup-banner">
       <button class="profile-popup-close" title="${t('modals.common.close')}">&times;</button>
     </div>
     <div class="profile-popup-avatar-wrapper">
@@ -881,6 +911,13 @@ _showProfilePopup(profile) {
       <div class="profile-popup-actions">${actionsHtml}</div>
     </div>
   `;
+
+  // Banner: the color they picked or their avatar's, else their name color.
+  // Set through the CSSOM, never pasted into markup, and only as #rrggbb.
+  const bannerEl = popup.querySelector('.profile-popup-banner');
+  this._paintProfileBanner(bannerEl, this._safeHexColor(profile.bannerColor) || color);
+  this._setProfileBannerImage(bannerEl, profile.banner, profile.animateProfile);
+  this._applyProfileTheme(popup, profile.profileTheme);
 
   // Hover mode: translucent, non-interactive preview (pointer-events:none via CSS)
   if (this._isHoverPopup) popup.classList.add('profile-popup-hover');
@@ -951,6 +988,16 @@ _showProfilePopup(profile) {
     avatarImgEl.addEventListener('click', (e) => {
       e.stopPropagation();
       this._openLightbox(profile.avatar);
+    });
+  }
+  // The banner picture opens the same way. The <img> lets clicks through, so
+  // the banner takes them, apart from its close button.
+  if (bannerEl.classList.contains('has-banner-image')) {
+    bannerEl.style.cursor = 'zoom-in';
+    bannerEl.addEventListener('click', (e) => {
+      if (e.target.closest('.profile-popup-close')) return;
+      e.stopPropagation();
+      this._openLightbox(profile.banner);
     });
   }
 

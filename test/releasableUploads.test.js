@@ -15,7 +15,7 @@ function fixture() {
   db.exec(`
     CREATE TABLE upload_ownership (rel_path TEXT PRIMARY KEY, user_id INTEGER, bytes INTEGER, scope TEXT);
     CREATE TABLE messages (id INTEGER PRIMARY KEY, content TEXT, is_archived INTEGER DEFAULT 0);
-    CREATE TABLE users (id INTEGER PRIMARY KEY, avatar TEXT, border TEXT);
+    CREATE TABLE users (id INTEGER PRIMARY KEY, avatar TEXT, border TEXT, banner TEXT);
     CREATE TABLE user_personas (id INTEGER PRIMARY KEY, avatar TEXT);
     CREATE TABLE webhooks (id INTEGER PRIMARY KEY, avatar_url TEXT);
     CREATE TABLE roles (id INTEGER PRIMARY KEY, icon TEXT);
@@ -45,6 +45,14 @@ test('only the author\'s own, unused attachments are released', () => {
     'mine.png', 'mine-dm.bin', 'theirs.png', 'my-avatar.png', 'reposted.png', 'icon.png', 'boop.mp3', 'unknown-legacy.png',
   ], [1]);
   assert.deepEqual(out.sort(), ['mine-dm.bin', 'mine.png']);
+});
+
+test('a file someone uses as their banner is kept', () => {
+  const db = fixture();
+  db.prepare('INSERT INTO upload_ownership (rel_path, user_id, bytes, scope) VALUES (?, 1, 0, ?)').run('banner-pic.png', 'channel');
+  assert.deepEqual(releasableUploads(db, ['banner-pic.png'], [1]), ['banner-pic.png']);
+  db.prepare('INSERT INTO users (banner) VALUES (?)').run('/uploads/banner-pic.png');
+  assert.deepEqual(releasableUploads(db, ['banner-pic.png'], [1]), []);
 });
 
 test('someone else\'s file is never released, whoever deletes', () => {

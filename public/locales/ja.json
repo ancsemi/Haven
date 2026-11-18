@@ -2691,6 +2691,7 @@
     "all_emojis_title": "すべての絵文字",
     "customize_quick_title": "クイックリアクションをカスタマイズ",
     "customize_quick_hint": "枠をクリックしてから、置き換える絵文字を選んでください。",
+    "customize_quick_reset": "自動に戻す",
     "skin_tone": "肌の色",
     "skin_tones": {
       "default": "デフォルト",

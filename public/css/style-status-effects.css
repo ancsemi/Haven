@@ -1181,6 +1181,13 @@
   overflow-y: auto;
 }
 
+/* The login page scrolls as an ordinary document. The app locks html and
+   sizes body to the dynamic viewport (#5285); left on here, body became the
+   scroller and its height changed as the phone's address bar slid in and
+   out mid-scroll, so the register form kept snapping back up. */
+html.auth-root { height: auto; overflow: visible; }
+body.auth-page { height: auto; min-height: 100vh; min-height: 100dvh; overflow: visible; }
+
 .auth-container { width: 100%; max-width: 25rem; padding: 1.25rem; margin: auto 0; }
 
 .auth-card {

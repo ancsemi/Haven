@@ -660,6 +660,7 @@
     "screen_share_cancelled": "Screen share cancelled or not supported",
     "camera_stopped": "Camera stopped",
     "camera_started": "Camera started",
+    "camera_fallback": "Your chosen camera was not found, so your default camera is on.",
     "camera_error": "Camera unavailable or permission denied",
     "stop_camera": "Stop Camera",
     "sharing_started": "{{who}} started sharing their screen",
@@ -711,6 +712,7 @@
     "no_answer": "No answer",
     "missed": "Missed call from {{name}}",
     "missed_title": "Missed call",
+    "missed_own": "Nobody answered your call",
     "call_back": "Call back",
     "notify_body": "{{name}} is calling you",
     "start": "📞 Call",
@@ -1311,6 +1313,9 @@
     "golden_grace": "Golden Grace"
   },
   "media_runtime": {
+    "banner": {
+      "remove_failed": "Failed to remove banner"
+    },
     "none": "None",
     "delete": "Delete",
     "delete_failed": "Delete failed",
@@ -1538,6 +1543,9 @@
     "you": "You",
     "camera": "Camera",
     "stream": "Stream",
+    "fullscreen_grid": "Show all streams at once",
+    "fullscreen_grid_off": "Show one stream",
+    "fullscreen_grid_focus": "Show this stream full size",
     "join": "Join",
     "camera_one": "{{count}} camera",
     "camera_other": "{{count}} cameras",
@@ -1597,6 +1605,7 @@
       "localization": "Localization",
       "layout": "Layout",
       "sounds": "Sounds",
+      "call_settings": "Voice & Video",
       "push": "Push",
       "password": "Password",
       "e2e_passphrase": "Encryption",
@@ -1670,6 +1679,7 @@
     "pages": {
       "look": "Appearance",
       "chat": "Chat & media",
+      "voice": "Voice & video",
       "alerts": "Notifications",
       "profile": "Profile & activity",
       "security": "Account & security",
@@ -2528,6 +2538,8 @@
       "fcm_desc": "FCM (Firebase Cloud Messaging) is Google's system for delivering push notifications to Android phones. It's what wakes your phone when you receive a new message while Haven is closed. This means that all notifications (including your Haven username, channel name and message content) sent to your Android phone have to pass through Google's servers to reach your phone.<br><br>While this may be fine for most users, some may prefer to keep Google completely out of the equation. <a href=\"https://unifiedpush.org\" target=\"_blank\" rel=\"noopener\">UnifiedPush</a> is a decentralized notification standard that supports several notification apps, and if a UnifiedPush compatible app is installed on your phone, Haven Mobile will prioritize it over FCM.",
       "fcm_note": "<strong>Dangerous Action Warning: Before disabling this, please ensure every member in your Haven server including yourself has a UnifiedPush compatible app installed on their phone. Otherwise, some members of your server will not receive any mobile notifications.</strong>",
       "fcm_enabled_label": "Enable Google FCM Push Notifications",
+      "fcm_hide_note": "Updated Haven apps get encrypted pushes, so Google, Apple and the push relay only see a sealed blob. Older apps still send the message text through them. Turn this on and those older apps only show \"New message\".",
+      "fcm_hide_label": "Hide message text in pushes to older apps",
       "branding_title": "Server Branding",
       "presence_title": "Presence & Activity",
       "auto_away_visible": "Visible tab (minutes)",
@@ -2868,6 +2880,8 @@
       "tags_role_cleared": "Anyone can use \"{{name}}\" now",
       "max_sound_hint": "Max soundboard upload size (256-10240 KB, default 1024 / 1 MB)",
       "max_avatar_hint": "Largest profile picture, border or persona picture someone can upload (1 to 10 MB, default 2). Animated GIFs are often over 2 MB, but every picture is loaded next to every message its owner sends, so keep this as low as you can.",
+      "max_banner": "Max Profile Banner Size (MB)",
+      "max_banner_hint": "Largest profile banner someone can upload (1 to 20 MB, default 5). Still pictures are cut to banner size before they upload, so this mostly limits animated banners, which load only when someone opens the profile card.",
       "max_emoji_hint": "Max custom emoji upload size (64-1024 KB, default 256)",
       "max_poll_hint": "Maximum answer choices per poll (2-25, default 10)",
       "blocked_upload_types": "Blocked file types",
@@ -3280,6 +3294,22 @@
       "off": "Never",
       "hint": "A version number has three parts: a big update changes the first, new features the second, and fixes the third. When an underlined part changes, you get a popup with the release notes. Saved on this device.",
       "show_now": "See what's new in this version"
+    },
+    "call": {
+      "title": "Voice & Video",
+      "hint": "Saved on this device. Changes apply to your next call, or straight away if you are in one.",
+      "test_mic": "Test microphone",
+      "stop_mic": "Stop microphone test",
+      "hear_myself": "Hear myself during the microphone test",
+      "hear_myself_hint": "Use headphones, or your speakers may squeal. You hear yourself as a call would send you, with your noise reduction setting. Echo cancellation is paused while you listen, or it would keep cutting out your own voice. Nothing plays while you are deafened in a call.",
+      "test_camera": "Test camera",
+      "stop_camera": "Stop camera test",
+      "mic_missing": "Your chosen microphone was not found, so the default one is being tested.",
+      "camera_missing": "Your chosen camera was not found, so the default one is being shown.",
+      "output_missing": "Your chosen speaker was not found, so the test plays on the default one.",
+      "camera_in_call": "Your camera is already on in the call. Turn it off there to test it here.",
+      "permission_denied": "The browser was not allowed to use this device. Allow it in the site settings and try again.",
+      "preview_failed": "This device could not be opened. It may be in use by another app."
     }
   },
   "modals": {
@@ -3489,6 +3519,19 @@
       "shape_squircle": "Squircle",
       "shape_hexagon": "Hexagon",
       "shape_diamond": "Diamond",
+      "banner_title": "Banner",
+      "banner_hint": "JPG, PNG, GIF (animated!), WebP · Max {{max}} MB",
+      "banner_color_title": "Banner color",
+      "banner_color_pick": "Pick a banner color",
+      "banner_color_auto": "Match avatar",
+      "banner_color_following": "Following your avatar",
+      "banner_color_picked": "Your own color",
+      "theme_title": "Profile theme",
+      "theme_top": "Top color",
+      "theme_bottom": "Bottom color",
+      "theme_off": "No theme",
+      "theme_on_note": "Your profile card fades between these colors",
+      "theme_off_note": "Pick a color to turn it on",
       "display_name_desc": "Letters, numbers, underscores, and spaces (2-20 chars)",
       "display_name_label": "Display Name",
       "display_name_placeholder": "New display name...",
@@ -3510,6 +3553,13 @@
       "personas_title": "👥 Personas",
       "add_persona": "+ Add Persona",
       "personas_hint": "Type <code>::Name your message</code> in chat to send as that persona (or pick from the autocomplete that appears when you start a message with <code>::</code>). Your real account stays linked for moderation."
+    },
+    "banner_crop": {
+      "title": "Edit Banner",
+      "hint": "Drag the picture to move it, and use the slider to zoom.",
+      "frame_label": "Banner crop area. Arrow keys move the picture, plus and minus zoom.",
+      "zoom": "Zoom",
+      "done": "Done"
     },
     "border_crop": {
       "title": "Edit",
@@ -4668,6 +4718,7 @@
     "all_emojis_title": "All emojis",
     "customize_quick_title": "Customize Quick Reactions",
     "customize_quick_hint": "Click a slot, then pick an emoji to replace it.",
+    "customize_quick_reset": "Reset to automatic",
     "favorites_hint": "Right-click an emoji, or press and hold it, to keep it here. On the keyboard, press Alt+Enter.",
     "skin_tone": "Skin tone",
     "skin_tones": {
