@@ -5,6 +5,7 @@ const path   = require('path');
 const fs     = require('fs');
 const webpush = require('web-push');
 
+const { readStatus, dmChannelCodes } = require('./profileStatus');
 const { verifyTokenAsync, generateChannelCode, generateToken } = require('../auth');
 const { sendFcm, isFcmEnabled } = require('../fcm');
 const { DATA_DIR } = require('../paths');
@@ -69,6 +70,7 @@ const registerTags       = require('./tags');
 const registerChannelTypes = require('./channelTypes');
 const registerMemberDefaults = require('./memberDefaults');
 const registerGameActivity = require('./gameActivity');
+const registerAppActivity = require('./appActivity');
 const registerMessageHighlights = require('./messageHighlights');
 const registerModCases = require('./modCases');
 const registerPermExceptions = require('./permExceptions');
@@ -756,11 +758,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   // refreshes the user's DM rooms. A DM has two members, so each list is tiny.
   function emitDmPresence(userId) {
     try {
-      const rows = db.prepare(`
-        SELECT c.code FROM channels c
-        JOIN channel_members cm ON cm.channel_id = c.id
-        WHERE c.is_dm = 1 AND cm.user_id = ?
-      `).all(userId);
+      const rows = dmChannelCodes(db, userId);
       for (const r of rows) emitOnlineUsers(r.code);
     } catch { /* presence is best-effort; the next presence change refreshes these DMs */ }
   }
@@ -2067,7 +2065,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       }
 
       try {
-        const statusRow = db.prepare('SELECT status, status_text FROM users WHERE id = ?').get(user.id);
+        const statusRow = readStatus(db, user.id);
         if (statusRow) {
           const dbStatus = statusRow.status || 'online';
           if (dbStatus === 'away') {
@@ -2779,6 +2777,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerChannelTypes(socket, ctx);
     registerMemberDefaults(socket, ctx);
     registerGameActivity(socket, ctx);
+    registerAppActivity(socket, ctx);
     registerMessageHighlights(socket, ctx);
     registerModCases(socket, ctx);
     registerForumUnread(socket, ctx);

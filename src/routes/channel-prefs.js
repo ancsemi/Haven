@@ -1,6 +1,19 @@
 'use strict';
 
 const express = require('express');
+const { lockUserPreferences } = require('../db/userPreferences');
+
+function muteUpsert(db) {
+  return db.prepare(`
+    INSERT INTO user_channel_prefs (user_id, channel_code, muted, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id, channel_code) DO UPDATE SET muted = excluded.muted, updated_at = CURRENT_TIMESTAMP
+  `);
+}
+
+function clearMuted(db, userId) {
+  return db.prepare('DELETE FROM user_channel_prefs WHERE user_id = ? AND muted = 1').run(userId);
+}
 
 module.exports = function registerChannelPrefs({ app, verifyToken }) {
   // ── Per-user channel notification prefs ──────────────────
@@ -34,13 +47,15 @@ module.exports = function registerChannelPrefs({ app, verifyToken }) {
       return res.status(400).json({ error: 'Invalid code' });
     try {
       const { getAsyncDb } = require('../database');
-      await getAsyncDb().prepare(`
-        INSERT INTO user_channel_prefs (user_id, channel_code, muted, updated_at)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(user_id, channel_code) DO UPDATE SET
-          muted = excluded.muted,
-          updated_at = CURRENT_TIMESTAMP
-      `).run(user.id, code, muted ? 1 : 0);
+      const db = getAsyncDb();
+      if (req.postgresUser) {
+        await db.withTransaction(async tx => {
+          await lockUserPreferences(tx, user.id);
+          await muteUpsert(tx).run(user.id, code, muted ? 1 : 0);
+        });
+      } else {
+        await muteUpsert(db).run(user.id, code, muted ? 1 : 0);
+      }
       res.json({ ok: true });
     } catch (err) {
       console.error('[user/channel-prefs POST]', err);
@@ -50,7 +65,7 @@ module.exports = function registerChannelPrefs({ app, verifyToken }) {
 
   // Bulk replace: used by the client on first sync to push the entire
   // localStorage set up at once (or to converge after offline edits).
-  app.put('/api/user/channel-prefs/muted', express.json({ limit: '16kb' }), (req, res) => {
+  app.put('/api/user/channel-prefs/muted', express.json({ limit: '16kb' }), async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -62,17 +77,20 @@ module.exports = function registerChannelPrefs({ app, verifyToken }) {
     try {
       const { getDb } = require('../database');
       const db = getDb();
-      const tx = db.transaction((uid, list) => {
-        db.prepare('DELETE FROM user_channel_prefs WHERE user_id = ? AND muted = 1').run(uid);
-        const ins = db.prepare(`
-          INSERT INTO user_channel_prefs (user_id, channel_code, muted, updated_at)
-          VALUES (?, ?, 1, CURRENT_TIMESTAMP)
-          ON CONFLICT(user_id, channel_code) DO UPDATE SET
-            muted = 1, updated_at = CURRENT_TIMESTAMP
-        `);
-        for (const c of list) ins.run(uid, c);
-      });
-      tx(user.id, clean);
+      if (db.kind === 'postgres') {
+        await db.withTransaction(async tx => {
+          await lockUserPreferences(tx, user.id);
+          await clearMuted(tx, user.id);
+          const upsert = muteUpsert(tx);
+          for (const code of clean) await upsert.run(user.id, code, 1);
+        });
+      } else {
+        db.transaction(() => {
+          clearMuted(db, user.id);
+          const upsert = muteUpsert(db);
+          for (const code of clean) upsert.run(user.id, code, 1);
+        })();
+      }
       res.json({ ok: true, count: clean.length });
     } catch (err) {
       console.error('[user/channel-prefs PUT]', err);

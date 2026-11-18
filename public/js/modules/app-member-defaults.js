@@ -224,6 +224,13 @@ const SETTINGS = [
     apply: (v) => setToggle('hover-profile-card', v),
     show: yesNo,
   },
+  {
+    key: 'emote_words', scope: 'device', dflt: false,
+    label: () => t('settings.chat_behavior.emote_words'),
+    read: () => lsGet('haven-emote-words') === 'true',
+    apply: (v) => setToggle('emote-words-toggle', v),
+    show: yesNo,
+  },
 ];
 const BY_KEY = new Map(SETTINGS.map(s => [s.key, s]));
 

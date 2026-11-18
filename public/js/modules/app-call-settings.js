@@ -5,8 +5,8 @@
 // plugins and user CSS rely on. The fullscreen call popup and the Voice & video
 // settings page mount their own copies.
 
-import { createDeviceList, createCallSettingsPanel } from './call-settings-panel.js?v=4.29.64';
-import { createMicPreview, createCameraPreview } from './call-settings-preview.js?v=4.29.64';
+import { createDeviceList, createCallSettingsPanel } from './call-settings-panel.js?v=4.29.71';
+import { createMicPreview, createCameraPreview } from './call-settings-preview.js?v=4.29.71';
 
 export default {
 

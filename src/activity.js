@@ -3,11 +3,12 @@
 /**
  * Haven: Rich presence / user activity
  *
- * Collects "what is this person doing right now" from five sources and hands
+ * Collects "what is this person doing right now" from six sources and hands
  * it to the presence broadcast in socketHandlers/index.js:
  *
  *   haven:    Haven's own voice-channel music player (no external calls)
  *   haven-game: a game from Haven's Activities list (no external calls)
+ *   app:      what Haven Desktop heard from apps on the member's own computer (no external calls)
  *   steam:    Steam Web API GetPlayerSummaries (one batched call for everyone)
  *   lastfm:   Last.fm getRecentTracks (username + server API key, no OAuth)
  *   spotify:  Spotify Web API currently-playing (full OAuth, one call per user)
@@ -335,6 +336,42 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
     if (entry && entry.playing && !mine) return true;
     setSlot(userId, 'playing', { type: 'playing', name, details: '', image: null, source: 'haven-game', startedAt: Date.now() });
     return true;
+  }
+
+  // ── Source: apps on the member's own computer ───────────
+  /**
+   * Games and players that announce themselves the way they would to a
+   * Discord app are picked up by Haven Desktop and reported by the member's
+   * client (#5894). The text comes from the member's machine, so it is
+   * cleaned and capped like every other outside source, and it carries no
+   * image. A slot another source holds (Steam, Haven's player, a linked
+   * music account) is left alone.
+   */
+  function appSlot(raw, type) {
+    if (!raw || typeof raw !== 'object') return null;
+    const name = clean(raw.name, 120);
+    if (!name) return null;
+    const now = Date.now();
+    let startedAt = Number(raw.startedAt);
+    if (!Number.isFinite(startedAt) || startedAt > now || startedAt < now - 7 * 24 * 3600 * 1000) startedAt = now;
+    const act = { type, name, details: clean(raw.details, 120), image: null, source: 'app', startedAt };
+    if (type === 'listening') {
+      const duration = Number(raw.duration);
+      act.app = clean(raw.app, 40) || null;
+      act.duration = Number.isFinite(duration) && duration > 0 && duration <= 24 * 3600 * 1000 ? Math.floor(duration) : 0;
+      act.paused = false;
+      act.positionMs = 0;
+    }
+    return act;
+  }
+
+  /** payload: { playing, listening }, each null or { name, details, startedAt }; null clears both. */
+  function setAppActivity(userId, payload) {
+    for (const slot of ['playing', 'listening']) {
+      const cur = activity.get(userId)?.[slot];
+      if (cur && cur.source !== 'app') continue;
+      setSlot(userId, slot, appSlot(payload && payload[slot], slot));
+    }
   }
 
   // ── Connections ─────────────────────────────────────────
@@ -866,6 +903,7 @@ function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }
     setHavenMusic,
     clearHavenMusic,
     setHavenGame,
+    setAppActivity,
     clearUser,
     saveConnection,
     removeConnection,

@@ -99,7 +99,7 @@ async function countAsync(db, userId, channelId) {
                ELSE COALESCE((SELECT MAX(r.id) FROM messages r WHERE r.thread_id = m.id), 0) > tr.last_read_reply_id
              END)
       LIMIT ${CAP}
-    )
+    ) AS unread_topics
   `).get(userId, channelId, userId, userId);
   return row ? row.n : 0;
 }

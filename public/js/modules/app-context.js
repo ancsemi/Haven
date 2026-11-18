@@ -534,6 +534,12 @@ _setupNotifications() {
     });
   }
 
+  const emoteWordsToggle = document.getElementById('emote-words-toggle');
+  if (emoteWordsToggle) {
+    emoteWordsToggle.checked = localStorage.getItem('haven-emote-words') === 'true';
+    emoteWordsToggle.addEventListener('change', () => localStorage.setItem('haven-emote-words', String(emoteWordsToggle.checked)));
+  }
+
   // Profile card on hover (on by default). The hover handler reads the flag
   // live, so no reload is needed.
   const hoverCardToggle = document.getElementById('hover-profile-card');

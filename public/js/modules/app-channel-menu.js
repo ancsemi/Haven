@@ -89,6 +89,7 @@ _bindChannelMenu() {
   // ── Channel context menu ("..." on hover) ──────────
   this._initChannelContextMenu();
   this._initDmContextMenu();
+  this._initDmSortMenu();
   // Delete channel: themed confirm (issue #5307: was using two chained native confirm() calls)
   document.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
     const code = this._ctxMenuChannel;
@@ -156,7 +157,7 @@ _bindChannelMenu() {
     this._closeChannelCtxMenu();
     this._copyChannelLink(code);
   });
-  // Pick people to add to this channel (app-channel-add-members.js).
+  // Add people to this channel or take them out (app-channel-add-members.js).
   document.querySelector('#channel-ctx-menu [data-action="add-members"]')?.addEventListener('click', () => {
     const code = this._ctxMenuChannel;
     if (!code) return;
@@ -751,7 +752,8 @@ _bindChannelMenu() {
   });
   document.getElementById('dm-organize-sort')?.addEventListener('change', () => {
     const mode = document.getElementById('dm-organize-sort').value;
-    localStorage.setItem('haven_dm_sort_mode', mode);
+    this._pickDmSortMode(mode);
+    if (mode === 'manual') this._dmOrganizeList = this._orderDms(this._dmOrganizeList || [], null, 'manual');
     this._renderDmOrganizeList();
   });
   document.getElementById('dm-organize-move-up')?.addEventListener('click', () => {

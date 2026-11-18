@@ -931,9 +931,10 @@ _listenAdminAndPrefs() {
   this.socket.on('preferences', (prefs) => {
     this._userPrefs = prefs || {};
     this._prefsReceived = true;
-    // Your own channel order and pinned DMs may arrive after the sidebar was
-    // drawn (#5779, app-dm-pins.js).
-    if ((this._userPrefs.channel_order || this._userPrefs.pinned_dms) && Array.isArray(this.channels) && this.channels.length) this._renderChannels();
+    // Your own channel order, pinned DMs and DM sort may arrive after the
+    // sidebar was drawn (#5779, app-dm-pins.js, app-dm-sort.js).
+    this._adoptAccountDmSort();
+    if ((this._userPrefs.channel_order || this._userPrefs.pinned_dms || this._userPrefs.dm_sort) && Array.isArray(this.channels) && this.channels.length) this._renderChannels();
     // The top-bar Android banner waits for this record before it shows (#5594).
     this._syncAndroidBanner?.();
     // Effects come back from the server like the theme does; restore them

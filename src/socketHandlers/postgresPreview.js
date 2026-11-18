@@ -7,18 +7,35 @@ const path = require('path');
 const { verifyTokenAsync } = require('../auth');
 const createPermissions = require('./asyncPermissions');
 const createChannelLists = require('./channelList');
-const { parseBorderTransform, utcStamp } = require('./helpers');
+const { parseBorderTransform, utcStamp, toReplyContext } = require('./helpers');
+const { REPLY_CONTEXT_SELECT } = require('../db/messagePosting');
+const { listReactions } = require('../db/messageReactions');
+const { createPostgresPosting } = require('./postgresPosting');
+const { createPostgresMessageActions } = require('./postgresMessageActions');
+const { createPostgresThreads, emitThreadRead, historyThreads } = require('./postgresThreads');
+const { createPostgresPresence, channelMembers } = require('./postgresPresence');
+const { createPostgresProfiles } = require('./postgresProfiles');
 const { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS } = require('./settingEffects');
 const { compatibleThemeFiles, validatedThemeDefault, themePreferenceAllowed } = require('../themeMetadata');
-const { cleanChannelOrder } = require('./users');
+const { cleanChannelOrder, deletableKeys } = require('./users');
 const { cleanEmojiFavorites } = require('../builtinEmojis');
+const { cleanPinnedDms } = require('../pinnedDms');
+const { savePreference, deletePreference } = require('../db/userPreferences');
+const writeAudit = require('../db/postgres/audit');
 const createEncryptionKeyReads = require('../db/encryptionKeys');
 const createReadPositions = require('../db/readPositions');
+const emitChannelRead = require('./channelReadEvents');
 const THEMES_DIR = path.join(__dirname, '..', '..', 'themes');
 
 function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
   const permissions = createPermissions(db);
   const readPositions = createReadPositions(db);
+  const presence = createPostgresPresence(io, db, permissions);
+  const logAudit = entry => writeAudit(db, entry);
+  const registerProfiles = createPostgresProfiles({ io, db, permissions, presence, channelMembers, logAudit });
+  const posting = createPostgresPosting(io, db, readPositions, channelMembers);
+  const messageActions = createPostgresMessageActions(io, db, channelMembers);
+  const threads = createPostgresThreads(io, db, posting, channelMembers);
   const lists = createChannelLists({
     db, userHasPermission: permissions.userHasPermission, roleGateAllows: permissions.roleGateAllows,
     getUserEffectiveLevel: permissions.getUserEffectiveLevel,
@@ -34,18 +51,18 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       const row = await db.prepare('SELECT * FROM users WHERE id = ?').get(decoded.id);
       if (!row || row.username !== decoded.username) return next(new Error('Session expired'));
       if (await db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(decoded.id)) return next(new Error('You have been banned from this server'));
+      const status = await presence.statusOnConnect(row.id);
       socket.sessionToken = socket.handshake.auth.token;
       socket.user = {
         id: row.id, username: row.username, displayName: row.display_name || row.username,
         isAdmin: !!row.is_admin, isGuest: !!row.is_guest, pwv: row.password_version || 1,
         avatar: row.avatar || null, avatar_shape: row.avatar_shape || 'circle',
         border: row.border || null, borderTransform: parseBorderTransform(row.border_transform),
-        animate_profile: row.animate_profile || 'trigger', status: row.status === 'away' ? 'online' : row.status || 'online',
-        statusText: row.status_text || '', isSso: !!row.oidc_subject, e2ePassphrase: !!row.e2e_passphrase,
+        animate_profile: row.animate_profile || 'trigger', ...status,
+        createdAt: row.created_at, isSso: !!row.oidc_subject, e2ePassphrase: !!row.e2e_passphrase,
         bio: row.bio || '', birthday: row.birthday || null, birthdaySetAt: row.birthday_set_at || null,
         birthdayHideYear: row.birthday_hide_year !== 0, birthdayHidden: row.birthday_hidden !== 0,
       };
-      if (row.status === 'away') await db.prepare("UPDATE users SET status = 'online' WHERE id = ? AND status = 'away'").run(row.id);
       next();
     } catch (err) {
       console.warn('[postgres-preview] socket authentication failed:', err.code || err.message);
@@ -59,19 +76,20 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     if (!ch) throw new Error('Channel not found');
     const member = await db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(ch.id, socket.user.id);
     if (!member && (!socket.user.isAdmin || ch.is_dm)) throw new Error('Not a member of this channel');
-    if (!socket.user.isAdmin && !ch.is_dm && !await permissions.roleGateAllows(socket.user.id, ch)) throw new Error('This channel needs a role you do not hold');
+    if (!socket.user.isAdmin && !await permissions.roleGateAllows(socket.user.id, ch)) throw new Error('This channel needs a role you do not hold');
     return ch;
   }
-  async function emitMembers(code) {
-    const live = [...io.sockets.sockets.values()].filter(s => s.user && s.currentChannel === code);
-    const unique = new Map(live.map(s => [s.user.id, s.user]));
-    const users = [];
-    for (const user of unique.values()) users.push({
-      id: user.id, username: user.displayName, loginName: user.username, avatar: user.avatar,
-      avatar_shape: user.avatar_shape, isAdmin: user.isAdmin, status: user.status, statusText: user.statusText,
-      roles: await permissions.getUserRoles(user.id), effectiveLevel: await permissions.getUserEffectiveLevel(user.id),
-    });
-    io.to('channel:' + code).emit('online-users', { channelCode: code, users });
+  async function emitSavedReads(userId, channelId = null) {
+    // Use the saved marker, since a message can arrive after the receipt write.
+    const rows = await db.prepare(`
+      SELECT c.code AS "channelCode", rp.last_read_message_id AS "messageId"
+      FROM read_positions rp
+      JOIN channels c ON c.id = rp.channel_id
+      JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = rp.user_id
+      JOIN messages m ON m.id = rp.last_read_message_id AND m.channel_id = c.id AND m.thread_id IS NULL
+      WHERE rp.user_id = ? ${channelId === null ? '' : 'AND c.id = ?'}
+    `).all(userId, ...(channelId === null ? [] : [channelId]));
+    emitChannelRead(io, userId, rows);
   }
 
   io.on('connection', socket => {
@@ -135,11 +153,20 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     });
     on('set-preference', async data => {
       const allowed = ['theme','hide_score_badge','hide_nsfw','effects','share_activity','share_game_activity','share_music_activity',
-        'promo_seen_desktop','promo_seen_android','recovery_notice_seen','android_banner_seen','timezone','time_format','channel_order','server_mute','muted_users','media_group_layout','emoji_favorites'];
+        'promo_seen_desktop','promo_seen_android','recovery_notice_seen','android_banner_seen','timezone','time_format','channel_order','server_mute','muted_users','media_group_layout','emoji_favorites','pinned_dms'];
       const key = typeof data?.key === 'string' ? data.key.trim() : '';
       const value = typeof data?.value === 'string' ? data.value.trim() : '';
-      const max = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : key === 'emoji_favorites' ? 1700 : key === 'theme' ? 200 : 50;
+      const max = key === 'effects' ? 400 : key === 'channel_order' ? 20000 : key === 'muted_users' ? 6000 : key === 'emoji_favorites' ? 1700 : key === 'pinned_dms' ? 4000 : key === 'theme' ? 200 : 50;
       if (!allowed.includes(key) || !value || value.length > max) return;
+      if (key === 'pinned_dms') {
+        const stored = await db.withTransaction(async tx => {
+          const clean = await cleanPinnedDms(tx, socket.user.id, value);
+          if (clean) await savePreference(tx, socket.user.id, key, clean);
+          return clean;
+        });
+        if (stored) socket.emit('preference-saved', { key, value: stored });
+        return;
+      }
       let stored = value;
       if (key === 'channel_order') { stored = cleanChannelOrder(value); if (!stored) return; }
       if (key === 'emoji_favorites') { stored = cleanEmojiFavorites(value); if (!stored) return; }
@@ -160,8 +187,14 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
         if (!Array.isArray(ids)) return;
         stored = JSON.stringify([...new Set(ids.map(Number).filter(n => Number.isInteger(n) && n > 0 && n !== socket.user.id))].slice(0, 500));
       }
-      await db.prepare('INSERT INTO user_preferences (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value').run(socket.user.id, key, stored);
+      await savePreference(db, socket.user.id, key, stored);
       socket.emit('preference-saved', { key, value: stored });
+    });
+    on('delete-preference', async data => {
+      const key = typeof data?.key === 'string' ? data.key.trim() : '';
+      if (!deletableKeys.includes(key)) return;
+      await deletePreference(db, socket.user.id, key);
+      socket.emit('preference-deleted', { key });
     });
     on('get-high-scores', async data => {
       const game = typeof data?.game === 'string' ? data.game.trim() : 'flappy';
@@ -191,21 +224,51 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     });
     on('enter-channel', async data => {
       const ch = await accessible(socket, data?.code);
-      if (ch.is_dm || ch.is_forum) throw new Error('This channel type is not available on this server yet');
+      if (ch.is_group || ch.is_forum) throw new Error('This channel type is not available on this server yet');
       const previous = socket.currentChannel;
       socket.currentChannel = ch.code;
       socket.join('channel:' + ch.code);
       viewers.set(socket.id, ch.code);
-      if (previous && previous !== ch.code) await emitMembers(previous);
-      await emitMembers(ch.code);
+      if (previous && previous !== ch.code) await presence.emitMembers(previous);
+      await presence.emitMembers(ch.code);
+    });
+    on('request-online-users', async data => {
+      const ch = await accessible(socket, data?.code);
+      socket.join('channel:' + ch.code);
+      await presence.emitMembers(ch.code);
     });
     on('get-channel-members', async data => {
       const ch = await accessible(socket, data?.code);
-      const members = await db.prepare(`SELECT u.id, COALESCE(u.display_name, u.username) AS username, u.username AS "loginName",
-        CASE WHEN u.birthday_hidden = 0 THEN substr(u.birthday, 6) END AS birthday
-        FROM users u JOIN channel_members cm ON cm.user_id = u.id LEFT JOIN bans b ON b.user_id = u.id
-        WHERE cm.channel_id = ? AND b.user_id IS NULL ORDER BY COALESCE(u.display_name, u.username)`).all(ch.id);
+      const rows = await channelMembers(db, ch, permissions);
+      const members = rows.map(({ id, username, loginName, birthday }) => ({ id, username, loginName, birthday }));
       socket.emit('channel-members', { channelCode: ch.code, members });
+    });
+    on('set-status', data => presence.setStatus(socket, data));
+    on('start-dm', data => posting.startDm(socket, data));
+    on('send-message', data => posting.send(socket, data));
+    on('get-channel-threads', data => threads.list(socket, data));
+    on('get-thread-messages', data => threads.load(socket, data));
+    on('send-thread-message', (data, callback) => threads.send(socket, data, callback));
+    on('edit-message', data => messageActions.edit(socket, data));
+    on('add-reaction', data => messageActions.react(socket, data, true));
+    on('remove-reaction', data => messageActions.react(socket, data, false));
+    on('delete-message', data => messageActions.remove(socket, data));
+    on('pin-message', data => messageActions.pin(socket, data, true));
+    on('unpin-message', data => messageActions.pin(socket, data, false));
+    on('archive-message', data => messageActions.protect(socket, data, true));
+    on('unarchive-message', data => messageActions.protect(socket, data, false));
+    on('get-pinned-messages', data => messageActions.getPins(socket, data));
+    on('typing', async data => {
+      const code = data?.code;
+      if (typeof code !== 'string' || !/^[a-f0-9]{8}$/i.test(code)) return;
+      const channel = await accessible(socket, code);
+      if (channel.is_group || channel.is_forum || (!channel.is_dm && socket.currentChannel !== code)) return;
+      const members = await channelMembers(db, channel, permissions);
+      if (!members.some(member => member.id === socket.user.id)) return;
+      const allowed = new Set(members.map(member => member.id));
+      const ids = [...(io.sockets.adapter.rooms.get('channel:' + code) || [])].filter(id =>
+        id !== socket.id && allowed.has(io.sockets.sockets.get(id)?.user?.id));
+      if (ids.length) io.to(ids).emit('user-typing', { channelCode: code, userId: socket.user.id, username: socket.user.displayName });
     });
     on('request-voice-users', async data => {
       const ch = await accessible(socket, data?.code);
@@ -213,7 +276,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     });
     on('get-messages', async data => {
       const ch = await accessible(socket, data?.code);
-      if (ch.is_dm || ch.is_forum) throw new Error('This channel type is not available on this server yet');
+      if (ch.is_group || ch.is_forum) throw new Error('This channel type is not available on this server yet');
       const limit = Number.isInteger(data.limit) && data.limit > 0 && data.limit <= 100 ? data.limit : 80;
       const before = Number.isInteger(data.before) ? data.before : null;
       const after = Number.isInteger(data.after) ? data.after : null;
@@ -221,11 +284,26 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
         COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') AS username,
         u.avatar, COALESCE(u.avatar_shape, 'circle') AS avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') AS animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
-        WHERE m.channel_id = ? AND m.thread_id IS NULL ${before ? 'AND m.id < ?' : after ? 'AND m.id > ?' : ''}
-        ORDER BY m.created_at ${after ? 'ASC' : 'DESC'}, m.id ${after ? 'ASC' : 'DESC'} LIMIT ?`).all(ch.id, ...((before || after) ? [before || after] : []), limit);
+        WHERE m.channel_id = ? AND m.thread_id IS NULL
+          AND m.destruct_at IS NULL AND COALESCE(m.burn_seconds, 0) = 0
+          AND (? = 1 OR EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = m.channel_id AND cm.user_id = ?))
+          ${before ? 'AND m.id < ?' : after ? 'AND m.id > ?' : ''}
+        ORDER BY m.created_at ${after ? 'ASC' : 'DESC'}, m.id ${after ? 'ASC' : 'DESC'} LIMIT ?`)
+        .all(ch.id, socket.user.isAdmin && !ch.is_dm ? 1 : 0, socket.user.id, ...((before || after) ? [before || after] : []), limit);
+      const replyIds = [...new Set(messages.filter(m => m.reply_to).map(m => m.reply_to))];
+      const replies = new Map();
+      if (replyIds.length) {
+        const rows = await db.prepare(`${REPLY_CONTEXT_SELECT}
+          WHERE m.channel_id = ? AND m.id IN (${replyIds.map(() => '?').join(',')})
+            AND m.thread_id IS NULL AND m.destruct_at IS NULL AND COALESCE(m.burn_seconds, 0) = 0
+        `).all(ch.id, ...replyIds);
+        for (const row of rows) replies.set(row.id, toReplyContext(row));
+      }
+      const threadMap = await historyThreads(db, ch, socket.user.id, messages);
       for (const m of messages) {
-        m.reactions = await db.prepare(`SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) AS username
-          FROM reactions r JOIN users u ON u.id = r.user_id WHERE r.message_id = ? ORDER BY r.id`).all(m.id);
+        m.replyContext = replies.get(m.reply_to) || null;
+        m.thread = threadMap.get(m.id) || null;
+        m.reactions = await listReactions(db, m.id);
         m.pinned = !!await db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(m.id);
         m.borderTransform = parseBorderTransform(m.border_transform);
         delete m.border_transform;
@@ -241,15 +319,22 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       const ch = await accessible(socket, data?.code);
       if (!Number.isInteger(data.messageId) || data.messageId <= 0) return;
       if (!await db.prepare('SELECT 1 FROM messages WHERE id = ? AND channel_id = ? AND thread_id IS NULL').get(data.messageId, ch.id)) return;
-      await readPositions.markRead(socket.user.id, ch.code, data.messageId);
+      const result = await readPositions.markRead(socket.user.id, ch.code, data.messageId);
+      if (result.changes) emitChannelRead(io, socket.user.id, [{ channelCode: ch.code, messageId: data.messageId }]);
     });
     on('mark-read-channel', async data => {
       const ch = await accessible(socket, data?.code);
-      await readPositions.markChannelRead(socket.user.id, ch.code);
+      const result = await readPositions.markChannelRead(socket.user.id, ch.code);
+      if (result.changes) await emitSavedReads(socket.user.id, ch.id);
     });
     on('mark-all-read', async (data, callback) => {
       try {
         const channels = await readPositions.markAllRead(socket.user.id);
+        try {
+          await emitSavedReads(socket.user.id);
+        } catch (err) {
+          console.warn('[postgres-preview] channel read notification failed:', err.code || err.message);
+        }
         if (typeof callback === 'function') callback({ ok: true, channels });
       } catch (err) {
         console.error('Mark all read error:', err);
@@ -269,9 +354,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       if (!Number.isInteger(data?.parentId)) return;
       const parent = await readPositions.markThreadRead(socket.user.id, data.parentId, socket.user.isAdmin);
       if (!parent) return;
-      for (const s of io.sockets.sockets.values()) {
-        if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parent.channel_code, parentId: data.parentId });
-      }
+      emitThreadRead(io, socket, parent.channel_code, data.parentId);
     });
     on('get-thread-read-state', async (data, callback) => {
       if (typeof callback !== 'function') return;
@@ -282,6 +365,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       callback({ reads });
     });
 
+    registerProfiles(socket, on, accessible);
     registerBootstrapReads(socket, on, db, permissions, accessible);
     registerKeys(socket, on, db, io);
     // Cosmetic presence pings do not write anything until their full feature
@@ -290,7 +374,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     socket.on('disconnect', () => {
       const code = viewers.get(socket.id);
       viewers.delete(socket.id);
-      if (code) emitMembers(code).catch(err => console.warn('[postgres-preview] presence cleanup failed:', err.code || err.message));
+      presence.refreshUser(socket.user.id, code).catch(err => console.warn('[postgres-preview] presence cleanup failed:', err.code || err.message));
     });
 
     // Install handlers before sending the initial session. The browser may
@@ -311,8 +395,8 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
   });
   return {
     state: { channelUsers: viewers }, activity: null,
-    logAudit: () => {}, broadcastChannelLists: () => {},
-    close: () => { viewers.clear(); floods.clear(); },
+    logAudit, broadcastChannelLists: () => {},
+    close: () => { viewers.clear(); floods.clear(); posting.close(); },
   };
 }
 

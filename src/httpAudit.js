@@ -21,7 +21,7 @@ function auditHttp(user, action, entry = {}) {
   const actor = user && Number.isInteger(user.id)
     ? { id: user.id, username: user.username, displayName: user.displayName || user.display_name || user.username }
     : null;
-  sink({ actor, action, ...entry });
+  return sink({ actor, action, ...entry });
 }
 
 module.exports = { setAuditSink, auditHttp };

@@ -1693,7 +1693,27 @@ app.get('/api/webhooks/:token', webhookLimiter, (req, res) => {
   });
 });
 
-app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' }), (req, res) => {
+// Same rule as getWebhookByToken: a banned person's bots stop posting.
+function findWebhook(token) {
+  if (!token || typeof token !== 'string' || token.length !== 64) return null;
+  return require('./src/database').getDb().prepare(
+    `SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0 AND ${CREATOR_NOT_BANNED_SQL}`
+  ).get(token) || null;
+}
+
+// A bot can send files with its message as multipart/form-data
+// (src/routes/webhookFiles.js); anything else is the usual JSON body.
+const webhookFiles = require('./src/routes/webhookFiles')({
+  uploadStorage, uploadDiskGuard, findWebhook, getDb: () => require('./src/database').getDb(),
+  verifyAdminFromDb, userHasPermission, recordUploadOwnership,
+});
+const webhookJson = express.json({ limit: '64kb' });
+function webhookBody(req, res, next) {
+  if (req.is('multipart/form-data')) return webhookFiles.parse(req, res, next);
+  return webhookJson(req, res, next);
+}
+
+app.post('/api/webhooks/:token', webhookLimiter, webhookBody, async (req, res) => {
   const { getDb } = require('./src/database');
   const db = getDb();
   const { token } = req.params;
@@ -1702,21 +1722,19 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     return res.status(400).json({ error: 'Invalid token' });
   }
 
-  // Same rule as getWebhookByToken: a banned person's bots stop posting.
-  const webhook = db.prepare(
-    `SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0 AND ${CREATOR_NOT_BANNED_SQL}`
-  ).get(token);
-
+  const webhook = findWebhook(token);
   if (!webhook) {
     return res.status(404).json({ error: 'Webhook not found or inactive' });
   }
+  if (!req.body || typeof req.body !== 'object') req.body = {};
+  const files = Array.isArray(req.webhookFiles) ? req.webhookFiles : [];
 
   // A bot can post silently too: "silent": true, or "@silent" up front.
   const silentPick = takeSilent(typeof req.body.content === 'string' ? req.body.content.trim() : '', req.body.silent);
   const silent = silentPick.silent;
-  const content = sanitizeText(silentPick.content.trim());
-  if (!content || content.length > 4000) {
-    return res.status(400).json({ error: 'Content required (max 4000 chars)' });
+  let content = sanitizeText(silentPick.content.trim());
+  if ((!content && !files.length) || content.length > 4000) {
+    return res.status(400).json({ error: files.length ? 'Content max 4000 chars' : 'Content required (max 4000 chars)' });
   }
 
   // Optional overrides per-message
@@ -1757,6 +1775,9 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
   // Optional ephemeral delivery to a single recipient in this channel.
   // Ephemeral webhook messages are not persisted to chat history.
   const ephemeral = req.body.ephemeral === true;
+  if (ephemeral && files.length) {
+    return res.status(400).json({ error: 'Files cannot be sent with ephemeral' });
+  }
   let recipientId = null;
   if (ephemeral) {
     const parsedRecipientId = parseInt(req.body.recipient_id, 10);
@@ -1823,6 +1844,21 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
       }
     }
     return res.status(200).json({ success: true, ephemeral: true, recipient_id: recipientId, delivered: deliveredSockets > 0 });
+  }
+
+  // Files are stored only once everything else checked out, each on its own
+  // line after the text, the way the app sends a picture with a caption.
+  if (files.length) {
+    let stored;
+    try {
+      stored = await webhookFiles.store(files, webhook);
+    } catch (err) {
+      console.warn('[webhook-files] storing failed:', err.message);
+      return res.status(500).json({ error: 'Failed to store the upload' });
+    }
+    if (stored.error) return res.status(400).json({ error: stored.error });
+    content = [content, ...stored.lines].filter(Boolean).join('\n');
+    message.content = content;
   }
 
   // Insert non-ephemeral messages into the DB/history.
@@ -3099,11 +3135,12 @@ try {
 }
 
 if (postgresPreview) {
-  console.log('[db] PostgreSQL browser preview: signup, login and public-room browsing are enabled; unsupported actions and background integrations are disabled.');
+  console.log('[db] PostgreSQL browser preview: signup, login, text chat, direct messages and status are enabled; unsupported actions and background integrations are disabled.');
   await _refreshIpBanCache();
   app.set('io', io);
   setFcmAdminEnabled(false);
   socketRuntime = require('./src/socketHandlers/postgresPreview').setupPostgresPreview(io, db, { isIpBanned });
+  require('./src/httpAudit').setAuditSink(socketRuntime.logAudit);
 } else {
 // ── Admin password reset (one-time, from .env) ───────────
 // Set ADMIN_RESET_PASSWORD in .env, restart, and it resets the admin's password.

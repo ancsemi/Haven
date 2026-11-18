@@ -57,6 +57,7 @@ const SETTINGS = {
   hide_send: { scope: 'device', check: bool },
   blur_nsfw: { scope: 'device', check: bool },
   hover_profile_card: { scope: 'device', check: bool },
+  emote_words: { scope: 'device', check: bool },
 };
 const ACCOUNT_KEYS = Object.keys(SETTINGS).filter((k) => SETTINGS[k].scope === 'account');
 
