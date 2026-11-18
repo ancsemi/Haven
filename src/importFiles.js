@@ -21,6 +21,9 @@
 //    an upload (privacyPass.admitFile)
 // Anything that cannot be copied (a link that has already expired, a file
 // over the limit, a network error) stays as the link it was.
+//
+// The live Discord bridge (src/ferry.js) uses the same copy for the files in
+// messages as they arrive: storeDiscordFiles.
 
 const fs = require('fs');
 const path = require('path');
@@ -42,6 +45,30 @@ function isDiscordFile(url) {
   } catch {
     return false; // not a link at all, so not one of Discord's
   }
+}
+
+// A link without its signature, which Discord changes whenever it refreshes one.
+function fileKey(url) {
+  try {
+    const u = new URL(url);
+    return u.origin + u.pathname;
+  } catch {
+    return String(url);
+  }
+}
+
+function nameOfUrl(url) {
+  try {
+    return decodeURIComponent(new URL(url).pathname.split('/').pop()) || 'file';
+  } catch {
+    return 'file';
+  }
+}
+
+// The Discord file links standing alone on a line of a relayed message, also
+// inside a quoted (forwarded) one.
+function fileUrlsIn(text) {
+  return String(text || '').split('\n').map(l => (l.startsWith('> ') ? l.slice(2) : l).trim()).filter(isDiscordFile);
 }
 
 // The same size label the app writes for an upload ("1.2 MB").
@@ -95,6 +122,22 @@ async function copyOne(url, name, { capBytes, fetchImpl, admit }) {
   return { stored, size: admitted.size };
 }
 
+// Copies one Discord file into Haven. Returns the line that shows it in a
+// message (the picture's path, or a file line), or null when it stays a link.
+async function storeFile(url, name, { capBytes, fetchImpl, admit, state }) {
+  if (!diskGuard.hasHeadroom(0)) { state.stopped = true; return null; }
+  try {
+    const got = await copyOne(url, name, { capBytes, fetchImpl, admit });
+    if (!got) { state.skipped = (state.skipped || 0) + 1; return null; }
+    state.copied = (state.copied || 0) + 1;
+    return IMAGE_EXTS.has(extOf(got.stored)) ? `/uploads/${got.stored}` : `[file:${safeName(name)}](/uploads/${got.stored}|${sizeLabel(got.size)})`;
+  } catch (err) {
+    state.skipped = (state.skipped || 0) + 1;
+    console.warn('[import] Could not copy a Discord attachment, keeping the link:', err.message);
+    return null;
+  }
+}
+
 /**
  * Turns the attachment lines of an imported message into files stored in
  * Haven. `state.stopped` is set once the disk reserve is reached, so the rest
@@ -109,20 +152,28 @@ async function copyAttachments(content, { capBytes, state = {}, fetchImpl = fetc
     const quoted = lines[i].startsWith('> ');
     const m = ATTACHMENT_LINE.exec(quoted ? lines[i].slice(2) : lines[i]);
     if (!m || !isDiscordFile(m[2])) continue;
-    if (!diskGuard.hasHeadroom(0)) { state.stopped = true; break; }
-    try {
-      const got = await copyOne(m[2], m[1], { capBytes, fetchImpl, admit: admitFile });
-      if (!got) { state.skipped = (state.skipped || 0) + 1; continue; }
-      const url = `/uploads/${got.stored}`;
-      const line = IMAGE_EXTS.has(extOf(got.stored)) ? url : `[file:${safeName(m[1])}](${url}|${sizeLabel(got.size)})`;
-      lines[i] = (quoted ? '> ' : '') + line;
-      state.copied = (state.copied || 0) + 1;
-    } catch (err) {
-      state.skipped = (state.skipped || 0) + 1;
-      console.warn('[import] Could not copy a Discord attachment, keeping the link:', err.message);
-    }
+    const line = await storeFile(m[2], m[1], { capBytes, fetchImpl, admit: admitFile, state });
+    if (line) lines[i] = (quoted ? '> ' : '') + line;
   }
   return lines.join('\n');
 }
 
-module.exports = { copyAttachments, isDiscordFile, sizeLabel };
+/**
+ * Copies the Discord files at `urls` into Haven and returns `known`, a map
+ * from each link (without its signature) to the line that shows the copy. A
+ * link already in `known` is not fetched again, and one that cannot be copied
+ * is left out, so it stays a link. Never throws.
+ */
+async function storeDiscordFiles(urls, { capBytes, state = {}, fetchImpl = fetch, admit = null, known = new Map() } = {}) {
+  const admitFile = admit || require('./privacyPass').admitFile;
+  for (const url of urls) {
+    if (state.stopped) break;
+    const key = fileKey(url);
+    if (!isDiscordFile(url) || known.has(key)) continue;
+    const line = await storeFile(url, nameOfUrl(url), { capBytes, fetchImpl, admit: admitFile, state });
+    if (line) known.set(key, line);
+  }
+  return known;
+}
+
+module.exports = { copyAttachments, storeDiscordFiles, fileUrlsIn, fileKey, isDiscordFile, sizeLabel };

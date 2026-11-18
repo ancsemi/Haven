@@ -23,6 +23,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Fixed
 - Your green speaking ring lit up for background noise the noise gate was blocking, so it looked like people could hear you when they could not. It now lights only for sound that actually gets sent, with the gate or AI noise suppression on (reported by Raidenphantom).
+- Pictures and files sent from Discord through Ferry, forwarded ones included, no longer break after about a day (asked for by Raidenphantom). They are copied into Haven's uploads as they arrive, held to the upload size limit, the disk space reserve and the privacy check like any upload, and an edit on Discord keeps the copies. A file that cannot be copied stays a Discord link. Admins can turn this off with Keep Discord pictures and files in the Ferry options.
 - A new forum post written while in a timeout vanished with only a few seconds of red notice, and nothing said how long the timeout would last. The title and text now come back to send later, and a notice above the message box shows the time left until the timeout ends.
 - A channel's right-click menu could open partly off the top of the screen, with its first items out of reach, when it fit neither below nor above the channel (most often in voice, where the menu is longer). It now stays on screen, and scrolls if the window is too short for all of it (reported by gitty).
 - On a phone's browser, scrolling down the login and register page kept bouncing back up to the top. The page now scrolls like any other.
