@@ -1654,12 +1654,13 @@ ul.chat-list { list-style-type: disc; }
 .fullscreen-call-control:hover,
 .fullscreen-call-control:focus-visible { background: rgba(255,255,255,0.24); }
 .fullscreen-call-control:focus-visible,
-.fullscreen-stream-select:focus-visible,
-.fullscreen-device-select:focus-visible,
-.fullscreen-call-volume:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fullscreen-stream-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .fullscreen-call-control:disabled { opacity: 0.45; cursor: not-allowed; }
 .fullscreen-call-control.muted,
-.fullscreen-call-control.deafened { background: #a8323e; }
+.fullscreen-call-control.deafened {
+  background: var(--danger);
+  color: var(--danger-text);
+}
 .fullscreen-call-control.sharing {
   background: var(--success);
   color: var(--success-text);
@@ -1684,43 +1685,55 @@ ul.chat-list { list-style-type: disc; }
   max-width: min(18rem, 32vw);
   min-height: 2.75rem;
   padding: 0.375rem 0.625rem;
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid var(--border);
   border-radius: 0.625rem;
-  color: #fff;
-  background: #242832;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
   font-size: 0.875rem;
 }
+/* The call settings popup holds a copy of the voice sidebar's settings
+   (call-settings-panel.js), so it takes the sidebar's row classes and the
+   theme's colors, with room to breathe and a scroll for small screens. */
 .fullscreen-audio-popover:not([hidden]) {
   position: absolute;
   right: 0;
   bottom: calc(100% + 0.625rem);
-  display: grid;
-  grid-template-columns: minmax(9rem, 1fr);
-  gap: 0.625rem;
-  width: min(19rem, calc(100vw - 2rem));
-  max-height: min(60vh, 28rem);
-  overflow: auto;
-  padding: 0.875rem;
-  border: 1px solid rgba(255,255,255,0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  width: min(21rem, calc(100vw - 2rem));
+  max-height: min(70vh, 34rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
   border-radius: 0.75rem;
-  color: #fff;
-  background: rgba(24, 27, 34, 0.97);
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
   box-shadow: 0 0.5rem 1.75rem rgba(0,0,0,0.5);
   text-align: left;
 }
-.fullscreen-audio-popover label {
-  display: grid;
-  gap: 0.25rem;
-  color: rgba(255,255,255,0.85);
-  font-size: 0.75rem;
-}
-.fullscreen-device-select {
-  width: 100%;
+.fullscreen-audio-popover .voice-settings-row { min-height: 2rem; flex-wrap: wrap; }
+.fullscreen-audio-popover .voice-settings-label { font-size: 0.75rem; }
+.fullscreen-audio-popover .voice-settings-select {
+  max-width: none;
   min-height: 2rem;
-  color: #fff;
-  background: #30343d;
+  margin-bottom: 0;
+  font-size: 0.8125rem;
 }
-.fullscreen-call-volume { width: 100%; }
+.fullscreen-audio-popover .ns-slider {
+  flex: 1;
+  width: auto;
+  min-width: 60px;
+}
+.fullscreen-audio-popover .bitrate-step-btn {
+  width: 2rem;
+  height: 2rem;
+}
+.fullscreen-audio-popover .bitrate-value { min-height: 2rem; }
+.fullscreen-audio-popover .voice-settings-divider { margin: 0.25rem 0; }
+.fullscreen-audio-popover .voice-settings-section-label { margin: 0.25rem 0 0; }
+.fullscreen-audio-popover .settings-hint { flex-basis: 100%; }
 .fullscreen-stream-grid {
   position: absolute;
   inset: 0;
