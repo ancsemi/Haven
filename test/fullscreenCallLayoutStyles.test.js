@@ -146,5 +146,18 @@ test('the remove button sits above the cell button and shows on hover, focus or 
   const shown = declarationsFor('.fullscreen-stream-cell:hover .fullscreen-stream-cell-remove');
   assert.match(shown, /opacity:\s*1/);
   assert.ok(rules.some(rule => rule.selectors.includes('.fullscreen-stream-cell:focus-within .fullscreen-stream-cell-remove')));
-  assert.match(stylesheet, /@media \(hover: none\) \{\s*\.fullscreen-stream-cell-remove \{ opacity: 1; \}/);
+  assert.match(stylesheet, /@media \(hover: none\) \{\s*\.fullscreen-stream-cell-remove,\s*\.fullscreen-stream-cell-volume \{ opacity: 1; \}/);
+});
+
+test('the volume slider sits above the cell button and shows like the remove button', () => {
+  const zIndex = selector => Number(declarationsFor(selector).match(/z-index:\s*(\d+)/)[1]);
+  const volume = declarationsFor('.fullscreen-stream-cell-volume');
+  assert.match(volume, /position:\s*absolute/);
+  assert.match(volume, /opacity:\s*0/);
+  assert.doesNotMatch(volume, /display:/, 'a display value would show a slider meant to be hidden');
+  assert.ok(zIndex('.fullscreen-stream-cell-volume') > zIndex('.fullscreen-stream-cell-focus'));
+  for (const selector of [
+    '.fullscreen-stream-cell:hover .fullscreen-stream-cell-volume',
+    '.fullscreen-stream-cell:focus-within .fullscreen-stream-cell-volume',
+  ]) assert.match(declarationsFor(selector), /opacity:\s*1/);
 });

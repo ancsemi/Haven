@@ -248,7 +248,11 @@ function renderWebcamTile(globals = {}) {
     getElementById: id => elements.get(id) || null,
     querySelectorAll: () => [],
     addEventListener: (type, listener) => { (documentListeners[type] ||= []).push(listener); },
-    dispatch: type => (documentListeners[type] || []).forEach(listener => listener()),
+    removeEventListener: (type, listener) => {
+      documentListeners[type] = (documentListeners[type] || []).filter(item => item !== listener);
+    },
+    listenerCount: type => (documentListeners[type] || []).length,
+    dispatch: (type, event) => (documentListeners[type] || []).forEach(listener => listener(event)),
   };
   const localStorage = { getItem: () => null, setItem() {} };
   const methods = loadMethods({
@@ -290,7 +294,11 @@ function renderScreenShareTile() {
     getElementById: id => elements.get(id) || null,
     querySelectorAll: () => [],
     addEventListener: (type, listener) => { (documentListeners[type] ||= []).push(listener); },
-    dispatch: type => (documentListeners[type] || []).forEach(listener => listener()),
+    removeEventListener: (type, listener) => {
+      documentListeners[type] = (documentListeners[type] || []).filter(item => item !== listener);
+    },
+    listenerCount: type => (documentListeners[type] || []).length,
+    dispatch: (type, event) => (documentListeners[type] || []).forEach(listener => listener(event)),
   };
   const methods = loadMethods({
     document,
@@ -313,7 +321,7 @@ function renderScreenShareTile() {
   return { document, tile };
 }
 
-function renderBothMediaTiles({ localCamera = false } = {}) {
+function renderBothMediaTiles({ localCamera = false, localStorage = { getItem: () => null } } = {}) {
   const webcamContainer = new FakeElement('div');
   const webcamGrid = new FakeElement('div');
   const webcamLabel = new FakeElement('div');
@@ -332,9 +340,13 @@ function renderBothMediaTiles({ localCamera = false } = {}) {
     getElementById: id => elements.get(id) || null,
     querySelectorAll: selector => roots.flatMap(root => root.querySelectorAll(selector)),
     addEventListener: (type, listener) => { (documentListeners[type] ||= []).push(listener); },
-    dispatch: type => (documentListeners[type] || []).forEach(listener => listener()),
+    removeEventListener: (type, listener) => {
+      documentListeners[type] = (documentListeners[type] || []).filter(item => item !== listener);
+    },
+    listenerCount: type => (documentListeners[type] || []).length,
+    dispatch: (type, event) => (documentListeners[type] || []).forEach(listener => listener(event)),
   };
-  const methods = loadMethods({ document, localStorage: { getItem: () => null } });
+  const methods = loadMethods({ document, localStorage });
   const voice = { inVoice: true, currentChannel: 'room', peerName: () => 'Participant' };
   const app = Object.assign({
     user: { id: localCamera ? 'peer-1' : 'self' },
@@ -1665,4 +1677,164 @@ test('double-clicks in fullscreen leave the page focus mode alone', () => {
   enterFullscreen(document, shareTile);
   dblclick(shareTile);
   assert.deepEqual(toggled, [cameraTile, shareTile]);
+});
+
+// ── Popups close on a click outside them ─────────────────────────────────
+
+function pointerDown(document, target) {
+  document.dispatch('pointerdown', { target });
+}
+
+test('clicking outside the stream list closes it', () => {
+  const { document, cameraTile } = renderGrid();
+  const button = cameraTile.querySelector('.fullscreen-call-streams');
+  const popover = cameraTile.querySelector('.fullscreen-stream-popover');
+  click(button);
+
+  pointerDown(document, streamChoices(cameraTile)[0]);
+  assert.equal(popover.hidden, false, 'a click inside the list keeps it open');
+  pointerDown(document, button);
+  assert.equal(popover.hidden, false, 'its own button toggles it instead');
+
+  pointerDown(document, cameraTile.querySelector('video'));
+  assert.equal(popover.hidden, true);
+  assert.equal(button.attributes['aria-expanded'], 'false');
+  assert.equal(cameraTile.classList.contains('fullscreen-popup-open'), false);
+});
+
+test('clicking a stream in the grid closes the open stream list', () => {
+  const { document, cameraTile, shareTile } = renderGrid();
+  click(cameraTile.querySelector('.fullscreen-call-streams'));
+  const focusButton = cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus');
+
+  pointerDown(document, focusButton);
+  click(focusButton);
+
+  assert.equal(cameraTile.querySelector('.fullscreen-stream-popover').hidden, true);
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), true);
+});
+
+test('clicking outside call settings closes it too', () => {
+  const { document, cameraTile } = renderGrid();
+  const trigger = cameraTile.querySelector('.fullscreen-call-audio');
+  const popover = cameraTile.querySelector('.fullscreen-audio-popover');
+  click(trigger);
+
+  pointerDown(document, popover.querySelector('select[data-device-kind]'));
+  assert.equal(popover.hidden, false);
+
+  pointerDown(document, cameraTile.querySelector('video'));
+  assert.equal(popover.hidden, true);
+  assert.equal(trigger.attributes['aria-expanded'], 'false');
+});
+
+test('the outside-click watch only runs while a popup is open', () => {
+  const { document, cameraTile } = renderGrid();
+  const before = document.listenerCount('pointerdown');
+  click(cameraTile.querySelector('.fullscreen-call-streams'));
+  assert.equal(document.listenerCount('pointerdown'), before + 1);
+  click(cameraTile.querySelector('.fullscreen-call-audio'));
+  assert.equal(document.listenerCount('pointerdown'), before + 1, 'switching popups keeps one watch');
+
+  pointerDown(document, cameraTile.querySelector('video'));
+  assert.equal(document.listenerCount('pointerdown'), before);
+
+  click(cameraTile.querySelector('.fullscreen-call-streams'));
+  leaveFullscreen(document);
+  assert.equal(document.listenerCount('pointerdown'), before, 'leaving fullscreen stops it');
+});
+
+// ── A volume slider on each stream of the grid ───────────────────────────
+
+function makeStorage() {
+  const values = {};
+  return { values, getItem: key => values[key] ?? null, setItem: (key, value) => { values[key] = String(value); } };
+}
+
+function cellVolume(tile, sourceTile) {
+  return cellFor(tile, sourceTile).querySelector('.fullscreen-stream-cell-volume');
+}
+
+function slide(slider, value) {
+  slider.value = String(value);
+  slider.listeners.input.forEach(listener => listener({ stopPropagation() {} }));
+}
+
+test("a screen share's slider sets its stream volume, like the slider on its tile", () => {
+  const localStorage = makeStorage();
+  const rendered = renderBothMediaTiles({ localStorage });
+  const { app, document, cameraTile, shareTile } = rendered;
+  const set = [];
+  app.voice.setStreamVolume = (userId, volume) => set.push([userId, volume]);
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+  const slider = cellVolume(cameraTile, shareTile);
+  assert.equal(slider.hidden, false);
+  assert.equal(slider.value, '100');
+  assert.equal(slider.attributes['aria-label'], 'voice_runtime.stream_volume_of');
+
+  slide(slider, 50);
+
+  assert.deepEqual(set, [['peer-1', 0.5]]);
+  assert.equal(shareTile.querySelector('.stream-vol-slider').value, '50');
+  assert.equal(shareTile.querySelector('.stream-vol-pct').textContent, '50%');
+  assert.deepEqual(JSON.parse(localStorage.values.haven_stream_volumes), { 'peer-1': 50 });
+});
+
+test("a share's grid slider follows its tile's slider and mute button", () => {
+  const { app, document, cameraTile, shareTile } = renderBothMediaTiles({ localStorage: makeStorage() });
+  app.voice.setStreamVolume = () => {};
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+
+  slide(shareTile.querySelector('.stream-vol-slider'), 140);
+  assert.equal(cellVolume(cameraTile, shareTile).value, '140');
+
+  click(shareTile.querySelector('.stream-mute-btn'));
+  assert.equal(cellVolume(cameraTile, shareTile).value, '0', 'a muted stream reads as 0');
+});
+
+test("a camera's slider sets that person's voice volume", () => {
+  const { app, document, cameraTile, shareTile } = renderBothMediaTiles();
+  const saved = [];
+  const set = [];
+  app._getVoiceVolume = () => 80;
+  app._setVoiceVolume = (userId, volume) => saved.push([userId, volume]);
+  app.voice.setVolume = (userId, volume) => set.push([userId, volume]);
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+  const slider = cellVolume(cameraTile, cameraTile);
+  assert.equal(slider.value, '80');
+  assert.equal(slider.attributes['aria-label'], 'voice_runtime.voice_volume_of');
+
+  slide(slider, 150);
+
+  assert.deepEqual(saved, [['peer-1', 150]]);
+  assert.deepEqual(set, [['peer-1', 1.5]]);
+});
+
+test('your own streams have no volume slider, as you do not hear yourself', () => {
+  const { document, cameraTile, shareTile } = renderBothMediaTiles({ localCamera: true });
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+
+  assert.equal(cellVolume(cameraTile, cameraTile).hidden, true);
+  assert.equal(cellVolume(cameraTile, shareTile).hidden, true);
+});
+
+test('using a volume slider does not open its stream full size', () => {
+  const { cameraTile, shareTile } = renderGrid();
+  const slider = cellVolume(cameraTile, shareTile);
+  for (const type of ['click', 'dblclick']) {
+    let stopped = 0;
+    slider.listeners[type].forEach(listener => listener({ stopPropagation() { stopped++; } }));
+    assert.equal(stopped > 0, true, `${type} stops at the slider`);
+  }
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), false);
+});
+
+test('volume slider strings exist in English', () => {
+  const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
+  assert.equal(en.voice_runtime.stream_volume_of, '{{name}} stream volume');
+  assert.equal(en.voice_runtime.voice_volume_of, '{{name}} voice volume');
 });
