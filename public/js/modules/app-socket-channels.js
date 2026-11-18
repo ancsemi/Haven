@@ -896,6 +896,16 @@ _listenPresenceAndVoice() {
     this._showToast(msg, 'error');
   });
 
+  // Auto-mod refused what was just sent (a link or word the server does not
+  // allow): the text, or the forum post, comes back to fix and send again.
+  // The notice itself follows as an error-msg.
+  this.socket.on('automod-refused', (data) => {
+    const surface = data && data.surface;
+    if (surface !== 'message' && surface !== 'dm') return;
+    this._restoreRefusedDraft(null, true);
+    this._forumRestoreDraft?.();
+  });
+
   // New accounts wait before posting (#5742). The server says how long is
   // left; the text, or the forum post being written, comes back for later.
   this.socket.on('new-account-wait', (data) => {

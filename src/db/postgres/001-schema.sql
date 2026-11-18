@@ -279,6 +279,8 @@ CREATE TABLE "fcm_tokens" (
   "token" TEXT NOT NULL,
   "created_at" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
   "scope" TEXT NOT NULL DEFAULT 'all',
+  "push_p256dh" TEXT DEFAULT NULL,
+  "push_auth" TEXT DEFAULT NULL,
   PRIMARY KEY ("id")
 );
 
@@ -784,6 +786,11 @@ CREATE TABLE "users" (
   "birthday_set_at" TEXT DEFAULT NULL,
   "birthday_hide_year" BIGINT DEFAULT 1,
   "birthday_hidden" BIGINT DEFAULT 0,
+  "banner_color" TEXT DEFAULT NULL,
+  "avatar_color" TEXT DEFAULT NULL,
+  "banner" TEXT DEFAULT NULL,
+  "profile_theme_top" TEXT DEFAULT NULL,
+  "profile_theme_bottom" TEXT DEFAULT NULL,
   "public_key" TEXT DEFAULT NULL,
   "signing_key" TEXT DEFAULT NULL,
   "signing_backup" TEXT DEFAULT NULL,

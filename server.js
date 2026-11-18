@@ -152,7 +152,7 @@ const {
 } = require('./src/botAudio');
 const { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup } = require('./src/tunnel');
 const { startDdns, getDdnsStatus, triggerDdnsNow } = require('./src/ddns');
-const { initFcm, setFcmAdminEnabled } = require('./src/fcm');
+const { initFcm, setFcmAdminEnabled, setFcmHideContent } = require('./src/fcm');
 const threadNotify = require('./src/threadNotify');
 const { takeSilent } = require('./src/silentMessages');
 
@@ -269,6 +269,7 @@ async function relocateUnreferencedUploads(db, relPaths, { ownerId = null } = {}
   const protectedUrlReferences = db.prepare(`
     SELECT avatar AS reference FROM users WHERE avatar LIKE '%/uploads/%'
     UNION ALL SELECT border FROM users WHERE border LIKE '%/uploads/%'
+    UNION ALL SELECT banner FROM users WHERE banner LIKE '%/uploads/%'
     UNION ALL SELECT avatar FROM user_personas WHERE avatar LIKE '%/uploads/%'
     UNION ALL SELECT avatar_url FROM webhooks WHERE avatar_url LIKE '%/uploads/%'
     UNION ALL SELECT icon FROM roles WHERE icon LIKE '%/uploads/%'
@@ -3183,6 +3184,12 @@ try {
   // setting must not quietly turn it back on.
   setFcmAdminEnabled(false);
   console.error('[fcm] Could not read the FCM Privacy setting, leaving FCM off:', err.message);
+}
+try {
+  setFcmHideContent(db.prepare("SELECT value FROM server_settings WHERE key = 'fcm_hide_content'").get()?.value === 'true');
+} catch (err) {
+  setFcmHideContent(true);
+  console.error('[fcm] Could not read the hide message text setting, hiding it:', err.message);
 }
 initFcm(DATA_DIR);
 // Clean photos and videos uploaded before the privacy pass existed.

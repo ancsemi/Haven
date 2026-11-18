@@ -694,7 +694,7 @@ async _startVoiceMessage() {
   try {
     // The same microphone voice chat uses, when one was picked.
     const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-    const savedInputId = localStorage.getItem('haven_input_device') || '';
+    const savedInputId = this.callSettings.get('inputDevice');
     if (savedInputId) audio.deviceId = { exact: savedInputId };
     try { stream = await navigator.mediaDevices.getUserMedia({ audio }); }
     catch { delete audio.deviceId; stream = await navigator.mediaDevices.getUserMedia({ audio }); }

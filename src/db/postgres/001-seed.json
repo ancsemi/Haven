@@ -930,6 +930,10 @@
       "value": "2"
     },
     {
+      "key": "max_banner_mb",
+      "value": "5"
+    },
+    {
       "key": "max_sound_kb",
       "value": "1024"
     },
@@ -1040,6 +1044,10 @@
     {
       "key": "fcm_enabled",
       "value": "true"
+    },
+    {
+      "key": "fcm_hide_content",
+      "value": "false"
     },
     {
       "key": "automod_seeded",

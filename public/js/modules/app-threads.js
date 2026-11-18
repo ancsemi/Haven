@@ -432,6 +432,8 @@ _appendThreadMessage(msg, opts = {}) {
   } else {
     avatarHtml = `<div class="thread-msg-avatar thread-msg-avatar-initial${shape}" style="background:${color}">${initial}</div>`;
   }
+  // The author's picture border, as in the channel (gitty).
+  avatarHtml = this._avatarWithBorder?.(avatarHtml, msg) || avatarHtml;
 
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
   // Some clients send every thread reply as a reply to the thread's own
@@ -495,6 +497,9 @@ _appendThreadMessage(msg, opts = {}) {
   el.dataset.username = msg.username || '';
   if (msg.avatar) el.dataset.avatar = msg.avatar;
   if (msg.avatar_shape) el.dataset.avatarShape = msg.avatar_shape;
+  if (msg.border) el.dataset.border = msg.border;
+  if (msg.borderTransform) el.dataset.borderTransform = JSON.stringify(msg.borderTransform);
+  if (msg.animateProfile) el.dataset.animateProfile = msg.animateProfile;
   if (msg.persona_id) el.dataset.personaId = String(msg.persona_id);
   this._stampGroupSource(el, msg);
   if (msg.silent) el.dataset.silent = '1';
@@ -603,9 +608,14 @@ _promoteThreadCompactToFull(compactEl) {
   const onlineUser = this._memberById(userId);
   const avatar = compactEl.dataset.avatar || (onlineUser && onlineUser.avatar) || null;
   const shape = this._threadAvatarShape(compactEl.dataset.avatarShape || (onlineUser && onlineUser.avatarShape));
-  const avatarHtml = avatar
+  const bareAvatar = avatar
     ? `<img class="thread-msg-avatar${shape}" ${this._imgSrcAttr(avatar)} alt="${initial}">`
     : `<div class="thread-msg-avatar thread-msg-avatar-initial${shape}" style="background:${color}">${initial}</div>`;
+  const border = compactEl.dataset.border || (onlineUser && onlineUser.border) || null;
+  let borderTransform = (onlineUser && onlineUser.borderTransform) || null;
+  try { if (compactEl.dataset.borderTransform) borderTransform = JSON.parse(compactEl.dataset.borderTransform); } catch { /* malformed border data: keep the member list value */ }
+  const animateProfile = compactEl.dataset.animateProfile || (onlineUser && onlineUser.animateProfile) || 'trigger';
+  const avatarHtml = this._avatarWithBorder?.(bareAvatar, { border, borderTransform, animateProfile }) || bareAvatar;
 
   compactEl.classList.remove('thread-compact');
   compactEl.innerHTML = `

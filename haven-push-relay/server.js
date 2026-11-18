@@ -47,7 +47,7 @@ app.post('/sendPush', async (req, res) => {
   const key = process.env.HAVEN_PUSH_KEY;
   const provided = req.headers['x-push-key'] || req.body?.pushKey;
   if (!provided || provided !== key) return res.status(403).json({ error: 'Invalid push key' });
-  const { tokens, title, body, data } = req.body;
+  const { tokens, title, body, data, sealed } = req.body;
   if (!tokens || !Array.isArray(tokens) || !tokens.length) return res.status(400).json({ error: 'tokens array required' });
   if (!title || typeof title !== 'string') return res.status(400).json({ error: 'title string required' });
   if (!body || typeof body !== 'string') return res.status(400).json({ error: 'body string required' });
@@ -60,7 +60,13 @@ app.post('/sendPush', async (req, res) => {
         : {},
       android: { priority: 'high', notification: { channelId: 'haven_messages' } },
     };
-    const response = await messaging.sendEachForMulticast(message);
+    const isSealed = (t) => sealed && typeof sealed === 'object' && Object.hasOwn(sealed, t) && typeof sealed[t] === 'string';
+    const { tokens: _all, ...shared } = message;
+    const response = tokens.some(isSealed)
+      ? await messaging.sendEach(tokens.map((token) => isSealed(token)
+        ? { token, data: { enc: sealed[token] }, android: { priority: 'high' }, apns: { headers: { 'apns-priority': '10', 'apns-push-type': 'alert' }, payload: { aps: { alert: { title, body }, sound: 'default', mutableContent: true } } } }
+        : { ...shared, token }))
+      : await messaging.sendEachForMulticast(message);
     const failedTokens = [];
     response.responses.forEach((resp, idx) => {
       if (!resp.success && resp.error) {
