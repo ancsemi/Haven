@@ -193,3 +193,15 @@ test("the volume slider draws Haven's own rounded track with room for its ends a
   assert.match(volume, /border-radius:\s*999px/);
   assert.match(volume, /background:\s*rgba\(0,\s*0,\s*0,\s*0\.6\)/);
 });
+
+test("a stream's name only makes room for its volume slider while the slider shows", () => {
+  // A narrow stream, an upright phone camera say, would otherwise have its
+  // name cut short all the time for a slider that only appears on hover.
+  assert.match(declarationsFor('.fullscreen-stream-cell-label'), /max-width:\s*calc\(100% - 1rem\)/);
+  const room = /max-width:\s*calc\(100% - min\(7rem, 40%\) - 2\.5rem\)/;
+  for (const selector of [
+    '.fullscreen-stream-cell:hover:has(.fullscreen-stream-cell-volume:not([hidden])) .fullscreen-stream-cell-label',
+    '.fullscreen-stream-cell:focus-within:has(.fullscreen-stream-cell-volume:not([hidden])) .fullscreen-stream-cell-label',
+  ]) assert.match(declarationsFor(selector), room, selector);
+  assert.match(stylesheet, /@media \(hover: none\) \{[^}]*\{ opacity: 1; \}\s*\.fullscreen-stream-cell:has\(\.fullscreen-stream-cell-volume:not\(\[hidden\]\)\) \.fullscreen-stream-cell-label \{ max-width: calc\(100% - min\(7rem, 40%\) - 2\.5rem\); \}/);
+});
