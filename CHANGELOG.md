@@ -23,6 +23,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Fixed
 - Your green speaking ring lit up for background noise the noise gate was blocking, so it looked like people could hear you when they could not. It now lights only for sound that actually gets sent, with the gate or AI noise suppression on (reported by Raidenphantom).
+- The microphone could stay on after leaving a call, most seen in Haven Desktop on Linux after long calls and switching servers (#5897). Leaving now lets go of the microphone first, so a step that fails later in the teardown can no longer keep it open, and a page that is closing lets go of it too.
 - A new forum post written while in a timeout vanished with only a few seconds of red notice, and nothing said how long the timeout would last. The title and text now come back to send later, and a notice above the message box shows the time left until the timeout ends.
 - A channel's right-click menu could open partly off the top of the screen, with its first items out of reach, when it fit neither below nor above the channel (most often in voice, where the menu is longer). It now stays on screen, and scrolls if the window is too short for all of it (reported by gitty).
 - On a phone's browser, scrolling down the login and register page kept bouncing back up to the top. The page now scrolls like any other.
