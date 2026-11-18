@@ -44,6 +44,11 @@ _createFullscreenCallToolbar(tile) {
     this._toggleFullscreenStreamPopover(tile, streamPopover, streamTrigger);
   });
   streamTrigger.setAttribute('aria-expanded', 'false');
+  // Up while one stream of the grid is shown full size.
+  const backToGrid = addButton('fullscreen-call-grid', 'voice_runtime.back_to_grid', '⊞', () => {
+    this._unfocusFullscreenStream(tile);
+  });
+  backToGrid.hidden = true;
   const showAllLabel = document.createElement('label');
   showAllLabel.className = 'fullscreen-stream-choice fullscreen-stream-choice-all';
   const showAll = document.createElement('input');
@@ -146,6 +151,10 @@ _createFullscreenCallToolbar(tile) {
   grid.hidden = true;
   grid.setAttribute('role', 'group');
   grid.setAttribute('aria-label', t('voice_runtime.streams'));
+  // A click on the tile itself leaves a stream shown full size; and a
+  // double-click would toggle the page's focus mode behind fullscreen.
+  grid.addEventListener('click', event => event.stopPropagation());
+  grid.addEventListener('dblclick', event => event.stopPropagation());
   tile.appendChild(grid);
   tile.appendChild(toolbar);
   if (!this._fullscreenCallToolbars) this._fullscreenCallToolbars = new Set();
@@ -174,6 +183,7 @@ _bindFullscreenCallTile(tile, toolbar) {
       this._fullscreenCallActiveTile = tile;
       this._fullscreenCallOriginalStream = tile._fullscreenCallSourceStream || tile.querySelector('video')?.srcObject || null;
       this._fullscreenCallSelectedTiles = [tile];
+      this._fullscreenCallFocusedTile = null;
       this._fullscreenCallShowAll = false;
       tile._fullscreenCallOriginalLabel = this._fullscreenStreamLabelNode(tile)?.textContent ?? null;
       this._setFullscreenVideoSource(tile, tile, this._fullscreenCallOriginalStream);
@@ -184,6 +194,12 @@ _bindFullscreenCallTile(tile, toolbar) {
     }
   };
   const onActivity = () => this._revealFullscreenCallControls(tile);
+  // Clicking the stream shown full size goes back to the grid. The second
+  // click of a double-click is ignored so it does not undo the first.
+  const onClick = (event) => {
+    if (event?.detail > 1 || this._fullscreenCallActiveTile !== tile || !this._fullscreenCallFocusedTile) return;
+    this._unfocusFullscreenStream(tile);
+  };
   // Controls are up only while the pointer is over the screen: hide them the
   // moment it leaves, unless the settings popup is open.
   const onPointerLeave = () => {
@@ -199,13 +215,14 @@ _bindFullscreenCallTile(tile, toolbar) {
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
   tile.addEventListener('mouseleave', onPointerLeave);
+  tile.addEventListener('click', onClick);
   tile.addEventListener('mousemove', onActivity);
   tile.addEventListener('touchstart', onActivity, { passive: true });
   tile.addEventListener('focusin', onActivity);
   toolbar.addEventListener('focusin', onActivity);
   toolbar.addEventListener('click', event => event.stopPropagation());
   toolbar.addEventListener('dblclick', event => event.stopPropagation());
-  this._fullscreenCallTileBindings.set(tile, { toolbar, onFullscreenChange, onActivity, onPointerLeave });
+  this._fullscreenCallTileBindings.set(tile, { toolbar, onFullscreenChange, onActivity, onPointerLeave, onClick });
 },
 
 // The element in fullscreen, including the WebKit-prefixed API older Safari uses.
@@ -232,7 +249,11 @@ _endFullscreenCallTile(tile) {
   this._fullscreenCallActiveTile = null;
   this._fullscreenCallOriginalStream = null;
   this._fullscreenCallSelectedTiles = null;
+  this._fullscreenCallFocusedTile = null;
   this._fullscreenCallShowAll = false;
+  tile.classList.remove('fullscreen-stream-focused');
+  const backToGrid = tile.querySelector('.fullscreen-call-grid');
+  if (backToGrid) backToGrid.hidden = true;
   tile._fullscreenCallOriginalLabel = null;
   clearTimeout(tile._fullscreenControlsTimer);
   tile.classList.remove('fullscreen-controls-idle');
@@ -455,9 +476,19 @@ _applyFullscreenSelection() {
   const activeTile = this._fullscreenCallActiveTile;
   if (!activeTile) return;
   const selected = this._fullscreenCallSelectedTiles || [activeTile];
-  if (selected.length < 2) {
-    this._hideFullscreenStreamGrid(activeTile);
-    const source = selected[0] || activeTile;
+  // A stream is only shown full size out of a grid it is still part of.
+  if (selected.length < 2 || !selected.includes(this._fullscreenCallFocusedTile)) {
+    this._fullscreenCallFocusedTile = null;
+  }
+  const focused = this._fullscreenCallFocusedTile;
+  activeTile.classList.toggle('fullscreen-stream-focused', !!focused);
+  const backToGrid = activeTile.querySelector('.fullscreen-call-grid');
+  if (backToGrid) backToGrid.hidden = !focused;
+  if (selected.length < 2 || focused) {
+    // Focused: the grid keeps its cells, so going back does not restart them.
+    if (focused) this._pauseFullscreenStreamGrid(activeTile);
+    else this._hideFullscreenStreamGrid(activeTile);
+    const source = focused || selected[0] || activeTile;
     const stream = source === activeTile
       ? this._fullscreenCallOriginalStream
       : (source._fullscreenCallSourceStream || source.querySelector('video')?.srcObject || null);
@@ -466,6 +497,35 @@ _applyFullscreenSelection() {
   }
   this._setFullscreenVideoSource(activeTile, activeTile, this._fullscreenCallOriginalStream);
   this._renderFullscreenStreamGrid(activeTile, selected);
+},
+
+// Shows one stream of the grid full size; the others stay ticked.
+_focusFullscreenStream(fullscreenTile, sourceTileId) {
+  if (this._fullscreenElement() !== fullscreenTile || this._fullscreenCallActiveTile !== fullscreenTile) return;
+  const source = this._fullscreenCallSelectedTiles?.find(item => item.id === sourceTileId);
+  if (!source) return;
+  const grid = fullscreenTile.querySelector('.fullscreen-stream-grid');
+  const fromGrid = !!grid?.contains?.(document.activeElement);
+  this._fullscreenCallFocusedTile = source;
+  this._applyFullscreenSelection();
+  this._refreshFullscreenStreamPicker();
+  // The button that was clicked is now hidden: keep keyboard focus on screen.
+  if (fromGrid) fullscreenTile.querySelector('.fullscreen-call-grid')?.focus();
+},
+
+_unfocusFullscreenStream(fullscreenTile) {
+  const focused = this._fullscreenCallFocusedTile;
+  if (this._fullscreenCallActiveTile !== fullscreenTile || !focused) return;
+  const backToGrid = fullscreenTile.querySelector('.fullscreen-call-grid');
+  const fromButton = !!backToGrid && document.activeElement === backToGrid;
+  this._fullscreenCallFocusedTile = null;
+  this._applyFullscreenSelection();
+  this._refreshFullscreenStreamPicker();
+  if (fromButton) {
+    const cell = Array.from(fullscreenTile.querySelectorAll('.fullscreen-stream-cell'))
+      .find(item => item.dataset.sourceId === focused.id);
+    cell?.querySelector('.fullscreen-stream-cell-focus')?.focus();
+  }
 },
 
 // A stream can no longer be shown: take it out of what fullscreen shows,
@@ -561,6 +621,7 @@ _setFullscreenStreamShown(fullscreenTile, sourceTileId, shown) {
   if (shown && source) selected.push(source);
   if (selected.length) {
     this._fullscreenCallSelectedTiles = selected;
+    this._fullscreenCallFocusedTile = null;
     this._fullscreenCallShowAll = false;
     this._applyFullscreenSelection();
   }
@@ -574,6 +635,7 @@ _setFullscreenShowAll(fullscreenTile, showAll) {
   }
   const streams = this._listLiveFullscreenStreams();
   this._fullscreenCallShowAll = showAll;
+  this._fullscreenCallFocusedTile = null;
   if (showAll) {
     if (streams.length) this._fullscreenCallSelectedTiles = streams.map(item => item.tile);
   } else {
@@ -618,6 +680,12 @@ _renderFullscreenStreamGrid(tile, selected) {
     }
     video.style.transform = item.tile._fullscreenCallMirrored ? 'scaleX(-1)' : '';
     cell.querySelector('.fullscreen-stream-cell-label').textContent = item.label;
+    const focusButton = cell.querySelector('.fullscreen-stream-cell-focus');
+    focusButton.title = t('voice_runtime.focus_stream', { name: item.label });
+    focusButton.setAttribute('aria-label', focusButton.title);
+    const removeButton = cell.querySelector('.fullscreen-stream-cell-remove');
+    removeButton.title = t('voice_runtime.remove_from_view', { name: item.label });
+    removeButton.setAttribute('aria-label', removeButton.title);
     return cell;
   });
   for (const cell of byId.values()) {
@@ -652,11 +720,39 @@ _createFullscreenStreamCell(tile, sourceId) {
   const relayout = () => this._scheduleFullscreenGridLayout(tile);
   video.addEventListener('loadedmetadata', relayout);
   video.addEventListener('resize', relayout);
+  // The whole cell is a button that shows its stream full size. The second
+  // click of a double-click is ignored, or it would land on the full-size
+  // stream and go straight back.
+  const focusButton = document.createElement('button');
+  focusButton.type = 'button';
+  focusButton.className = 'fullscreen-stream-cell-focus';
+  focusButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (event.detail > 1) return;
+    this._focusFullscreenStream(tile, sourceId);
+  });
   const label = document.createElement('span');
   label.className = 'fullscreen-stream-cell-label';
+  const removeButton = document.createElement('button');
+  removeButton.type = 'button';
+  removeButton.className = 'fullscreen-stream-cell-remove';
+  removeButton.textContent = '✕';
+  removeButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    this._setFullscreenStreamShown(tile, sourceId, false);
+  });
   cell.appendChild(video);
+  cell.appendChild(focusButton);
   cell.appendChild(label);
+  cell.appendChild(removeButton);
   return cell;
+},
+
+// Hides the grid behind a stream shown full size, keeping its cells playing.
+_pauseFullscreenStreamGrid(tile) {
+  const grid = tile?.querySelector('.fullscreen-stream-grid');
+  if (grid) grid.hidden = true;
+  tile?.classList.remove('fullscreen-grid-active');
 },
 
 _hideFullscreenStreamGrid(tile) {
@@ -806,6 +902,7 @@ _handleFullscreenTileRemoval(tile) {
     document.removeEventListener?.('fullscreenchange', binding.onFullscreenChange);
     document.removeEventListener?.('webkitfullscreenchange', binding.onFullscreenChange);
     tile.removeEventListener?.('mouseleave', binding.onPointerLeave);
+    tile.removeEventListener?.('click', binding.onClick);
     tile.removeEventListener?.('mousemove', binding.onActivity);
     tile.removeEventListener?.('touchstart', binding.onActivity);
     tile.removeEventListener?.('focusin', binding.onActivity);
@@ -963,6 +1060,9 @@ _handleWebcamStream(userId, stream) {
       // Double-click to toggle focus mode (expand tile full-size)
       tile.addEventListener('dblclick', (e) => {
         e.preventDefault();
+        // In fullscreen the page's focus mode is out of sight; a double-click
+        // there would only leave the layout changed on the way out.
+        if (this._fullscreenCallActiveTile === tile) return;
         this._toggleWebcamFocus(tile);
       });
 
@@ -1472,6 +1572,9 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       // Double-click to toggle focus mode (expand tile to fill chat area)
       tile.addEventListener('dblclick', (e) => {
         e.preventDefault();
+        // In fullscreen the page's focus mode is out of sight; a double-click
+        // there would only leave the layout changed on the way out.
+        if (this._fullscreenCallActiveTile === tile) return;
         this._toggleStreamFocus(tile);
       });
 

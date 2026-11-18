@@ -121,3 +121,30 @@ test('the stream list is a popup like call settings, and the old dropdown is gon
   assert.match(popover, /overflow:\s*auto/);
   assert.equal(stylesheet.includes('.fullscreen-stream-select'), false);
 });
+
+test('a grid cell is one big button that shows its stream full size', () => {
+  const focus = declarationsFor('.fullscreen-stream-cell-focus');
+  assert.match(focus, /position:\s*absolute/);
+  assert.match(focus, /inset:\s*0/);
+  assert.match(focus, /background:\s*transparent/);
+  assert.match(focus, /cursor:\s*zoom-in/);
+  assert.match(declarationsFor('.fullscreen-stream-cell-focus:focus-visible'), /outline:/);
+});
+
+test('the full-size stream shows it can be clicked back to the grid', () => {
+  for (const tile of ['.webcam-tile', '.screen-share-tile']) {
+    for (const mode of ['.is-fullscreen', '.haven-manual-fullscreen']) {
+      assert.match(declarationsFor(`${tile}${mode}.fullscreen-stream-focused > video`), /cursor:\s*zoom-out/);
+    }
+  }
+});
+
+test('the remove button sits above the cell button and shows on hover, focus or touch', () => {
+  const zIndex = selector => Number(declarationsFor(selector).match(/z-index:\s*(\d+)/)[1]);
+  assert.ok(zIndex('.fullscreen-stream-cell-remove') > zIndex('.fullscreen-stream-cell-focus'));
+  assert.match(declarationsFor('.fullscreen-stream-cell-remove'), /opacity:\s*0/);
+  const shown = declarationsFor('.fullscreen-stream-cell:hover .fullscreen-stream-cell-remove');
+  assert.match(shown, /opacity:\s*1/);
+  assert.ok(rules.some(rule => rule.selectors.includes('.fullscreen-stream-cell:focus-within .fullscreen-stream-cell-remove')));
+  assert.match(stylesheet, /@media \(hover: none\) \{\s*\.fullscreen-stream-cell-remove \{ opacity: 1; \}/);
+});
