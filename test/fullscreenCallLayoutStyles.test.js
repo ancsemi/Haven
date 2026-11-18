@@ -83,3 +83,41 @@ test('fullscreen sharing is green and leave is a red circle with its themed X', 
   assert.match(leave, /background:\s*var\(--danger\)/);
   assert.match(leave, /color:\s*var\(--danger-text\)/);
 });
+
+test('the stream grid covers the fullscreen tile and places its cells itself', () => {
+  const grid = declarationsFor('.fullscreen-stream-grid:not([hidden])');
+  assert.match(grid, /position:\s*absolute/);
+  assert.match(grid, /inset:\s*0/);
+
+  const cell = declarationsFor('.fullscreen-stream-cell');
+  assert.match(cell, /position:\s*absolute/);
+  assert.match(cell, /overflow:\s*hidden/);
+});
+
+test('grid cells contain their stream so a shape change before the next layout is not cropped', () => {
+  const video = declarationsFor('.fullscreen-stream-cell video');
+  assert.match(video, /object-fit:\s*contain\s*!important/);
+  assert.match(video, /width:\s*100%\s*!important/);
+  assert.match(video, /height:\s*100%\s*!important/);
+});
+
+test("while the grid shows, it covers the tile's own video and hides its label", () => {
+  // The stall watchdog counts frames of the tile's own video, and a video
+  // that is display:none may stop counting them, so it is covered, not hidden.
+  assert.match(declarationsFor('.fullscreen-stream-grid:not([hidden])'), /background:\s*#000/);
+  assert.equal(rules.some(rule => rule.selectors.some(selector => /fullscreen-grid-active > video/.test(selector))), false);
+  for (const label of [
+    '.webcam-tile.is-fullscreen.fullscreen-grid-active > .webcam-tile-label',
+    '.screen-share-tile.is-fullscreen.fullscreen-grid-active > .screen-share-tile-label',
+  ]) {
+    assert.match(declarationsFor(label), /display:\s*none\s*!important/);
+  }
+});
+
+test('the stream list is a popup like call settings, and the old dropdown is gone', () => {
+  const popover = declarationsFor('.fullscreen-stream-popover:not([hidden])');
+  assert.match(popover, /position:\s*absolute/);
+  assert.match(popover, /bottom:\s*calc\(100% \+ 0\.625rem\)/);
+  assert.match(popover, /overflow:\s*auto/);
+  assert.equal(stylesheet.includes('.fullscreen-stream-select'), false);
+});

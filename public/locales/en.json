@@ -1545,6 +1545,8 @@
     "camera_hidden_other": "{{count}} cameras hidden",
     "stream_one": "{{count}} stream",
     "stream_other": "{{count}} streams",
+    "streams": "Streams",
+    "show_all_streams": "Show all",
     "hidden_count": "({{count}} hidden)",
     "window_opacity": "Window opacity",
     "audio": "Audio",
