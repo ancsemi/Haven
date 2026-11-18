@@ -4706,7 +4706,11 @@ class VoiceManager {
     try {
       this._ensureAudioCtx();
 
-      const source = this.audioCtx.createMediaStreamSource(this.rawStream);
+      // Listen after the noise gate and AI suppression, so the green ring
+      // only lights for sound peers actually hear. Listening to the raw mic
+      // lit it for noise the gate was blocking.
+      const gated = this._noiseGateGain;
+      const source = gated || this.audioCtx.createMediaStreamSource(this.rawStream);
       const analyser = this.audioCtx.createAnalyser();
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0.5;
@@ -4776,6 +4780,9 @@ class VoiceManager {
     if (this._localTalkInterval) {
       clearInterval(this._localTalkInterval);
       this._localTalkInterval = null;
+      const tap = this._localTalkAnalyser;
+      // The gate's gain node outlives this analyser, so unhook only our tap.
+      if (tap) tap.source.disconnect(tap.analyser);
       this._localTalkAnalyser = null;
       this.talkingState.delete('self');
       if (this.socket && this.inVoice) this.socket.emit('voice-speaking', { speaking: false });
