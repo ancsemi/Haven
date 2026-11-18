@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.29.70">
+  <link rel="stylesheet" href="/css/style.css?v=4.29.73">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.27.19"></script>
 </head>
@@ -816,83 +816,7 @@
         </div>
         <!-- Voice settings sub-panel (slides up above controls) -->
         <div id="voice-settings-panel" class="voice-settings-panel" data-haven-region="voice-settings" style="display:none">
-          <div class="voice-settings-section-label">🎧 <span data-i18n="voice_settings.audio_devices">Audio Devices</span></div>
-          <div class="voice-settings-row">
-            <label class="voice-settings-label" data-i18n="voice_settings.input">Input</label>
-            <select id="voice-input-device" class="voice-settings-select">
-              <option value="" data-i18n="voice_settings.default_mic">Default Microphone</option>
-            </select>
-          </div>
-          <div class="voice-settings-row">
-            <label class="voice-settings-label" data-i18n="voice_settings.output">Output</label>
-            <select id="voice-output-device" class="voice-settings-select">
-              <option value="" data-i18n="voice_settings.default_speaker">Default Speaker</option>
-            </select>
-          </div>
-          <div class="voice-settings-row">
-            <label class="voice-settings-label" data-i18n="voice_settings.camera">Camera</label>
-            <select id="voice-cam-device" class="voice-settings-select">
-              <option value="" data-i18n="voice_settings.default_camera">Default Camera</option>
-            </select>
-          </div>
-          <div class="voice-settings-row">
-            <label class="voice-settings-label" data-i18n="voice_settings.camera_quality">Camera Quality</label>
-            <select id="voice-cam-quality" class="voice-settings-select" data-i18n-title="voice_settings.camera_quality_hint" title="Higher quality looks sharper but uses more bandwidth, for you and everyone watching. Your camera may top out lower.">
-              <option value="480">480p</option>
-              <option value="720">720p</option>
-              <option value="720p60">720p 60 fps</option>
-              <option value="1080">1080p</option>
-              <option value="1080p60">1080p 60 fps</option>
-            </select>
-          </div>
-          <div class="voice-settings-divider"></div>
-          <div class="voice-settings-row">
-            <label class="voice-settings-label">🤫 <span data-i18n="voice_settings.noise_reduction">Noise Reduction</span></label>
-            <select id="voice-noise-mode" class="voice-settings-select" data-i18n-title="voice_settings.noise_mode_hint" title="Off = no processing, Gate = silence below threshold, Suppress = AI noise removal (RNNoise)">
-              <option value="off" data-i18n="voice_settings.off">Off</option>
-              <option value="gate" data-i18n="voice_settings.noise_gate">Noise Gate</option>
-              <option value="suppress" data-i18n="voice_settings.suppression_ai">Suppression (AI)</option>
-            </select>
-          </div>
-          <div class="voice-settings-row" id="noise-gate-row">
-            <label class="voice-settings-label" style="font-size:0.72rem;opacity:0.8" data-i18n="voice_settings.gate_sensitivity">Gate Sensitivity</label>
-            <input type="range" id="voice-ns-slider" class="ns-slider" min="0" max="100" value="10" data-i18n-title="voice_settings.gate_slider_hint" title="Noise gate: 0 = off, 100 = aggressive">
-          </div>
-          <div class="voice-settings-row mic-meter-row">
-            <label class="voice-settings-label">🎙️ <span data-i18n="voice_settings.mic_level">Mic Level</span></label>
-            <div class="mic-meter" id="mic-level-meter">
-              <div class="mic-meter-fill" id="mic-meter-fill"></div>
-              <div class="mic-meter-threshold" id="mic-meter-threshold" data-i18n-title="voice_settings.gate_threshold" title="Gate threshold"></div>
-            </div>
-          </div>
-          <div class="voice-settings-divider"></div>
-          <div class="voice-settings-section-label">🖥️ <span data-i18n="voice_settings.screen_share_quality">Screen Share Quality</span></div>
-          <div class="voice-settings-row">
-            <label class="voice-settings-label" data-i18n="voice_settings.resolution">Resolution</label>
-            <select id="screen-res-select" class="voice-settings-select">
-              <option value="source" data-i18n="voice_settings.resolution_source">Source</option>
-              <option value="720">720p</option>
-              <option value="1080" selected>1080p</option>
-              <option value="1440">1440p</option>
-            </select>
-          </div>
-          <div class="voice-settings-row">
-            <label class="voice-settings-label" data-i18n="voice_settings.bitrate">Bitrate</label>
-            <div class="bitrate-stepper">
-              <button id="screen-bitrate-minus" class="bitrate-step-btn" aria-label="−">−</button>
-              <input id="screen-bitrate-value" class="bitrate-value" inputmode="numeric"
-                autocomplete="off" spellcheck="false" value="8000 Kbps">
-              <button id="screen-bitrate-plus" class="bitrate-step-btn" aria-label="+">+</button>
-            </div>
-          </div>
-          <div class="voice-settings-row">
-            <label class="voice-settings-label" data-i18n="voice_settings.frame_rate">Frame Rate</label>
-            <select id="screen-fps-select" class="voice-settings-select">
-              <option value="15">15 fps</option>
-              <option value="30" selected>30 fps</option>
-              <option value="60">60 fps</option>
-            </select>
-          </div>
+          <!-- Filled in by createCallSettingsPanel (js/modules/call-settings-panel.js) -->
         </div>
         <!-- Voice controls bar (pinned above settings) -->
         <div id="voice-panel" class="voice-panel" data-haven-region="voice-controls" style="display:none">
@@ -1313,6 +1237,34 @@
           <button type="button" class="avatar-shape-btn" data-shape="hex" data-i18n-title="modals.edit_profile.shape_hexagon" title="Hexagon"><div class="shape-preview shape-hex"></div></button>
           <button type="button" class="avatar-shape-btn" data-shape="diamond" data-i18n-title="modals.edit_profile.shape_diamond" title="Diamond"><div class="shape-preview shape-diamond"></div></button>
         </div>
+        <!-- Banner: a picture over a color that is picked, or left to follow the avatar -->
+        <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.banner_title">Banner</h5>
+        <div class="edit-profile-banner-preview" id="banner-color-preview"></div>
+        <div class="avatar-upload-row" style="margin-bottom: 10px;">
+          <button type="button" class="btn-sm" id="banner-upload-btn" data-i18n="modals.edit_profile.upload_btn">Upload</button>
+          <button type="button" class="btn-sm" id="banner-edit-btn" data-i18n="modals.edit_profile.edit_btn" disabled>Edit</button>
+          <button type="button" class="btn-sm" id="banner-remove-btn" data-i18n="modals.edit_profile.clear_btn" disabled>Clear</button>
+          <input type="file" id="banner-file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+        </div>
+        <small class="muted-text" id="banner-hint" style="display:block;margin-top:-4px;margin-bottom:8px;opacity:0.6"></small>
+        <small class="muted-text" id="banner-edit-note" style="display:none;margin-top:-4px;margin-bottom:8px;opacity:0.6" data-i18n="modals.edit_profile.avatar_edit_animated">Animated images can't be edited.</small>
+        <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.banner_color_title">Banner color</h5>
+        <div class="banner-color-row">
+          <input type="color" id="banner-color-input" data-i18n-title="modals.edit_profile.banner_color_pick" title="Pick a banner color">
+          <button type="button" class="btn-sm" id="banner-color-auto-btn" data-i18n="modals.edit_profile.banner_color_auto">Match avatar</button>
+          <small class="muted-text" id="banner-color-note"></small>
+        </div>
+        <!-- Profile theme: two colors the whole card fades between, top to bottom -->
+        <h5 class="settings-section-subtitle" data-i18n="modals.edit_profile.theme_title">Profile theme</h5>
+        <div class="profile-theme-preview" id="profile-theme-preview">
+          <input type="color" class="profile-theme-swatch" id="profile-theme-top" data-i18n-title="modals.edit_profile.theme_top" title="Top color" data-i18n-aria-label="modals.edit_profile.theme_top" aria-label="Top color">
+          <span class="profile-theme-sample" aria-hidden="true">Aa</span>
+          <input type="color" class="profile-theme-swatch" id="profile-theme-bottom" data-i18n-title="modals.edit_profile.theme_bottom" title="Bottom color" data-i18n-aria-label="modals.edit_profile.theme_bottom" aria-label="Bottom color">
+        </div>
+        <div class="banner-color-row">
+          <button type="button" class="btn-sm" id="profile-theme-off-btn" data-i18n="modals.edit_profile.theme_off">No theme</button>
+          <small class="muted-text" id="profile-theme-note"></small>
+        </div>
       </div>
 
       <!-- Display Name -->
@@ -1400,6 +1352,27 @@
         <span id="avatar-save-status" class="settings-hint" style="flex:1"></span>
         <button class="btn-sm" id="cancel-rename-btn" data-i18n="modals.common.cancel">Cancel</button>
         <button class="btn-sm btn-accent" id="save-rename-btn" data-i18n="modals.common.save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Banner crop: the picture fills a 5:2 frame; drag (or arrow keys) to
+       move it, slider (or wheel, + and -) to zoom. Done cuts the framed part
+       out at banner size. -->
+  <div class="modal-overlay" id="banner-crop-modal" style="display:none">
+    <div class="modal">
+      <h3 data-i18n="modals.banner_crop.title">Edit Banner</h3>
+      <p class="modal-desc" data-i18n="modals.banner_crop.hint">Drag the picture to move it, and use the slider to zoom.</p>
+      <div class="banner-crop-frame" id="banner-crop-frame" tabindex="0" role="img" data-i18n-aria-label="modals.banner_crop.frame_label" aria-label="Banner crop area. Arrow keys move the picture, plus and minus zoom.">
+        <img id="banner-crop-img" alt="" draggable="false">
+      </div>
+      <label class="select-row banner-crop-zoom">
+        <span data-i18n="modals.banner_crop.zoom">Zoom</span>
+        <input type="range" id="banner-crop-zoom" min="100" max="400" value="100">
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn-sm" id="banner-crop-cancel" data-i18n="modals.common.cancel">Cancel</button>
+        <button type="button" class="btn-sm btn-accent" id="banner-crop-done" data-i18n="modals.banner_crop.done">Done</button>
       </div>
     </div>
   </div>
@@ -1557,6 +1530,7 @@
           <div class="settings-nav-item" data-target="section-chat-behavior">💬 <span data-i18n="settings.nav.chat_behavior">Chat Behavior</span></div>
           <div class="settings-nav-item" data-target="section-whats-new">🆕 <span data-i18n="settings.nav.whats_new">What's New</span></div>
           <div class="settings-nav-item" data-target="section-soundboard-mode">🎛️ <span data-i18n="settings.nav.soundboard">Soundboard</span></div>
+          <div class="settings-nav-item" data-target="section-call-settings">🎧 <span data-i18n="settings.nav.call_settings">Voice &amp; Video</span></div>
           <div class="settings-nav-item" data-target="section-sounds">🔔 <span data-i18n="settings.nav.sounds">Sounds</span></div>
           <div class="settings-nav-item" data-target="section-push">📲 <span data-i18n="settings.nav.push">Push</span></div>
 
@@ -2152,6 +2126,29 @@
       </div>
 
       <!-- Sounds Section -->
+      <!-- Voice & video: the call settings, usable outside a call, with a
+           microphone and camera test. The controls are built by
+           createCallSettingsPanel (js/modules/call-settings-panel.js) and the
+           tests are wired in js/modules/app-call-settings.js. -->
+      <div class="settings-section" id="section-call-settings">
+        <h5 class="settings-section-title">🎧 <span data-i18n="settings.call.title">Voice &amp; Video</span></h5>
+        <small class="settings-hint" style="display:block" data-i18n="settings.call.hint">Saved on this device. Changes apply to your next call, or straight away if you are in one.</small>
+        <div class="call-preview">
+          <div class="call-preview-buttons">
+            <button type="button" class="btn-sm call-preview-btn" id="call-preview-mic" aria-pressed="false">🎙️ <span data-i18n="settings.call.test_mic">Test microphone</span></button>
+            <button type="button" class="btn-sm call-preview-btn" id="call-preview-camera" aria-pressed="false">📷 <span data-i18n="settings.call.test_camera">Test camera</span></button>
+          </div>
+          <label class="call-preview-loopback">
+            <input type="checkbox" id="call-preview-loopback" checked>
+            <span data-i18n="settings.call.hear_myself">Hear myself during the microphone test</span>
+          </label>
+          <small class="call-preview-loopback-hint" data-i18n="settings.call.hear_myself_hint">Use headphones, or your speakers may squeal. You hear yourself as a call would send you, with your noise reduction setting. Echo cancellation is paused while you listen, or it would keep cutting out your own voice. Nothing plays while you are deafened in a call.</small>
+          <small class="settings-hint call-preview-status" id="call-preview-status" role="status" aria-live="polite" hidden></small>
+          <video class="call-preview-video" id="call-preview-video" muted playsinline autoplay hidden></video>
+        </div>
+        <div class="voice-settings-panel call-settings-page-panel" id="call-settings-page-panel"></div>
+      </div>
+
       <div class="settings-section" id="section-sounds">
         <h5 class="settings-section-title">🔔 <span data-i18n="settings.sounds_section.title">Sounds</span></h5>
         <div class="notif-settings">
@@ -3449,6 +3446,11 @@
             <span data-i18n="settings.admin.fcm_enabled_label">Enable Google FCM Push Notifications</span>
             <input type="checkbox" id="fcm-enabled">
           </label>
+          <small class="settings-hint" style="display:block;margin-top:8px" data-i18n="settings.admin.fcm_hide_note">Updated Haven apps get encrypted pushes, so Google, Apple and the push relay only see a sealed blob. Older apps still send the message text through them. Turn this on and those older apps only show "New message".</small>
+          <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.fcm_hide_label">Hide message text in pushes to older apps</span>
+            <input type="checkbox" id="fcm-hide-content">
+          </label>
         </div>
 
         <!-- Auto-mod -->
@@ -3800,6 +3802,11 @@
             <input type="number" id="max-avatar-mb" min="1" max="10" value="2" class="settings-number-input">
           </label>
           <small class="settings-hint" data-i18n="settings.admin.max_avatar_hint">Largest profile picture, border or persona picture someone can upload (1 to 10 MB, default 2). Animated GIFs are often over 2 MB, but every picture is loaded next to every message its owner sends, so keep this as low as you can.</small>
+          <label class="select-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.max_banner">Max Profile Banner Size (MB)</span>
+            <input type="number" id="max-banner-mb" min="1" max="20" value="5" class="settings-number-input">
+          </label>
+          <small class="settings-hint" data-i18n="settings.admin.max_banner_hint">Largest profile banner someone can upload (1 to 20 MB, default 5). Still pictures are cut to banner size before they upload, so this mostly limits animated banners, which load only when someone opens the profile card.</small>
           <label class="select-row" style="margin-top:8px">
             <span data-i18n="settings.admin.max_emoji">Max Emoji File Size (KB)</span>
             <input type="number" id="max-emoji-kb" min="64" max="1024" value="256" class="settings-number-input">
@@ -5600,14 +5607,14 @@
   <script src="/js/notifications.js?v=4.23.6"></script>
   <script src="/js/servers.js?v=4.23.9"></script>
   <script src="/js/voice-relay.js?v=4.27.5"></script>
-  <script src="/js/voice.js?v=4.29.71"></script>
+  <script src="/js/voice.js?v=4.29.73"></script>
   <script src="/js/modmode.js?v=4.21.0"></script>
   <script src="/js/e2e-group.js?v=4.21.0"></script>
   <script src="/js/e2e.js?v=4.21.0"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.71"></script>
+  <script type="module" src="/js/app.js?v=4.29.75"></script>
   <script src="/js/plugin-loader.js?v=4.29.63"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

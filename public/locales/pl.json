@@ -4383,6 +4383,7 @@
     "all_emojis_title": "Wszystkie emoji",
     "customize_quick_title": "Dostosuj szybkie reakcje",
     "customize_quick_hint": "Kliknij slot, a następnie wybierz emoji, aby go zastąpić.",
+    "customize_quick_reset": "Przywróć tryb automatyczny",
     "skin_tone": "Odcień skóry",
     "skin_tones": {
       "default": "Domyślny",

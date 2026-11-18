@@ -2,7 +2,7 @@
    HAVEN: Multi-Theme Stylesheet
    Themes: Haven (default), Discord, Matrix, Tron, HALO, LoTR
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-@import url('/css/voice.css?v=4.24.5');
+@import url('/css/voice.css?v=4.29.71');
 @import url('/css/music.css?v=4.27.17');
 @import url('/css/style-themes.css?v=4.27.19');
 @import url('/css/style-themes-win95-light.css?v=4.24.16');
@@ -10,7 +10,7 @@
 @import url('/css/style-status-effects.css?v=4.29.70');
 @import url('/css/style-theme-picker.css?v=4.27.12');
 @import url('/css/style-sidebar.css?v=4.29.19');
-@import url('/css/style-messages.css?v=4.27.14');
+@import url('/css/style-messages.css?v=4.29.71');
 @import url('/css/style-profile-servers-modals.css?v=4.27.50');
 @import url('/css/style-image-zoom.css?v=4.23.12');
 @import url('/css/style-emoji-reactions-threads.css?v=4.29.61');
@@ -19,7 +19,7 @@
 @import url('/css/style-e2e-spoilers.css?v=4.26.17');
 @import url('/css/style-settings.css?v=4.27.29');
 @import url('/css/style-mobile.css?v=4.26.10');
-@import url('/css/style-streams-markdown.css?v=4.27.56');
+@import url('/css/style-streams-markdown.css?v=4.29.73');
 @import url('/css/style-presence-connections.css?v=4.29.65');
 @import url('/css/style-media-controls.css?v=4.29.63');
 @import url('/css/style-roles-layout-polls.css?v=4.22.12');

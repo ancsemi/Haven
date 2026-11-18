@@ -139,7 +139,7 @@ module.exports = function register(socket, ctx) {
       'max_tags_per_attachment', 'max_tag_len', // (#tagging phase 4) upload-tag limits
       'blocked_upload_extensions', // (#5833) file types members cannot upload
       'automod_ai_enabled', // experimental AutoMod Quarantine AI link checks
-      'max_sound_kb', 'max_avatar_mb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'update_channel_early', 'hide_disabled_channel_badges',
+      'max_sound_kb', 'max_avatar_mb', 'max_banner_mb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'update_channel_early', 'hide_disabled_channel_badges',
       'category_layout', 'category_short_names', // (#5756) category tabs and short names
       'media_group_layout', // (#5799) pictures sent together: 'grid' or 'stacked'
       'allow_self_purge', // (#5686) members may delete every message they wrote
@@ -176,6 +176,7 @@ module.exports = function register(socket, ctx) {
       'voice_relay_mode', 'voice_relay_port', 'voice_relay_workers', 'voice_relay_address',
       'media_proxy_enabled', // (v3.43.0) server-side fetch + cache for remote images
       'fcm_enabled', // admin gate for Google FCM mobile push; off = FCM sends skipped (web-push unaffected)
+      'fcm_hide_content',
       'unicode_emoji_auto_update' // monthly refresh of the built-in emoji set from unicode.org, opt-in
     ];
     if (!allowedKeys.includes(key)) return;
@@ -200,6 +201,7 @@ module.exports = function register(socket, ctx) {
     if (automodBools.includes(key) && !['true', 'false'].includes(value)) return;
     if (key === 'media_proxy_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'fcm_enabled' && !['true', 'false'].includes(value)) return;
+    if (key === 'fcm_hide_content' && !['true', 'false'].includes(value)) return;
     if (key === 'unicode_emoji_auto_update' && !['true', 'false'].includes(value)) return;
     if (key === 'automod_link_mode' && !['off', 'allowlist', 'blocklist'].includes(value)) return;
     if (key === 'automod_link_exempt_level') {
@@ -302,6 +304,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'max_message_chars') { const n = parseInt(value); if (isNaN(n) || n < 200 || n > 100000) return; }
     if (key === 'max_sound_kb') { const n = parseInt(value); if (isNaN(n) || n < 256 || n > 10240) return; }
     if (key === 'max_avatar_mb') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 10) return; }
+    if (key === 'max_banner_mb') { const n = parseInt(value); if (isNaN(n) || n < 1 || n > 20) return; }
     if (key === 'max_emoji_kb') { const n = parseInt(value); if (isNaN(n) || n < 64 || n > 1024) return; }
     if (key === 'max_sticker_kb') { const n = parseInt(value); if (isNaN(n) || n < 256 || n > 10240) return; }
     if (key === 'session_duration_days') { const n = parseInt(value); if (isNaN(n) || n < 0 || n > 365) return; } // 0 = never expire (#5391)
@@ -546,6 +549,7 @@ module.exports = function register(socket, ctx) {
     // Keep the in-memory FCM toggle in sync so the message hot path never reads
     // the database. isFcmEnabled() consults this on the next push. (FCM Privacy)
     if (key === 'fcm_enabled') require('../fcm').setFcmAdminEnabled(value !== 'false');
+    if (key === 'fcm_hide_content') require('../fcm').setFcmHideContent(value === 'true');
 
     // Turning the feature on shouldn't make the admin wait until the next boot:
     // refresh right away. ensureEmojiData is a no-op when the on-disk copy is
