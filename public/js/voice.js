@@ -24,6 +24,7 @@ class VoiceManager {
     this.socket = socket;
     this.localStream = null;        // Processed stream (sent to peers)
     this.rawStream = null;          // Raw mic stream (for local talk detection)
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('pagehide', (e) => { if (!e.persisted) this._releaseMic(); });
     this.screenStream = null;       // Screen share MediaStream
     this.webcamStream = null;       // Webcam video MediaStream
     this._cameraSwitchGeneration = 0;
@@ -1841,22 +1842,26 @@ class VoiceManager {
     this._disableRNNoise();
     this._stopNoiseGate();
     this._stopLocalTalkDetection();
-    if (this.rawStream) {
-      this.rawStream.getTracks().forEach(track => track.stop());
-      this.rawStream = null;
-    }
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
-      this.localStream = null;
-    }
+    this._releaseMic();
     if (this.audioCtx) {
       this.audioCtx.close().catch(() => { /* already closed */ });
       this.audioCtx = null;
     }
   }
 
+  _releaseMic() {
+    [this.rawStream, this.localStream].forEach(stream => stream?.getTracks().forEach(track => { try { track.stop(); } catch (err) { console.warn('[Voice] a microphone track would not stop', err); } }));
+    this.rawStream = null;
+    this.localStream = null;
+  }
+
   leave() {
     this._leaveCount = (this._leaveCount || 0) + 1;
+    this._releaseMic();
+    try { this._leaveSession(); } finally { this._releaseMic(); }
+  }
+
+  _leaveSession() {
     // Breadcrumb for the maximize/resize "fake disconnect" bug: if leave()
     // runs when the user didn't click Disconnect, the stack tells us why.
     console.warn('[Voice] leave() invoked', {
@@ -1921,16 +1926,6 @@ class VoiceManager {
     }
     this.gainNodes.clear();
 
-    // Stop local tracks (both raw and processed)
-    if (this.rawStream) {
-      this.rawStream.getTracks().forEach(t => t.stop());
-      this.rawStream = null;
-    }
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(t => t.stop());
-      this.localStream = null;
-    }
-
     this.currentChannel = null;
     this.inVoice = false;
     this.isMuted = false;
@@ -1972,6 +1967,7 @@ class VoiceManager {
    */
   _softLeave() {
     if (!this.inVoice) return;
+    this._releaseMic();
     this.stopBotAudio();
 
     this._screenStartOperation = (this._screenStartOperation || 0) + 1;
@@ -2002,15 +1998,6 @@ class VoiceManager {
       this._removePeer(id);
     }
     this.gainNodes.clear();
-
-    if (this.rawStream) {
-      this.rawStream.getTracks().forEach(t => t.stop());
-      this.rawStream = null;
-    }
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(t => t.stop());
-      this.localStream = null;
-    }
 
     // Remember the channel we were in so the reconnect handler can use
     // voice-rejoin (which broadcasts voice-user-left to peers, forcing them
