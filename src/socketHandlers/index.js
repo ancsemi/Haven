@@ -2486,6 +2486,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       }
       if (!verdict || verdict.ok) return false;
 
+      // Says which kind of text was refused, so the app can give back a
+      // message or forum post that was just sent instead of losing it.
+      socket.emit('automod-refused', { surface: opts.surface || 'message' });
       socket.emit('error-msg', verdict.message);
 
       let outcome = { count: 0, action: 'none' };

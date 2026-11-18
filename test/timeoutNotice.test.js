@@ -46,3 +46,19 @@ test('the error-msg listener restores a refused forum post and shows the notice 
   handlers['error-msg']('Message too long');
   assert.deepEqual(calls.map(c => c[0]).filter(k => ['_forumRestoreDraft', '_showTimeoutNotice', '_showToast'].includes(k)), ['_showToast']);
 });
+test('an auto-mod refusal of a message or post gives the draft back, other refusals do not', () => {
+  const handlers = {};
+  const calls = [];
+  const self = new Proxy({ socket: { on: (ev, fn) => { handlers[ev] = fn; } } }, { get: (target, key) => key in target ? target[key] : (...args) => { calls.push([String(key), ...args]); } });
+  const methods = load('app-socket-channels.js', { document: { getElementById: () => null, addEventListener() {}, querySelector: () => null }, window: {}, localStorage: { getItem: () => null }, t: k => k });
+  methods._listenPresenceAndVoice.call(self);
+  const restores = () => calls.map(c => c[0]).filter(k => ['_restoreRefusedDraft', '_forumRestoreDraft'].includes(k));
+  calls.length = 0;
+  handlers['automod-refused']({ surface: 'message' });
+  assert.deepEqual(restores(), ['_restoreRefusedDraft', '_forumRestoreDraft']);
+  calls.length = 0;
+  handlers['automod-refused']({ surface: 'profile' });
+  handlers['automod-refused']({ surface: 'edit' });
+  handlers['automod-refused'](null);
+  assert.deepEqual(restores(), []);
+});
