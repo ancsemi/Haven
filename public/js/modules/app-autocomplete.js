@@ -40,7 +40,7 @@ _handleMarkdownShortcuts(inputEl, event) {
   const modifier = event.ctrlKey || event.metaKey;
   // AltGr reports as Ctrl+Alt on Windows, and those combos type characters.
   if (!modifier || event.altKey) return false;
-  const key = (event.key || '').toLowerCase();
+  const key = this._shortcutKey(event);
 
   // Italic (Ctrl/Cmd + I). Shift+I is left to the browser (DevTools).
   if (key === 'i' && !event.shiftKey) {
