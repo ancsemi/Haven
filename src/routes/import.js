@@ -577,6 +577,7 @@ module.exports = function registerImport(deps) {
       // (src/importFiles.js), each held to the server's upload size limit.
       // A message already in Haven is not fetched again.
       const capBytes = (parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_upload_mb'").get()?.value, 10) || 25) * 1024 * 1024;
+      const blockedTypes = db.prepare("SELECT value FROM server_settings WHERE key = 'blocked_upload_extensions'").get()?.value || '';
       const fileState = {};
       const copyFilesOf = async (channelId, msgs) => {
         if (!copyFiles) return;
@@ -584,7 +585,7 @@ module.exports = function registerImport(deps) {
           if (fileState.stopped) break;
           if (!msg.content || !msg.content.includes('📎')) continue;
           if (msg.discordId && lookupByDiscordId.get(channelId, msg.discordId)) continue;
-          msg.content = await copyAttachments(msg.content, { capBytes, state: fileState });
+          msg.content = await copyAttachments(msg.content, { capBytes, state: fileState, blocked: blockedTypes });
           job.filesCopied = fileState.copied || 0;
           job.updatedAt = Date.now();
         }

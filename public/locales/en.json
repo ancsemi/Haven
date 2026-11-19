@@ -4336,6 +4336,8 @@
       "allow_mentions_hint": "Off means relayed messages never ping anyone on Discord. On, @name pings the Discord person, and an @Role ping goes through both ways when the Discord role lets everyone mention it.",
       "relay_bots": "Relay other bots",
       "relay_bots_hint": "Off means messages from Discord bots are ignored. On can flood a Haven channel.",
+      "copy_files": "Keep Discord pictures and files",
+      "copy_files_hint": "Off keeps Discord's links, which stop working after about a day. On copies the pictures and files of messages from paired channels into Haven's uploads as they arrive, so they keep working. Copies follow the upload size limit and blocked file types, and use disk space.",
       "token_required": "Paste a bot token first",
       "remove_token_confirm": "Remove the Discord bot token? Ferry stops immediately. Your pairings are kept.",
       "remove_pairing_confirm": "Remove this pairing? Messages stop crossing between those two channels.",
