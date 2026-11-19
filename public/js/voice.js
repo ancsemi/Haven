@@ -4544,6 +4544,7 @@ class VoiceManager {
     const OPEN_CONFIRM = 1;  // Require signal above threshold for this many extra polls
                              // before opening (filters transient clicks/taps, ~20ms at 20ms poll)
     let gateOpen = false;
+    let shut = false;
     let holdTimeout = null;
     let aboveCount = 0;      // consecutive polls above threshold
 
@@ -4561,6 +4562,7 @@ class VoiceManager {
       if (this.noiseSensitivity === 0) {
         gain.gain.value = 1;
         gateOpen = false;
+        shut = false;
         aboveCount = 0;
         if (holdTimeout) { clearTimeout(holdTimeout); holdTimeout = null; }
         return;
@@ -4578,15 +4580,21 @@ class VoiceManager {
         if (!gateOpen && aboveCount > OPEN_CONFIRM) {
           gain.gain.setTargetAtTime(1, this.audioCtx.currentTime, ATTACK);
           gateOpen = true;
+          shut = false;
         }
       } else {
         aboveCount = 0;
+        if (!gateOpen && !shut) {
+          gain.gain.setTargetAtTime(0, this.audioCtx.currentTime, RELEASE);
+          shut = true;
+        }
         if (gateOpen && !holdTimeout) {
           // Signal dropped below threshold: start hold timer before closing
           holdTimeout = setTimeout(() => {
             if (!this.audioCtx) return;
             gain.gain.setTargetAtTime(0, this.audioCtx.currentTime, RELEASE);
             gateOpen = false;
+            shut = true;
             holdTimeout = null;
           }, HOLD_MS);
         }

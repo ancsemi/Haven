@@ -362,7 +362,7 @@ _searchFilterInit() {
   document.getElementById('search-filter-btn')?.addEventListener('click', (e) => {
     e.stopPropagation();
     const hidden = pop.style.display === 'none' || !pop.style.display;
-    if (hidden) { this._sfpShowRoot(); pop.style.display = 'block'; keepInColumn(pop); }
+    if (hidden) { this._sfpShowRoot(); pop.style.display = 'flex'; keepInColumn(pop); }
     else pop.style.display = 'none';
   });
   // Clicking into the text box reopens the popover too (parity with the filter
@@ -373,7 +373,7 @@ _searchFilterInit() {
     if (ch && ch.is_dm) return;
     if (pop.style.display === 'none' || !pop.style.display) {
       this._sfpShowRoot();
-      pop.style.display = 'block';
+      pop.style.display = 'flex';
       keepInColumn(pop);
     }
   });
@@ -396,7 +396,7 @@ _sfpSync() {
   const show = open && !(ch && ch.is_dm);
   const btn = document.getElementById('search-filter-btn');
   if (btn) btn.style.display = show ? '' : 'none';
-  if (show) { this._sfpShowRoot(); pop.style.display = 'block'; keepInColumn(pop); }
+  if (show) { this._sfpShowRoot(); pop.style.display = 'flex'; keepInColumn(pop); }
   else pop.style.display = 'none';
 },
 

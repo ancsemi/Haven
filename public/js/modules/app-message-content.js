@@ -1189,7 +1189,7 @@ _startEditMessage(msgEl, msgId) {
     // in app-ui.js can't fire here because we stopPropagation above, so it's
     // re-handled locally; _activeEditTextarea (set above) routes the pick into
     // this textarea rather than the main composer.
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === 'e') {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && this._shortcutKey(e) === 'e') {
       e.preventDefault();
       this._activeEditTextarea = textarea;
       this._toggleEmojiPicker();
