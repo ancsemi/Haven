@@ -446,7 +446,7 @@ _setupNotifications() {
 
   mentionSound.addEventListener('change', () => {
     this.notifications.setSound('mention', mentionSound.value);
-    this.notifications.play('mention'); // Preview the selected sound
+    this.notifications.play('mention', { preview: true });
   });
 
   if (replyVolume) {
@@ -458,7 +458,7 @@ _setupNotifications() {
   if (replySound) {
     replySound.addEventListener('change', () => {
       this.notifications.setSound('reply', replySound.value);
-      this.notifications.play('reply');
+      this.notifications.play('reply', { preview: true });
     });
   }
 
@@ -471,7 +471,7 @@ _setupNotifications() {
   if (joinSound) {
     joinSound.addEventListener('change', () => {
       this.notifications.setSound('join', joinSound.value);
-      this.notifications.play('join');
+      this.notifications.play('join', { preview: true });
     });
   }
 
@@ -484,7 +484,7 @@ _setupNotifications() {
   if (leaveSound) {
     leaveSound.addEventListener('change', () => {
       this.notifications.setSound('leave', leaveSound.value);
-      this.notifications.play('leave');
+      this.notifications.play('leave', { preview: true });
     });
   }
 

@@ -2,7 +2,7 @@
 
 // Push notifications follow your own mutes: a member muted for you sends
 // you none; a muted server sends none except DMs, and with "except
-// @mentions" also messages that mention you.
+// @mentions" also messages that mention you. Do Not Disturb sends none.
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
@@ -13,7 +13,7 @@ const { quietRecipients, pingedRecipients } = require('../src/pushMutes');
 function freshDb() {
   const db = new Database(':memory:');
   db.exec(`
-    CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, display_name TEXT);
+    CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, display_name TEXT, status TEXT);
     CREATE TABLE channels (id INTEGER PRIMARY KEY, is_dm INTEGER DEFAULT 0);
     CREATE TABLE user_preferences (user_id INTEGER, key TEXT, value TEXT, PRIMARY KEY (user_id, key));
     CREATE TABLE roles (id INTEGER PRIMARY KEY, name TEXT, mentionable INTEGER NOT NULL DEFAULT 1);
@@ -79,4 +79,15 @@ test('a mentions-only device is pushed DMs, replies and pings only', () => {
   assert.deepEqual(pinged('sounds good', { replyToUserId: 4 }), [4], 'a reply to you');
   assert.deepEqual([...pingedRecipients(db, { channelId: 20, messageContent: 'psst', userIds: [4] })], [4], 'every DM');
   assert.deepEqual([...pingedRecipients(db, { channelId: 10, messageContent: '@ann', userIds: [] })], []);
+});
+
+test('Do Not Disturb sends no push, even for a DM or a mention', () => {
+  const db = freshDb();
+  db.prepare("INSERT INTO users (id, username, display_name, status) VALUES (5, 'dee', 'Dee', 'dnd'), (6, 'eve', 'Eve', 'invisible')").run();
+  const plain = quietRecipients(db, { channelId: 10, senderUserId: 1, messageContent: 'hello all' });
+  assert.ok(plain.has(5) && !plain.has(6));
+  const dm = quietRecipients(db, { channelId: 20, senderUserId: 1, messageContent: 'hi' });
+  assert.ok(dm.has(5) && !dm.has(6));
+  const mention = quietRecipients(db, { channelId: 10, senderUserId: 1, messageContent: 'hey @dee' });
+  assert.ok(mention.has(5));
 });
