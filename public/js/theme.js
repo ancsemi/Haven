@@ -54,12 +54,13 @@ function _readableV(h, s, v, bgRgb, target) {
 // ── Generate full theme palette from a single HSV accent ─
 // vibrancy: 0-1, controls how much the hue tints backgrounds/text/borders
 // lightBase: false = dark base, true = light base
-function generateCustomPalette(h, s, v, vibrancy, lightBase) {
+function generateCustomPalette(h, s, v, vibrancy, lightBase, accent) {
   if (vibrancy === undefined) vibrancy = 0.5;
   if (lightBase === undefined) lightBase = false;
 
   const vib = Math.max(0, Math.min(1, vibrancy));
-  const rgb = hsvToRgb(h, s, v);
+  const ac = accent && Number.isFinite(accent.h) && Number.isFinite(accent.s) && Number.isFinite(accent.v) ? accent : { h, s, v };
+  const rgb = hsvToRgb(ac.h, ac.s, ac.v);
   const bgSat  = lightBase ? 0.01 + vib * 0.05 : 0.05 + vib * 0.30;
   const bdrSat = lightBase ? 0.02 + vib * 0.08 : 0.05 + vib * 0.25;
 
@@ -117,7 +118,7 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
   // On a light base the accent, the link and the status colors are darkened
   // until they stand out from the background (about 3:1, 4.5:1 for links),
   // or mentions, links and warnings in yellow, green or cyan all but vanish.
-  let aV = v;
+  let aV = ac.v;
   let linkV = lightBase ? 0.55 : 0.95;
   let okV = 0.72, badV = 0.94, warnV = 0.94;
   // Green, red and amber mean something (online, do not disturb, a warning,
@@ -127,20 +128,20 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
   const OK_H = 140, BAD_H = 355, WARN_H = 40;
   if (lightBase) {
     const bg = hsvToRgb(h, bgSat, 0.985);
-    aV = _readableV(h, s, v, bg, 3);
-    linkV = _readableV((h + 180) % 360, 0.5 + vib * 0.2, linkV, bg, 4.5);
+    aV = _readableV(ac.h, ac.s, ac.v, bg, 3);
+    linkV = _readableV((ac.h + 180) % 360, 0.5 + vib * 0.2, linkV, bg, 4.5);
     okV = _readableV(OK_H, 0.55, okV, bg, 3);
     badV = _readableV(BAD_H, 0.70, badV, bg, 3);
     warnV = _readableV(WARN_H, 0.75, warnV, bg, 3);
   }
 
   return {
-    '--accent':         hsvToHex(h, s, aV),
+    '--accent':         hsvToHex(ac.h, ac.s, aV),
     // Black or white button text, whichever reads better, only in light
     // mode: dark Custom and RGB keep the white text they always had.
-    ...(lightBase ? { '--accent-text': getAccentTextColor(...hsvToRgb(h, s, aV)) } : {}),
-    '--accent-hover':   hsvToHex(h, Math.max(s - 0.15, 0), Math.min(aV + 0.15, 1)),
-    '--accent-dim':     hsvToHex(h, Math.min(s + 0.1, 1), Math.max(aV - 0.2, 0)),
+    ...(lightBase ? { '--accent-text': getAccentTextColor(...hsvToRgb(ac.h, ac.s, aV)) } : {}),
+    '--accent-hover':   hsvToHex(ac.h, Math.max(ac.s - 0.15, 0), Math.min(aV + 0.15, 1)),
+    '--accent-dim':     hsvToHex(ac.h, Math.min(ac.s + 0.1, 1), Math.max(aV - 0.2, 0)),
     '--accent-glow':    `rgba(${rgb.join(',')}, ${(0.15 + vib * 0.20).toFixed(2)})`,
     '--bg-primary':     bgPrimary,
     '--bg-secondary':   bgSecondary,
@@ -152,7 +153,7 @@ function generateCustomPalette(h, s, v, vibrancy, lightBase) {
     '--text-primary':   txtPri,
     '--text-secondary': txtSec,
     '--text-muted':     txtMut,
-    '--text-link':      hsvToHex((h + 180) % 360, 0.5 + vib * 0.2, linkV),
+    '--text-link':      hsvToHex((ac.h + 180) % 360, 0.5 + vib * 0.2, linkV),
     '--border':         border,
     '--border-light':   borderLight,
     '--success':        hsvToHex(OK_H, 0.55, okV),
@@ -1804,86 +1805,85 @@ function drawTriangle(ctx, w, h, hue, selS, selV) {
   ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
 }
 
-// ── Initialise the custom-theme triangle editor ─────────
-function initCustomThemeEditor() {
-  const editor = document.getElementById('custom-theme-editor');
-  if (!editor) return;
-
-  const hueCanvas  = document.getElementById('custom-hue-bar');
-  const triCanvas  = document.getElementById('custom-triangle');
-  if (!hueCanvas || !triCanvas) return;
-
+function makeHsvPicker(hueCanvas, triCanvas, start, onChange) {
   const hueCtx = hueCanvas.getContext('2d');
   const triCtx = triCanvas.getContext('2d');
-
-  const saved = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
-  let hue = saved ? saved.h : 260;
-  let sat = saved ? saved.s : 0.75;
-  let val = saved ? saved.v : 0.95;
-
-  function redrawHue() { drawHueBar(hueCtx, hueCanvas.width, hueCanvas.height, hue); }
-  function redrawTri()  { drawTriangle(triCtx, triCanvas.width, triCanvas.height, hue, sat, val); }
-
-  function paintSwatch(palette) {
-    const swatch = document.getElementById('custom-theme-swatch');
-    if (swatch) swatch.style.background = palette['--accent'];
-  }
-
-  function apply() {
-    const palette = generateCustomPalette(hue, sat, val, sat, isLightColorBase());
-    applyCustomVars(palette);
-    localStorage.setItem('haven_custom_hsv', JSON.stringify({ h: hue, s: sat, v: val }));
-    paintSwatch(palette);
-  }
-
-  function render() { redrawHue(); redrawTri(); apply(); }
-
-  function hueFromEvent(e) {
-    const r = hueCanvas.getBoundingClientRect();
-    const x = Math.max(0, Math.min((e.clientX ?? e.touches[0].clientX) - r.left, r.width));
-    hue = (x / r.width) * 360;
-    render();
-  }
-  let hueDrag = false;
-  hueCanvas.addEventListener('mousedown',  (e) => { hueDrag = true; hueFromEvent(e); });
-  window.addEventListener('mousemove',     (e) => { if (hueDrag) hueFromEvent(e); });
-  window.addEventListener('mouseup',       ()  => { hueDrag = false; });
-  hueCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); hueFromEvent(e); });
-  hueCanvas.addEventListener('touchmove',  (e) => { e.preventDefault(); hueFromEvent(e); });
-
+  const c = { h: start.h, s: start.s, v: start.v };
   const pad = 8;
   const tw = triCanvas.width, th = triCanvas.height;
   const ax = tw / 2, ay = pad, bx = pad, by = th - pad, cx = tw - pad, cy = th - pad;
-
-  function triFromEvent(e) {
+  const redraw = () => { drawHueBar(hueCtx, hueCanvas.width, hueCanvas.height, c.h); drawTriangle(triCtx, tw, th, c.h, c.s, c.v); };
+  const point = (e) => ({ x: e.clientX ?? e.touches[0].clientX, y: e.clientY ?? e.touches[0].clientY });
+  const fromHue = (e) => {
+    const r = hueCanvas.getBoundingClientRect();
+    c.h = (Math.max(0, Math.min(point(e).x - r.left, r.width)) / r.width) * 360;
+    redraw();
+    onChange(c);
+  };
+  const fromTri = (e) => {
     const r = triCanvas.getBoundingClientRect();
-    const ex = (e.clientX ?? e.touches[0].clientX) - r.left;
-    const ey = (e.clientY ?? e.touches[0].clientY) - r.top;
-    const px = ex * (tw / r.width), py = ey * (th / r.height);
-    const bc = bary(px, py, ax, ay, bx, by, cx, cy);
+    const bc = bary((point(e).x - r.left) * (tw / r.width), (point(e).y - r.top) * (th / r.height), ax, ay, bx, by, cx, cy);
     let u = Math.max(0, bc.u), v = Math.max(0, bc.v), w = Math.max(0, bc.w);
     const sum = u + v + w; u /= sum; v /= sum; w /= sum;
-    val = Math.max(0.01, u + v);
-    sat = val > 0 ? u / val : 0;
-    render();
+    c.v = Math.max(0.01, u + v);
+    c.s = c.v > 0 ? u / c.v : 0;
+    redraw();
+    onChange(c);
+  };
+  const drag = (canvas, handler) => {
+    let on = false;
+    canvas.addEventListener('mousedown', (e) => { on = true; handler(e); });
+    window.addEventListener('mousemove', (e) => { if (on) handler(e); });
+    window.addEventListener('mouseup', () => { on = false; });
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handler(e); });
+    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handler(e); });
+  };
+  drag(hueCanvas, fromHue);
+  drag(triCanvas, fromTri);
+  redraw();
+  return { color: c, redraw, set: (n) => { Object.assign(c, { h: n.h, s: n.s, v: n.v }); redraw(); } };
+}
+
+function initCustomThemeEditor() {
+  const editor = document.getElementById('custom-theme-editor');
+  if (!editor) return;
+  const hueCanvas = document.getElementById('custom-hue-bar');
+  const triCanvas = document.getElementById('custom-triangle');
+  if (!hueCanvas || !triCanvas) return;
+  const saved = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
+  const start = saved || { h: 260, s: 0.75, v: 0.95 };
+  const savedAccent = saved && saved.a && Number.isFinite(saved.a.h) && Number.isFinite(saved.a.s) && Number.isFinite(saved.a.v) ? saved.a : null;
+  const toggle = document.getElementById('custom-accent-toggle');
+  const box = document.getElementById('custom-accent-picker');
+  const accentHue = document.getElementById('custom-accent-hue-bar');
+  const accentTri = document.getElementById('custom-accent-triangle');
+  const hasAccent = !!(toggle && box && accentHue && accentTri);
+  let separate = !!savedAccent;
+  let accentChosen = separate;
+  const paintSwatch = (palette) => { const swatch = document.getElementById('custom-theme-swatch'); if (swatch) swatch.style.background = palette['--accent']; };
+  const current = () => ({ h: main.color.h, s: main.color.s, v: main.color.v, ...(separate ? { a: accent ? { h: accent.color.h, s: accent.color.s, v: accent.color.v } : savedAccent } : {}) });
+  const apply = () => {
+    const hsv = current();
+    const palette = generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase(), hsv.a);
+    applyCustomVars(palette);
+    localStorage.setItem('haven_custom_hsv', JSON.stringify(hsv));
+    paintSwatch(palette);
+  };
+  const main = makeHsvPicker(hueCanvas, triCanvas, start, apply);
+  const accent = hasAccent ? makeHsvPicker(accentHue, accentTri, savedAccent || start, () => { accentChosen = true; apply(); }) : null;
+  if (hasAccent) {
+    toggle.checked = separate;
+    box.style.display = separate ? 'block' : 'none';
+    toggle.addEventListener('change', () => {
+      separate = toggle.checked;
+      box.style.display = separate ? 'block' : 'none';
+      if (separate && !accentChosen) accent.set(main.color);
+      if (separate) accent.redraw();
+      apply();
+    });
   }
-  let triDrag = false;
-  triCanvas.addEventListener('mousedown',  (e) => { triDrag = true; triFromEvent(e); });
-  window.addEventListener('mousemove',     (e) => { if (triDrag) triFromEvent(e); });
-  window.addEventListener('mouseup',       ()  => { triDrag = false; });
-  triCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); triFromEvent(e); });
-  triCanvas.addEventListener('touchmove',  (e) => { e.preventDefault(); triFromEvent(e); });
-
-  // Draw the picker and the swatch only. Applying the palette here put
-  // Custom's colors over every other theme on each page load, so an account
-  // with no saved theme saw Custom instead of Haven. The palette is applied
-  // when Custom is the selected theme: initThemeSwitcher, a picker click,
-  // applyThemeFromServer, or _show() below.
-  redrawHue();
-  redrawTri();
-  paintSwatch(generateCustomPalette(hue, sat, val, sat, isLightColorBase()));
-
-  editor._show = () => { editor.style.display = 'block'; render(); };
+  paintSwatch(generateCustomPalette(main.color.h, main.color.s, main.color.v, main.color.s, isLightColorBase(), current().a));
+  editor._show = () => { editor.style.display = 'block'; main.redraw(); accent?.redraw(); apply(); };
   editor._hide = () => { editor.style.display = 'none'; };
 }
 
@@ -1918,7 +1918,7 @@ function initThemeSwitcher(containerId, socket) {
   // If custom was saved, apply vars immediately
   if (saved === 'custom') {
     const hsv = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
-    if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase()));
+    if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase(), hsv.a));
   }
   // If rgb was saved, start cycling
   if (saved === 'rgb') {
@@ -1959,7 +1959,7 @@ function initThemeSwitcher(containerId, socket) {
 
       if (theme === 'custom') {
         const hsv = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
-        if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase()));
+        if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase(), hsv.a));
         if (customEditor && customEditor._show) customEditor._show();
         if (rgbEditor && rgbEditor._hide) rgbEditor._hide();
       } else if (theme === 'rgb') {
@@ -2003,7 +2003,7 @@ function initThemeSwitcher(containerId, socket) {
           );
 
           if (hsv) {
-            applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase()));
+            applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase(), hsv.a));
           }
         } else if (theme === 'rgb') {
           if (typeof stopRgbCycle === 'function') stopRgbCycle();
@@ -2068,7 +2068,7 @@ function applyThemeFromServer(theme, persist = true, syncFallback = false) {
   stopRgbCycle();
   if (theme === 'custom') {
     const hsv = JSON.parse(localStorage.getItem('haven_custom_hsv') || 'null');
-    if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase()));
+    if (hsv) applyCustomVars(generateCustomPalette(hsv.h, hsv.s, hsv.v, hsv.s, isLightColorBase(), hsv.a));
     const editor = document.getElementById('custom-theme-editor');
     if (editor && editor._show) editor._show();
   } else if (theme === 'rgb') {
