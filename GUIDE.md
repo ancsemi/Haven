@@ -1525,14 +1525,14 @@ What is inside the ZIP:
 
 - `manifest.json`: the Haven version, when the export was made, and what it includes
 - `structure.json` (when you tick Channels & roles, Users or Server settings): those lists as plain JSON, readable in any text editor. Password hashes, two-factor secrets, recovery codes and email addresses are left out
-- `haven.db` (when you tick Messages): a copy of the whole database. It is a SQLite file, so any SQLite viewer opens it. Messages are in its `messages` table with the channel, the sender's user id and the time; the user ids match the `users` list in `structure.json`. Two-factor secrets are removed from the copy
+- `haven.db` (when you tick Messages): a copy of the whole database. It is a SQLite file, so any SQLite viewer opens it. Messages are in its `messages` table with the channel, the sender's user id and the time; the user ids match the `users` list in `structure.json`. Two-factor secrets are removed from the copy, but it still holds every account's email and password hash, so keep the file somewhere safe and do not hand the whole thing to anyone
 - `uploads/` (when you tick Uploaded files): every uploaded picture and file
 
-Direct messages are left out unless you tick them, and even then they are end-to-end encrypted: only the people holding the original keys can read them.
+Direct messages are left out unless you tick them, and even then they are normally end-to-end encrypted: only the people holding the original keys can read those.
 
 Two more ways to get records out:
 
-- **Audit log**: **Settings → Audit Log → View Audit Log**, then **Export JSON** saves the admin and moderator actions as a JSON file
+- **Audit log**: **Settings → Admin → Audit Log → View Audit Log**, then **Export JSON** saves the admin and moderator actions as a JSON file
 - **Automatic backups**: the same section can save the same ZIP on a schedule into the server's data folder. For yearly records, pick Monthly and raise **Keep last N backups**
 
 There is no button that exports one member's data on its own. A backup holds the whole server, so to answer a request about one person, pick their account out of `structure.json` and their messages out of `haven.db`.
