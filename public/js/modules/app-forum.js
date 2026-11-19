@@ -964,7 +964,7 @@ _setupSettingsSearch() {
   };
   input.addEventListener('input', apply);
   modal.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); input.focus(); input.select(); }
+    if ((e.ctrlKey || e.metaKey) && this._shortcutKey(e) === 'f') { e.preventDefault(); input.focus(); input.select(); }
     if (e.key === 'Escape' && document.activeElement === input && input.value) { e.stopPropagation(); input.value = ''; apply(); }
   });
 },
