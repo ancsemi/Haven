@@ -29,6 +29,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 
 ### Fixed
+- A name with a gradient role color now shows its gradient in the reply line above a message, instead of a single flat color.
 - When an admin switched text or media on or off for the channel you had open, the message box and its buttons stayed as they were until you changed channels. They now update right away (thanks rajuriprathik-a11y, #5909).
 - Picture borders now show on avatars in threads and on your own picture at the bottom left (reported by gitty).
 - A message or forum post refused by auto-mod (a link the server does not allow, for one) was thrown away. It now comes back to fix and send again (reported by gitty).

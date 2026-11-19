@@ -957,13 +957,15 @@ _renderReplyBanner(replyCtx) {
   let color = this._getUserColor(replyCtx.username);
   const ownName = !replyCtx.is_webhook && !replyCtx.imported_from && !replyCtx.persona_username;
   const member = ownName ? this._memberById?.(replyCtx.user_id) : null;
-  if ((localStorage.getItem('haven-role-display') || 'colored-name') === 'colored-name' && member?.role?.color) {
-    color = this._safeColor(member.role.color, color);
-  }
+  const role = (localStorage.getItem('haven-role-display') || 'colored-name') === 'colored-name' && member?.role?.color ? member.role : null;
+  if (role) color = this._safeColor(role.color, color);
+  // A gradient role paints the name here as it does on the message.
+  const name = this._getNickname(replyCtx.user_id, replyCtx.username);
+  const nameHtml = role ? this._roleNameHtml(role, name) : this._escapeHtml(name);
   return `
     <div class="reply-banner" data-reply-msg-id="${replyCtx.id}">
       <span class="reply-line" style="background:${color}"></span>
-      <span class="reply-author" style="color:${color}">${this._escapeHtml(this._getNickname(replyCtx.user_id, replyCtx.username))}</span>
+      <span class="reply-author" style="color:${color}">${nameHtml}</span>
       <span class="reply-preview">${this._escapeHtml(previewText)}</span>
     </div>
   `;
