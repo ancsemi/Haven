@@ -159,7 +159,8 @@ _restoreRefusedDraft(msg, always = false) {
   // In a timeout nothing was posted, so the text goes back in the box
   // instead of being lost along with the notice.
   const inTimeout = typeof msg === 'string' && /^You are in a timeout/.test(msg);
-  if (!d || (!tooLong && !sdRefused && !inTimeout && !always)) return;
+  const slowRefused = typeof msg === 'string' && /^Slow mode: wait/.test(msg);
+  if (!d || (!tooLong && !sdRefused && !inTimeout && !slowRefused && !always)) return;
   this._lastSendDraft = null;
   const inputId = d.inputId || 'message-input';
   const open = inputId === 'dm-pip-input' ? this._activeDMPip
