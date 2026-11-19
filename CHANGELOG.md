@@ -25,6 +25,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - The guide has a new "Exporting your data" section (asked for by Elijahzeal, #5910): how an admin downloads a backup or the audit log, what the files contain and how to read them, and that a single member's data is picked out of the backup.
 - Ferry can keep the pictures and files of Discord messages (asked for by Raidenphantom, by Amnibro in #5906). Discord's own links stop working after about a day, which broke forwarded pictures. With Keep Discord pictures and files switched on in the Ferry options, each one is copied into Haven's uploads as the message arrives: only from paired channels, held to the upload size limit, your blocked file types, the disk space reserve and the privacy check, and removed again when the message is deleted. It is off until an admin turns it on, and a file that cannot be copied stays a Discord link.
 
+### Changed
+- Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
+
 ### Fixed
 - When an admin switched text or media on or off for the channel you had open, the message box and its buttons stayed as they were until you changed channels. They now update right away (thanks rajuriprathik-a11y, #5909).
 - Picture borders now show on avatars in threads and on your own picture at the bottom left (reported by gitty).

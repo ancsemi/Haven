@@ -383,13 +383,14 @@ _createForumTopicEl(msg) {
         <span class="forum-topic-replies" data-thread-parent="${msg.id}">${this._forumBlogRepliesLabel?.(msg) || (count ? `💬 ${t('forum.replies', { count })}` : t('thread_runtime.reply_to_topic'))}</span>
         ${this._forumVotesHtml ? this._forumVotesHtml(msg) : ''}
         <span class="forum-topic-when" title="${this._fmtDateTime(when)}">${this._forumAgo(when)}</span>
-        ${canEdit ? `<button type="button" class="forum-topic-edit" title="${t('forum.edit_post')}">✎</button>` : ''}
+        ${canEdit ? `<span class="forum-topic-actions">${this._forumCloseButtonHtml(msg)}<button type="button" class="forum-topic-edit" title="${t('forum.edit_post')}">✎</button></span>` : ''}
       </div>
     </div>`;
   this._forumBindVotes?.(el, msg);
   this._forumLoadLinkPreview(msg);
   el.addEventListener('click', (e) => {
     if (e.target.closest('.forum-topic-edit')) { e.stopPropagation(); this._forumEditTopicMeta(msg.id); return; }
+    if (e.target.closest('.forum-close-btn')) { e.stopPropagation(); this._forumSetClosed(msg, !msg.closed); return; }
     // The first click on a blurred picture or preview shows it; the title and
     // the rest of the card open the topic as usual.
     if (msg.nsfw && !el.classList.contains('revealed') && e.target.closest('.forum-topic-thumb, .forum-topic-snippet')) { e.stopPropagation(); el.classList.add('revealed'); return; }
@@ -413,6 +414,23 @@ _createForumTopicEl(msg) {
   return el;
 },
 
+// Closing is used as often as deleting, so it gets its own labeled button on
+// the card and in the open topic's header, not only a box in the edit window.
+// The label says what a click does; the Closed tag beside the title says
+// what the topic is now.
+_forumCanEditTopic(msg) {
+  return !!(this.user && msg && (msg.user_id === this.user.id || this.user.isAdmin || (this._hasPerm && this._hasPerm('delete_message'))));
+},
+
+_forumCloseButtonHtml(msg) {
+  const label = this._escapeHtml(t(msg.closed ? 'forum.reopen_topic' : 'forum.close_topic'));
+  return `<button type="button" class="forum-close-btn" title="${label}">${msg.closed ? '🔓' : '🔒'} <span>${label}</span></button>`;
+},
+
+_forumSetClosed(msg, closed) {
+  this.socket.emit('set-topic-meta', { messageId: msg.id, title: msg.title || '', tags: Array.isArray(msg.tags) ? msg.tags : [], closed: !!closed });
+},
+
 // Right-click on a topic card. The chat menu's Edit, React and Thread do
 // not fit a card: Edit stacked a second copy of the text on it, React opened
 // the picker under the composer, and Thread is what a click already does. A
@@ -431,7 +449,7 @@ _showForumTopicContextMenu(e, msg) {
   items.push(msg.thread && msg.thread.muted ? item('unmute-topic', '🔔', t('forum.unmute_topic')) : item('mute-topic', '🔕', t('forum.mute_topic')));
   if (canEdit) items.push(item('edit', '✏️', t('forum.edit_post')));
   if (canPin) items.push(msg.pinned ? item('unpin', '📌', t('msg_toolbar.unpin')) : item('pin', '📌', t('msg_toolbar.pin')));
-  if (canEdit) items.push(msg.closed ? item('reopen', '🔓', t('forum.reopen_topic')) : item('close', '✔', t('forum.close_topic')));
+  if (canEdit) items.push(msg.closed ? item('reopen', '🔓', t('forum.reopen_topic')) : item('close', '🔒', t('forum.close_topic')));
   if (canEdit) items.push(msg.nsfw ? item('unnsfw', '🔞', t('forum.unmark_nsfw')) : item('nsfw', '🔞', t('forum.mark_nsfw_menu')));
   if (this._forumMoveTargets().length && (this.user?.isAdmin || this._hasPerm('delete_message'))) items.push(item('move', '📦', t('forum.move_topic')));
   if (this._forumCanSelect()) items.push(item('select', '☑️', t('forum.select')));
@@ -468,7 +486,7 @@ _showForumTopicContextMenu(e, msg) {
     } else if (action === 'unpin') {
       this.socket.emit('unpin-message', { messageId: msgId });
     } else if (action === 'close' || action === 'reopen') {
-      this.socket.emit('set-topic-meta', { messageId: msgId, title: msg.title || '', tags: Array.isArray(msg.tags) ? msg.tags : [], closed: action === 'close' });
+      this._forumSetClosed(msg, action === 'close');
     } else if (action === 'nsfw' || action === 'unnsfw') {
       this.socket.emit('set-topic-meta', { messageId: msgId, title: msg.title || '', tags: Array.isArray(msg.tags) ? msg.tags : [], nsfw: action === 'nsfw' });
     } else if (action === 'move') {
@@ -728,7 +746,7 @@ _openForumComposer(existing = null, draft = null) {
         ${bodyField}
         ${tags.length ? `<div class="forum-field"><span>${t('forum.tags')} <small>${t('forum.tags_hint')}</small></span><div class="forum-tag-picker">${tags.map(tg => `<button type="button" class="forum-tag-chip${picked.has(tg.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tg.name)}">${tg.emoji ? this._escapeHtml(tg.emoji) + ' ' : ''}${this._escapeHtml(tg.name)}</button>`).join('')}</div></div>` : ''}
         <label class="forum-field forum-field-closed forum-field-nsfw"><span><input type="checkbox" id="forum-post-nsfw"${(existing || draft) && (existing || draft).nsfw ? ' checked' : ''}> 🔞 ${t('forum.mark_nsfw')}</span></label>
-        ${existing ? `<label class="forum-field forum-field-closed"><span><input type="checkbox" id="forum-post-closed"${existing.closed ? ' checked' : ''}> ${t('forum.mark_closed')}</span></label>` : ''}
+        ${existing ? `<div class="forum-field forum-state-field"><span>${t('forum.state')}</span><div class="forum-state-switch" role="radiogroup" aria-label="${this._escapeHtml(t('forum.state'))}"><label><input type="radio" name="forum-post-state" value="open"${existing.closed ? '' : ' checked'}><span>🔓 ${t('forum.state_open')}</span></label><label><input type="radio" name="forum-post-state" id="forum-post-closed" value="closed"${existing.closed ? ' checked' : ''}><span>🔒 ${t('forum.closed')}</span></label></div><small>${t('forum.state_hint')}</small></div>` : ''}
       </div>
       <div class="modal-footer">${canDelete ? `<button type="button" class="btn-sm btn-danger forum-post-delete" id="forum-post-delete">🗑️ ${t('forum.delete_topic')}</button>` : ''}<button type="button" class="btn-sm" id="forum-post-cancel">${t('modals.common.cancel')}</button><button type="button" class="btn-sm btn-accent" id="forum-post-go">${existing ? t('modals.common.save') : t('forum.post')}</button></div>
     </div>`;
@@ -1024,9 +1042,11 @@ _forumApplyThreadChrome(parentId) {
       ${flags ? `<div class="forum-topic-tags thread-forum-tags">${flags}</div>` : ''}
       <div class="thread-forum-meta">${this._escapeHtml(topic.username || '')} · <span title="${this._escapeHtml(this._fmtDateTime(when))}">${this._forumAgo(when)}</span>${this._forumVotesHtml ? this._forumVotesHtml(topic) : ''}</div>
     </div>
+    ${this._forumCanEditTopic(topic) ? this._forumCloseButtonHtml(topic) : ''}
     <button type="button" class="btn-sm thread-forum-layout" title="${this._escapeHtml(t(full ? 'thread_runtime.forum_side_title' : 'thread_runtime.forum_full_title'))}">${t(full ? 'thread_runtime.forum_side' : 'thread_runtime.forum_full')}</button>`;
   bar.style.display = 'flex';
   this._forumBindVotes?.(bar, topic);
+  bar.querySelector('.forum-close-btn')?.addEventListener('click', () => this._forumSetClosed(topic, !topic.closed));
   bar.querySelector('.thread-forum-layout').addEventListener('click', () => {
     localStorage.setItem('haven_forum_topic_full', full ? '0' : '1');
     this._forumApplyThreadChrome(parentId);
