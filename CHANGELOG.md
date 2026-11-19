@@ -26,6 +26,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Ferry can keep the pictures and files of Discord messages (asked for by Raidenphantom, by Amnibro in #5906). Discord's own links stop working after about a day, which broke forwarded pictures. With Keep Discord pictures and files switched on in the Ferry options, each one is copied into Haven's uploads as the message arrives: only from paired channels, held to the upload size limit, your blocked file types, the disk space reserve and the privacy check, and removed again when the message is deleted. It is off until an admin turns it on, and a file that cannot be copied stays a Discord link.
 
 ### Fixed
+- When an admin switched text or media on or off for the channel you had open, the message box and its buttons stayed as they were until you changed channels. They now update right away (thanks rajuriprathik-a11y, #5909).
 - Picture borders now show on avatars in threads and on your own picture at the bottom left (reported by gitty).
 - A message or forum post refused by auto-mod (a link the server does not allow, for one) was thrown away. It now comes back to fix and send again (reported by gitty).
 - On the voice relay, one person could stay silent to someone for the rest of a call when their sound failed to connect once, usually right after a reconnect. The app now tries again, and checks every 30 seconds for anyone it is missing (reported by fbsagat, #5908).
