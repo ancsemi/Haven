@@ -2691,6 +2691,7 @@
     "all_emojis_title": "모든 이모지",
     "customize_quick_title": "빠른 반응 사용자 지정",
     "customize_quick_hint": "칸을 클릭한 다음, 바꿀 이모지를 선택하세요.",
+    "customize_quick_reset": "자동으로 되돌리기",
     "skin_tone": "피부색",
     "skin_tones": {
       "default": "기본",

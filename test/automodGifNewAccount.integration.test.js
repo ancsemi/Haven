@@ -39,6 +39,9 @@ test('a new account can send GIFs but not other links', async () => {
   assert.ok(await got, 'the GIF went through');
 
   const refused = h.next(B, 'new-message', (d) => d && d.message && d.message.content.includes('example.org'), 1500);
+  const told = h.next(B, 'automod-refused', (d) => d && d.surface === 'message', 1500);
   B.emit('send-message', { code: chat.code, content: 'look https://example.org/page' });
   assert.strictEqual(await refused, null, 'a pasted link still waits');
+  // The app is told, so it can give the text or forum post back (gitty).
+  assert.ok(await told, 'the sender is told the message was refused');
 });

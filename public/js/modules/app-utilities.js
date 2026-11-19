@@ -931,6 +931,44 @@ _getUserColor(username) {
   return colors[Math.abs(hash) % colors.length];
 },
 
+// A profile color from the server, only if it is an exact #rrggbb. The server
+// checks it too; this is the last stop before it reaches a style.
+_safeHexColor(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
+},
+
+// The color an avatar mostly is, for the default banner. Pixels are binned
+// coarsely and the fullest bin wins, then averaged, so a photo gives its main
+// color rather than a muddy mean. Transparent pixels are skipped. Resolves
+// null when the image can't be read; the banner then uses the name color.
+async _sampleAvatarColor(file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const D = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = D; canvas.height = D;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bmp, 0, 0, D, D);
+    bmp.close?.();
+    const data = ctx.getImageData(0, 0, D, D).data;
+    const bins = new Map();
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) continue;
+      const key = (data[i] >> 5) << 6 | (data[i + 1] >> 5) << 3 | (data[i + 2] >> 5);
+      const bin = bins.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+      bin.n++; bin.r += data[i]; bin.g += data[i + 1]; bin.b += data[i + 2];
+      bins.set(key, bin);
+    }
+    let best = null;
+    for (const bin of bins.values()) if (!best || bin.n > best.n) best = bin;
+    if (!best) return null;
+    const hex = (v) => Math.round(v / best.n).toString(16).padStart(2, '0');
+    return `#${hex(best.r)}${hex(best.g)}${hex(best.b)}`;
+  } catch {
+    return null; // an image the browser cannot decode has no colour to offer
+  }
+},
+
 _isScrolledToBottom() {
   const el = document.getElementById('messages');
   return el.scrollHeight - el.clientHeight - el.scrollTop < 150;

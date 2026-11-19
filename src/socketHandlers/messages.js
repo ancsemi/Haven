@@ -452,6 +452,7 @@ module.exports = function register(socket, ctx) {
       obj.pinned = pinnedSet ? pinnedSet.has(m.id) : false;
       obj.is_archived = !!m.is_archived;
       if (m.silent) obj.silent = true; else delete obj.silent;
+      if (m.type === 'missed_call') obj.system = true;
       if (highlightMap.has(m.id)) obj.highlight = highlightMap.get(m.id);
       if (quoteMap.has(m.id)) obj.quoteOf = quoteMap.get(m.id);
       obj.thread = threadMap.get(m.id) || null;

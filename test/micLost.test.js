@@ -18,6 +18,7 @@ function setup({ store = {}, failing = [] } = {}) {
   const raws = [];
   const asked = [];
   const deviceChange = [];
+  const pageHide = [];
   class AudioContext {
     constructor() { this.state = 'running'; this.currentTime = 0; this.destination = node(); }
     addEventListener() {}
@@ -43,7 +44,7 @@ function setup({ store = {}, failing = [] } = {}) {
     module: { exports: {} },
     navigator: { userAgent: '', platform: '', maxTouchPoints: 0, mediaDevices },
     document: { getElementById: () => null },
-    window: { AudioContext },
+    window: { AudioContext, addEventListener: (e, f) => { if (e === 'pagehide') pageHide.push(f); } },
     localStorage: { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: (k) => { delete store[k]; } },
     console: { log() {}, warn() {}, error() {} },
     AudioContext,
@@ -57,7 +58,7 @@ function setup({ store = {}, failing = [] } = {}) {
   voice._initRNNoise = async () => {};
   voice.getRelayClientInfo = () => ({});
   made.push(voice);
-  return { voice, raws, asked, store, deviceChange, failing };
+  return { voice, raws, asked, store, deviceChange, failing, pageHide };
 }
 const tick = () => new Promise((r) => setTimeout(r, 10));
 const liveRaws = (raws) => raws.filter((t) => t.readyState === 'live').length;
@@ -152,5 +153,31 @@ test('leaving while a join is still getting ready cancels it and lets go of the 
   finishSetup();
   assert.equal(await joining, false);
   assert.equal(voice.inVoice, false);
+  assert.equal(liveRaws(raws), 0);
+});
+test('leaving lets go of the mic even when a later step of the teardown throws', async () => {
+  const { voice, raws } = setup();
+  await voice.join('aaaaaaaa');
+  const real = voice.stopBotAudio;
+  voice.stopBotAudio = () => { voice.stopBotAudio = real; throw new Error('teardown failed'); };
+  assert.throws(() => voice.leave(), /teardown failed/);
+  assert.equal(liveRaws(raws), 0);
+  assert.equal(voice.rawStream, null);
+  assert.equal(voice.localStream, null);
+});
+test('a soft leave lets go of the mic even when a later step throws', async () => {
+  const { voice, raws } = setup();
+  await voice.join('aaaaaaaa');
+  const real = voice.stopBotAudio;
+  voice.stopBotAudio = () => { voice.stopBotAudio = real; throw new Error('teardown failed'); };
+  assert.throws(() => voice._softLeave(), /teardown failed/);
+  assert.equal(liveRaws(raws), 0);
+});
+test('a page that is going away lets go of the mic, a page kept for later does not', async () => {
+  const { voice, raws, pageHide } = setup();
+  await voice.join('aaaaaaaa');
+  pageHide.forEach((f) => f({ persisted: true }));
+  assert.equal(liveRaws(raws), 1);
+  pageHide.forEach((f) => f({ persisted: false }));
   assert.equal(liveRaws(raws), 0);
 });

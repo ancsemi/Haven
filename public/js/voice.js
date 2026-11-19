@@ -24,6 +24,7 @@ class VoiceManager {
     this.socket = socket;
     this.localStream = null;        // Processed stream (sent to peers)
     this.rawStream = null;          // Raw mic stream (for local talk detection)
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('pagehide', (e) => { if (!e.persisted) this._releaseMic(); });
     this.screenStream = null;       // Screen share MediaStream
     this.webcamStream = null;       // Webcam video MediaStream
     this._cameraSwitchGeneration = 0;
@@ -1759,21 +1760,7 @@ class VoiceManager {
         // ── Noise Gate via Web Audio ──
         // Route mic through an analyser + gain node so we can silence
         // audio below a threshold before sending it to peers.
-        const source = this.audioCtx.createMediaStreamSource(this.rawStream);
-        this._rnnoiseSource = source;
-        const gateAnalyser = this.audioCtx.createAnalyser();
-        gateAnalyser.fftSize = 2048;
-        gateAnalyser.smoothingTimeConstant = 0.3;
-        source.connect(gateAnalyser);
-
-        const gateGain = this.audioCtx.createGain();
-        source.connect(gateGain);
-
-        const dest = this.audioCtx.createMediaStreamDestination();
-        gateGain.connect(dest);
-
-        this._noiseGateAnalyser = gateAnalyser;
-        this._noiseGateGain = gateGain;
+        const dest = this._buildMicChain(this.rawStream);
         this._vcDest = dest;
         this.localStream = dest.stream;   // processed stream → peers
         this._startNoiseGate();
@@ -1781,15 +1768,7 @@ class VoiceManager {
         // Initialize RNNoise and apply saved noise mode
         await this._initRNNoise();
         if (abandoned()) return false;
-        if (this.noiseMode === 'suppress' && this._rnnoiseWasmBytes) {
-          this.setNoiseSensitivity(0);
-          this._enableRNNoise();
-        } else if (this.noiseMode === 'off') {
-          this.setNoiseSensitivity(0);
-        } else if (this.noiseMode === 'gate') {
-          const saved = parseInt(localStorage.getItem('haven_ns_value') || '10', 10);
-          this.setNoiseSensitivity(saved);
-        }
+        this._applyStartingNoiseMode();
       }
 
       // Do not let Socket.IO buffer a stale voice-join if the connection
@@ -1841,22 +1820,26 @@ class VoiceManager {
     this._disableRNNoise();
     this._stopNoiseGate();
     this._stopLocalTalkDetection();
-    if (this.rawStream) {
-      this.rawStream.getTracks().forEach(track => track.stop());
-      this.rawStream = null;
-    }
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
-      this.localStream = null;
-    }
+    this._releaseMic();
     if (this.audioCtx) {
       this.audioCtx.close().catch(() => { /* already closed */ });
       this.audioCtx = null;
     }
   }
 
+  _releaseMic() {
+    [this.rawStream, this.localStream].forEach(stream => stream?.getTracks().forEach(track => { try { track.stop(); } catch (err) { console.warn('[Voice] a microphone track would not stop', err); } }));
+    this.rawStream = null;
+    this.localStream = null;
+  }
+
   leave() {
     this._leaveCount = (this._leaveCount || 0) + 1;
+    this._releaseMic();
+    try { this._leaveSession(); } finally { this._releaseMic(); }
+  }
+
+  _leaveSession() {
     // Breadcrumb for the maximize/resize "fake disconnect" bug: if leave()
     // runs when the user didn't click Disconnect, the stack tells us why.
     console.warn('[Voice] leave() invoked', {
@@ -1921,16 +1904,6 @@ class VoiceManager {
     }
     this.gainNodes.clear();
 
-    // Stop local tracks (both raw and processed)
-    if (this.rawStream) {
-      this.rawStream.getTracks().forEach(t => t.stop());
-      this.rawStream = null;
-    }
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(t => t.stop());
-      this.localStream = null;
-    }
-
     this.currentChannel = null;
     this.inVoice = false;
     this.isMuted = false;
@@ -1972,6 +1945,7 @@ class VoiceManager {
    */
   _softLeave() {
     if (!this.inVoice) return;
+    this._releaseMic();
     this.stopBotAudio();
 
     this._screenStartOperation = (this._screenStartOperation || 0) + 1;
@@ -2002,15 +1976,6 @@ class VoiceManager {
       this._removePeer(id);
     }
     this.gainNodes.clear();
-
-    if (this.rawStream) {
-      this.rawStream.getTracks().forEach(t => t.stop());
-      this.rawStream = null;
-    }
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(t => t.stop());
-      this.localStream = null;
-    }
 
     // Remember the channel we were in so the reconnect handler can use
     // voice-rejoin (which broadcasts voice-user-left to peers, forcing them
@@ -2542,14 +2507,27 @@ class VoiceManager {
 
   async startWebcam() {
     if (!this.inVoice || this.isWebcamActive) return false;
+    this.webcamFellBack = false;
     try {
       const savedCamId = localStorage.getItem('haven_cam_device') || '';
       const videoConstraints = this._webcamConstraints(savedCamId);
 
-      this.webcamStream = await navigator.mediaDevices.getUserMedia({
-        video: videoConstraints,
-        audio: false  // mic already captured separately
-      });
+      try {
+        this.webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: false  // mic already captured separately
+        });
+      } catch (err) {
+        // The saved camera is not plugged in: use the default one, as joining
+        // does for the microphone. The choice is kept for when it is back.
+        if (!savedCamId || !['OverconstrainedError', 'NotFoundError'].includes(err?.name)) throw err;
+        console.warn('[Voice] Saved camera not found, using the default one:', err.message);
+        this.webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: this._webcamConstraints(''),
+          audio: false
+        });
+        this.webcamFellBack = true;
+      }
 
       this.isWebcamActive = true;
 
@@ -3746,7 +3724,15 @@ class VoiceManager {
     const relay = this._relay;
     if (!relay) return;
     const mic = this.localStream?.getAudioTracks()[0];
-    if (mic && !this.isListenerOnly) await relay.publish('mic', mic).catch(err => console.warn('[Relay] Mic not sent:', err.message));
+    // A failed send would leave this person unheard for the whole call
+    // (#5908), so try a few more times while this session is still current.
+    for (let attempt = 0; mic && !this.isListenerOnly && attempt < 3; attempt++) {
+      try { await relay.publish('mic', mic); break; } catch (err) {
+        console.warn('[Relay] Mic not sent:', err.message);
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        if (this._relay !== relay || relay.closed) return;
+      }
+    }
     if (this.isScreenSharing && this.screenStream) {
       // Same guarded, serialized, fresh-cap publish as a new share: a relay
       // (re)start can race a stop or a bitrate change exactly like shareScreen
@@ -4077,38 +4063,18 @@ class VoiceManager {
     this._stopNoiseGate();
     this._stopLocalTalkDetection();
 
-    const source = this.audioCtx.createMediaStreamSource(this.rawStream);
-    this._rnnoiseSource = source;
-    const gateAnalyser = this.audioCtx.createAnalyser();
-    gateAnalyser.fftSize = 2048;
-    gateAnalyser.smoothingTimeConstant = 0.3;
-    source.connect(gateAnalyser);
-
-    const gateGain = this.audioCtx.createGain();
-    source.connect(gateGain);
-
-    const dest = this.audioCtx.createMediaStreamDestination();
-    gateGain.connect(dest);
-
-    this._noiseGateAnalyser = gateAnalyser;
-    this._noiseGateGain = gateGain;
+    const dest = this._buildMicChain(this.rawStream);
+    // The soundboard mixes into this destination: point it at the new chain,
+    // or clips played after a microphone switch go nowhere.
+    this._vcDest = dest;
 
     const oldLocalStream = this.localStream;
     this.localStream = dest.stream;
     this._startNoiseGate();
     this._startLocalTalkDetection();
 
-    // Re-enable RNNoise if it was active (bytes loaded is enough to re-arm;
-    // _rnnoiseReady flips true asynchronously when the worklet confirms).
-    if (this.noiseMode === 'suppress' && this._rnnoiseWasmBytes) {
-      this.setNoiseSensitivity(0);
-      this._enableRNNoise();
-    } else if (this.noiseMode === 'gate') {
-      const saved = parseInt(localStorage.getItem('haven_ns_value') || '10', 10);
-      this.setNoiseSensitivity(saved);
-    } else if (this.noiseMode === 'off') {
-      this.setNoiseSensitivity(0);
-    }
+    // Re-enable RNNoise if it was active.
+    this._applyStartingNoiseMode();
 
     // Replace the audio track on every peer connection, concurrently (see
     // switchCamera). (#5426)
@@ -4363,11 +4329,55 @@ class VoiceManager {
 
   // ── Noise Gate ───────────────────────────────────────────
 
+  // The mic chain a call sends: raw mic → gate gain → destination, with an
+  // analyser on the raw mic for the gate and the level meter. RNNoise, when
+  // on, is wired in between by _enableRNNoise. Shared by joining, switching
+  // microphone, and the settings mic test (MicChain).
+  _buildMicChain(rawStream) {
+    const source = this.audioCtx.createMediaStreamSource(rawStream);
+    this._rnnoiseSource = source;
+    const gateAnalyser = this.audioCtx.createAnalyser();
+    gateAnalyser.fftSize = 2048;
+    gateAnalyser.smoothingTimeConstant = 0.3;
+    source.connect(gateAnalyser);
+
+    const gateGain = this.audioCtx.createGain();
+    source.connect(gateGain);
+
+    const dest = this.audioCtx.createMediaStreamDestination();
+    gateGain.connect(dest);
+
+    this._noiseGateAnalyser = gateAnalyser;
+    this._noiseGateGain = gateGain;
+    return dest;
+  }
+
+  // Puts the current noise mode on a freshly built chain (RNNoise already
+  // loaded, if it could be).
+  _applyStartingNoiseMode() {
+    // Bytes loaded is enough to arm RNNoise; _rnnoiseReady flips true
+    // asynchronously when the worklet confirms.
+    if (this.noiseMode === 'suppress' && this._rnnoiseWasmBytes) {
+      this.setNoiseSensitivity(0);
+      this._enableRNNoise();
+    } else if (this.noiseMode === 'off') {
+      this.setNoiseSensitivity(0);
+    } else if (this.noiseMode === 'gate') {
+      const saved = parseInt(localStorage.getItem('haven_ns_value') || '10', 10);
+      this.setNoiseSensitivity(saved);
+    }
+  }
+
   setNoiseMode(mode) {
     // mode: 'off' | 'gate' | 'suppress'
     this.noiseMode = mode;
     localStorage.setItem('haven_noise_mode', mode);
+    this._applyNoiseMode(mode);
+  }
 
+  // Puts a noise mode on the running mic chain without saving it (the
+  // settings mic test uses this too, see MicChain).
+  _applyNoiseMode(mode) {
     if (mode === 'suppress') {
       // Disable noise gate, enable RNNoise
       if (this.noiseSensitivity !== 0) {
@@ -4874,4 +4884,52 @@ class VoiceManager {
   }
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { VoiceManager };
+// The settings mic test (Settings, Voice & video) runs a microphone through
+// the same noise gate and AI suppression a call uses, so the user hears what
+// a call would send. MicChain borrows VoiceManager's own methods for this, so
+// there is one copy of that code, and gets its own AudioContext (48 kHz, as a
+// call's) so a test never touches a running call.
+class MicChain {
+  constructor(rawStream, { noiseMode = 'gate' } = {}) {
+    this.noiseMode = noiseMode;
+    this.noiseSensitivity = 10;
+    this.currentMicLevel = 0;
+    this._noiseGateInterval = null;
+    this._noiseGateAnalyser = null;
+    this._noiseGateGain = null;
+    this._rnnoiseSource = null;
+    this._rnnoiseNode = null;
+    this._rnnoiseReady = false;
+    this._rnnoiseWasmBytes = null;
+    this._rnnoiseModuleCtx = null;
+    this.audioCtx = new AudioContext({ sampleRate: 48000 });
+    this.stream = this._buildMicChain(rawStream).stream;
+    this._startNoiseGate();
+  }
+
+  // Loads AI suppression if it can, then puts the noise mode on.
+  async ready() {
+    await this._initRNNoise();
+    if (this.audioCtx) this._applyStartingNoiseMode();
+  }
+
+  setNoiseMode(mode) {
+    this.noiseMode = mode;
+    this._applyNoiseMode(mode);
+  }
+
+  destroy() {
+    if (!this.audioCtx) return;
+    this._disableRNNoise();
+    this._stopNoiseGate();
+    const ctx = this.audioCtx;
+    this.audioCtx = null;
+    try { ctx.close(); } catch { /* already closed */ }
+  }
+}
+for (const name of ['_buildMicChain', '_applyStartingNoiseMode', '_applyNoiseMode', 'setNoiseSensitivity',
+  '_initRNNoise', '_enableRNNoise', '_disableRNNoise', '_startNoiseGate', '_stopNoiseGate']) {
+  MicChain.prototype[name] = VoiceManager.prototype[name];
+}
+
+if (typeof module !== 'undefined' && module.exports) module.exports = { VoiceManager, MicChain };

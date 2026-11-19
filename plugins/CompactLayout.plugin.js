@@ -273,6 +273,14 @@ html[data-compact-layout-desktop="1"] :where([data-haven-region="server-list"]) 
 html[data-compact-layout-desktop="1"] :where([data-haven-region="sidebar-footer"]) {
   background: var(--bg-tertiary);
 }
+@media (min-height: 551px) {
+  html[data-compact-layout-desktop="1"] :where([data-haven-region="sidebar-content"]) {
+    overflow-y: auto;
+  }
+  html[data-compact-layout-desktop="1"] :where([data-haven-region="sidebar-content"] > :has([data-haven-region="channels"])) {
+    min-height: 14rem;
+  }
+}
 
 html[data-compact-layout-desktop="1"] :where([data-haven-region="account"]) {
   margin: 0.375rem 0.5rem;

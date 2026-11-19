@@ -329,6 +329,13 @@ test('Compact Layout uses only public regions and scoped CSS', () => {
   }
 });
 
+test('Compact Layout keeps the channel list usable and scrolls the sidebar when Join and Create fill it', () => {
+  const css = CompactLayout.CSS;
+  assert.match(css, /@media \(min-height: 551px\)\s*\{[^@]*data-haven-region="sidebar-content"\]\) \{\s*overflow-y: auto;/);
+  assert.match(css, /data-haven-region="sidebar-content"\] > :has\(\[data-haven-region="channels"\]\)\) \{\s*min-height: 14rem;/);
+  assert.equal((css.match(/!important/g) || []).length, 2);
+});
+
 test('Compact Layout moves desktop regions and restores their exact positions on stop', () => {
   withEnvironment(true, ({ document, styles, nodes }) => {
     const originalWorkspace = [...nodes.workspace.children];

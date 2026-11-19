@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayName } = require('./helpers');
+const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayName, cleanHexColor, cleanProfileTheme } = require('./helpers');
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 const { saveFcmToken } = require('../fcm');
@@ -342,6 +342,37 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  // Banner color: an exact #rrggbb, or null to go back to the avatar's
+  // color. Anything else is refused rather than quietly reset.
+  socket.on('set-banner-color', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    const color = data.color === null ? null : cleanHexColor(data.color);
+    if (data.color !== null && !color) return socket.emit('error-msg', 'Invalid banner color');
+    try {
+      await profile.setBannerColor(asyncDb, socket.user.id, color);
+      socket.user.bannerColor = color;
+      socket.emit('banner-color-updated', { color });
+    } catch (err) {
+      console.error('Set banner color error:', err);
+    }
+  });
+
+  // Profile theme: two exact #rrggbb colors, top and bottom, or both null to
+  // turn it off. Anything else is refused.
+  socket.on('set-profile-theme', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    const off = data.top === null && data.bottom === null;
+    const theme = off ? null : cleanProfileTheme(data.top, data.bottom);
+    if (!off && !theme) return socket.emit('error-msg', 'Invalid profile theme');
+    try {
+      await profile.setProfileTheme(asyncDb, socket.user.id, theme);
+      socket.user.profileTheme = theme;
+      socket.emit('profile-theme-updated', { theme });
+    } catch (err) {
+      console.error('Set profile theme error:', err);
+    }
+  });
+
   // A birthday is set once and can never be changed. Hiding it keeps the date
   // and only takes it off the profile and member lists; Hide birth year
   // changes whenever. `hidden` is optional: clients from before it existed
@@ -458,7 +489,7 @@ module.exports = function register(socket, ctx) {
       // cleans itself up.
       // saveFcmToken claims the token for this account and applies the
       // length and per-account caps.
-      saveFcmToken(db, socket.user.id, data.token.trim(), data.scope);
+      saveFcmToken(db, socket.user.id, data.token.trim(), data.scope, data.pushKey);
     } catch (err) {
       console.error('FCM token register error:', err);
     }

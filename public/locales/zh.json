@@ -4352,6 +4352,7 @@
     "all_emojis_title": "全部表情",
     "customize_quick_title": "自定义快捷回应",
     "customize_quick_hint": "点击一个槽位，然后选择表情进行替换。",
+    "customize_quick_reset": "恢复为自动",
     "skin_tone": "肤色",
     "skin_tones": {
       "default": "默认",

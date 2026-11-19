@@ -5,7 +5,7 @@ const Database = require('better-sqlite3');
 const createDmCalls = require('../src/dmCalls');
 function setup() {
   const db = new Database(':memory:');
-  db.exec('CREATE TABLE channels (id INTEGER PRIMARY KEY, name TEXT, code TEXT, is_dm INTEGER DEFAULT 0); CREATE TABLE channel_members (channel_id INTEGER, user_id INTEGER);');
+  db.exec('CREATE TABLE channels (id INTEGER PRIMARY KEY, name TEXT, code TEXT, is_dm INTEGER DEFAULT 0); CREATE TABLE channel_members (channel_id INTEGER, user_id INTEGER); CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER, user_id INTEGER, content TEXT, type TEXT DEFAULT \'user\', created_at TEXT DEFAULT CURRENT_TIMESTAMP);');
   const addChannel = (name, code, isDm, members) => {
     const id = db.prepare('INSERT INTO channels (name, code, is_dm) VALUES (?, ?, ?)').run(name, code, isDm).lastInsertRowid;
     for (const m of members) db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(id, m);
@@ -23,7 +23,8 @@ function setup() {
   const enter = (code, userId) => { if (!voiceUsers.has(code)) voiceUsers.set(code, new Map()); voiceUsers.get(code).set(userId, { id: userId }); };
   const leave = (code, userId) => { voiceUsers.get(code)?.delete(userId); if (voiceUsers.get(code)?.size === 0) voiceUsers.delete(code); calls.sync(code); };
   const events = (ev, to) => got.filter(g => g.ev === ev && (!to || g.to === to));
-  return { calls, got, sockets, enter, leave, events, pushes };
+  const rows = () => db.prepare('SELECT * FROM messages ORDER BY id').all();
+  return { calls, got, sockets, enter, leave, events, pushes, rows };
 }
 test('starting voice in a group DM rings every other member on every device', () => {
   const t = setup();
@@ -94,4 +95,71 @@ test('rejoining a DM to ring someone again is held to one ring per 30 s, and six
   assert.equal(t.events('dm-call-unanswered').length, 0);
   t.leave('bbbbbbbb', 1);
   t.leave('bbbbbbbb', 2);
+});
+test('a call that rings out unanswered leaves one \"Missed call\" message in the chat (#5901)', (ctx) => {
+  ctx.mock.timers.enable({ apis: ['setTimeout'] });
+  const t = setup();
+  t.enter('bbbbbbbb', 1);
+  t.calls.joined('bbbbbbbb', { id: 1, username: 'u1' });
+  assert.equal(t.rows().length, 0);
+  ctx.mock.timers.tick(45000);
+  const [row, ...rest] = t.rows();
+  assert.equal(rest.length, 0);
+  assert.deepEqual([row.user_id, row.content, row.type, row.channel_id], [1, 'Missed call from u1', 'missed_call', 2]);
+  const live = t.events('new-message', 'channel:bbbbbbbb');
+  assert.equal(live.length, 1);
+  assert.equal(live[0].data.channelCode, 'bbbbbbbb');
+  assert.deepEqual([live[0].data.message.id, live[0].data.message.type, live[0].data.message.system, live[0].data.message.silent, live[0].data.message.user_id], [row.id, 'missed_call', true, true, 1]);
+  t.leave('bbbbbbbb', 1);
+  assert.equal(t.rows().length, 1);
+});
+test('a caller who hangs up while it is still ringing leaves a \"Missed call\" message too', () => {
+  const t = setup();
+  t.enter('bbbbbbbb', 1);
+  t.calls.joined('bbbbbbbb', { id: 1, username: 'u1', displayName: 'Una' });
+  t.leave('bbbbbbbb', 1);
+  assert.deepEqual(t.rows().map(r => r.content), ['Missed call from Una']);
+  assert.equal(t.events('new-message', 'channel:bbbbbbbb').length, 1);
+});
+test('an answered call, or one everybody declined, leaves no \"Missed call\" message', (ctx) => {
+  ctx.mock.timers.enable({ apis: ['setTimeout'] });
+  const t = setup();
+  t.enter('bbbbbbbb', 1);
+  t.calls.joined('bbbbbbbb', { id: 1, username: 'u1' });
+  t.enter('bbbbbbbb', 2);
+  t.calls.joined('bbbbbbbb', { id: 2, username: 'u2' });
+  ctx.mock.timers.tick(45000);
+  t.leave('bbbbbbbb', 2);
+  t.leave('bbbbbbbb', 1);
+  t.enter('aaaaaaaa', 1);
+  t.calls.joined('aaaaaaaa', { id: 1, username: 'u1' });
+  t.calls.decline('aaaaaaaa', { id: 2, username: 'u2' });
+  t.calls.decline('aaaaaaaa', { id: 3, username: 'u3' });
+  ctx.mock.timers.tick(45000);
+  t.leave('aaaaaaaa', 1);
+  assert.equal(t.rows().length, 0);
+  assert.equal(t.events('new-message').length, 0);
+});
+test('in a group call one member answered, nobody is told they missed it', (ctx) => {
+  ctx.mock.timers.enable({ apis: ['setTimeout'] });
+  const t = setup();
+  t.enter('aaaaaaaa', 1);
+  t.calls.joined('aaaaaaaa', { id: 1, username: 'u1' });
+  t.enter('aaaaaaaa', 2);
+  t.calls.joined('aaaaaaaa', { id: 2, username: 'u2' });
+  ctx.mock.timers.tick(45000);
+  t.leave('aaaaaaaa', 2);
+  t.leave('aaaaaaaa', 1);
+  assert.equal(t.rows().length, 0);
+});
+test('a group call nobody answered leaves one message for the whole group', (ctx) => {
+  ctx.mock.timers.enable({ apis: ['setTimeout'] });
+  const t = setup();
+  t.enter('aaaaaaaa', 1);
+  t.calls.joined('aaaaaaaa', { id: 1, username: 'u1' });
+  t.calls.decline('aaaaaaaa', { id: 2, username: 'u2' });
+  ctx.mock.timers.tick(45000);
+  t.leave('aaaaaaaa', 1);
+  assert.equal(t.rows().length, 1);
+  assert.equal(t.rows()[0].channel_id, 1);
 });
