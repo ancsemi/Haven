@@ -296,7 +296,11 @@ function stripRoleMentions(content, roleNames) {
 // its file alive, but a file the sender had already shared in the open stays.
 function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null } = {}) {
   const owners = new Set((ownerIds || []).filter(id => Number.isInteger(id)));
-  if (!owners.size) return [];
+  // A message with no author (one Ferry carried from Discord) may take the
+  // files recorded with no owner: the copies Ferry made of that message's
+  // Discord files.
+  const authorless = (ownerIds || []).some(id => id === null);
+  if (!owners.size && !authorless) return [];
   const ownership = db.prepare('SELECT user_id, scope FROM upload_ownership WHERE rel_path = ?');
   const before = Number.isInteger(ignoreMessagesAfter) ? ignoreMessagesAfter : Number.MAX_SAFE_INTEGER;
   // A protected message keeps its files whenever it was posted.
@@ -318,7 +322,8 @@ function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null 
   for (const relPath of new Set(relPaths || [])) {
     if (typeof relPath !== 'string' || !relPath || out.length >= 200) continue;
     const own = ownership.get(relPath);
-    if (!own || !owners.has(own.user_id) || (own.scope !== 'channel' && own.scope !== 'dm')) continue;
+    if (!own || (own.scope !== 'channel' && own.scope !== 'dm')) continue;
+    if (own.user_id === null ? !authorless : !owners.has(own.user_id)) continue;
     const ref = '/uploads/' + relPath;
     try {
       if (inMessages.get(ref, before)) continue;
