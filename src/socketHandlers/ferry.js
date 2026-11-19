@@ -29,6 +29,7 @@ const TOGGLES = new Set([
   'ferry_allow_dms',
   'ferry_allow_mentions',
   'ferry_relay_bots',
+  'ferry_copy_files',
 ]);
 
 module.exports = function register(socket, ctx) {
