@@ -76,6 +76,7 @@ async switchChannel(code) {
     : channel ? `# ${channel.name}` : code;
 
   document.getElementById('channel-header-name').textContent = displayName;
+  this._markDmView(!!isDm);
   // Clear scramble cache so the effect picks up the new channel name
   const headerEl = document.getElementById('channel-header-name');
   if (headerEl) { delete headerEl.dataset.originalText; headerEl._scrambling = false; }
@@ -191,8 +192,13 @@ async switchChannel(code) {
   const _msgInput = document.getElementById('message-input');
   if (_msgInput) {
     const _forumCh = this.channels && this.channels.find(c => c.code === code);
+    // A DM's box says who the message goes to (#5920).
+    const _dmTo = isDm && !channel.is_group && channel.dm_target
+      ? this._getNickname(channel.dm_target.id, channel.dm_target.username) : '';
     _msgInput.placeholder = (_forumCh && _forumCh.is_forum)
       ? t('app.messages.placeholder_forum')
+      : _dmTo ? t('app.messages.placeholder_dm', { name: _dmTo })
+      : isDm ? t('app.messages.placeholder_dm_group')
       : t(window.innerWidth <= 480 ? 'app.messages.placeholder_short' : 'header.message_placeholder_commands');
   }
 
@@ -412,7 +418,16 @@ async _editTopic() {
   this.socket.emit('set-channel-topic', { code: this.currentChannel, topic: newTopic.slice(0, 256) });
 },
 
+// Marks the main pane as showing a DM, so it cannot be taken for a
+// channel (#5920): the header tag, and the accent line under the header.
+_markDmView(isDm) {
+  document.body.classList.toggle('viewing-dm', isDm);
+  const tag = document.getElementById('dm-private-tag');
+  if (tag) tag.style.display = isDm ? '' : 'none';
+},
+
 _showWelcome() {
+  this._markDmView(false);
   document.getElementById('message-area').style.display = 'none';
   document.getElementById('no-channel-msg').style.display = 'flex';
   document.getElementById('channel-header-name').textContent = t('header.select_channel');
