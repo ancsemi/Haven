@@ -62,3 +62,19 @@ test('an auto-mod refusal of a message or post gives the draft back, other refus
   handlers['automod-refused'](null);
   assert.deepEqual(restores(), []);
 });
+test('a slow-mode refusal gives the typed text back to the box it came from', () => {
+  const { _restoreRefusedDraft } = load('app-socket.js', { document: { getElementById: id => box }, Event: class { constructor(type) { this.type = type; } }, t: k => k });
+  const box = { value: '', dispatchEvent() {}, focus() { this.focused = true; } };
+  const self = { currentChannel: 'abc', _lastSendDraft: { text: 'hello there', code: 'abc', at: Date.now() } };
+  _restoreRefusedDraft.call(self, 'Slow mode: wait 12s before sending another message');
+  assert.equal(box.value, 'hello there');
+  assert.equal(self._lastSendDraft, null);
+  box.value = '';
+  self._lastSendDraft = { text: 'hi', code: 'abc', at: Date.now() };
+  _restoreRefusedDraft.call(self, 'Some other refusal');
+  assert.equal(box.value, '');
+  self._lastSendDraft = { text: 'reply', code: 'parent', at: Date.now(), inputId: 'thread-input' };
+  self._activeThreadParent = 'parent';
+  _restoreRefusedDraft.call(self, 'Slow mode: wait 3s before sending another message');
+  assert.equal(box.value, 'reply');
+});

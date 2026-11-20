@@ -76,3 +76,15 @@ test('a file waiting in a scheduled message is kept', () => {
   db.prepare('INSERT INTO scheduled_messages (content) VALUES (?)').run('later\n[file:a.txt](/uploads/mine.png|1 KB)');
   assert.deepEqual(releasableUploads(db, ['mine.png'], [1]), []);
 });
+
+test('a message with no author takes the copies Ferry made, and nothing else', () => {
+  const db = fixture();
+  db.prepare('INSERT INTO upload_ownership (rel_path, user_id, bytes, scope) VALUES (?, NULL, 0, ?)').run('from-discord.png', 'channel');
+  assert.deepEqual(releasableUploads(db, ['from-discord.png', 'mine.png', 'unknown-legacy.png'], [null]), ['from-discord.png']);
+});
+
+test('a member cannot release a copy Ferry made by naming it', () => {
+  const db = fixture();
+  db.prepare('INSERT INTO upload_ownership (rel_path, user_id, bytes, scope) VALUES (?, NULL, 0, ?)').run('from-discord.png', 'channel');
+  assert.deepEqual(releasableUploads(db, ['from-discord.png'], [1]), []);
+});

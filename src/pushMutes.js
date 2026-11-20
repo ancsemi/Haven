@@ -16,7 +16,8 @@ const pingsEveryone = (text) => /(?<![\w@])@(everyone|here)\b/i.test(text);
 //   - a member they muted for themselves sends them none at all;
 //   - a muted server sends none except for DMs, and with "except @mentions"
 //     also for messages that mention them (or @everyone / @here) or reply
-//     to them.
+//     to them;
+//   - Do Not Disturb sends them none at all.
 // Returns a Set of user ids to leave out.
 function quietRecipients(db, { channelId, senderUserId, messageContent, replyToUserId }) {
   const quiet = new Set();
@@ -29,6 +30,7 @@ function quietRecipients(db, { channelId, senderUserId, messageContent, replyToU
     FROM user_preferences p JOIN users u ON u.id = p.user_id
     WHERE p.key IN ('server_mute', 'muted_users')
   `).all();
+  for (const u of db.prepare("SELECT id FROM users WHERE status = 'dnd'").all()) quiet.add(u.id);
   for (const r of rows) {
     if (r.key === 'muted_users') {
       let ids = [];

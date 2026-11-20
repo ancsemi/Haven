@@ -1065,7 +1065,7 @@ _renderAssignTab() {
       const mainSel = document.getElementById(notifSelect);
       if (mainSel) mainSel.value = val;
       // Play preview
-      this.notifications.play(event);
+      this.notifications.play(event, { preview: true });
     });
   });
 },

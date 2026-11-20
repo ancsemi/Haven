@@ -10,9 +10,9 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.29.81">
+  <link rel="stylesheet" href="/css/style.css?v=4.29.87">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
-  <script src="/js/theme-init.js?v=4.27.19"></script>
+  <script src="/js/theme-init.js?v=4.27.20"></script>
 </head>
 <body data-haven-page="app">
 
@@ -259,6 +259,14 @@
             <div id="custom-theme-editor" style="display:none">
               <canvas id="custom-hue-bar" width="206" height="18"></canvas>
               <canvas id="custom-triangle" width="206" height="180"></canvas>
+              <label class="toggle-row theme-base-toggle">
+                <span data-i18n="app.theme.custom_accent">Pick the highlight color separately</span>
+                <input type="checkbox" id="custom-accent-toggle">
+              </label>
+              <div id="custom-accent-picker" style="display:none">
+                <canvas id="custom-accent-hue-bar" width="206" height="18"></canvas>
+                <canvas id="custom-accent-triangle" width="206" height="180"></canvas>
+              </div>
               <label class="toggle-row theme-base-toggle">
                 <span data-i18n="app.theme.light_mode">Light Mode</span>
                 <input type="checkbox" data-color-base-toggle>
@@ -5602,19 +5610,19 @@
       </div>
     </div>
   </div>
-  <script src="/js/theme.js?v=4.29.55"></script>
+  <script src="/js/theme.js?v=4.29.56"></script>
   <script src="/js/theme-gallery.js?v=4.26.1"></script>
-  <script src="/js/notifications.js?v=4.23.6"></script>
+  <script src="/js/notifications.js?v=4.23.7"></script>
   <script src="/js/servers.js?v=4.23.9"></script>
   <script src="/js/voice-relay.js?v=4.29.76"></script>
-  <script src="/js/voice.js?v=4.29.76"></script>
+  <script src="/js/voice.js?v=4.29.83"></script>
   <script src="/js/modmode.js?v=4.21.0"></script>
   <script src="/js/e2e-group.js?v=4.21.0"></script>
   <script src="/js/e2e.js?v=4.21.0"></script>
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.81"></script>
+  <script type="module" src="/js/app.js?v=4.29.89"></script>
   <script src="/js/plugin-loader.js?v=4.29.63"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

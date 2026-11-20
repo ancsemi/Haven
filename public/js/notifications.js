@@ -163,6 +163,7 @@ class NotificationManager {
   // ── Public API ──────────────────────────────────────────
 
   play(event, opts) {
+    if (event !== 'sent' && window.app?.userStatus === 'dnd' && !(opts && opts.preview)) return;
     // Per-type opt-in: mentions, replies, DMs bypass master toggle if their own toggle is on
     if (opts && opts.isMention && this.mentionsEnabled) { /* allowed */ }
     else if (opts && opts.isReply && this.repliesEnabled) { /* allowed */ }

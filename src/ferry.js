@@ -44,6 +44,7 @@ const { accessContext, channelAccess, bits } = require('./discordPermissions');
 const { unescapeDiscord, forwardedMessage, quoteForwarded } = require('./discordText');
 const ferryReplies = require('./ferryReplies');
 const ferryReactions = require('./ferryReactions');
+const importFiles = require('./importFiles');
 const { isUsableEmoji } = require('./builtinEmojis');
 
 /**
@@ -183,6 +184,7 @@ function getConfig() {
     allowDms:       boolSetting('ferry_allow_dms', false),
     allowMentions:  boolSetting('ferry_allow_mentions', false),
     relayBots:      boolSetting('ferry_relay_bots', false),
+    copyFiles:      boolSetting('ferry_copy_files', false),
     // "=>" and not ">>": a leading ">" is Haven's blockquote marker, so an
     // unresolved ">>Server#general hi" would silently render as a quote
     // instead of showing the user that their target did not match. "=>" has no
@@ -582,11 +584,11 @@ function handleDispatch(type, d) {
     }
 
     case 'MESSAGE_CREATE':
-      relayToHaven(d);
+      inbound(d, relayToHaven);
       break;
 
     case 'MESSAGE_UPDATE':
-      relayEditToHaven(d);
+      inbound(d, relayEditToHaven, () => relayedMessages.get(d.id)?.files, () => relayedMessages.has(d.id));
       break;
 
     case 'MESSAGE_REACTION_ADD':
@@ -745,6 +747,109 @@ function cacheChannel(c) {
 // Discord → Haven
 // ══════════════════════════════════════════════════════════════
 
+const DISCORD_FILE_LINK = /https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/attachments\//;
+// A live message is not held up for a minute by one slow file.
+const FILE_COPY_TIMEOUT_MS = 20000;
+let inboundTail = Promise.resolve();
+let inboundWaiting = 0;
+
+// Whether a message is one Ferry will carry into Haven, as far as can be told
+// before its text is built: the same early checks relayToHaven makes, and a
+// pairing that brings this channel (or the channel its thread is in) to
+// Haven. Files are only fetched for these. Without it the bot would download
+// every file from every Discord channel it can see, paired or not, and from
+// its own messages coming back.
+function carriedToHaven(msg) {
+  if (!msg || !msg.channel_id) return false;
+  if (msg.webhook_id && ownWebhookIds.has(msg.webhook_id)) return false;
+  if (botUser && msg.author && msg.author.id === botUser.id) return false;
+  if (msg.author && msg.author.bot && !boolSetting('ferry_relay_bots', false)) return false;
+  if (msg.type !== undefined && msg.type !== 0 && msg.type !== 19) return false;
+  const channelId = String(msg.channel_id);
+  try {
+    if (mappedTopics(channelId).some(r => r.inbound)) return true;
+    const paired = deps.db.prepare(
+      "SELECT 1 FROM ferry_links WHERE discord_channel_id = ? AND is_active = 1 AND direction IN ('both','to_haven') LIMIT 1"
+    );
+    if (paired.get(channelId)) return true;
+    const thread = threads.get(channelId);
+    return !!(thread && paired.get(thread.parentId));
+  } catch (err) {
+    // Not knowing whether the channel is paired means nothing is fetched.
+    console.warn('[ferry] pairing lookup failed, files stay links:', err.message);
+    return false;
+  }
+}
+
+// Copies the files of a message into Haven's uploads (src/importFiles.js: the
+// upload size limit, the blocked file types, the disk reserve and the privacy
+// pass apply), so they do not turn into dead links when Discord's signed
+// links expire. Off unless the admin turned it on. `known` holds the copies
+// of an earlier version of the message, so an edit does not copy them again.
+// A file that cannot be copied stays a link. The names of the new copies are
+// left in `msg._newFiles`.
+async function keepFiles(msg, known) {
+  msg._files = new Map(known || []);
+  msg._newFiles = [];
+  if (!boolSetting('ferry_copy_files', false)) return;
+  const capBytes = (parseInt(getSetting('max_upload_mb', ''), 10) || 25) * 1024 * 1024;
+  await importFiles.storeDiscordFiles(importFiles.fileUrlsIn(buildHavenContent(msg)), {
+    capBytes,
+    known: msg._files,
+    blocked: getSetting('blocked_upload_extensions', ''),
+    timeoutMs: FILE_COPY_TIMEOUT_MS,
+    onStored: (stored, bytes) => { msg._newFiles.push(stored); recordCopy(stored, bytes); },
+  });
+}
+
+// A copy belongs to no member: it is recorded with no owner, which is what
+// lets deleting the relayed message take the file with it (releasableUploads
+// in src/socketHandlers/helpers.js).
+function recordCopy(stored, bytes) {
+  try {
+    deps.db.prepare("INSERT OR REPLACE INTO upload_ownership (rel_path, user_id, bytes, scope) VALUES (?, NULL, ?, 'channel')")
+      .run(stored, Math.max(0, Math.round(bytes) || 0));
+  } catch (err) {
+    console.warn('[ferry] could not record a copied file:', err.message);
+  }
+}
+
+// Copies made for a message that then did not reach Haven (nothing left of
+// it after the content rules, say) are removed, so they do not sit in
+// uploads with nothing pointing at them.
+async function dropUnusedCopies(msg) {
+  const fresh = msg._newFiles || [];
+  if (!fresh.length) return;
+  const text = relayedMessages.get(msg.id)?.content || '';
+  for (const stored of fresh) {
+    if (text.includes(`/uploads/${stored}`)) continue;
+    await require('./storage').remove(stored);
+    try {
+      deps.db.prepare('DELETE FROM upload_ownership WHERE rel_path = ? AND user_id IS NULL').run(stored);
+    } catch (err) {
+      console.warn('[ferry] could not clear the record of a removed copy:', err.message);
+    }
+  }
+}
+
+// A message with files waits for their copies, and everything after it waits
+// for the message, so Haven keeps Discord's order. Only a message Ferry will
+// carry has its files copied.
+function inbound(msg, relay, knownFiles = () => null, wanted = carriedToHaven) {
+  const copy = boolSetting('ferry_copy_files', false) && DISCORD_FILE_LINK.test(JSON.stringify(msg)) && wanted(msg);
+  if (!inboundWaiting && !copy) return relay(msg);
+  inboundWaiting++;
+  inboundTail = inboundTail
+    .then(async () => {
+      if (copy) await keepFiles(msg, knownFiles());
+      relay(msg);
+      if (copy) await dropUnusedCopies(msg);
+    })
+    .catch(err => console.error('Ferry file copy error:', err.message))
+    .finally(() => { inboundWaiting--; });
+  return inboundTail;
+}
+
 function relayToHaven(msg) {
   try {
     if (!msg || !msg.channel_id) return;
@@ -810,18 +915,18 @@ function relayToHaven(msg) {
       }
       touchLink(link.id, null);
     }
-    if (targets.length) rememberRelay(msg.id, content, targets);
+    if (targets.length) rememberRelay(msg.id, content, targets, msg._files);
   } catch (err) {
     console.error('Ferry inbound relay error:', err.message);
   }
 }
 
-function rememberRelay(discordMessageId, content, targets) {
+function rememberRelay(discordMessageId, content, targets, files = null) {
   // Map preserves insertion order, so the first key is the oldest entry.
   if (relayedMessages.size >= RELAY_MAP_MAX) {
     relayedMessages.delete(relayedMessages.keys().next().value);
   }
-  relayedMessages.set(discordMessageId, { content, targets });
+  relayedMessages.set(discordMessageId, { content, targets, files });
 }
 
 /**
@@ -843,6 +948,9 @@ function relayEditToHaven(msg) {
     if (!known) return;
 
     const content = buildHavenContent(msg);
+    // An edit whose files were not copied (copying is off) keeps the copies
+    // the message already has.
+    if (msg._files) known.files = msg._files;
     if (!content || content === known.content) return;
 
     known.content = content;
@@ -974,7 +1082,7 @@ function relayForumMessage(msg) {
       if (id) targets.push({ havenMessageId: id, channelCode: r.channel_code });
       touchLink(r.link_id, null);
     }
-    if (targets.length) rememberRelay(msg.id, content, targets);
+    if (targets.length) rememberRelay(msg.id, content, targets, msg._files);
     return true;
   }
 
@@ -1026,7 +1134,7 @@ function relayChatThreadReply(msg, thread) {
     if (id) targets.push({ havenMessageId: id, channelCode: link.channel_code });
     touchLink(link.id, null);
   }
-  if (targets.length) rememberRelay(msg.id, content, targets);
+  if (targets.length) rememberRelay(msg.id, content, targets, msg._files);
 }
 
 function stashStarter(msg) {
@@ -1159,7 +1267,7 @@ function relayForumStarter(msg, thread) {
       targets.push({ havenMessageId: topicId, channelCode: link.channel_code });
       touchLink(link.id, null);
     }
-    if (targets.length) rememberRelay(msg.id, content, targets);
+    if (targets.length) rememberRelay(msg.id, content, targets, msg._files);
   } catch (err) {
     console.error('Ferry forum relay error:', err.message);
   }
@@ -1236,18 +1344,19 @@ function relayThreadDeleteToHaven(d) {
 
 /**
  * Flattens a Discord message into the plain text Haven stores. Attachments and
- * stickers become links rather than being re-hosted: Discord CDN links are
- * signed and expire after roughly a day, so a copy in Haven's uploads folder
- * would be the only durable option and that is a disk-growth decision for the
- * admin, not something a bridge should do silently.
+ * stickers become links. Discord CDN links are signed and expire after roughly
+ * a day, so keepFiles copies a message's attachments into Haven's uploads
+ * first (unless the admin turned that off) and leaves their copies in
+ * `msg._files`, which replace the links here. A file that could not be copied
+ * stays a link.
  */
 function buildHavenContent(msg) {
   // A forward has no content of its own: what was forwarded comes through,
   // quoted under "Forwarded", held to the same rules as anything else.
   const fwd = forwardedMessage(msg);
   if (fwd && !msg.content && !(msg.attachments || []).length) {
-    const inner = buildHavenContent({ ...fwd, guild_id: msg.guild_id, mention_everyone: false, message_snapshots: null });
-    return inner ? quoteForwarded(inner).slice(0, 4000) : '';
+    const inner = buildHavenContent({ ...fwd, guild_id: msg.guild_id, mention_everyone: false, message_snapshots: null, _files: msg._files });
+    return inner ? quoteForwarded(inner).replace(/^> (\/uploads\/\S+|\[file:[^\n]*\]\(\/uploads\/[^\n]*\))$/gm, '$1').slice(0, 4000) : '';
   }
 
   // What the Discord author actually typed, and what Discord itself attached,
@@ -1374,7 +1483,7 @@ function buildHavenContent(msg) {
   } catch (err) { noteAutomodFault(err); }
 
   // A picture referenced from both a component and an attachment goes once.
-  const uniqueMedia = [...new Set(media.filter(Boolean))];
+  const uniqueMedia = [...new Set(media.filter(Boolean).map(url => msg._files?.get(importFiles.fileKey(url)) || url))];
   return cleanOf([...authored, ...uniqueMedia].join('\n').slice(0, 4000));
 }
 
@@ -2321,6 +2430,7 @@ function getFerryState() {
     allowDms: cfg.allowDms,
     allowMentions: cfg.allowMentions,
     relayBots: cfg.relayBots,
+    copyFiles: cfg.copyFiles,
     trigger: cfg.trigger,
     // The admin needs to know avatars will be missing before wondering why.
     publicUrlSet: !!(process.env.PUBLIC_URL || '').trim(),
@@ -2365,6 +2475,8 @@ module.exports = {
   resolveFerryTarget,
   sanitizeWebhookUsername,
   buildHavenContent,
+  keepFiles,
+  inbound,
   translateHavenEmotes,
   translateDiscordRefs,
   translateHavenRefs,

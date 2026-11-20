@@ -606,6 +606,7 @@ export default {
         ${toggle('ferry_allow_dms', t('modals.ferry.allow_dms'), t('modals.ferry.allow_dms_hint'), st.allowDms, false)}
         ${toggle('ferry_allow_mentions', t('modals.ferry.allow_mentions'), t('modals.ferry.allow_mentions_hint'), st.allowMentions, false)}
         ${toggle('ferry_relay_bots', t('modals.ferry.relay_bots'), t('modals.ferry.relay_bots_hint'), st.relayBots, false)}
+        ${toggle('ferry_copy_files', t('modals.ferry.copy_files'), t('modals.ferry.copy_files_hint'), st.copyFiles, false)}
         ${publicUrlWarning}
       </details>
     `;

@@ -213,12 +213,13 @@ _bindAppChrome() {
   this._e2ePwLocked = false;
   this._e2ePwPendingAction = null;
 
+  document.addEventListener('paste', () => { this._lastPasteAt = Date.now(); }, true);
   // Global keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     // Type-to-focus: start typing anywhere and the message box takes over.
     // No preventDefault, so the browser inserts the keystroke into the newly
     // focused textarea. Nothing is dropped.
-    const pasteKey = (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'v';
+    const pasteKey = (e.ctrlKey || e.metaKey) && !e.altKey && this._shortcutKey(e) === 'v';
     if ((pasteKey || e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) && !e.isComposing) {
       const ae = document.activeElement;
       const tag = ae?.tagName;
@@ -233,21 +234,24 @@ _bindAppChrome() {
         msgInput.focus();
       }
     }
+    if (pasteKey && e.code !== 'KeyV' && !e.repeat && !e.isComposing) this._pasteIfKeyMissed();
 
+    // AltGr arrives as Ctrl+Alt on Windows and types a character, and
+    // Ctrl+Shift+letter belongs to the browser, so neither is a shortcut here.
     // Ctrl+F = search
-    if ((e.ctrlKey || e.metaKey) && e.key === 'f' && this.currentChannel) {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && this._shortcutKey(e) === 'f' && this.currentChannel) {
       e.preventDefault();
       const sc = document.getElementById('search-container');
       sc.style.display = 'flex';
       document.getElementById('search-input').focus();
     }
     // Ctrl+K = quick channel switcher
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && this._shortcutKey(e) === 'k') {
       e.preventDefault();
       this._openQuickSwitcher();
     }
     // Ctrl+E = toggle emoji picker (open/close)
-    if ((e.ctrlKey || e.metaKey) && e.key === 'e' && this.currentChannel) {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && this._shortcutKey(e) === 'e' && this.currentChannel) {
       e.preventDefault();
       this._emojiPickerContext = 'main';
       this._aimEmojiAtComposer();
@@ -563,6 +567,39 @@ _setupImageUpload() {
 _pasteIsLinkWithPreview(e) {
   const text = (e.clipboardData?.getData('text/plain') || '').trim();
   return /^https?:\/\/\S+$/i.test(text);
+},
+_shortcutKey(e) {
+  return /^[a-z]$/i.test(e.key || '') ? e.key.toLowerCase() : /^Key[A-Z]$/.test(e.code || '') ? e.code.slice(3).toLowerCase() : (e.key || '').toLowerCase();
+},
+_pasteIfKeyMissed() {
+  const at = Date.now();
+  setTimeout(() => {
+    const el = document.activeElement;
+    const typing = el && !el.readOnly && !el.disabled && (el.isContentEditable || el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && /^(text|search|url|email|tel|number)$/.test(el.type)));
+    if (typing && (this._lastPasteAt || 0) < at) this._pasteFromClipboard(el);
+  }, 150);
+},
+async _pasteFromClipboard(el) {
+  const dt = new DataTransfer();
+  try {
+    for (const item of await navigator.clipboard.read()) for (const type of item.types) {
+      const blob = await item.getType(type);
+      if (type === 'text/plain') dt.setData(type, await blob.text());
+      else if (type.startsWith('image/')) dt.items.add(new File([blob], `pasted.${type.slice(6).split('+')[0]}`, { type }));
+    }
+  } catch {
+    // Reading pictures was refused or is not supported: fall back to the text.
+    try { dt.setData('text/plain', await navigator.clipboard.readText()); } catch {
+      // The browser will not hand over the clipboard, so there is nothing to paste.
+      return;
+    }
+  }
+  // The read can wait on a permission prompt; paste only where the key was pressed.
+  if (document.activeElement !== el) return;
+  const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+  el.dispatchEvent(ev);
+  const text = dt.getData('text/plain');
+  if (!ev.defaultPrevented && text) document.execCommand('insertText', false, text);
 },
 
 // ═══════════════════════════════════════════════════════

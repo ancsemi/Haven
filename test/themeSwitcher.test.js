@@ -241,3 +241,37 @@ test('every native select and its options use the theme input colors', () => {
   assert.match(option[1], /background-color:\s*var\(--bg-input\)/);
   assert.match(option[1], /color:\s*var\(--text-primary\)/);
 });
+test('Custom without a separate highlight color makes the palette it always did', () => {
+  const page = loadThemePage();
+  const golden = { '120,0.8,0.9,false': ['#2ee62e', '#59ff59', '#12b312', 'rgba(46,230,46, 0.31)', '#f252f2', '#111811'], '260,0.75,0.95,false': ['#793df2', '#9966ff', '#531dbf', 'rgba(121,61,242, 0.30)', '#bef255', '#131118'], '30,0.4,0.6,true': ['#997a5c', '#bfa78f', '#664d33', 'rgba(153,122,92, 0.23)', '#3b648c', '#fbf7f4'], '200,1,1,true': ['#0092db', '#26b7ff', '#0070a8', 'rgba(0,170,255, 0.35)', '#8c4b2a', '#ecf6fb'] };
+  for (const [key, want] of Object.entries(golden)) {
+    const [h, s, v, light] = key.split(',');
+    const p = page.context.generateCustomPalette(+h, +s, +v, +s, light === 'true');
+    assert.deepEqual([p['--accent'], p['--accent-hover'], p['--accent-dim'], p['--accent-glow'], p['--text-link'], p['--bg-primary']], want);
+    assert.deepEqual(page.context.generateCustomPalette(+h, +s, +v, +s, light === 'true', { h: +h, s: +s, v: +v }), p);
+  }
+});
+test('a separate highlight color changes the accent and link colors and leaves the background alone', () => {
+  const page = loadThemePage();
+  const plain = page.context.generateCustomPalette(120, 0.8, 0.9, 0.8, false);
+  const split = page.context.generateCustomPalette(120, 0.8, 0.9, 0.8, false, { h: 20, s: 0.9, v: 0.95 });
+  const alone = page.context.generateCustomPalette(20, 0.9, 0.95, 0.8, false);
+  for (const key of ['--accent', '--accent-hover', '--accent-dim', '--accent-glow', '--text-link']) {
+    assert.equal(split[key], alone[key]);
+    assert.notEqual(split[key], plain[key]);
+  }
+  for (const key of ['--bg-primary', '--bg-secondary', '--bg-card', '--border', '--text-primary', '--success', '--danger']) assert.equal(split[key], plain[key]);
+});
+test('an account with a saved highlight color gets it on Custom and a damaged one is ignored', () => {
+  const hsv = { h: 120, s: 0.8, v: 0.9, a: { h: 20, s: 0.9, v: 0.95 } };
+  const page = loadThemePage({ haven_theme: 'custom', haven_custom_hsv: JSON.stringify(hsv) });
+  page.context.initThemeSwitcher('theme-selector');
+  page.runTimers();
+  const expected = page.context.generateCustomPalette(120, 0.8, 0.9, 0.8, false, hsv.a);
+  assert.equal(page.root.style.props.get('--accent'), expected['--accent']);
+  assert.equal(page.root.style.props.get('--bg-primary'), expected['--bg-primary']);
+  const bad = loadThemePage({ haven_theme: 'custom', haven_custom_hsv: JSON.stringify({ h: 120, s: 0.8, v: 0.9, a: { h: 'x' } }) });
+  bad.context.initThemeSwitcher('theme-selector');
+  bad.runTimers();
+  assert.equal(bad.root.style.props.get('--accent'), page.context.generateCustomPalette(120, 0.8, 0.9, 0.8, false)['--accent']);
+});
