@@ -1285,7 +1285,7 @@ _createMessageEl(msg, prevMsg) {
 
   const botBadge = msg.imported_from === 'discord'
     ? '<span class="discord-badge">DISCORD</span>'
-    : msg.is_webhook ? '<span class="bot-badge">BOT</span>' : '';
+    : msg.is_webhook || msg.bot ? '<span class="bot-badge">BOT</span>' : '';
 
   // Persona badge (#86, #5349), shown when message was sent via a user persona
   const personaBadge = msg.persona_id

@@ -9,6 +9,10 @@
 //   update-channel-members { code, add, remove } -> { success, added, removed } or { error }
 //   add-channel-members { code, userIds } -> { success, added } or { error }
 //   add-all-members { code } -> { success, added } or { error }
+//   get-member-channels { userId } gives { channels } or { error }
+//     one person's side of the same rules, for a bot's page in Settings:
+//     the channels they are in, and those you may add them to or take
+//     them out of. Changes go through update-channel-members.
 //
 // Who may add: the admin, Invite Users or Manage Server on a public channel,
 // and on a private one whoever may invite to it one by one (its creator or a
@@ -187,6 +191,32 @@ module.exports = function register(socket, ctx) {
     } catch (err) {
       console.error('[manage-members] load failed:', err.message);
       cb({ error: 'Could not load members' });
+    }
+  });
+
+  socket.on('get-member-channels', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    const userId = data && Number.isInteger(data.userId) ? data.userId : null;
+    const target = userId && db.prepare('SELECT id, is_admin, is_guest FROM users WHERE id = ?').get(userId);
+    if (!target) return cb({ error: 'User not found' });
+    try {
+      const inIds = new Set(db.prepare('SELECT channel_id FROM channel_members WHERE user_id = ?').all(userId).map(r => r.channel_id));
+      const channels = [];
+      for (const ch of db.prepare('SELECT id, code, name, parent_channel_id FROM channels WHERE is_dm = 0 ORDER BY position, name').all()) {
+        const a = access(ch.code);
+        const inChannel = inIds.has(ch.id);
+        const myLevel = a && !socket.user.isAdmin ? getUserEffectiveLevel(socket.user.id, ch.id) : Infinity;
+        const canAdd = !!a && a.canAdd && !inChannel;
+        const canRemove = !!a && inChannel && removable(a, target, myLevel);
+        // Channels they are in are listed when this person can see them.
+        if (canAdd || canRemove || (inChannel && (a || reachableChannelByCode(ctx, socket.user, ch.code) || socket.user.isAdmin))) {
+          channels.push({ code: ch.code, name: ch.name, sub: !!ch.parent_channel_id, inChannel, canAdd, canRemove });
+        }
+      }
+      cb({ channels });
+    } catch (err) {
+      console.error('[member-channels] failed:', err.message);
+      cb({ error: 'Could not load channels' });
     }
   });
 

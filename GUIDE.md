@@ -1603,7 +1603,7 @@ Haven has a built-in bot API powered by webhooks. Bots can send messages, edit a
 
 ### Creating a Bot
 
-1. Go to **Settings → Admin → Bots** (or open a channel's settings and look for the webhook/bot option)
+1. Go to **Settings → Bots & data → Webhooks** (or open a channel's settings and look for the webhook option)
 2. Create a new webhook. Give it a name, optionally set an avatar URL and a callback URL
 3. Copy the **Webhook Token** (64-character hex string). This is your bot's API key
 
@@ -1889,6 +1889,51 @@ X-Haven-Signature: sha256=<HMAC of the body with your callback secret>
 - Bot posts (its own included) are not sent back, so a bot cannot loop on itself.
 - DMs never reach a bot, and a bot only hears its channel while the person who made it can still read that channel.
 - The callback URL must be reachable from the server. A bot on your own network (`192.168.x`, `localhost`, a sibling Docker container) needs `HAVEN_ALLOW_PRIVATE_CALLBACKS=true` in `.env`. A failed delivery is retried once, and the last result shows on the bot's card in Settings.
+
+### Bot Accounts
+
+A webhook posts into one channel and hears it through a callback URL. A **bot account** is different: it is a member account that a program signs in to with a token, so it can do anything a member can, wherever its roles and channels let it. Use one for a bot that answers commands in many channels, reads threads, looks people up, or sets its own picture and status.
+
+**Making one.** Settings → Bots & data → **Bots** → Manage Bots → **+ New Bot**. This needs the **Manage Bots** permission (or the admin). The new bot gets the roles that are given to every new member, and joins the channels a new member joins. The page then shows:
+
+- **Token**: shown once, when the bot is made or a new one is made. Copy it then. If it is lost, **Make new token**: the old one stops working at once and the bot is signed out. Tokens never expire.
+- **Name and Picture**: a bot's name follows the username rules (3 to 20 letters, numbers or underscores) and must be free. The bot can rename itself too.
+- **Enable / Disable**: while disabled, its token is refused and it is signed out. Enabling it again brings the same token back.
+- **Managers**: people who may change the token, name and picture and turn the bot on or off, without any other permission. The bot's creator and anyone with Manage Bots may change this list.
+- **Channels**: add or remove the bot with the same rules as a channel's Manage members.
+- **Manage this bot's roles**: shown to people who can manage anyone's roles. Managers cannot change a bot's roles.
+- **Delete**: Manage Bots may delete a bot that has never posted. Once it has posted, only the admin can, and its messages are deleted with it.
+
+A bot account has no password and cannot sign in on the login page. Its messages and its entry in the member list carry a **BOT** tag.
+
+**Connecting.** A bot uses the same Socket.IO connection as the app, with the token as `auth.token`:
+
+```js
+const { io } = require('socket.io-client');
+const socket = io('https://your-server.com', { auth: { token: process.env.HAVEN_BOT_TOKEN } });
+socket.on('session-info', (me) => console.log('signed in as', me.username, me.botAccount));
+socket.emit('get-channels');
+socket.on('new-message', ({ channelCode, message }) => { /* answer commands */ });
+```
+
+From there it uses the app's own events, as a member does: `join-channel`, `send-message`, `send-thread-message`, `edit-message`, `delete-message`, `set-status`, and so on. Its picture is set with `POST /api/upload-avatar` (the token as a Bearer token) and then `set-avatar`. It renames itself with `rename-bot { botId, name }`, using its own id.
+
+**Embeds, buttons and dropdowns.** `send-message` and `send-thread-message` take the same `embeds` and `components` as a webhook (see Embeds, Buttons and Dropdowns above), and the text may be empty when there is an embed. Only bot accounts may send them. A click or a pick comes straight back over the bot's connection, with no callback URL:
+
+```js
+socket.on('bot-interaction', ({ channelCode, interaction }) => {
+  // interaction: { id, type: 'component', message_id, thread_id, custom_id,
+  //                component_type, values, user: { id, username } }
+});
+```
+
+The person who clicked sees "This bot is offline" when the bot is not connected. To change a message's embeds or components, for example to update a count or grey a button out, send `edit-bot-parts`:
+
+```js
+socket.emit('edit-bot-parts', { messageId, components: [] }, (res) => { /* { success } or { error } */ });
+```
+
+As with a webhook's edit, a list given replaces the message's own, an empty list removes them, and a list left out stays as it is.
 
 ---
 

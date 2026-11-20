@@ -11,6 +11,40 @@ const automod = require('../automod');
 const createPermissions = require('./permissions');
 const createAsyncPermissions = require('./asyncPermissions');
 
+// Puts an account into the channels a new member joins: the admin's default
+// join channels, or every open channel when none are set. Never a channel
+// whose code is hidden. Returns how many it joined. Also used for a new bot
+// account (socketHandlers/botAccounts.js).
+function joinDefaultChannels(db, userId) {
+  let targetRows = [];
+  try {
+    const djc = db.prepare("SELECT value FROM server_settings WHERE key = 'default_join_channels'").get();
+    const parsed = djc && djc.value ? JSON.parse(djc.value) : [];
+    const ids = Array.isArray(parsed)
+      ? parsed.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0)
+      : [];
+
+    if (ids.length > 0) {
+      const ph = ids.map(() => '?').join(',');
+      targetRows = db.prepare(
+        `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') AND id IN (${ph})`
+      ).all(...ids);
+    }
+  } catch {
+    targetRows = []; // a malformed default_join_channels setting: join nothing extra
+  }
+
+  if (targetRows.length === 0) {
+    targetRows = db.prepare(
+      "SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') ORDER BY position, name"
+    ).all();
+  }
+
+  const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
+  for (const row of targetRows) insertMember.run(row.id, userId);
+  return targetRows.length;
+}
+
 module.exports = function createChannelLists({ db, userHasPermission, roleGateAllows, getUserEffectiveLevel = createPermissions(db).getUserEffectiveLevel }) {
   function getChannelRows(userId, isAdmin) {
     // Holders of 'view_all_channels' (e.g. a server-wide Mod role) get the
@@ -70,33 +104,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
       if (channels.length === 0) {
         const userRow = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(userId);
         if (!userRow || !userRow.is_guest) {
-          let targetRows = [];
-          try {
-            const djc = db.prepare("SELECT value FROM server_settings WHERE key = 'default_join_channels'").get();
-            const parsed = djc && djc.value ? JSON.parse(djc.value) : [];
-            const ids = Array.isArray(parsed)
-              ? parsed.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0)
-              : [];
-
-            if (ids.length > 0) {
-              const ph = ids.map(() => '?').join(',');
-              targetRows = db.prepare(
-                `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') AND id IN (${ph})`
-              ).all(...ids);
-            }
-          } catch {
-            targetRows = []; // a malformed default_join_channels setting: join nothing extra
-          }
-
-          if (targetRows.length === 0) {
-            targetRows = db.prepare(
-              "SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') ORDER BY position, name"
-            ).all();
-          }
-
-          if (targetRows.length > 0) {
-            const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
-            for (const row of targetRows) insertMember.run(row.id, userId);
+          if (joinDefaultChannels(db, userId)) {
             channels = db.prepare(`
               SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm, c.is_group,
                      c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
@@ -595,3 +603,4 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
 
   return { getEnrichedChannels, getEnrichedChannelsAsync };
 };
+module.exports.joinDefaultChannels = joinDefaultChannels;

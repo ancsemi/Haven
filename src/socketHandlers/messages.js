@@ -25,6 +25,7 @@ const { messageChannel, messageChannelMember, messageForAction, messageAuthor,
         setProtection, listPins, formatPins } = require('../db/messageManagement');
 const { takeSilent } = require('../silentMessages');
 const botComponents = require('../botComponents');
+const { botIds } = require('../botAccounts');
 const { parseSlash } = require('../slashParse');
 const { tagAccess } = require('../uploadTagRoles');
 const { moveToChannel } = require('../moveMessages');
@@ -252,6 +253,15 @@ module.exports = function register(socket, ctx) {
     try { const a = JSON.parse(raw); return Array.isArray(a) ? a.filter(t => typeof t === 'string') : []; } catch { return []; }
   }
 
+  // What a bot account sent along with its text, checked; nothing for anyone
+  // else. { embeds, components, any } or { error }.
+  function botParts(data) {
+    if (!socket.user.botAccount) return { embeds: null, components: null, any: false };
+    const parts = botComponents.clean(data);
+    if (parts.error) return parts;
+    return { ...parts, any: !!(parts.embeds?.length || parts.components?.length) };
+  }
+
   socket.on('get-messages', (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
@@ -354,6 +364,7 @@ module.exports = function register(socket, ctx) {
     let highlightMap = new Map();
     let quoteMap = new Map();
     let botPartsMap = new Map();
+    let botAuthors = new Set();
     if (msgIds.length > 0) {
       const ph = msgIds.map(() => '?').join(',');
       db.prepare(`
@@ -373,6 +384,7 @@ module.exports = function register(socket, ctx) {
       highlightMap = highlights.lookup(db, msgIds);
       quoteMap = quotes.lookup(db, msgIds);
       botPartsMap = botComponents.lookup(db, msgIds);
+      botAuthors = botIds(db, messages.map(m => m.user_id));
 
       db.prepare(`SELECT message_id, title, data FROM role_menus WHERE message_id IN (${ph})`).all(...msgIds)
         .forEach(r => { const menu = ctx.buildRoleMenu?.(r, socket.user.id); if (menu) roleMenuMap.set(r.message_id, menu); });
@@ -459,6 +471,7 @@ module.exports = function register(socket, ctx) {
       if (highlightMap.has(m.id)) obj.highlight = highlightMap.get(m.id);
       if (quoteMap.has(m.id)) obj.quoteOf = quoteMap.get(m.id);
       if (botPartsMap.has(m.id)) Object.assign(obj, botPartsMap.get(m.id));
+      if (botAuthors.has(m.user_id)) obj.bot = true;
       obj.thread = threadMap.get(m.id) || null;
       if (threadNew && obj.thread && threadNew.has(m.id)) obj.thread = { ...obj.thread, newCount: threadNew.get(m.id) };
       // A forum topic is unread until you open it (your own topics start
@@ -1200,7 +1213,11 @@ module.exports = function register(socket, ctx) {
     let content = typeof data.content === 'string' ? data.content : '';
 
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
-    if (!content || content.trim().length === 0) return;
+    // Embeds, buttons and dropdowns come from bot accounts only, and an
+    // embed alone is a whole message (src/botComponents.js).
+    const parts = botParts(data);
+    if (parts.error) return socket.emit('error-msg', parts.error);
+    if ((!content || content.trim().length === 0) && !parts.any) return;
     // Silent messages (src/silentMessages.js): "@silent" up front, or the
     // composer's toggle. No sound, pop-up or push for anyone.
     const _silentPick = takeSilent(content, data.silent);
@@ -1388,6 +1405,7 @@ module.exports = function register(socket, ctx) {
           created_at: new Date().toISOString(),
           username: socket.user.displayName,
           user_id: socket.user.id,
+          bot: socket.user.botAccount || undefined,
           avatar: socket.user.avatar || null,
           avatar_shape: socket.user.avatar_shape || 'circle',
           border: socket.user.border || null,
@@ -1417,7 +1435,7 @@ module.exports = function register(socket, ctx) {
 
     let replyTo = isInt(data.replyTo) ? data.replyTo : null;
     const safeContent = sanitizeText(content.trim());
-    if (!safeContent) return;
+    if (!safeContent && !parts.any) return;
 
     // Validate replyTo belongs to same channel (prevents cross-channel data leaks).
     // A self destructing message takes no replies, so nothing outlives it.
@@ -1572,6 +1590,7 @@ module.exports = function register(socket, ctx) {
         created_at: new Date().toISOString(),
         username: personaUsername || socket.user.displayName,
         user_id: socket.user.id,
+        bot: socket.user.botAccount || undefined,
         avatar: personaAvatar || socket.user.avatar || null,
         avatar_shape: personaId ? 'circle' : (socket.user.avatar_shape || 'circle'),
         border: personaId ? null : (socket.user.border || null),
@@ -1603,6 +1622,12 @@ module.exports = function register(socket, ctx) {
         } catch (err) {
           console.warn('[highlight] could not mark a new message:', err.message);
         }
+      }
+
+      if (parts.any) {
+        botComponents.record(db, message.id, parts);
+        if (parts.embeds?.length) message.embeds = parts.embeds;
+        if (parts.components?.length) message.components = parts.components;
       }
 
       // Sent from the Quote action: the quote leads back to its message
@@ -2682,6 +2707,7 @@ module.exports = function register(socket, ctx) {
         created_at: new Date().toISOString(),
         username: socket.user.displayName,
         user_id: socket.user.id,
+        bot: socket.user.botAccount || undefined,
         avatar: socket.user.avatar || null,
         avatar_shape: socket.user.avatar_shape || 'circle',
         border: socket.user.border || null,
@@ -2948,9 +2974,11 @@ module.exports = function register(socket, ctx) {
     const blogParts = forumBlog.blogOn(db, channel.id) ? forumBlog.partIdsOf(db, parentId) : null;
 
     const threadBotParts = botComponents.lookup(db, msgIds);
+    const threadBots = botIds(db, messages.map(m => m.user_id));
     const enriched = messages.map(m => {
       const obj = formatThreadMessage(m, replyMap.get(m.reply_to), reactionMap.get(m.id));
       if (threadBotParts.has(m.id)) Object.assign(obj, threadBotParts.get(m.id));
+      if (threadBots.has(m.user_id)) obj.bot = true;
       const atags = threadTagMap.get(m.id);
       if (atags && atags.length) obj.attachmentTags = atags;
       if (blogParts) obj.post_part = blogParts.has(m.id);
@@ -2977,7 +3005,9 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const parentId = isInt(data.parentId) ? data.parentId : null;
     let content = typeof data.content === 'string' ? data.content.trim() : '';
-    if (!parentId || !content) return;
+    const parts = botParts(data);
+    if (parts.error) return socket.emit('error-msg', parts.error);
+    if (!parentId || (!content && !parts.any)) return;
     // A silent reply makes no sound for anyone (src/silentMessages.js).
     const tSilent = takeSilent(content, data.silent);
     content = tSilent.content.trim();
@@ -3040,7 +3070,7 @@ module.exports = function register(socket, ctx) {
     if (tSlow) return socket.emit('error-msg', tSlow);
 
     const safeContent = sanitizeText(pingSafe(content, socket.user.id, channel.id));
-    if (!safeContent) return;
+    if (!safeContent && !parts.any) return;
 
     let replyTo = isInt(data.replyTo) ? data.replyTo : null;
     if (replyTo) {
@@ -3072,6 +3102,7 @@ module.exports = function register(socket, ctx) {
         created_at: new Date().toISOString(),
         username: socket.user.displayName,
         user_id: socket.user.id,
+        bot: socket.user.botAccount || undefined,
         avatar: socket.user.avatar || null,
         avatar_shape: socket.user.avatar_shape || 'circle',
         border: socket.user.border || null,
@@ -3084,6 +3115,11 @@ module.exports = function register(socket, ctx) {
         thread_id: parentId,
         silent: tSilent.silent ? true : undefined
       };
+      if (parts.any) {
+        botComponents.record(db, message.id, parts);
+        if (parts.embeds?.length) message.embeds = parts.embeds;
+        if (parts.components?.length) message.components = parts.components;
+      }
 
       if (replyTo) message.replyContext = toReplyContext(threadReplyContexts(db, [replyTo])[0]);
       // Blog mode (#5742): the server, not the sender, says whether this is
