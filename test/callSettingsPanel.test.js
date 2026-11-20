@@ -575,14 +575,15 @@ async function setupSidebarAndPopup() {
   const screen = loadScreenWebcamMethods(doc);
   const app = Object.assign({ voice }, Methods, {
     _toggleFullscreenAudioPopover: screen._toggleFullscreenAudioPopover,
-    _closeFullscreenAudioPopover: screen._closeFullscreenAudioPopover,
+    _closeFullscreenPopover: screen._closeFullscreenPopover,
+    _watchFullscreenPopoverOutside: screen._watchFullscreenPopoverOutside,
   });
   app.callSettings = createCallSettings({ storage, getVoice: () => voice });
   globalThis.document = doc;
   globalThis.t = tr;
   app._mountVoiceSettingsPanel();
   const open = () => app._toggleFullscreenAudioPopover(tile, popover, trigger);
-  const close = () => app._closeFullscreenAudioPopover(tile, popover, trigger);
+  const close = () => app._closeFullscreenPopover(tile, popover, trigger);
   const done = () => { app.voiceSettingsPanel.destroy(); delete globalThis.document; delete globalThis.t; };
   return { app, doc, sidebar, popover, tile, trigger, storage, voice, open, close, done };
 }
@@ -635,13 +636,15 @@ test('closing the popup leaves no listeners, subscriptions or meter loop behind'
   let nextFrame = 1;
   globalThis.requestAnimationFrame = () => { const id = nextFrame++; frames.add(id); return id; };
   globalThis.cancelAnimationFrame = (id) => frames.delete(id);
-  const { app, popover, open, close, done } = await setupSidebarAndPopup();
+  const { app, doc, popover, open, close, done } = await setupSidebarAndPopup();
   try {
     const sidebarFrames = frames.size;
     open();
     assert.equal(frames.size, sidebarFrames + 1, 'the popup meter runs while open');
+    assert.equal((doc.listeners.pointerdown || []).length, 1, 'a click outside is watched while open');
     const nodes = popover.querySelectorAll('*');
     close();
+    assert.equal((doc.listeners.pointerdown || []).length, 0, 'and no longer once closed');
     assert.equal(frames.size, sidebarFrames, 'its loop is cancelled on close');
     assert.equal(popover.childNodes.length, 0);
     assert.equal(nodes.reduce((sum, n) => sum + n.listenerCount(), 0), 0);

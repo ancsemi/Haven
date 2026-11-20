@@ -196,6 +196,12 @@ function makeDocument() {
     createElement: (tag) => new FakeElement(tag, doc),
     createTextNode: (text) => new FakeText(text),
     getElementById(id) { return doc.body.querySelector(`#${id}`); },
+    // Document-level listeners, as a fullscreen popup's outside-click watch uses.
+    listeners: {},
+    addEventListener(type, fn) { (doc.listeners[type] ||= []).push(fn); },
+    removeEventListener(type, fn) {
+      doc.listeners[type] = (doc.listeners[type] || []).filter((item) => item !== fn);
+    },
   };
   doc.body = new FakeElement('body', doc);
   return doc;

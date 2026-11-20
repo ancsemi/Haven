@@ -141,6 +141,10 @@ class FakeElement {
     return found;
   }
 
+  contains(element) {
+    return element === this || this.children.some(child => child.contains(element));
+  }
+
   remove() {
     if (!this.parentNode) return;
     this.parentNode.children = this.parentNode.children.filter(child => child !== this);
@@ -236,7 +240,11 @@ function renderWebcamTile(globals = {}) {
     getElementById: id => elements.get(id) || null,
     querySelectorAll: () => [],
     addEventListener: (type, listener) => { (documentListeners[type] ||= []).push(listener); },
-    dispatch: type => (documentListeners[type] || []).forEach(listener => listener()),
+    removeEventListener: (type, listener) => {
+      documentListeners[type] = (documentListeners[type] || []).filter(item => item !== listener);
+    },
+    listenerCount: type => (documentListeners[type] || []).length,
+    dispatch: (type, event) => (documentListeners[type] || []).forEach(listener => listener(event)),
   };
   const localStorage = { getItem: () => null, setItem() {} };
   const methods = loadMethods({
@@ -285,7 +293,11 @@ function renderScreenShareTile() {
     getElementById: id => elements.get(id) || null,
     querySelectorAll: () => [],
     addEventListener: (type, listener) => { (documentListeners[type] ||= []).push(listener); },
-    dispatch: type => (documentListeners[type] || []).forEach(listener => listener()),
+    removeEventListener: (type, listener) => {
+      documentListeners[type] = (documentListeners[type] || []).filter(item => item !== listener);
+    },
+    listenerCount: type => (documentListeners[type] || []).length,
+    dispatch: (type, event) => (documentListeners[type] || []).forEach(listener => listener(event)),
   };
   const methods = loadMethods({
     document,
@@ -308,7 +320,7 @@ function renderScreenShareTile() {
   return { document, tile };
 }
 
-function renderBothMediaTiles({ localCamera = false } = {}) {
+function renderBothMediaTiles({ localCamera = false, localStorage = { getItem: () => null } } = {}) {
   const webcamContainer = new FakeElement('div');
   const webcamGrid = new FakeElement('div');
   const webcamLabel = new FakeElement('div');
@@ -327,9 +339,13 @@ function renderBothMediaTiles({ localCamera = false } = {}) {
     getElementById: id => elements.get(id) || null,
     querySelectorAll: selector => roots.flatMap(root => root.querySelectorAll(selector)),
     addEventListener: (type, listener) => { (documentListeners[type] ||= []).push(listener); },
-    dispatch: type => (documentListeners[type] || []).forEach(listener => listener()),
+    removeEventListener: (type, listener) => {
+      documentListeners[type] = (documentListeners[type] || []).filter(item => item !== listener);
+    },
+    listenerCount: type => (documentListeners[type] || []).length,
+    dispatch: (type, event) => (documentListeners[type] || []).forEach(listener => listener(event)),
   };
-  const methods = loadMethods({ document, localStorage: { getItem: () => null } });
+  const methods = loadMethods({ document, localStorage });
   const voice = { inVoice: true, currentChannel: 'room', peerName: () => 'Participant' };
   const app = Object.assign({
     user: { id: localCamera ? 'peer-1' : 'self' },
@@ -354,6 +370,33 @@ function renderBothMediaTiles({ localCamera = false } = {}) {
   elements.set(shareTile.id, shareTile);
   app._refreshFullscreenStreamPicker?.();
   return { app, document, cameraTile, shareTile, webcamContainer, cameraStream, shareStream, cameraTrack, shareTrack };
+}
+
+function streamChoices(tile) {
+  return tile.querySelectorAll('.fullscreen-stream-option');
+}
+
+function streamChoiceValues(tile) {
+  return streamChoices(tile).map(box => box.value);
+}
+
+function streamChoiceLabels(tile) {
+  return tile.querySelectorAll('.fullscreen-stream-choice-label').map(label => label.textContent);
+}
+
+function setStreamShown(tile, sourceTileId, shown) {
+  const box = streamChoices(tile).find(item => item.value === sourceTileId);
+  assert.ok(box, `${sourceTileId} is offered in the stream list`);
+  box.checked = shown;
+  box.listeners.change[0]({ stopPropagation() {} });
+}
+
+// The old single-stream picker as a checklist: tick the stream, untick the rest.
+function showOnlyStream(tile, sourceTile) {
+  setStreamShown(tile, sourceTile.id, true);
+  for (const box of streamChoices(tile)) {
+    if (box.value !== sourceTile.id && box.checked) setStreamShown(tile, box.value, false);
+  }
 }
 
 test('the webcam fullscreen button requests fullscreen on its tile wrapper', () => {
@@ -403,18 +446,15 @@ test('fullscreen call controls render in the same sequence as the regular voice 
   const { cameraTile } = renderBothMediaTiles();
   const toolbar = cameraTile.querySelector('.fullscreen-call-toolbar');
   const controls = Array.from(toolbar.children)
-    .filter(child => child.className === 'fullscreen-stream-select' ||
-      child.className.split(/\s+/).includes('fullscreen-call-control'))
-    .map(child => child.className === 'fullscreen-stream-select'
-      ? child.className
-      : child.className.split(/\s+/).find(name => name.startsWith('fullscreen-call-') && name !== 'fullscreen-call-control'));
+    .filter(child => child.className.split(/\s+/).includes('fullscreen-call-control'))
+    .map(child => child.className.split(/\s+/).find(name => name.startsWith('fullscreen-call-') && name !== 'fullscreen-call-control'));
 
   assert.deepEqual(controls, [
     'fullscreen-call-mute',
     'fullscreen-call-deafen',
     'fullscreen-call-camera',
     'fullscreen-call-share',
-    'fullscreen-stream-select',
+    'fullscreen-call-streams',
     'fullscreen-call-grid',
     'fullscreen-call-audio',
     'fullscreen-call-leave',
@@ -535,14 +575,16 @@ test('the screen-share fullscreen button requests fullscreen on its tile wrapper
 
 test('the fullscreen stream picker keeps one participant camera and share as separate live options', () => {
   const { app, cameraTile, shareTile } = renderBothMediaTiles();
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
-  assert.ok(picker, 'each fullscreen toolbar has a stream picker');
-  assert.equal(picker.attributes['aria-label'], 'voice_runtime.stream');
-  assert.deepEqual(picker.children.map(option => option.textContent), [
+  const fsTile = cameraTile;
+  const pickerButton = cameraTile.querySelector('.fullscreen-call-streams');
+  assert.ok(pickerButton, 'each fullscreen toolbar has a stream picker');
+  assert.equal(pickerButton.attributes['aria-label'], 'voice_runtime.streams');
+  assert.equal(cameraTile.querySelector('.fullscreen-stream-popover').attributes['aria-label'], 'voice_runtime.streams');
+  assert.deepEqual(streamChoiceLabels(fsTile), [
     'Participant · voice.panel.camera',
     'Participant · voice.screen_share',
   ]);
-  assert.deepEqual(picker.children.map(option => option.value), [cameraTile.id, shareTile.id]);
+  assert.deepEqual(streamChoiceValues(fsTile), [cameraTile.id, shareTile.id]);
   assert.equal(app.voice.inVoice, true);
 });
 
@@ -557,9 +599,8 @@ test('switching a mirrored fullscreen camera to a screen share clears the mirror
   cameraTile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
   document.dispatch('fullscreenchange');
 
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
-  picker.value = shareTile.id;
-  picker.listeners.change[0]({ stopPropagation() {} });
+  const fsTile = cameraTile;
+  showOnlyStream(fsTile, shareTile);
 
   assert.equal(cameraVideo.srcObject, shareStream);
   assert.equal(cameraVideo.style.transform, '', 'the screen share should not inherit the camera mirror');
@@ -582,14 +623,12 @@ test('the fullscreen stream label follows the selected source and restores on ex
   cameraTile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
   document.dispatch('fullscreenchange');
 
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
-  const selectedOption = picker.children.find(option => option.value === shareTile.id);
-  picker.value = shareTile.id;
-  picker.listeners.change[0]({ stopPropagation() {} });
+  const fsTile = cameraTile;
+  showOnlyStream(fsTile, shareTile);
 
-  assert.equal(cameraLabel.textContent, selectedOption.textContent);
+  assert.equal(cameraLabel.textContent, 'Participant · voice.screen_share');
   app._refreshFullscreenStreamPicker();
-  assert.deepEqual(picker.children.map(option => option.textContent), [
+  assert.deepEqual(streamChoiceLabels(fsTile), [
     'Participant · voice.panel.camera',
     'Participant · voice.screen_share',
   ]);
@@ -611,14 +650,13 @@ test('fullscreen local stream labels use the account username instead of You', (
   cameraTile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
   document.dispatch('fullscreenchange');
 
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
-  assert.deepEqual(picker.children.map(option => option.textContent), [
+  const fsTile = cameraTile;
+  assert.deepEqual(streamChoiceLabels(fsTile), [
     'niko · voice.panel.camera',
     'niko · voice.screen_share',
   ]);
   assert.equal(cameraLabel.textContent, 'niko · voice.panel.camera');
-  picker.value = shareTile.id;
-  picker.listeners.change[0]({ stopPropagation() {} });
+  showOnlyStream(fsTile, shareTile);
   assert.equal(cameraLabel.textContent, 'niko · voice.screen_share');
 
   document.fullscreenElement = null;
@@ -637,9 +675,8 @@ test('switching a fullscreen screen share to the local camera mirrors it and res
   shareTile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
   document.dispatch('fullscreenchange');
 
-  const picker = shareTile.querySelector('.fullscreen-stream-select');
-  picker.value = cameraTile.id;
-  picker.listeners.change[0]({ stopPropagation() {} });
+  const fsTile = shareTile;
+  showOnlyStream(fsTile, cameraTile);
   assert.equal(shareVideo.srcObject, cameraStream);
   assert.equal(shareVideo.style.transform, 'scaleX(-1)', 'the selected local camera should be mirrored');
 
@@ -656,9 +693,7 @@ test('the fullscreen picker keeps camera labels correct after the wrapper gains 
 
   app._refreshFullscreenStreamPicker();
 
-  const cameraOption = cameraTile.querySelector('.fullscreen-stream-select').children
-    .find(option => option.value === cameraTile.id);
-  assert.equal(cameraOption.textContent, 'Participant · voice.panel.camera');
+  assert.equal(streamChoiceLabels(cameraTile)[0], 'Participant · voice.panel.camera');
 });
 
 test('the fullscreen picker excludes cameras inside a collapsed webcam container', () => {
@@ -667,53 +702,52 @@ test('the fullscreen picker excludes cameras inside a collapsed webcam container
 
   app._refreshFullscreenStreamPicker();
 
-  const picker = shareTile.querySelector('.fullscreen-stream-select');
-  assert.deepEqual(picker.children.map(option => option.value), [shareTile.id]);
+  const fsTile = shareTile;
+  assert.deepEqual(streamChoiceValues(fsTile), [shareTile.id]);
 });
 
 test('the fullscreen stream picker drops a webcam as soon as its tile ends', () => {
   const { app, cameraTile, shareTile } = renderBothMediaTiles();
-  const picker = shareTile.querySelector('.fullscreen-stream-select');
+  const fsTile = shareTile;
 
   app._handleWebcamStream('peer-1', null);
 
-  assert.deepEqual(picker.children.map(option => option.value), [shareTile.id]);
+  assert.deepEqual(streamChoiceValues(fsTile), [shareTile.id]);
 });
 
 test('hiding a live screen-share tile immediately removes it from the fullscreen picker', () => {
   const { app, document, cameraTile, shareTile } = renderBothMediaTiles();
   app._hideStreamTile = loadStreamTileMethods(document)._hideStreamTile;
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
+  const fsTile = cameraTile;
 
   app._hideStreamTile(shareTile, 'peer-1', 'Participant');
 
-  assert.deepEqual(picker.children.map(option => option.value), [cameraTile.id]);
+  assert.deepEqual(streamChoiceValues(fsTile), [cameraTile.id]);
 });
 
 test('hiding the selected source restores another live stream without leaving fullscreen', () => {
   const { app, document, cameraTile, shareTile, cameraStream } = renderBothMediaTiles();
   app._hideStreamTile = loadStreamTileMethods(document)._hideStreamTile;
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
+  const fsTile = cameraTile;
   cameraTile.requestFullscreen = () => {
     document.fullscreenElement = cameraTile;
     return Promise.resolve();
   };
   cameraTile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
   document.dispatch('fullscreenchange');
-  picker.value = shareTile.id;
-  picker.listeners.change[0]({ stopPropagation() {} });
+  showOnlyStream(fsTile, shareTile);
 
   app._hideStreamTile(shareTile, 'peer-1', 'Participant');
 
   assert.equal(document.fullscreenElement, cameraTile);
   assert.equal(cameraTile.querySelector('video').srcObject, cameraStream);
-  assert.deepEqual(picker.children.map(option => option.value), [cameraTile.id]);
+  assert.deepEqual(streamChoiceValues(fsTile), [cameraTile.id]);
 });
 
 test('switching the fullscreen picker rebinds the stable wrapper and restores its original stream on exit', () => {
   const { app, document, cameraTile, shareTile, cameraStream, shareStream } = renderBothMediaTiles();
   const cameraVideo = cameraTile.querySelector('video');
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
+  const fsTile = cameraTile;
   cameraTile.requestFullscreen = () => {
     document.fullscreenElement = cameraTile;
     return Promise.resolve();
@@ -721,8 +755,7 @@ test('switching the fullscreen picker rebinds the stable wrapper and restores it
   cameraTile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
   document.dispatch('fullscreenchange');
 
-  picker.value = shareTile.id;
-  picker.listeners.change[0]({ stopPropagation() {} });
+  showOnlyStream(fsTile, shareTile);
 
   assert.equal(document.fullscreenElement, cameraTile);
   assert.equal(cameraVideo.srcObject, shareStream);
@@ -737,35 +770,34 @@ test('ending the selected source removes its option and restores the still-live 
   app._cancelScreenNoAudioTimer = () => {};
   app._removeScreenSharePiP = () => {};
   app._stopStreamStallWatchdog = () => {};
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
+  const fsTile = cameraTile;
   cameraTile.requestFullscreen = () => {
     document.fullscreenElement = cameraTile;
     return Promise.resolve();
   };
   cameraTile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
   document.dispatch('fullscreenchange');
-  picker.value = shareTile.id;
-  picker.listeners.change[0]({ stopPropagation() {} });
+  showOnlyStream(fsTile, shareTile);
   assert.equal(cameraTile.querySelector('video').srcObject, shareStream, 'the selected share is displayed');
 
   app._handleScreenStream('peer-1', null);
 
   assert.equal(document.fullscreenElement, cameraTile);
   assert.equal(cameraTile.querySelector('video').srcObject, cameraStream, 'the original camera stream is restored');
-  assert.deepEqual(picker.children.map(option => option.value), [cameraTile.id]);
+  assert.deepEqual(streamChoiceValues(fsTile), [cameraTile.id]);
 });
 
 test('an ended selected video track falls back without moving focus from the picker', () => {
   const { app, document, cameraTile, shareTile, cameraStream, shareTrack } = renderBothMediaTiles();
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
+  const fsTile = cameraTile;
   cameraTile.requestFullscreen = () => {
     document.fullscreenElement = cameraTile;
     return Promise.resolve();
   };
   cameraTile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
   document.dispatch('fullscreenchange');
-  picker.value = shareTile.id;
-  picker.listeners.change[0]({ stopPropagation() {} });
+  showOnlyStream(fsTile, shareTile);
+  const picker = streamChoices(fsTile).find(box => box.value === shareTile.id);
   document.activeElement = picker;
 
   shareTrack.end();
@@ -773,20 +805,19 @@ test('an ended selected video track falls back without moving focus from the pic
   assert.equal(document.fullscreenElement, cameraTile);
   assert.equal(document.activeElement, picker);
   assert.equal(cameraTile.querySelector('video').srcObject, cameraStream);
-  assert.deepEqual(picker.children.map(option => option.value), [cameraTile.id]);
+  assert.deepEqual(streamChoiceValues(fsTile), [cameraTile.id]);
 });
 
 test('exiting after the original fullscreen track ends does not leave another participant in that tile', () => {
   const { app, document, cameraTile, shareTile, shareStream, cameraTrack } = renderBothMediaTiles();
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
+  const fsTile = cameraTile;
   cameraTile.requestFullscreen = () => {
     document.fullscreenElement = cameraTile;
     return Promise.resolve();
   };
   cameraTile.querySelector('.stream-fullscreen-btn').listeners.click[0]({ stopPropagation() {} });
   document.dispatch('fullscreenchange');
-  picker.value = shareTile.id;
-  picker.listeners.change[0]({ stopPropagation() {} });
+  showOnlyStream(fsTile, shareTile);
   cameraTrack.end();
   assert.equal(cameraTile.querySelector('video').srcObject, shareStream);
 
@@ -1004,9 +1035,8 @@ test('repeated fullscreen change events do not stack the stream label or reset t
   document.dispatch('fullscreenchange');
   assert.equal(cameraLabel.textContent, `${original} · voice.panel.camera`);
 
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
-  picker.value = shareTile.id;
-  picker.listeners.change[0]({ stopPropagation() {} });
+  const fsTile = cameraTile;
+  showOnlyStream(fsTile, shareTile);
   document.dispatch('fullscreenchange');
   assert.equal(cameraLabel.textContent, `${original} · voice.screen_share`);
 
@@ -1084,10 +1114,10 @@ test('leaving the screen drops focus from a toolbar button but not from an open 
   enterFullscreen(document, tile);
   const toolbar = tile.querySelector('.fullscreen-call-toolbar');
   const button = tile.querySelector('.fullscreen-call-mute');
-  const picker = tile.querySelector('.fullscreen-stream-select');
+  const pickerButton = tile.querySelector('.fullscreen-call-streams');
   let blurred = 0;
   button.blur = () => { blurred++; };
-  picker.blur = () => { blurred++; };
+  pickerButton.blur = () => { blurred++; };
 
   toolbar.contains = el => el === button;
   document.activeElement = button;
@@ -1095,24 +1125,27 @@ test('leaving the screen drops focus from a toolbar button but not from an open 
   assert.equal(blurred, 1);
   assert.equal(tile.classList.contains('fullscreen-controls-idle'), true);
 
-  toolbar.contains = el => el === picker;
-  document.activeElement = picker;
+  tile.listeners.mousemove[0]();
+  pickerButton.listeners.click[0]({ stopPropagation() {} });
+  toolbar.contains = el => el === pickerButton;
+  document.activeElement = pickerButton;
   tile.listeners.mouseleave[0]();
-  assert.equal(blurred, 1, 'a focused dropdown is left alone');
+  assert.equal(blurred, 1, 'the open stream list is left alone');
+  assert.equal(tile.classList.contains('fullscreen-controls-idle'), false);
 });
 
 test('the stream picker is only rebuilt when its list of streams changes', () => {
   const { app, cameraTile, shareTrack } = renderBothMediaTiles();
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
-  const before = [...picker.children];
+  const fsTile = cameraTile;
+  const before = streamChoices(fsTile);
   assert.equal(before.length, 2);
 
   app._refreshFullscreenStreamPicker();
   app._refreshFullscreenStreamPicker();
-  assert.deepEqual(picker.children.map((option, index) => option === before[index]), [true, true]);
+  assert.deepEqual(streamChoices(fsTile).map((option, index) => option === before[index]), [true, true]);
 
   shareTrack.end();
-  assert.equal(picker.children.length, 1);
+  assert.equal(streamChoices(fsTile).length, 1);
 });
 
 test('the fullscreen settings button and popup are named Call settings', () => {
@@ -1134,75 +1167,747 @@ test('the fullscreen toolbar is named as call controls, not voice settings', () 
   assert.equal(en.voice.panel.call_controls, 'Call controls');
 });
 
-function gridOf(tile) {
+// ── Several streams at once (#5899) ──────────────────────────────────────
+
+function streamGrid(tile) {
   return tile.querySelector('.fullscreen-stream-grid');
 }
 
-test('the fullscreen grid shows every live stream at once and the toolbar button turns it on and off', () => {
-  const { document, cameraTile, shareTile, cameraStream, shareStream } = renderBothMediaTiles();
+function gridCells(tile) {
+  return streamGrid(tile).querySelectorAll('.fullscreen-stream-cell');
+}
+
+test('the stream list opens from its toolbar button and closes with Escape', () => {
+  const { document, cameraTile } = renderBothMediaTiles();
   enterFullscreen(document, cameraTile);
-  const button = cameraTile.querySelector('.fullscreen-call-grid');
-  assert.ok(button, 'the toolbar has a grid button');
+  const button = cameraTile.querySelector('.fullscreen-call-streams');
+  const popover = cameraTile.querySelector('.fullscreen-stream-popover');
+  assert.equal(popover.hidden, true);
+  assert.equal(button.attributes['aria-expanded'], 'false');
+
+  button.listeners.click[0]({ stopPropagation() {} });
+  assert.equal(popover.hidden, false);
+  assert.equal(button.attributes['aria-expanded'], 'true');
+  assert.equal(cameraTile.classList.contains('fullscreen-popup-open'), true);
+
+  cameraTile.querySelector('.fullscreen-call-toolbar').listeners.keydown[0]({ key: 'Escape', preventDefault() {} });
+  assert.equal(popover.hidden, true);
+  assert.equal(button.attributes['aria-expanded'], 'false');
+  assert.equal(cameraTile.classList.contains('fullscreen-popup-open'), false);
+});
+
+test('opening the stream list closes call settings, and the other way round', () => {
+  const { document, cameraTile } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  const streams = cameraTile.querySelector('.fullscreen-call-streams');
+  const streamPopover = cameraTile.querySelector('.fullscreen-stream-popover');
+  const settings = cameraTile.querySelector('.fullscreen-call-audio');
+  const settingsPopover = cameraTile.querySelector('.fullscreen-audio-popover');
+
+  settings.listeners.click[0]({ stopPropagation() {} });
+  streams.listeners.click[0]({ stopPropagation() {} });
+  assert.equal(settingsPopover.hidden, true);
+  assert.equal(streamPopover.hidden, false);
+  assert.equal(cameraTile.classList.contains('fullscreen-popup-open'), true);
+
+  settings.listeners.click[0]({ stopPropagation() {} });
+  assert.equal(streamPopover.hidden, true);
+  assert.equal(streams.attributes['aria-expanded'], 'false');
+  assert.equal(settingsPopover.hidden, false);
+  assert.equal(cameraTile.classList.contains('fullscreen-popup-open'), true);
+});
+
+test('the stream button is disabled while there is only one stream to show', () => {
+  const { app, cameraTile, shareTrack } = renderBothMediaTiles();
+  const button = cameraTile.querySelector('.fullscreen-call-streams');
   assert.equal(button.disabled, false);
-  assert.equal(gridOf(cameraTile), null, 'one stream at a time until the grid is asked for');
-  button.listeners.click[0]({ stopPropagation() {} });
-  const grid = gridOf(cameraTile);
-  assert.ok(grid, 'the grid is drawn over the fullscreen tile');
-  assert.deepEqual(grid.children.map(cell => cell.querySelector('video').srcObject), [cameraStream, shareStream]);
-  assert.equal(grid.style.gridTemplateColumns, 'repeat(2, minmax(0, 1fr))');
-  assert.equal(cameraTile.classList.contains('fullscreen-grid-on'), true);
-  assert.equal(button.attributes['aria-pressed'], 'true');
-  assert.equal(button.title, 'voice_runtime.fullscreen_grid_off');
-  button.listeners.click[0]({ stopPropagation() {} });
-  assert.equal(gridOf(cameraTile), null);
-  assert.equal(cameraTile.classList.contains('fullscreen-grid-on'), false);
-  assert.equal(button.attributes['aria-pressed'], 'false');
+  shareTrack.end();
+  app._refreshFullscreenStreamPicker();
+  assert.equal(button.disabled, true);
+});
+
+test('ticking a second stream shows both in a grid of their own videos', () => {
+  const { document, cameraTile, shareTile, cameraStream, shareStream } = renderBothMediaTiles();
+  const hostVideo = cameraTile.querySelector('video');
+  enterFullscreen(document, cameraTile);
+  assert.equal(streamGrid(cameraTile).hidden, true, 'one stream needs no grid');
+  assert.deepEqual(streamChoices(cameraTile).map(box => box.checked), [true, false]);
+
+  setStreamShown(cameraTile, shareTile.id, true);
+
+  assert.equal(streamGrid(cameraTile).hidden, false);
+  assert.equal(cameraTile.classList.contains('fullscreen-grid-active'), true);
+  const cells = gridCells(cameraTile);
+  assert.deepEqual(cells.map(cell => cell.dataset.sourceId), [cameraTile.id, shareTile.id]);
+  const videos = cells.map(cell => cell.querySelector('video'));
+  assert.deepEqual(videos.map(video => video.srcObject), [cameraStream, shareStream]);
+  assert.deepEqual(videos.map(video => video.muted), [true, true], 'sound plays elsewhere, never from a grid copy');
+  assert.deepEqual(cells.map(cell => cell.querySelector('.fullscreen-stream-cell-label').textContent), [
+    'Participant · voice.panel.camera',
+    'Participant · voice.screen_share',
+  ]);
+  assert.equal(cameraTile.querySelector('video'), hostVideo, "the tile's own video stays its first video");
+  assert.equal(hostVideo.srcObject, cameraStream);
+  assert.deepEqual(streamChoices(cameraTile).map(box => box.checked), [true, true]);
+});
+
+test('unticking back to one stream closes the grid and shows that stream full size', () => {
+  const { document, cameraTile, shareTile, shareStream } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+  const videos = gridCells(cameraTile).map(cell => cell.querySelector('video'));
+
+  setStreamShown(cameraTile, cameraTile.id, false);
+
+  assert.equal(streamGrid(cameraTile).hidden, true);
+  assert.equal(gridCells(cameraTile).length, 0);
+  assert.deepEqual(videos.map(video => video.srcObject), [null, null], 'grid copies let go of their streams');
+  assert.equal(cameraTile.classList.contains('fullscreen-grid-active'), false);
+  assert.equal(cameraTile.querySelector('video').srcObject, shareStream);
+});
+
+test('the last stream shown cannot be unticked', () => {
+  const { document, cameraTile, cameraStream } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  const cameraBox = streamChoices(cameraTile).find(box => box.value === cameraTile.id);
+  assert.equal(cameraBox.disabled, true);
+
+  setStreamShown(cameraTile, cameraTile.id, false);
+
+  assert.equal(cameraBox.checked, true);
+  assert.equal(cameraTile.querySelector('video').srcObject, cameraStream);
+});
+
+test('a mirrored local camera stays mirrored in its grid cell', () => {
+  const { document, cameraTile, shareTile } = renderBothMediaTiles({ localCamera: true });
+  enterFullscreen(document, shareTile);
+  setStreamShown(shareTile, cameraTile.id, true);
+
+  const transforms = gridCells(shareTile).map(cell => cell.querySelector('video').style.transform || '');
+  assert.deepEqual(transforms, ['scaleX(-1)', '']);
+});
+
+test('a stream that ends leaves the grid and the one left fills the screen', () => {
+  const { document, cameraTile, shareTile, cameraStream, shareTrack } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+
+  shareTrack.end();
+
+  assert.equal(document.fullscreenElement, cameraTile);
+  assert.equal(streamGrid(cameraTile).hidden, true);
+  assert.equal(cameraTile.querySelector('video').srcObject, cameraStream);
+  assert.deepEqual(streamChoiceValues(cameraTile), [cameraTile.id]);
+});
+
+test('closing the shown tile of a grid keeps fullscreen on the others', () => {
+  const { app, document, cameraTile, shareTile, shareStream } = renderBothMediaTiles();
+  app._hideStreamTile = loadStreamTileMethods(document)._hideStreamTile;
+  const third = { getVideoTracks: () => [makeVideoTrack()] };
+  app._handleScreenStream('peer-2', third);
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+  const secondShare = streamChoices(cameraTile)[2].value;
+  setStreamShown(cameraTile, secondShare, true);
+  assert.equal(gridCells(cameraTile).length, 3);
+
+  app._hideStreamTile(shareTile, 'peer-1', 'Participant');
+
+  assert.equal(document.fullscreenElement, cameraTile);
+  assert.deepEqual(gridCells(cameraTile).map(cell => cell.dataset.sourceId), [cameraTile.id, secondShare]);
+  assert.equal(gridCells(cameraTile).some(cell => cell.querySelector('video').srcObject === shareStream), false);
+});
+
+test('leaving fullscreen takes the grid down and puts the tile back', () => {
+  const { document, cameraTile, shareTile, cameraStream } = renderBothMediaTiles();
+  const label = cameraTile.querySelector('.webcam-tile-label');
+  const original = label.textContent;
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+  const videos = gridCells(cameraTile).map(cell => cell.querySelector('video'));
+
+  leaveFullscreen(document);
+
+  assert.equal(streamGrid(cameraTile).hidden, true);
+  assert.equal(gridCells(cameraTile).length, 0);
+  assert.deepEqual(videos.map(video => video.srcObject), [null, null]);
+  assert.equal(cameraTile.classList.contains('fullscreen-grid-active'), false);
+  assert.equal(cameraTile.querySelector('video').srcObject, cameraStream);
+  assert.equal(label.textContent, original);
+
+  enterFullscreen(document, cameraTile);
+  assert.equal(streamGrid(cameraTile).hidden, true, 'the next fullscreen starts with one stream again');
+  assert.deepEqual(streamChoices(cameraTile).map(box => box.checked), [true, false]);
+});
+
+test('Show all puts every stream in the grid and adds streams that start later', () => {
+  const { app, document, cameraTile } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  const showAll = cameraTile.querySelector('.fullscreen-stream-all');
+  assert.equal(showAll.checked, false);
+
+  showAll.checked = true;
+  showAll.listeners.change[0]({ stopPropagation() {} });
+  assert.equal(gridCells(cameraTile).length, 2);
+
+  app._handleScreenStream('peer-2', { getVideoTracks: () => [makeVideoTrack()] });
+  assert.equal(gridCells(cameraTile).length, 3, 'a new stream joins the grid');
+  assert.equal(showAll.checked, true);
+
+  setStreamShown(cameraTile, streamChoices(cameraTile)[1].value, false);
+  assert.equal(showAll.checked, false, 'picking streams by hand turns Show all off');
+  assert.equal(gridCells(cameraTile).length, 2);
+
+  app._handleScreenStream('peer-3', { getVideoTracks: () => [makeVideoTrack()] });
+  assert.equal(gridCells(cameraTile).length, 2, 'without Show all a new stream is only offered');
+  assert.equal(streamChoices(cameraTile).length, 4);
+});
+
+test('unticking Show all goes back to the stream fullscreen started on', () => {
+  const { document, cameraTile, shareTile, shareStream } = renderBothMediaTiles();
+  enterFullscreen(document, shareTile);
+  const showAll = shareTile.querySelector('.fullscreen-stream-all');
+  showAll.checked = true;
+  showAll.listeners.change[0]({ stopPropagation() {} });
+  showAll.checked = false;
+  showAll.listeners.change[0]({ stopPropagation() {} });
+
+  assert.equal(streamGrid(shareTile).hidden, true);
+  assert.equal(shareTile.querySelector('video').srcObject, shareStream);
+  assert.deepEqual(streamChoices(shareTile).map(box => box.checked), [false, true]);
+  assert.ok(cameraTile);
+});
+
+test('the stream button names the stream shown, or says how many', () => {
+  const { document, cameraTile, shareTile } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  const button = cameraTile.querySelector('.fullscreen-call-streams');
+  assert.equal(button.textContent, 'Participant · voice.panel.camera');
+
+  setStreamShown(cameraTile, shareTile.id, true);
+  assert.equal(button.textContent, 'voice_runtime.stream');
+});
+
+test('grid cells are placed by the layout and follow a stream changing shape', () => {
+  const { document, cameraTile, shareTile } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+  const [cameraCell, shareCell] = gridCells(cameraTile);
+  const width = cell => parseFloat(cell.style.width);
+  const top = cell => parseFloat(cell.style.top);
+  assert.ok(width(cameraCell) > 0 && Math.abs(width(cameraCell) - width(shareCell)) < 0.01,
+    'two streams of unknown shape share the screen equally');
+  assert.ok(Math.abs(top(cameraCell) - top(shareCell)) < 0.01, 'side by side on a wide screen');
+
+  const cameraVideo = cameraCell.querySelector('video');
+  cameraVideo.videoWidth = 720;
+  cameraVideo.videoHeight = 1280;
+  cameraVideo.listeners.resize.forEach(listener => listener());
+
+  assert.ok(width(cameraCell) < width(shareCell) / 2, 'an upright camera gets a narrow slot');
+});
+
+test('the grid sits before the toolbar so the controls stay on top', () => {
+  const { cameraTile } = renderBothMediaTiles();
+  const children = cameraTile.children;
+  const grid = children.indexOf(streamGrid(cameraTile));
+  const toolbar = children.indexOf(cameraTile.querySelector('.fullscreen-call-toolbar'));
+  const video = children.indexOf(cameraTile.querySelector('video'));
+  assert.ok(video < grid && grid < toolbar);
+});
+
+// ── Click controls: focus one stream of the grid (#5899) ─────────────────
+
+function click(element, extra = {}) {
+  element.listeners.click.forEach(listener => listener({ stopPropagation() {}, detail: 1, ...extra }));
+}
+
+function cellFor(tile, sourceTile) {
+  return gridCells(tile).find(cell => cell.dataset.sourceId === sourceTile.id);
+}
+
+function addThirdShare(app) {
+  const track = makeVideoTrack();
+  const stream = { getVideoTracks: () => [track] };
+  app._handleScreenStream('peer-2', stream);
+  return { track, stream };
+}
+
+function renderGrid(options) {
+  const rendered = renderBothMediaTiles(options);
+  enterFullscreen(rendered.document, rendered.cameraTile);
+  setStreamShown(rendered.cameraTile, rendered.shareTile.id, true);
+  return rendered;
+}
+
+test('clicking a grid cell shows that stream full size and keeps the others ticked', () => {
+  const { cameraTile, shareTile, shareStream } = renderGrid();
+  const backToGrid = cameraTile.querySelector('.fullscreen-call-grid');
+  assert.equal(backToGrid.hidden, true, 'hidden in the grid view');
+
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+
+  assert.equal(streamGrid(cameraTile).hidden, true);
+  assert.equal(cameraTile.classList.contains('fullscreen-grid-active'), false);
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), true);
+  assert.equal(cameraTile.querySelector('video').srcObject, shareStream);
+  assert.equal(cameraTile.querySelector('.webcam-tile-label').textContent, 'Participant · voice.screen_share');
+  assert.deepEqual(streamChoices(cameraTile).map(box => box.checked), [true, true]);
+  assert.equal(backToGrid.hidden, false);
+});
+
+test('clicking the stream shown full size goes back to the grid', () => {
+  const { cameraTile, shareTile, cameraStream } = renderGrid();
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+
+  click(cameraTile, { target: cameraTile.querySelector('video') });
+
+  assert.equal(streamGrid(cameraTile).hidden, false);
+  assert.equal(gridCells(cameraTile).length, 2);
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), false);
+  assert.equal(cameraTile.querySelector('video').srcObject, cameraStream);
+  assert.equal(cameraTile.querySelector('.fullscreen-call-grid').hidden, true);
+});
+
+test('the Back to grid button returns to the grid', () => {
+  const { cameraTile, shareTile } = renderGrid();
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+  const backToGrid = cameraTile.querySelector('.fullscreen-call-grid');
+  assert.equal(backToGrid.attributes['aria-label'], 'voice_runtime.back_to_grid');
+
+  click(backToGrid);
+
+  assert.equal(streamGrid(cameraTile).hidden, false);
+  assert.equal(backToGrid.hidden, true);
+});
+
+test('the second click of a double-click does not undo the first', () => {
+  const { cameraTile, shareTile } = renderGrid();
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+
+  click(cameraTile, { target: cameraTile.querySelector('video'), detail: 2 });
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), true, 'still focused');
+
+  click(cameraTile, { target: cameraTile.querySelector('video') });
+  const focusButton = cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus');
+  click(focusButton, { detail: 2 });
+  assert.equal(streamGrid(cameraTile).hidden, false, 'still the grid');
+});
+
+test('clicking the screen does nothing while only one stream is shown', () => {
+  const { document, cameraTile, cameraStream } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+
+  click(cameraTile, { target: cameraTile.querySelector('video') });
+
+  assert.equal(cameraTile.querySelector('video').srcObject, cameraStream);
+  assert.equal(streamGrid(cameraTile).hidden, true);
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), false);
+});
+
+test('clicks and double-clicks in the grid stay in the grid', () => {
+  const { cameraTile } = renderGrid();
+  const grid = streamGrid(cameraTile);
+  for (const type of ['click', 'dblclick']) {
+    let stopped = 0;
+    grid.listeners[type].forEach(listener => listener({ stopPropagation() { stopped++; } }));
+    assert.equal(stopped > 0, true, `${type} does not reach the tile`);
+  }
+});
+
+test('the remove button on a cell unticks that stream', () => {
+  const { app, cameraTile, shareTile } = renderGrid();
+  addThirdShare(app);
+  setStreamShown(cameraTile, streamChoices(cameraTile)[2].value, true);
+  assert.equal(gridCells(cameraTile).length, 3);
+
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-remove'));
+
+  assert.equal(gridCells(cameraTile).length, 2);
+  assert.equal(cellFor(cameraTile, shareTile), undefined);
+  assert.deepEqual(streamChoices(cameraTile).map(box => box.checked), [true, false, true]);
+});
+
+test('removing one of two streams from the grid shows the other full size', () => {
+  const { cameraTile, shareTile, shareStream } = renderGrid();
+
+  click(cellFor(cameraTile, cameraTile).querySelector('.fullscreen-stream-cell-remove'));
+
+  assert.equal(streamGrid(cameraTile).hidden, true);
+  assert.equal(cameraTile.querySelector('video').srcObject, shareStream);
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), false);
   assert.ok(shareTile);
 });
 
-test('clicking a tile in the fullscreen grid brings that stream back to full size', () => {
-  const { document, cameraTile, shareTile, shareStream } = renderBothMediaTiles();
-  enterFullscreen(document, cameraTile);
-  cameraTile.querySelector('.fullscreen-call-grid').listeners.click[0]({ stopPropagation() {} });
-  const shareCell = gridOf(cameraTile).children[1];
-  shareCell.listeners.click[0]({ stopPropagation() {} });
-  assert.equal(gridOf(cameraTile), null);
-  assert.equal(cameraTile.querySelector('video').srcObject, shareStream);
-  assert.equal(cameraTile.querySelector('.fullscreen-stream-select').value, shareTile.id);
+test('cell buttons are named for the stream they act on', () => {
+  const { cameraTile, shareTile } = renderGrid();
+  const cell = cellFor(cameraTile, shareTile);
+  const focusButton = cell.querySelector('.fullscreen-stream-cell-focus');
+  const removeButton = cell.querySelector('.fullscreen-stream-cell-remove');
+  assert.equal(focusButton.tagName, 'button');
+  assert.equal(focusButton.type, 'button');
+  assert.equal(focusButton.attributes['aria-label'], 'voice_runtime.focus_stream');
+  assert.equal(removeButton.tagName, 'button');
+  assert.equal(removeButton.attributes['aria-label'], 'voice_runtime.remove_from_view');
+  const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
+  assert.equal(en.voice_runtime.focus_stream, 'Show {{name}} full size');
+  assert.equal(en.voice_runtime.remove_from_view, 'Remove {{name}} from view');
+  assert.equal(en.voice_runtime.back_to_grid, 'Back to grid');
 });
 
-test('picking a stream in the picker leaves the fullscreen grid', () => {
-  const { document, cameraTile, shareTile, shareStream } = renderBothMediaTiles();
-  enterFullscreen(document, cameraTile);
-  cameraTile.querySelector('.fullscreen-call-grid').listeners.click[0]({ stopPropagation() {} });
-  const picker = cameraTile.querySelector('.fullscreen-stream-select');
-  picker.value = shareTile.id;
-  picker.listeners.change[0]({ stopPropagation() {} });
-  assert.equal(gridOf(cameraTile), null);
+test('keyboard focus moves to Back to grid and back to the stream it left', () => {
+  const { document, cameraTile, shareTile } = renderGrid();
+  const focusOn = element => { element.focus = () => { document.activeElement = element; }; };
+  const backToGrid = cameraTile.querySelector('.fullscreen-call-grid');
+  focusOn(backToGrid);
+  const focusButton = cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus');
+  focusOn(focusButton);
+  const shareVideo = cellFor(cameraTile, shareTile).querySelector('video');
+  document.activeElement = focusButton;
+
+  click(focusButton);
+  assert.equal(document.activeElement, backToGrid);
+
+  click(backToGrid);
+  assert.equal(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'), focusButton,
+    'the cell is kept while focused');
+  assert.equal(cellFor(cameraTile, shareTile).querySelector('video'), shareVideo, 'its video is not restarted');
+  assert.equal(document.activeElement, focusButton);
+});
+
+test('a focused stream that ends goes back to the grid of the rest', () => {
+  const { app, cameraTile, shareTile, shareTrack } = renderGrid();
+  addThirdShare(app);
+  setStreamShown(cameraTile, streamChoices(cameraTile)[2].value, true);
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+
+  shareTrack.end();
+
+  assert.equal(streamGrid(cameraTile).hidden, false);
+  assert.equal(gridCells(cameraTile).length, 2);
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), false);
+  assert.equal(cameraTile.querySelector('.fullscreen-call-grid').hidden, true);
+});
+
+test('a focused stream that ends with one other left shows that one', () => {
+  const { cameraTile, shareTile, shareTrack, cameraStream } = renderGrid();
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+
+  shareTrack.end();
+
+  assert.equal(streamGrid(cameraTile).hidden, true);
+  assert.equal(cameraTile.querySelector('video').srcObject, cameraStream);
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), false);
+});
+
+test('another stream ending keeps the focused view', () => {
+  const { app, cameraTile, shareTile, shareStream } = renderGrid();
+  const third = addThirdShare(app);
+  setStreamShown(cameraTile, streamChoices(cameraTile)[2].value, true);
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+
+  third.track.end();
+
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), true);
   assert.equal(cameraTile.querySelector('video').srcObject, shareStream);
 });
 
-test('the fullscreen grid follows streams that start and stop, and goes away with fullscreen', () => {
+test('ticking or unticking a stream while focused goes back to the grid', () => {
+  const { app, cameraTile, shareTile } = renderGrid();
+  addThirdShare(app);
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+
+  setStreamShown(cameraTile, streamChoices(cameraTile)[2].value, true);
+  assert.equal(streamGrid(cameraTile).hidden, false);
+  assert.equal(gridCells(cameraTile).length, 3);
+
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+  setStreamShown(cameraTile, cameraTile.id, false);
+  assert.equal(streamGrid(cameraTile).hidden, false);
+  assert.equal(gridCells(cameraTile).length, 2);
+});
+
+test('Show all adding a stream that starts later keeps the focused view', () => {
+  const { app, document, cameraTile, shareTile, shareStream } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  const showAll = cameraTile.querySelector('.fullscreen-stream-all');
+  showAll.checked = true;
+  showAll.listeners.change[0]({ stopPropagation() {} });
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+
+  addThirdShare(app);
+
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), true);
+  assert.equal(cameraTile.querySelector('video').srcObject, shareStream);
+  assert.deepEqual(streamChoices(cameraTile).map(box => box.checked), [true, true, true]);
+});
+
+test('leaving fullscreen forgets the focused stream', () => {
+  const { document, cameraTile, shareTile, cameraStream } = renderGrid();
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+
+  leaveFullscreen(document);
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), false);
+  assert.equal(cameraTile.querySelector('video').srcObject, cameraStream);
+
+  enterFullscreen(document, cameraTile);
+  assert.equal(cameraTile.querySelector('.fullscreen-call-grid').hidden, true);
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), false);
+});
+
+test('double-clicks in fullscreen leave the page focus mode alone', () => {
+  const { app, document, cameraTile, shareTile } = renderBothMediaTiles();
+  const toggled = [];
+  app._toggleWebcamFocus = tile => toggled.push(tile);
+  app._toggleStreamFocus = tile => toggled.push(tile);
+  const dblclick = tile => tile.listeners.dblclick.forEach(listener => listener({ preventDefault() {}, stopPropagation() {} }));
+
+  dblclick(cameraTile);
+  dblclick(shareTile);
+  assert.deepEqual(toggled, [cameraTile, shareTile], 'outside fullscreen a double-click still toggles focus mode');
+
+  enterFullscreen(document, cameraTile);
+  dblclick(cameraTile);
+  leaveFullscreen(document);
+  enterFullscreen(document, shareTile);
+  dblclick(shareTile);
+  assert.deepEqual(toggled, [cameraTile, shareTile]);
+});
+
+// ── Popups close on a click outside them ─────────────────────────────────
+
+function pointerDown(document, target) {
+  document.dispatch('pointerdown', { target });
+}
+
+test('clicking outside the stream list closes it', () => {
+  const { document, cameraTile } = renderGrid();
+  const button = cameraTile.querySelector('.fullscreen-call-streams');
+  const popover = cameraTile.querySelector('.fullscreen-stream-popover');
+  click(button);
+
+  pointerDown(document, streamChoices(cameraTile)[0]);
+  assert.equal(popover.hidden, false, 'a click inside the list keeps it open');
+  pointerDown(document, button);
+  assert.equal(popover.hidden, false, 'its own button toggles it instead');
+
+  pointerDown(document, cameraTile.querySelector('video'));
+  assert.equal(popover.hidden, true);
+  assert.equal(button.attributes['aria-expanded'], 'false');
+  assert.equal(cameraTile.classList.contains('fullscreen-popup-open'), false);
+});
+
+test('clicking a stream in the grid closes the open stream list', () => {
+  const { document, cameraTile, shareTile } = renderGrid();
+  click(cameraTile.querySelector('.fullscreen-call-streams'));
+  const focusButton = cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus');
+
+  pointerDown(document, focusButton);
+  click(focusButton);
+
+  assert.equal(cameraTile.querySelector('.fullscreen-stream-popover').hidden, true);
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), true);
+});
+
+test('clicking outside call settings closes it too', () => {
+  const { document, cameraTile } = renderGrid();
+  const trigger = cameraTile.querySelector('.fullscreen-call-audio');
+  const popover = cameraTile.querySelector('.fullscreen-audio-popover');
+  click(trigger);
+
+  const control = popover.appendChild(new FakeElement('select'));
+  pointerDown(document, control);
+  assert.equal(popover.hidden, false, 'a click on a control inside it keeps it open');
+
+  pointerDown(document, cameraTile.querySelector('video'));
+  assert.equal(popover.hidden, true);
+  assert.equal(trigger.attributes['aria-expanded'], 'false');
+});
+
+test('the outside-click watch only runs while a popup is open', () => {
+  const { document, cameraTile } = renderGrid();
+  const before = document.listenerCount('pointerdown');
+  click(cameraTile.querySelector('.fullscreen-call-streams'));
+  assert.equal(document.listenerCount('pointerdown'), before + 1);
+  click(cameraTile.querySelector('.fullscreen-call-audio'));
+  assert.equal(document.listenerCount('pointerdown'), before + 1, 'switching popups keeps one watch');
+
+  pointerDown(document, cameraTile.querySelector('video'));
+  assert.equal(document.listenerCount('pointerdown'), before);
+
+  click(cameraTile.querySelector('.fullscreen-call-streams'));
+  leaveFullscreen(document);
+  assert.equal(document.listenerCount('pointerdown'), before, 'leaving fullscreen stops it');
+});
+
+// ── A volume slider on each stream of the grid ───────────────────────────
+
+function makeStorage() {
+  const values = {};
+  return { values, getItem: key => values[key] ?? null, setItem: (key, value) => { values[key] = String(value); } };
+}
+
+function cellVolume(tile, sourceTile) {
+  return cellFor(tile, sourceTile).querySelector('.fullscreen-stream-cell-volume');
+}
+
+function slide(slider, value) {
+  slider.value = String(value);
+  slider.listeners.input.forEach(listener => listener({ stopPropagation() {} }));
+}
+
+test("a screen share's slider sets its stream volume, like the slider on its tile", () => {
+  const localStorage = makeStorage();
+  const rendered = renderBothMediaTiles({ localStorage });
+  const { app, document, cameraTile, shareTile } = rendered;
+  const set = [];
+  app.voice.setStreamVolume = (userId, volume) => set.push([userId, volume]);
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+  const slider = cellVolume(cameraTile, shareTile);
+  assert.equal(slider.hidden, false);
+  assert.equal(slider.value, '100');
+  assert.equal(slider.attributes['aria-label'], 'voice_runtime.stream_volume_of');
+
+  slide(slider, 50);
+
+  assert.deepEqual(set, [['peer-1', 0.5]]);
+  assert.equal(shareTile.querySelector('.stream-vol-slider').value, '50');
+  assert.equal(shareTile.querySelector('.stream-vol-pct').textContent, '50%');
+  assert.deepEqual(JSON.parse(localStorage.values.haven_stream_volumes), { 'peer-1': 50 });
+});
+
+test("a share's grid slider follows its tile's slider and mute button", () => {
+  const { app, document, cameraTile, shareTile } = renderBothMediaTiles({ localStorage: makeStorage() });
+  app.voice.setStreamVolume = () => {};
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+
+  slide(shareTile.querySelector('.stream-vol-slider'), 140);
+  assert.equal(cellVolume(cameraTile, shareTile).value, '140');
+
+  click(shareTile.querySelector('.stream-mute-btn'));
+  assert.equal(cellVolume(cameraTile, shareTile).value, '0', 'a muted stream reads as 0');
+});
+
+test("a camera's slider sets that person's voice volume", () => {
+  const { app, document, cameraTile, shareTile } = renderBothMediaTiles();
+  const saved = [];
+  const set = [];
+  app._getVoiceVolume = () => 80;
+  app._setVoiceVolume = (userId, volume) => saved.push([userId, volume]);
+  app.voice.setVolume = (userId, volume) => set.push([userId, volume]);
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+  const slider = cellVolume(cameraTile, cameraTile);
+  assert.equal(slider.value, '80');
+  assert.equal(slider.attributes['aria-label'], 'voice_runtime.voice_volume_of');
+
+  slide(slider, 150);
+
+  assert.deepEqual(saved, [['peer-1', 150]]);
+  assert.deepEqual(set, [['peer-1', 1.5]]);
+});
+
+test('your own streams have no volume slider, as you do not hear yourself', () => {
+  const { document, cameraTile, shareTile } = renderBothMediaTiles({ localCamera: true });
+  enterFullscreen(document, cameraTile);
+  setStreamShown(cameraTile, shareTile.id, true);
+
+  assert.equal(cellVolume(cameraTile, cameraTile).hidden, true);
+  assert.equal(cellVolume(cameraTile, shareTile).hidden, true);
+});
+
+test('using a volume slider does not open its stream full size', () => {
+  const { cameraTile, shareTile } = renderGrid();
+  const slider = cellVolume(cameraTile, shareTile);
+  for (const type of ['click', 'dblclick']) {
+    let stopped = 0;
+    slider.listeners[type].forEach(listener => listener({ stopPropagation() { stopped++; } }));
+    assert.equal(stopped > 0, true, `${type} stops at the slider`);
+  }
+  assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), false);
+});
+
+test('volume slider strings exist in English', () => {
+  const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
+  assert.equal(en.voice_runtime.stream_volume_of, '{{name}} stream volume');
+  assert.equal(en.voice_runtime.voice_volume_of, '{{name}} voice volume');
+});
+
+// ── From #5905: the grid of every stream, reached here through Show all ──
+
+function showAllStreams(tile) {
+  const showAll = tile.querySelector('.fullscreen-stream-all');
+  showAll.checked = true;
+  showAll.listeners.change[0]({ stopPropagation() {} });
+}
+
+test('there is no separate button for showing every stream: Show all in the list does it', () => {
+  const { document, cameraTile, cameraStream, shareStream } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  const backToGrid = cameraTile.querySelector('.fullscreen-call-grid');
+  assert.equal(backToGrid.hidden, true, 'the only grid button is Back to grid, hidden here');
+  assert.equal(backToGrid.textContent, '▦', 'it keeps the grid icon from #5905');
+  assert.equal(backToGrid.attributes['aria-label'], 'voice_runtime.back_to_grid');
+
+  showAllStreams(cameraTile);
+
+  assert.deepEqual(gridCells(cameraTile).map(cell => cell.querySelector('video').srcObject), [cameraStream, shareStream]);
+  assert.equal(backToGrid.hidden, true, 'still hidden in the grid view');
+});
+
+test('clicking a tile in the fullscreen grid brings that stream to full size', () => {
+  const { document, cameraTile, shareTile, shareStream } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  showAllStreams(cameraTile);
+
+  click(cellFor(cameraTile, shareTile).querySelector('.fullscreen-stream-cell-focus'));
+
+  assert.equal(streamGrid(cameraTile).hidden, true);
+  assert.equal(cameraTile.querySelector('video').srcObject, shareStream);
+});
+
+test('picking one stream in the stream list leaves the fullscreen grid', () => {
+  const { document, cameraTile, shareTile, shareStream } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  showAllStreams(cameraTile);
+
+  showOnlyStream(cameraTile, shareTile);
+
+  assert.equal(streamGrid(cameraTile).hidden, true);
+  assert.equal(cameraTile.querySelector('video').srcObject, shareStream);
+});
+
+test('the grid follows streams that start and stop, and goes away with fullscreen', () => {
   const { app, document, cameraTile, shareTrack } = renderBothMediaTiles();
   enterFullscreen(document, cameraTile);
-  cameraTile.querySelector('.fullscreen-call-grid').listeners.click[0]({ stopPropagation() {} });
-  const before = gridOf(cameraTile);
+  showAllStreams(cameraTile);
+  const before = gridCells(cameraTile);
   app._refreshFullscreenStreamPicker();
-  assert.equal(gridOf(cameraTile), before, 'an unchanged list does not rebuild the videos');
+  assert.deepEqual(gridCells(cameraTile).map((cell, i) => cell === before[i]), [true, true],
+    'an unchanged list does not rebuild the videos');
+  addThirdShare(app);
+  assert.equal(gridCells(cameraTile).length, 3, 'a stream that starts joins the grid');
+
   shareTrack.end();
-  assert.equal(gridOf(cameraTile), null, 'a single stream left is shown full size');
-  assert.equal(cameraTile.querySelector('.fullscreen-call-grid').disabled, true);
+  assert.equal(gridCells(cameraTile).length, 2);
   leaveFullscreen(document);
-  assert.equal(gridOf(cameraTile), null);
-  assert.equal(cameraTile._fullscreenGridOn, false);
+  assert.equal(streamGrid(cameraTile).hidden, true);
 });
 
 test('leaving fullscreen while the grid is up takes the grid down', () => {
   const { document, cameraTile } = renderBothMediaTiles();
   enterFullscreen(document, cameraTile);
-  cameraTile.querySelector('.fullscreen-call-grid').listeners.click[0]({ stopPropagation() {} });
-  assert.ok(gridOf(cameraTile));
+  showAllStreams(cameraTile);
+  assert.equal(streamGrid(cameraTile).hidden, false);
   leaveFullscreen(document);
-  assert.equal(gridOf(cameraTile), null);
-  assert.equal(cameraTile.classList.contains('fullscreen-grid-on'), false);
+  assert.equal(streamGrid(cameraTile).hidden, true);
+  assert.equal(cameraTile.classList.contains('fullscreen-grid-active'), false);
+});
+
+test('the one-click grid strings from #5905 are gone with its button', () => {
+  const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
+  assert.equal(en.voice_runtime.fullscreen_grid, undefined);
+  assert.equal(en.voice_runtime.fullscreen_grid_off, undefined);
 });
