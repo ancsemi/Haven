@@ -1553,6 +1553,7 @@
     "stream_other": "{{count}} streams",
     "streams": "Streams",
     "show_all_streams": "Show all",
+    "show_all_streams_now": "Show all streams at once",
     "back_to_grid": "Back to grid",
     "focus_stream": "Show {{name}} full size",
     "remove_from_view": "Remove {{name}} from view",

@@ -44,9 +44,11 @@ _createFullscreenCallToolbar(tile) {
     this._toggleFullscreenStreamPopover(tile, streamPopover, streamTrigger);
   });
   streamTrigger.setAttribute('aria-expanded', 'false');
-  // Up while one stream of the grid is shown full size.
+  // One click to the grid: back to it while one of its streams is shown full
+  // size, otherwise every live stream at once. See _syncFullscreenGridButton.
   const backToGrid = addButton('fullscreen-call-grid', 'voice_runtime.back_to_grid', '▦', () => {
-    this._unfocusFullscreenStream(tile);
+    if (this._fullscreenCallFocusedTile) this._unfocusFullscreenStream(tile);
+    else this._setFullscreenShowAll(tile, true);
   });
   backToGrid.hidden = true;
   const showAllLabel = document.createElement('label');
@@ -444,8 +446,7 @@ _applyFullscreenSelection() {
   }
   const focused = this._fullscreenCallFocusedTile;
   activeTile.classList.toggle('fullscreen-stream-focused', !!focused);
-  const backToGrid = activeTile.querySelector('.fullscreen-call-grid');
-  if (backToGrid) backToGrid.hidden = !focused;
+  this._syncFullscreenGridButton(activeTile);
   if (selected.length < 2 || focused) {
     // Focused: the grid keeps its cells, so going back does not restart them.
     if (focused) this._pauseFullscreenStreamGrid(activeTile);
@@ -459,6 +460,18 @@ _applyFullscreenSelection() {
   }
   this._setFullscreenVideoSource(activeTile, activeTile, this._fullscreenCallOriginalStream);
   this._renderFullscreenStreamGrid(activeTile, selected);
+},
+
+// The grid button is up while one stream of the grid is shown full size
+// (Back to grid), and while some live streams are left out (Show all).
+_syncFullscreenGridButton(tile, live = this._listLiveFullscreenStreams().length) {
+  const button = tile.querySelector('.fullscreen-call-grid');
+  if (!button) return;
+  const focused = !!this._fullscreenCallFocusedTile;
+  const shown = (this._fullscreenCallSelectedTiles || [tile]).length;
+  button.hidden = !focused && !(live > 1 && shown < live);
+  button.title = t(focused ? 'voice_runtime.back_to_grid' : 'voice_runtime.show_all_streams_now');
+  button.setAttribute('aria-label', button.title);
 },
 
 // Shows one stream of the grid full size; the others stay ticked.
@@ -566,10 +579,12 @@ _refreshFullscreenStreamPicker(excludeTile = null) {
     if (trigger) {
       const shownStreams = streams.filter(item => shownIds.has(item.tile.id));
       trigger.textContent = shownStreams.length > 1
-        ? t('voice_runtime.stream', { count: shownStreams.length })
+        ? t('voice_runtime.stream_other', { count: shownStreams.length })
         : (shownStreams[0]?.label || t('voice_runtime.streams'));
       trigger.disabled = streams.length < 2;
     }
+    // A stream that starts or ends changes whether any are left out.
+    if (isActive) this._syncFullscreenGridButton(owner, streams.length);
   }
 },
 

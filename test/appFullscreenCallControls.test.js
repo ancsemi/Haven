@@ -1385,7 +1385,7 @@ test('the stream button names the stream shown, or says how many', () => {
   assert.equal(button.textContent, 'Participant · voice.panel.camera');
 
   setStreamShown(cameraTile, shareTile.id, true);
-  assert.equal(button.textContent, 'voice_runtime.stream');
+  assert.equal(button.textContent, 'voice_runtime.stream_other');
 });
 
 test('grid cells are placed by the layout and follow a stream changing shape', () => {
@@ -1651,7 +1651,7 @@ test('leaving fullscreen forgets the focused stream', () => {
   assert.equal(cameraTile.querySelector('video').srcObject, cameraStream);
 
   enterFullscreen(document, cameraTile);
-  assert.equal(cameraTile.querySelector('.fullscreen-call-grid').hidden, true);
+  assert.equal(cameraTile.querySelector('.fullscreen-call-grid').attributes['aria-label'], 'voice_runtime.show_all_streams_now');
   assert.equal(cameraTile.classList.contains('fullscreen-stream-focused'), false);
 });
 
@@ -1843,18 +1843,16 @@ function showAllStreams(tile) {
   showAll.listeners.change[0]({ stopPropagation() {} });
 }
 
-test('there is no separate button for showing every stream: Show all in the list does it', () => {
+test('Show all in the list shows every stream, and the grid button then has nothing to add', () => {
   const { document, cameraTile, cameraStream, shareStream } = renderBothMediaTiles();
   enterFullscreen(document, cameraTile);
   const backToGrid = cameraTile.querySelector('.fullscreen-call-grid');
-  assert.equal(backToGrid.hidden, true, 'the only grid button is Back to grid, hidden here');
   assert.equal(backToGrid.textContent, '▦', 'it keeps the grid icon from #5905');
-  assert.equal(backToGrid.attributes['aria-label'], 'voice_runtime.back_to_grid');
 
   showAllStreams(cameraTile);
 
   assert.deepEqual(gridCells(cameraTile).map(cell => cell.querySelector('video').srcObject), [cameraStream, shareStream]);
-  assert.equal(backToGrid.hidden, true, 'still hidden in the grid view');
+  assert.equal(backToGrid.hidden, true, 'hidden in the grid view of every stream');
 });
 
 test('clicking a tile in the fullscreen grid brings that stream to full size', () => {
@@ -1910,4 +1908,22 @@ test('the one-click grid strings from #5905 are gone with its button', () => {
   const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/locales/en.json'), 'utf8'));
   assert.equal(en.voice_runtime.fullscreen_grid, undefined);
   assert.equal(en.voice_runtime.fullscreen_grid_off, undefined);
+});
+
+test('the grid button shows every stream in one click while some are left out', () => {
+  const { document, cameraTile, shareTile } = renderBothMediaTiles();
+  enterFullscreen(document, cameraTile);
+  const button = cameraTile.querySelector('.fullscreen-call-grid');
+  assert.equal(button.hidden, false, 'one of two streams is shown');
+  assert.equal(button.attributes['aria-label'], 'voice_runtime.show_all_streams_now');
+
+  click(button);
+
+  assert.equal(streamGrid(cameraTile).hidden, false);
+  assert.equal(gridCells(cameraTile).length, 2);
+  assert.deepEqual(streamChoices(cameraTile).map(box => box.checked), [true, true]);
+  assert.equal(button.hidden, true, 'nothing is left out');
+
+  setStreamShown(cameraTile, shareTile.id, false);
+  assert.equal(button.hidden, false);
 });
