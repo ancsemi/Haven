@@ -457,9 +457,9 @@ _restyleMessageAuthors() {
     const title = all.length > 1 ? all.map(r => r.name).join('\n') : u.role.name;
     const badge = document.createElement('span');
     badge.className = 'user-role-badge msg-role-badge';
-    badge.style.color = this._safeColor(u.role.color, 'var(--text-muted)');
+    badge.style.color = this._safeColor(this._roleOwn(u.role).color, 'var(--text-muted)');
     badge.title = title;
-    badge.innerHTML = this._roleNameHtml(u.role, u.role.name)
+    badge.innerHTML = this._roleNameHtml(this._roleOwn(u.role), u.role.name)
       + (all.length > 1 ? ` <span class="msg-role-extra-count">+${all.length - 1}</span>` : '');
     const time = header.querySelector('.message-time');
     header.insertBefore(badge, time || null);
@@ -1259,7 +1259,7 @@ _createMessageEl(msg, prevMsg) {
     ? _allRoles.map(r => r.name).join('\n')
     : (onlineUser && onlineUser.role ? onlineUser.role.name : '');
   const msgRoleBadge = onlineUser && onlineUser.role
-    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle)}">${this._roleNameHtml(onlineUser.role, onlineUser.role.name)}${_allRoles.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles.length - 1}</span>` : ''}</span>`
+    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(this._roleOwn(onlineUser.role).color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle)}">${this._roleNameHtml(this._roleOwn(onlineUser.role), onlineUser.role.name)}${_allRoles.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles.length - 1}</span>` : ''}</span>`
     : '';
 
   // Role icon in chat
@@ -1436,7 +1436,7 @@ _promoteCompactToFull(compactEl) {
     ? _allRoles2.map(r => r.name).join('\n')
     : (onlineUser && onlineUser.role ? onlineUser.role.name : '');
   const msgRoleBadge = onlineUser && onlineUser.role
-    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle2)}">${this._roleNameHtml(onlineUser.role, onlineUser.role.name)}${_allRoles2.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles2.length - 1}</span>` : ''}</span>`
+    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(this._roleOwn(onlineUser.role).color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle2)}">${this._roleNameHtml(this._roleOwn(onlineUser.role), onlineUser.role.name)}${_allRoles2.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles2.length - 1}</span>` : ''}</span>`
     : '';
 
   // Role icon in chat (compact-to-full)

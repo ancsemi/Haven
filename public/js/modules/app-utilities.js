@@ -92,6 +92,14 @@ _roleNameHtml(role, text) {
   return `<span class="role-gradient${look.shimmer ? ' role-shimmer' : ''}" style="--role-c1:${look.c1};--role-c2:${look.c2}">${this._roleEmojiSafe(safe)}</span>`;
 },
 
+/** The role in its own colors, for drawing the role itself (its badge).
+ *  Someone who picked another role for their name color carries that color
+ *  on `role`, and the role's own under own_* (src/nameColor.js). */
+_roleOwn(role) {
+  if (!role || role.own_color === undefined) return role;
+  return { ...role, color: role.own_color, color2: role.own_color2, color_shimmer: role.own_color_shimmer };
+},
+
 /** Emoji inside a gradient name, each run wrapped in its own span so CSS can
  *  draw them in their own colors instead of as gradient silhouettes (#5720).
  *  Takes already escaped HTML: entities are plain ASCII and never match. */

@@ -1847,6 +1847,11 @@
           </button>
         </div>
         <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.role_display.hint">How role colors are shown next to usernames in chat and the member list.</small>
+        <div id="name-color-row" style="display:none;margin-top:12px">
+          <label class="settings-label" for="name-color-select" data-i18n="settings.role_display.name_color">Your name color</label>
+          <select id="name-color-select" class="form-select"></select>
+          <small class="settings-hint" style="margin-top:4px;display:block" data-i18n="settings.role_display.name_color_hint">Which of your roles colors your name for everyone. Automatic uses your highest role.</small>
+        </div>
       </div>
 
       <!-- Toolbar Icon Style -->
@@ -5622,7 +5627,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.90"></script>
+  <script type="module" src="/js/app.js?v=4.29.91"></script>
   <script src="/js/plugin-loader.js?v=4.29.63"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

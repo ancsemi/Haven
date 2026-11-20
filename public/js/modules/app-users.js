@@ -179,7 +179,7 @@ _renderUserItem(u, scoreLookup) {
 
   // Keep the old badge for message area (msg-role-badge) but hide in sidebar
   const roleBadge = u.role
-    ? `<span class="user-role-badge" style="color:${this._safeColor(u.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(u.role.name)}">${this._roleNameHtml(u.role, u.role.name)}</span>`
+    ? `<span class="user-role-badge" style="color:${this._safeColor(this._roleOwn(u.role).color, 'var(--text-muted)')}" title="${this._escapeHtml(u.role.name)}">${this._roleNameHtml(this._roleOwn(u.role), u.role.name)}</span>`
     : '';
   // (#5381) Mark guest accounts with a small badge so people know not to
   // expect long-term presence.

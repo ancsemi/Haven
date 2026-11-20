@@ -72,6 +72,7 @@ const registerMemberDefaults = require('./memberDefaults');
 const registerGameActivity = require('./gameActivity');
 const registerAppActivity = require('./appActivity');
 const registerMessageHighlights = require('./messageHighlights');
+const registerNameColor = require('./nameColor');
 const registerModCases = require('./modCases');
 const registerPermExceptions = require('./permExceptions');
 const modCases = require('../modCases');
@@ -2792,6 +2793,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerGameActivity(socket, ctx);
     registerAppActivity(socket, ctx);
     registerMessageHighlights(socket, ctx);
+    registerNameColor(socket, ctx);
     registerModCases(socket, ctx);
     registerForumUnread(socket, ctx);
     registerThreadReadState(socket, ctx);

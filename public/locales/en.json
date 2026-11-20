@@ -1847,7 +1847,11 @@
       "colored_name_hint": "Color the username with the role color",
       "dot": "Dot",
       "dot_hint": "Show a colored dot next to the name (legacy)",
-      "hint": "How role colors are shown next to usernames in chat and the member list."
+      "hint": "How role colors are shown next to usernames in chat and the member list.",
+      "name_color": "Your name color",
+      "name_color_auto": "Automatic (highest role)",
+      "name_color_hint": "Which of your roles colors your name for everyone. Automatic uses your highest role.",
+      "name_color_failed": "Could not change your name color."
     },
     "toolbar_icons": {
       "title": "Interface Icons",
