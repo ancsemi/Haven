@@ -1055,6 +1055,7 @@ _createMessageEl(msg, prevMsg) {
 
   // The role menu first: it decides which reactions and lines it stands in for.
   const roleMenuHtml = msg.roleMenu ? this._renderRoleMenu(msg.id, msg.roleMenu) : '';
+  const botPartsHtml = this._botPartsHtml(msg);
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
   const tagsHtml = this._renderAttachmentTags(msg.attachmentTags);
   const pollHtml = msg.poll ? this._renderPollWidget(msg.id, msg.poll) : '';
@@ -1213,7 +1214,7 @@ _createMessageEl(msg, prevMsg) {
       <span class="compact-time">${this._fmtTime(msg.created_at)}</span>
       <div class="message-body">
         <div class="message-content">${pinnedTag}${archivedTag}${ephemeralTag}${this._formatContent(this._roleMenuText(msg.id, msg.content), { e2e: !!msg._e2e })}${editedHtml}${statusSlotHtml}</div>
-        ${pollHtml}${roleMenuHtml}${destructHtml}
+        ${pollHtml}${roleMenuHtml}${botPartsHtml}${destructHtml}
         ${reactionsHtml}
         ${tagsHtml}
         ${threadHtml}
@@ -1362,7 +1363,7 @@ _createMessageEl(msg, prevMsg) {
           <span class="message-header-spacer"></span>
         </div>
         <div class="message-content">${this._formatContent(this._roleMenuText(msg.id, msg.content), { e2e: !!msg._e2e })}${editedHtml}</div>
-        ${pollHtml}${roleMenuHtml}${destructHtml}
+        ${pollHtml}${roleMenuHtml}${botPartsHtml}${destructHtml}
         ${reactionsHtml}
         ${tagsHtml}
         ${threadHtml}

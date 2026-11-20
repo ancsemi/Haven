@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.30.0] - Unreleased
 
 ### Added
+- Bots can post embeds, buttons and dropdowns, in the same JSON shapes Discord uses, so a Discord bot's payload works as it is. Embeds show a colored card with a title, text, fields, pictures and a footer. Buttons come in the primary, secondary, green, red and link styles. Dropdowns allow one pick or several. A click or a pick is checked and sent to the bot's callback URL, signed, and the bot answers with a private reply, a new message, or an edit that changes the message (a bot's edit can now replace its embeds and buttons). See "Embeds, Buttons and Dropdowns" in GUIDE.md.
 - More profile customization (thanks Bo0sted, #5900): pick a banner color in Edit Profile or let it follow your avatar, upload and crop a banner picture (with its own size limit in Uploads & Limits), and give your profile card a two-color theme it fades between.
 - Call settings everywhere (thanks Roolk, #5903): Settings has a new Voice & video page with every call setting, usable without joining a call, plus Test microphone (with Hear myself) and Test camera. The fullscreen call popup shows the same full set of settings instead of three dropdowns.
 - The quick reaction row leads with your favorites, then the reactions you use most, then the usual defaults (thanks Amnibro, #5902). A row you customized still wins, and its editor has a Reset to automatic button.

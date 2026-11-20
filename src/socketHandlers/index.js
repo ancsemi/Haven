@@ -72,6 +72,7 @@ const registerMemberDefaults = require('./memberDefaults');
 const registerGameActivity = require('./gameActivity');
 const registerAppActivity = require('./appActivity');
 const registerMessageHighlights = require('./messageHighlights');
+const registerBotInteractions = require('./botInteractions');
 const registerNameColor = require('./nameColor');
 const registerModCases = require('./modCases');
 const registerPermExceptions = require('./permExceptions');
@@ -1474,6 +1475,33 @@ function setupSocketHandlers(io, db, opts = {}) {
     }
   }
 
+  // A click or pick on one bot's own buttons goes to that bot alone, and the
+  // person waits on the answer, so there is one try and the result comes back.
+  async function deliverBotInteraction(bot, body) {
+    if (!bot.callback_url || !isSafeCallbackUrl(bot.callback_url)) return { ok: false };
+    const payload = JSON.stringify({ event: 'interaction', timestamp: new Date().toISOString(), ...body });
+    const headers = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Haven-Webhook/1.1',
+      'X-Haven-Event': 'interaction'
+    };
+    if (bot.callback_secret) {
+      headers['X-Haven-Signature'] =
+        'sha256=' + crypto.createHmac('sha256', bot.callback_secret).update(payload).digest('hex');
+    }
+    try {
+      const resp = await postWebhookCallback(bot.callback_url, payload, headers, {
+        allowPrivateCallbacks: ALLOW_PRIVATE_CALLBACKS,
+        timeoutMs: 5000
+      });
+      _recordWebhookDelivery(bot.id, resp.status, resp.ok ? null : `HTTP ${resp.status}`);
+      return { ok: resp.ok };
+    } catch (err) {
+      _recordWebhookDelivery(bot.id, 0, ((err && err.message) || String(err)).slice(0, 200));
+      return { ok: false };
+    }
+  }
+
   function fireWebhookEvent(channelId, channelCode, eventType, body) {
     try {
       // DMs are between their two people; no bot callback ever hears them.
@@ -2363,6 +2391,8 @@ function setupSocketHandlers(io, db, opts = {}) {
       // a ceiling of its own.
       voiceSpeaking: { max: 100, windowMs: 10000 },
       webcamLifecycle: { max: 20, windowMs: 10000 },
+      // Each click on a bot's button is a request to the bot's own server.
+      botInteraction: { max: 10, windowMs: 10000 },
     };
 
     function floodCheck(bucket, scope = '') {
@@ -2734,7 +2764,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       liveAccess,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode, rotatePrivateCodesAfterRemoval,
       // Push / webhooks
-      sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, dmCalls,
+      sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, deliverBotInteraction, dmCalls,
       // Ferry (Discord bridge)
       ferry, ferryLinksFor, parseFerryTarget, ferryRelay, ferryRelayReply, ferryReactionChanged,
       // Slash commands
@@ -2793,6 +2823,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerGameActivity(socket, ctx);
     registerAppActivity(socket, ctx);
     registerMessageHighlights(socket, ctx);
+    registerBotInteractions(socket, ctx);
     registerNameColor(socket, ctx);
     registerModCases(socket, ctx);
     registerForumUnread(socket, ctx);

@@ -514,7 +514,7 @@ _appendThreadMessage(msg, opts = {}) {
             <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
             ${threadOverflowHtml}
           </div>
-          <div class="thread-msg-content">${this._formatContent(msg.content)}${silentHtml}</div>
+          <div class="thread-msg-content">${this._formatContent(msg.content)}${silentHtml}</div>${this._botPartsHtml(msg)}
           ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>
@@ -534,7 +534,7 @@ _appendThreadMessage(msg, opts = {}) {
             </div>
           </div>
           ${replyHtml}
-          <div class="thread-msg-content">${this._formatContent(msg.content)}${silentHtml}</div>
+          <div class="thread-msg-content">${this._formatContent(msg.content)}${silentHtml}</div>${this._botPartsHtml(msg)}
           ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>

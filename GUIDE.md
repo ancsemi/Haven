@@ -1676,6 +1676,90 @@ curl -F 'payload_json={"content":"Forwarded from Discord"}' \
 - Files cannot be sent with `ephemeral`, since an ephemeral message is never stored.
 
 
+### Embeds, Buttons and Dropdowns
+
+Bot messages can carry embeds, buttons and dropdowns in the same JSON shapes Discord uses, so a payload built for a Discord webhook or bot works here as it is. Add `embeds` and `components` to the Sending Messages body. `content` becomes optional when either is present.
+
+```
+POST https://your-server.com/api/webhooks/<token>
+Content-Type: application/json
+
+{
+  "embeds": [{
+    "title": "Build #12 passed",
+    "url": "https://ci.example.com/12",
+    "description": "All **412** tests green",
+    "color": 5763719,
+    "fields": [
+      { "name": "Branch", "value": "main", "inline": true },
+      { "name": "Time", "value": "3m 10s", "inline": true }
+    ],
+    "thumbnail": { "url": "https://ci.example.com/logo.png" },
+    "footer": { "text": "CI" },
+    "timestamp": "2026-11-20T10:00:00Z"
+  }],
+  "components": [
+    { "type": 1, "components": [
+      { "type": 2, "style": 1, "label": "Re-run", "custom_id": "rerun" },
+      { "type": 2, "style": 4, "label": "Cancel", "custom_id": "cancel", "emoji": { "name": "🛑" } },
+      { "type": 2, "style": 5, "label": "Open log", "url": "https://ci.example.com/12" }
+    ]},
+    { "type": 1, "components": [
+      { "type": 3, "custom_id": "notify", "placeholder": "Who should hear about failures?",
+        "min_values": 1, "max_values": 2,
+        "options": [
+          { "label": "Me", "value": "me", "description": "Just you" },
+          { "label": "The team", "value": "team", "emoji": { "name": "👥" } }
+        ] }
+    ]}
+  ]
+}
+```
+
+**Embeds** (up to 10 per message, 6000 characters across all of them): `title` (256), `description` (4096, markdown), `url`, `color` (a number, `0xRRGGBB`), `timestamp` (ISO 8601), `author` (`name`, `url`, `icon_url`), `footer` (`text`, `icon_url`), `thumbnail.url`, `image.url`, and up to 25 `fields` (`name` 256, `value` 1024, `inline`). Links must be `http` or `https`. Pictures must be `https` links (shown through the media proxy) or this server's `/uploads/` files.
+
+**Components** are up to 5 action rows (`"type": 1`). A row holds up to 5 buttons, or one dropdown:
+
+- **Button** (`"type": 2`): `style` 1 primary, 2 secondary, 3 success (green), 4 danger (red), or 5 link; a `label` (80) and/or an `emoji` (`{ "name": "👍" }`, unicode only); `disabled`. Styles 1 to 4 need a `custom_id` (100); a link button needs a `url` instead and just opens it.
+- **Dropdown** (`"type": 3`, Discord's string select): `custom_id`, 1 to 25 `options` (`label`, `value`, optional `description`, `emoji`, `default`), `placeholder` (150), `min_values` (0 to 25, default 1), `max_values` (1 to 25, default 1), `disabled`.
+
+Each `custom_id` must be unique within the message. Discord's user, role, channel and mentionable selects, premium buttons and Components V2 layouts are not supported. Buttons and dropdowns cannot be sent with `ephemeral`, but embeds can.
+
+A payload that breaks a rule is refused with `400` and the reason, for example `{ "error": "components[0].components[1].custom_id is required" }`.
+
+#### Handling clicks and picks
+
+When someone clicks a button or picks from a dropdown, Haven checks it (they can read the channel, the button exists and is not disabled, the picks are the dropdown's own values) and sends it to your bot's `callback_url`, signed like every other event:
+
+```
+POST <your callback_url>
+Content-Type: application/json
+X-Haven-Event: interaction
+X-Haven-Signature: sha256=<HMAC of the body with your callback secret>
+
+{
+  "event": "interaction",
+  "timestamp": "2026-11-20T10:01:00.000Z",
+  "channelId": "<channel code>",
+  "interaction": {
+    "id": "6f1c0a52-...",
+    "type": "component",
+    "message_id": 124,
+    "thread_id": null,
+    "custom_id": "notify",
+    "component_type": 3,
+    "values": ["me", "team"],
+    "user": { "id": 7, "username": "alice" }
+  }
+}
+```
+
+`values` is there only for a dropdown. Answer with any `2xx` within 5 seconds; otherwise the person sees "The bot did not answer". Interactions always reach the bot that posted the message, whatever its `subscribed_events`. Then reply with the API you already have:
+
+- a private answer to the person who clicked: POST with `"ephemeral": true, "recipient_id": <interaction.user.id>`
+- a message everyone sees: POST as usual, with `"reply_to": <message_id>` if you like
+- change the message itself (a vote count, a greyed-out button): PATCH it, below
+
 ### Editing Messages
 
 ```
@@ -1686,6 +1770,8 @@ Content-Type: application/json
 ```
 
 A bot can edit the messages it posted itself (use the `message_id` it got back when posting), and nobody else's. The message shows as edited. Returns `{ "success": true, "message_id": 124 }`.
+
+The body may also hold `embeds` and `components`, which replace the message's own; an empty list (`"components": []`) removes them, and leaving the key out keeps them. `content` can be left out when only those change, and `"content": ""` removes the text as long as an embed or component is left.
 
 ### Deleting Messages
 

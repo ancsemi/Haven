@@ -24,6 +24,7 @@ const { messageChannel, messageChannelMember, messageForAction, messageAuthor,
         ownDeleteOverride, deleteMessage, findPin, countPins, insertPin, deletePin, clearDestructAt,
         setProtection, listPins, formatPins } = require('../db/messageManagement');
 const { takeSilent } = require('../silentMessages');
+const botComponents = require('../botComponents');
 const { parseSlash } = require('../slashParse');
 const { tagAccess } = require('../uploadTagRoles');
 const { moveToChannel } = require('../moveMessages');
@@ -352,6 +353,7 @@ module.exports = function register(socket, ctx) {
     let pinnedSet = null;
     let highlightMap = new Map();
     let quoteMap = new Map();
+    let botPartsMap = new Map();
     if (msgIds.length > 0) {
       const ph = msgIds.map(() => '?').join(',');
       db.prepare(`
@@ -370,6 +372,7 @@ module.exports = function register(socket, ctx) {
       );
       highlightMap = highlights.lookup(db, msgIds);
       quoteMap = quotes.lookup(db, msgIds);
+      botPartsMap = botComponents.lookup(db, msgIds);
 
       db.prepare(`SELECT message_id, title, data FROM role_menus WHERE message_id IN (${ph})`).all(...msgIds)
         .forEach(r => { const menu = ctx.buildRoleMenu?.(r, socket.user.id); if (menu) roleMenuMap.set(r.message_id, menu); });
@@ -455,6 +458,7 @@ module.exports = function register(socket, ctx) {
       if (m.type === 'missed_call') obj.system = true;
       if (highlightMap.has(m.id)) obj.highlight = highlightMap.get(m.id);
       if (quoteMap.has(m.id)) obj.quoteOf = quoteMap.get(m.id);
+      if (botPartsMap.has(m.id)) Object.assign(obj, botPartsMap.get(m.id));
       obj.thread = threadMap.get(m.id) || null;
       if (threadNew && obj.thread && threadNew.has(m.id)) obj.thread = { ...obj.thread, newCount: threadNew.get(m.id) };
       // A forum topic is unread until you open it (your own topics start
@@ -2943,8 +2947,10 @@ module.exports = function register(socket, ctx) {
     // Blog mode (#5742): which replies are the author's additions to the post.
     const blogParts = forumBlog.blogOn(db, channel.id) ? forumBlog.partIdsOf(db, parentId) : null;
 
+    const threadBotParts = botComponents.lookup(db, msgIds);
     const enriched = messages.map(m => {
       const obj = formatThreadMessage(m, replyMap.get(m.reply_to), reactionMap.get(m.id));
+      if (threadBotParts.has(m.id)) Object.assign(obj, threadBotParts.get(m.id));
       const atags = threadTagMap.get(m.id);
       if (atags && atags.length) obj.attachmentTags = atags;
       if (blogParts) obj.post_part = blogParts.has(m.id);

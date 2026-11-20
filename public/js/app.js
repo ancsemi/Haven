@@ -48,7 +48,7 @@ import ChannelMergeMethods from './modules/app-channel-merge.js?v=4.29.60';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.29.66';
 import DmPinMethods from './modules/app-dm-pins.js?v=4.29.30';
 import DmSortMethods from './modules/app-dm-sort.js?v=4.29.65';
-import MessageMethods  from './modules/app-messages.js?v=4.29.91';
+import MessageMethods  from './modules/app-messages.js?v=4.29.94';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.29.57';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.29.61';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.29.40';
@@ -67,7 +67,7 @@ import UtilityMethods  from './modules/app-utilities.js?v=4.29.91';
 import MessageContentMethods from './modules/app-message-content.js?v=4.29.86';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.77';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
-import ThreadMethods from './modules/app-threads.js?v=4.29.76';
+import ThreadMethods from './modules/app-threads.js?v=4.29.94';
 import AdminMethods    from './modules/app-admin.js?v=4.29.71';
 import BrandingMethods from './modules/app-branding.js?v=4.29.19';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.52';
@@ -95,6 +95,7 @@ import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.29.67';
 import DesktopActivityMethods from './modules/app-desktop-activity.js?v=4.29.68';
 import LoginBrandingMethods from './modules/app-login-branding.js?v=4.27.4';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
+import BotComponentMethods from './modules/app-bot-components.js?v=4.29.94';
 import MessageGroupingMethods from './modules/message-grouping.js?v=4.25.1';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
 import BlockedNameMethods from './modules/app-blocked-names.js?v=4.29.15';
@@ -483,6 +484,7 @@ class HavenApp {
     this._setupDesktopAppActivity();
     this._setupLoginBranding();
     this._setupMessageHighlights();
+    this._setupBotComponents();
     this._setupModCases();
     this._setupBadges();
     this._setupServerMute();
@@ -692,6 +694,7 @@ Object.assign(HavenApp.prototype,
   DesktopActivityMethods,
   LoginBrandingMethods,
   MessageHighlightMethods,
+  BotComponentMethods,
   MessageGroupingMethods,
   ModCaseMethods,
   ServerMuteMethods,

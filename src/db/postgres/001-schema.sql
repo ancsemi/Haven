@@ -414,6 +414,13 @@ CREATE TABLE "message_highlights" (
   PRIMARY KEY ("message_id")
 );
 
+CREATE TABLE "message_bot_parts" (
+  "message_id" BIGINT,
+  "embeds" TEXT,
+  "components" TEXT,
+  PRIMARY KEY ("message_id")
+);
+
 CREATE TABLE "message_quotes" (
   "message_id" BIGINT,
   "quote_of" BIGINT NOT NULL,
@@ -926,6 +933,8 @@ ALTER TABLE "message_highlights" ADD CONSTRAINT "message_highlights_fk_0" FOREIG
 ALTER TABLE "message_highlights" ADD CONSTRAINT "message_highlights_fk_1" FOREIGN KEY ("role_id") REFERENCES "roles" ("id") ON DELETE SET NULL ON UPDATE NO ACTION;
 
 ALTER TABLE "message_highlights" ADD CONSTRAINT "message_highlights_fk_2" FOREIGN KEY ("message_id") REFERENCES "messages" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+
+ALTER TABLE "message_bot_parts" ADD CONSTRAINT "message_bot_parts_fk_0" FOREIGN KEY ("message_id") REFERENCES "messages" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 ALTER TABLE "message_quotes" ADD CONSTRAINT "message_quotes_fk_0" FOREIGN KEY ("quote_of") REFERENCES "messages" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 

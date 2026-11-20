@@ -4974,6 +4974,12 @@
     "reply_other": "{{count}} replies",
     "unavailable_in_dm": "Threads are not available in DMs"
   },
+  "bot_parts": {
+    "select_placeholder": "Make a selection",
+    "select_done": "Done",
+    "select_count": "Pick {{min}} to {{max}}",
+    "external_link": "Opens {{url}}"
+  },
   "role_menu": {
     "pick_one_only": "Pick one",
     "pick_up_to": "Pick up to {{count}}",

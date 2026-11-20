@@ -6,6 +6,7 @@ const { migrateSelfDms } = require('./selfDmSchema');
 const { applyDefaultUpdates } = require('./settingDefaults');
 const messageHighlights = require('./messageHighlights');
 const messageQuotes = require('./messageQuotes');
+const botComponents = require('./botComponents');
 const modCases = require('./modCases');
 const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
@@ -1715,6 +1716,7 @@ function initDatabase() {
   applyDefaultUpdates(db);
   messageHighlights.ensureTable(db);
   messageQuotes.ensureTable(db);
+  botComponents.ensureTable(db);
   modCases.ensureTable(db);
   migrateImportedAuthors(db);
   forumUnread.ensureTable(db);
