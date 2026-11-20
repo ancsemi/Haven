@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.30.0] - Unreleased
 
 ### Added
+- Small text: a line that starts with `-# ` shows small and muted, the way Discord does, so it also reads right in messages that come across Ferry (asked for by test1). The formatting menu has a Small text row.
 - Pick your name color: someone who holds several colored roles can choose which one colors their name, in Settings > Role Display. Automatic (the default) uses the highest role as before. Only the name color changes; the role badge still shows the highest role in its own color.
 - Do Not Disturb now keeps your notifications quiet (asked for by TGS). While your status is Do Not Disturb the chat plays no message, mention, reply, join or leave sounds, shows no desktop pop-up, and the server sends your phone and browser no push; your own send sound and the sound you pick in Settings still play, and unread counts still show in the sidebar. Away and Invisible are unchanged, and Invisible already stays on across logins.
 - Custom theme: a switch under the color picker lets you pick the highlight color (buttons, selections, links) on its own, so it no longer has to share a hue with the background. Off by default; with it off Custom looks as before (reported by qNemo).

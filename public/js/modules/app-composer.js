@@ -576,6 +576,7 @@ _formatGuideRows() {
     { key: 'codeblock', before: '```\n', after: '\n```', block: true },
     { key: 'quote',     before: '> ',  after: '', block: true },
     { key: 'heading',   before: '# ',  after: '', block: true },
+    { key: 'subtext',   before: '-# ', after: '', block: true },
     { key: 'list',      before: '- ',  after: '', block: true },
     { key: 'numbered',  before: '1. ', after: '', block: true },
     { key: 'link',      before: '[',   after: '](https://example.com)' },
