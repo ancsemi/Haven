@@ -29,6 +29,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Ferry can keep the pictures and files of Discord messages (asked for by Raidenphantom, by Amnibro in #5906). Discord's own links stop working after about a day, which broke forwarded pictures. With Keep Discord pictures and files switched on in the Ferry options, each one is copied into Haven's uploads as the message arrives: only from paired channels, held to the upload size limit, your blocked file types, the disk space reserve and the privacy check, and removed again when the message is deleted. It is off until an admin turns it on, and a file that cannot be copied stays a Discord link.
 
 ### Changed
+- Haven uses less processor while it is in the background (#5911): shimmering role names and theme effects stop moving while the window is hidden or another program has the keyboard, and in Desktop servers that are not the one on screen. Three shimmering names measured about 10% of a processor core on an otherwise idle page; paused, the same page uses about 0.2%.
 - A DM opened in the main window is easier to tell from a channel (#5920): the header shows a "Private conversation" tag with a colored line under it, and the message box says who the message goes to.
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 

@@ -78,6 +78,27 @@ _setupAccessibility() {
     this._applyViewerAnimPref?.();
     this._applyViewerChatAnimPref?.();
   });
+  this._setupBackgroundMotion();
+},
+
+// Decorative animations that loop forever (shimmering role names, theme
+// effects) redraw every frame: three shimmering names measured about 10% of
+// a processor core on an idle page (#5911). Nobody is watching them while
+// Haven is hidden or another window has the keyboard (a game, say), or in a
+// Desktop server that is not the one on screen, so they are paused there.
+// The CSS that does the pausing hangs off html.haven-background.
+_setupBackgroundMotion() {
+  const sync = () => this._setBackgroundMotion(document.hidden || !document.hasFocus());
+  document.addEventListener('visibilitychange', sync);
+  window.addEventListener('focus', sync);
+  // Focus moving into an embedded player also blurs the window; hasFocus()
+  // is still true then, once the move has finished.
+  window.addEventListener('blur', () => setTimeout(sync, 0));
+  sync();
+},
+
+_setBackgroundMotion(inBackground) {
+  document.documentElement.classList.toggle('haven-background', !!inBackground);
 },
 
 // A default is stored as no key at all, the way a fresh device has it.
