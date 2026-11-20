@@ -9,6 +9,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.30.0] - Unreleased
 
 ### Added
+- More profile customization (thanks Bo0sted, #5900): pick a banner color in Edit Profile or let it follow your avatar, upload and crop a banner picture (with its own size limit in Uploads & Limits), and give your profile card a two-color theme it fades between.
+- Call settings everywhere (thanks Roolk, #5903): Settings has a new Voice & video page with every call setting, usable without joining a call, plus Test microphone (with Hear myself) and Test camera. The fullscreen call popup shows the same full set of settings instead of three dropdowns.
+- The quick reaction row leads with your favorites, then the reactions you use most, then the usual defaults (thanks Amnibro, #5902). A row you customized still wins, and its editor has a Reset to automatic button.
 - Pick your name color: someone who holds several colored roles can choose which one colors their name, in Settings > Role Display. Automatic (the default) uses the highest role as before. Only the name color changes; the role badge still shows the highest role in its own color.
 - Do Not Disturb now keeps your notifications quiet (asked for by TGS). While your status is Do Not Disturb the chat plays no message, mention, reply, join or leave sounds, shows no desktop pop-up, and the server sends your phone and browser no push; your own send sound and the sound you pick in Settings still play, and unread counts still show in the sidebar. Away and Invisible are unchanged, and Invisible already stays on across logins.
 - Custom theme: a switch under the color picker lets you pick the highlight color (buttons, selections, links) on its own, so it no longer has to share a hue with the background. Off by default; with it off Custom looks as before (reported by qNemo).
