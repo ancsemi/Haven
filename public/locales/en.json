@@ -270,6 +270,7 @@
       "stained_glass": "Stained Glass",
       "divine_radiance": "Divine Radiance",
       "light_mode": "Light Mode",
+      "custom_accent": "Pick the highlight color separately",
       "picker": {
         "search": "Search themes",
         "no_match": "No themes match your search.",
