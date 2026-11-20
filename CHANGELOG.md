@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.30.0] - Unreleased
 
 ### Added
+- Custom theme: a switch under the color picker lets you pick the highlight color (buttons, selections, links) on its own, so it no longer has to share a hue with the background. Off by default; with it off Custom looks as before (reported by qNemo).
 - Encrypted mobile push (#5871): each app now gets its pushes sealed with its own key using the same scheme as web push (RFC 8291), so the push relay, Google and Apple only see "New message" and a blob. The title, text and channel are read on the phone. Apps that have not updated keep working as they do today, and Settings > Security > FCM Privacy has a new switch to hide the message text from those too.
 - See several streams at once in a fullscreen call (asked for by florianbaer, #5899): the new grid button in the fullscreen call bar lays out every live screen share and camera together. Click a tile, or pick one in the stream menu, to bring it back to full size; the grid button goes back to the one you had.
 - Bots can send files and pictures with their messages (asked for by Raidenphantom). A bot that forwarded only links, such as Discord's, saw its pictures break once those links expired; now it can send the files themselves, which are kept on the server like a member's upload, under the same size limit, blocked file types and privacy pass. See "Sending Files and Pictures" in GUIDE.md.
