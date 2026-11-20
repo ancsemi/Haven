@@ -1233,6 +1233,7 @@ video:-webkit-full-screen {
 .chat-h1 { font-size: 1.5em; }
 .chat-h2 { font-size: 1.25em; }
 .chat-h3 { font-size: 1.1em; }
+.chat-subtext { font-size: 0.75em; color: var(--text-muted); line-height: 1.3; }
 
 /* ── Chat Markdown: Horizontal Rules ───────────────────── */
 .chat-hr {
