@@ -33,7 +33,11 @@ function parsePortchecker(result, port) {
   const entry = list?.find(p => parseInt(p?.port, 10) === want);
   if (!entry) return null;
   if (typeof entry.status === 'boolean') return entry.status;
-  if (typeof entry.status === 'string') return entry.status.toLowerCase() === 'open';
+  if (typeof entry.status === 'string') {
+    const status = entry.status.toLowerCase();
+    if (status === 'open') return true;
+    if (status === 'closed') return false;
+  }
   return null;
 }
 
@@ -51,7 +55,12 @@ function queryPortchecker(host, port, { agentFor, request = https.request, timeo
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Content-Length': Buffer.byteLength(body) },
       }, (resp) => {
         let data = '';
-        resp.on('data', chunk => { data += chunk; });
+        resp.on('error', () => resolve(null));
+        resp.on('aborted', () => resolve(null));
+        resp.on('data', chunk => {
+          data += chunk;
+          if (data.length > 65536) { req.destroy(); resolve(null); }
+        });
         resp.on('end', () => {
           if (resp.statusCode < 200 || resp.statusCode >= 300) return resolve(null);
           try { resolve(parsePortchecker(JSON.parse(data), port)); } catch { resolve(null); }

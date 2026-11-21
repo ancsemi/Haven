@@ -30,6 +30,7 @@ test('reads the current reply shape and the old one', () => {
 test('an error reply or a missing port is "no answer", not "unreachable"', () => {
   assert.equal(parsePortchecker({ error: true, msg: 'bad' }, 443), null);
   assert.equal(parsePortchecker({ check: [{ port: 80, status: true }] }, 443), null);
+  assert.equal(parsePortchecker({ check: [{ port: 443, status: 'unknown' }] }, 443), null);
   assert.equal(parsePortchecker(null, 443), null);
   assert.equal(parsePortchecker('nope', 443), null);
 });
@@ -56,4 +57,19 @@ test('a non-2xx reply (the old 405) or bad body is "no answer"', async () => {
   assert.equal(await queryPortchecker('203.0.113.7', 443, { request: fakeRequest(405, 'Method Not Allowed', []) }), null);
   assert.equal(await queryPortchecker('203.0.113.7', 443, { request: fakeRequest(200, '<html>', []) }), null);
   assert.equal(await queryPortchecker('203.0.113.7', 443, { request: fakeRequest(200, JSON.stringify({ error: false, check: [{ port: 443, status: false }] }), []) }), false);
+});
+
+test('response errors and timeouts return no answer', async () => {
+  for (const event of ['error', 'aborted']) {
+    const request = (_url, _opts, onResp) => {
+      const req = new EventEmitter(); req.destroy = () => {};
+      req.end = () => { const resp = new EventEmitter(); resp.statusCode = 200; onResp(resp); setImmediate(() => resp.emit(event)); };
+      return req;
+    };
+    assert.equal(await queryPortchecker('203.0.113.7', 443, { request }), null);
+  }
+  let destroyed = false;
+  const request = () => { const req = new EventEmitter(); req.destroy = () => { destroyed = true; }; req.end = () => setImmediate(() => req.emit('timeout')); return req; };
+  assert.equal(await queryPortchecker('203.0.113.7', 443, { request }), null);
+  assert.equal(destroyed, true);
 });
