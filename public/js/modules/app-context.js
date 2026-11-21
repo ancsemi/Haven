@@ -623,6 +623,7 @@ _setupNotifications() {
     const applyCompact = () => {
       document.documentElement.toggleAttribute('data-compact-composer', compactToggle.checked);
       if (!compactToggle.checked) this._closeComposerMenu?.();
+      this._applyComposerButtons?.();
     };
     compactToggle.checked = localStorage.getItem('haven_compact_composer') === 'true';
     compactToggle.addEventListener('change', () => {

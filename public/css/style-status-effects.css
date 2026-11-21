@@ -102,7 +102,8 @@
 /* One + button in place of the toolbar (#5654). The toolbar itself becomes
    the menu that opens above the +, with each button's title as its label. */
 .btn-composer-plus { display: none; }
-[data-compact-composer] .btn-composer-plus {
+[data-compact-composer] .btn-composer-plus,
+[data-composer-folded] .btn-composer-plus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -118,8 +119,11 @@
   cursor: pointer;
 }
 [data-compact-composer] .btn-composer-plus:hover,
-[data-compact-composer] .btn-composer-plus[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
-[data-compact-composer] .input-actions-box {
+[data-compact-composer] .btn-composer-plus[aria-expanded="true"],
+[data-composer-folded] .btn-composer-plus:hover,
+[data-composer-folded] .btn-composer-plus[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+[data-compact-composer] .input-actions-box,
+.composer-overflow {
   display: none;
   position: absolute;
   bottom: 100%;
@@ -136,9 +140,12 @@
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
   z-index: 1050;
 }
-[data-compact-composer] .input-actions-box.open { display: flex; }
-[data-compact-composer] .input-actions-box .input-actions-divider { display: none !important; }
-[data-compact-composer] .input-actions-box > button {
+[data-compact-composer] .input-actions-box.open,
+.composer-overflow.open { display: flex; }
+[data-compact-composer] .input-actions-box .input-actions-divider,
+[data-composer-custom] .input-actions-box .input-actions-divider { display: none !important; }
+[data-compact-composer] .input-actions-box > button,
+.composer-overflow > button {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -147,7 +154,8 @@
   padding: 0.45rem 0.6rem;
   border-radius: var(--radius-sm);
 }
-[data-compact-composer] .input-actions-box > button::after {
+[data-compact-composer] .input-actions-box > button::after,
+.composer-overflow > button::after {
   content: attr(title);
   font-size: 0.85rem;
   font-weight: 500;
@@ -157,13 +165,15 @@
 /* The GIF button is a bordered "GIF" chip in the toolbar. As a menu row the
    border goes on the letters only, so it reads as an icon like the others
    rather than an outline around the whole row. */
-[data-compact-composer] .input-actions-box > .btn-gif {
+[data-compact-composer] .input-actions-box > .btn-gif,
+.composer-overflow > .btn-gif {
   height: auto;
   border-color: transparent;
   font-size: inherit;
   letter-spacing: normal;
 }
-[data-compact-composer] .input-actions-box > .btn-gif > span {
+[data-compact-composer] .input-actions-box > .btn-gif > span,
+.composer-overflow > .btn-gif > span {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -175,7 +185,10 @@
   font-weight: 800;
   letter-spacing: 0.02em;
 }
-[data-compact-composer] .input-actions-box > .btn-gif:hover { border-color: transparent; }
+[data-compact-composer] .input-actions-box > .btn-gif:hover,
+.composer-overflow > .btn-gif:hover { border-color: transparent; }
+.composer-overflow { max-width: calc(100vw - 2.5rem); }
+.composer-overflow > button::after { white-space: normal; text-align: left; }
 
 /* Voice messages (#5665) */
 .btn-voice-msg.recording { color: #e74c5f; animation: voice-rec-pulse 1s ease-in-out infinite; }
