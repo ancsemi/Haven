@@ -42,8 +42,15 @@ _emojiSearchScore(emoji, rawQuery) {
   const raw = (rawQuery || '').trim();
   const q = raw.toLowerCase();
   if (!q) return 0;
-  const name = String(this.emojiNames?.[emoji] || '').toLowerCase();
-  const extra = typeof emoji === 'string' ? (this.emojiKeywords?.[noVs(emoji)] || '') : '';
+  // Haven's own image emoji (:flag_us:) are found by their name and the
+  // words listed with them in app.js ("united states america usa").
+  const named = typeof emoji === 'string' && /^:[a-zA-Z0-9_-]+:$/.test(emoji) ? emoji.slice(1, -1) : '';
+  const name = named
+    ? named.replace(/[_-]/g, ' ').toLowerCase()
+    : String(this.emojiNames?.[emoji] || '').toLowerCase();
+  const extra = named
+    ? String(this._findNamedEmoji?.(named)?.keywords || '').toLowerCase()
+    : typeof emoji === 'string' ? (this.emojiKeywords?.[noVs(emoji)] || '') : '';
   // A whole word beats the start of one: "lol" finds 😂 before 🍭 "lollipop".
   const wholeWord = (text) => ` ${text} `.replace(/[:,]/g, ' ').includes(` ${q} `);
   const startsWord = (text) => ` ${text}`.includes(` ${q}`);
