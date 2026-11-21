@@ -8,6 +8,7 @@ const { verifyToken } = require('../auth');
 const storage = require('../storage');
 const { avatarShape, animationMode, borderFit, setAvatarShape, setAnimationMode, setBorderFit } = require('../db/userProfiles');
 const { cleanHexColor } = require('../socketHandlers/helpers');
+const botAccounts = require('../botAccounts');
 
 module.exports = function registerProfile(deps) {
   const { uploadDiskGuard, app, recordUploadOwnership, releaseOwnUploads, verifyAdminFromDb, userHasPermission, upload, uploadLimiter } = deps;
@@ -17,6 +18,15 @@ module.exports = function registerProfile(deps) {
     .catch(err => console.warn(`[${what}] Could not release the old picture:`, err.message));
   // Profile pictures, borders and persona avatars share one size limit the
   // admin sets (Settings, Uploads & Limits): 1 to 10 MB, 2 MB by default.
+  // Whose picture this is: the signed in account, or a bot it manages when
+  // the request names one (src/botAccounts.js). Null when that is refused.
+  const avatarOwner = (user, rawBotId) => {
+    if (rawBotId === undefined || rawBotId === '') return user.id;
+    const { getDb } = require('../database');
+    const actor = { id: user.id, isAdmin: verifyAdminFromDb(user) };
+    const a = botAccounts.access(getDb(), actor, parseInt(rawBotId, 10), userHasPermission);
+    return a ? a.bot.id : null;
+  };
   const avatarMaxMb = () => {
     const { getDb } = require('../database');
     const n = parseInt(getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_avatar_mb'").get()?.value, 10);
@@ -90,8 +100,10 @@ module.exports = function registerProfile(deps) {
       const finalName = await keepImageUpload(req, res, { maxMb: avatarMaxMb(), label: 'Avatar' });
       if (!finalName) return;
       const avatarUrl = `/uploads/${finalName}`;
+      const ownerId = avatarOwner(user, req.body?.botId);
+      if (!ownerId) return res.status(403).json({ error: 'Insufficient permissions' });
 
-      recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
+      recordUploadOwnership(ownerId, finalName, req.file.size, 'profile');
 
       // Update the user's avatar in the database, with the color the client
       // sampled from it for the default banner. A missing or malformed color
@@ -100,14 +112,14 @@ module.exports = function registerProfile(deps) {
       let oldAvatar = null;
       try {
         const db = getDb();
-        oldAvatar = db.prepare('SELECT avatar FROM users WHERE id = ?').get(user.id)?.avatar || null;
-        db.prepare('UPDATE users SET avatar = ?, avatar_color = ? WHERE id = ?').run(avatarUrl, avatarColor, user.id);
+        oldAvatar = db.prepare('SELECT avatar FROM users WHERE id = ?').get(ownerId)?.avatar || null;
+        db.prepare('UPDATE users SET avatar = ?, avatar_color = ? WHERE id = ?').run(avatarUrl, avatarColor, ownerId);
         console.log(`[Avatar] ${user.username} uploaded avatar: ${avatarUrl}`);
       } catch (dbErr) {
         console.error('Avatar DB update error:', dbErr);
         return res.status(500).json({ error: 'Failed to save avatar' });
       }
-      await releaseOld(oldAvatar, user.id, 'Avatar');
+      await releaseOld(oldAvatar, ownerId, 'Avatar');
 
       res.json({ url: avatarUrl });
     });
@@ -118,11 +130,13 @@ module.exports = function registerProfile(deps) {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const ownerId = avatarOwner(user, req.body?.botId);
+    if (!ownerId) return res.status(403).json({ error: 'Insufficient permissions' });
     try {
       const { getDb } = require('../database');
-      const old = getDb().prepare('SELECT avatar FROM users WHERE id = ?').get(user.id)?.avatar || null;
-      getDb().prepare('UPDATE users SET avatar = NULL, avatar_color = NULL WHERE id = ?').run(user.id);
-      await releaseOld(old, user.id, 'Avatar');
+      const old = getDb().prepare('SELECT avatar FROM users WHERE id = ?').get(ownerId)?.avatar || null;
+      getDb().prepare('UPDATE users SET avatar = NULL, avatar_color = NULL WHERE id = ?').run(ownerId);
+      await releaseOld(old, ownerId, 'Avatar');
       res.json({ ok: true });
     } catch (err) {
       console.error('Avatar remove error:', err);

@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.29.77';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.83';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.95';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.29.71';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.83';
 import ComposerMethods from './modules/app-composer.js?v=4.29.71';
@@ -48,12 +48,12 @@ import ChannelMergeMethods from './modules/app-channel-merge.js?v=4.29.60';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.29.66';
 import DmPinMethods from './modules/app-dm-pins.js?v=4.29.30';
 import DmSortMethods from './modules/app-dm-sort.js?v=4.29.65';
-import MessageMethods  from './modules/app-messages.js?v=4.29.91';
+import MessageMethods  from './modules/app-messages.js?v=4.29.95';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.29.57';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.29.61';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.29.40';
 import UnthreadMethods from './modules/app-unthread.js?v=4.29.40';
-import UserMethods     from './modules/app-users.js?v=4.29.91';
+import UserMethods     from './modules/app-users.js?v=4.29.95';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
 import VoiceMethods    from './modules/app-voice.js?v=4.29.83';
 import ThemePickerMethods from './modules/app-theme-picker.js?v=4.25.30';
@@ -67,15 +67,15 @@ import UtilityMethods  from './modules/app-utilities.js?v=4.29.91';
 import MessageContentMethods from './modules/app-message-content.js?v=4.29.86';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.77';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
-import ThreadMethods from './modules/app-threads.js?v=4.29.76';
-import AdminMethods    from './modules/app-admin.js?v=4.29.71';
+import ThreadMethods from './modules/app-threads.js?v=4.29.95';
+import AdminMethods    from './modules/app-admin.js?v=4.29.96';
 import BrandingMethods from './modules/app-branding.js?v=4.29.19';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.52';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.29.13';
 import StatusMethods from './modules/app-status.js?v=4.29.2';
 import DiscordImportMethods from './modules/app-discord-import.js?v=4.27.52';
-import RoleMethods from './modules/app-roles.js?v=4.27.52';
-import RoleAssignMethods from './modules/app-role-assign.js?v=4.26.16';
+import RoleMethods from './modules/app-roles.js?v=4.29.95';
+import RoleAssignMethods from './modules/app-role-assign.js?v=4.29.95';
 import ModerationMethods from './modules/app-moderation.js?v=4.29.70';
 import PlatformMethods from './modules/app-platform.js?v=4.27.49';
 import SearchMethods   from './modules/app-search.js?v=4.29.79';
@@ -86,7 +86,7 @@ import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.29.20';
 import ChannelAddMemberMethods from './modules/app-channel-add-members.js?v=4.29.66';
-import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.27.51';
+import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.29.95';
 import CallMethods from './modules/app-calls.js?v=4.22.24';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
 import GroupMethods from './modules/app-groups.js?v=4.27.52';
@@ -95,6 +95,8 @@ import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.29.67';
 import DesktopActivityMethods from './modules/app-desktop-activity.js?v=4.29.68';
 import LoginBrandingMethods from './modules/app-login-branding.js?v=4.27.4';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
+import BotComponentMethods from './modules/app-bot-components.js?v=4.29.94';
+import BotAccountMethods from './modules/app-bot-accounts.js?v=4.29.96';
 import MessageGroupingMethods from './modules/message-grouping.js?v=4.25.1';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
 import BlockedNameMethods from './modules/app-blocked-names.js?v=4.29.15';
@@ -116,7 +118,7 @@ import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
 import ReplyPingMethods from './modules/app-reply-ping.js?v=4.29.61';
 import MentionsMethods from './modules/app-mentions.js?v=4.29.11';
-import SettingsPageMethods from './modules/app-settings-pages.js?v=4.29.71';
+import SettingsPageMethods from './modules/app-settings-pages.js?v=4.29.95';
 import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.29.12';
 import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';
 import { createCallSettings } from './modules/call-settings.js?v=4.29.77';
@@ -258,9 +260,10 @@ class HavenApp {
     // Admin tab that did nothing when clicked.)
     // Mirrors the access table in _syncSettingsNav (app-admin.js): anyone who
     // can see at least one admin section must also be allowed onto the tab.
-    this._hasAnyAdminSettingsAccess = () => this.user.isAdmin || [
+    // A bot's Bot Creators get the tab for the Bots page alone.
+    this._hasAnyAdminSettingsAccess = () => this.user.isAdmin || !!this.user.botCreator || [
       'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_roles',
-      'manage_server', 'manage_webhooks', 'view_audit_log', 'invite_users',
+      'manage_server', 'manage_webhooks', 'manage_bots', 'view_audit_log', 'invite_users',
       'ban_user', 'kick_user', 'view_all_members', 'manage_badges'
     ].some(p => this._hasPerm(p));
     // Global-only variant: excludes permissions granted via a channel-scoped
@@ -483,6 +486,8 @@ class HavenApp {
     this._setupDesktopAppActivity();
     this._setupLoginBranding();
     this._setupMessageHighlights();
+    this._setupBotComponents();
+    this._setupBotAccounts();
     this._setupModCases();
     this._setupBadges();
     this._setupServerMute();
@@ -692,6 +697,8 @@ Object.assign(HavenApp.prototype,
   DesktopActivityMethods,
   LoginBrandingMethods,
   MessageHighlightMethods,
+  BotComponentMethods,
+  BotAccountMethods,
   MessageGroupingMethods,
   ModCaseMethods,
   ServerMuteMethods,

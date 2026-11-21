@@ -514,7 +514,7 @@ _appendThreadMessage(msg, opts = {}) {
             <div class="msg-toolbar-group">${threadCoreToolbarBtns}</div>
             ${threadOverflowHtml}
           </div>
-          <div class="thread-msg-content">${this._formatContent(msg.content)}${silentHtml}</div>
+          <div class="thread-msg-content">${this._formatContent(msg.content)}${silentHtml}</div>${this._botPartsHtml(msg)}
           ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>
@@ -525,7 +525,7 @@ _appendThreadMessage(msg, opts = {}) {
         ${avatarHtml}
         <div class="thread-msg-body">
           <div class="thread-msg-header">
-            <span class="thread-msg-author" style="color:${authorColor}">${this._roleNameHtml(authorRole, displayName)}</span>
+            <span class="thread-msg-author" style="color:${authorColor}">${this._roleNameHtml(authorRole, displayName)}</span>${msg.bot ? '<span class="bot-badge">BOT</span>' : ''}
             <span class="thread-msg-time"${this._timeAttr(msg.created_at)}>${this._formatTime(msg.created_at)}</span>
             <span class="thread-msg-header-spacer"></span>
             <div class="thread-msg-toolbar">
@@ -534,7 +534,7 @@ _appendThreadMessage(msg, opts = {}) {
             </div>
           </div>
           ${replyHtml}
-          <div class="thread-msg-content">${this._formatContent(msg.content)}${silentHtml}</div>
+          <div class="thread-msg-content">${this._formatContent(msg.content)}${silentHtml}</div>${this._botPartsHtml(msg)}
           ${reactionsHtml}${threadTagsHtml}
         </div>
       </div>
