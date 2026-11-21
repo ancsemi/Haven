@@ -76,3 +76,13 @@ test('search never offers a left-out person', () => {
   const found = new Set(['person', 'shrug', 'technologist', 'claus', 'family', 'run'].flatMap(q => app._emojiSearch(q)));
   assert.deepEqual(data.hidden.filter(g => found.has(g)), []);
 });
+
+test("Haven's own image emoji are found by their name and their listed words", () => {
+  const app = searcher();
+  app._findNamedEmoji = (name) => (name === 'flag_us' ? { name, keywords: 'united states america usa flag' } : null);
+  for (const query of ['usa', 'USA', 'america', 'united states', 'flag', 'us']) {
+    assert.ok(app._emojiSearchScore(':flag_us:', query) >= 0, `"${query}" should find :flag_us:`);
+  }
+  assert.equal(app._emojiSearchScore(':flag_us:', 'canada'), -1);
+  assert.equal(app._emojiSearchScore(':some_server_emoji:', 'usa'), -1);
+});
