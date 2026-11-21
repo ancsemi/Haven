@@ -29,7 +29,7 @@ module.exports = function register(socket, ctx) {
   // Every live connection of the bot.
   const botSockets = (id) => [...io.sockets.sockets.values()].filter(s => s.user && s.user.id === id);
   const signOut = (id) => botSockets(id).forEach(s => s.disconnect(true));
-  const changed = () => io.emit('bots-changed');
+  const changed = () => io.except('bot-sockets').emit('bots-changed');
 
   // A new name or picture, wherever the bot is shown right now.
   function refreshLive(id) {

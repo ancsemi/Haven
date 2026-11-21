@@ -38,7 +38,7 @@ const register = (username) => post('/api/auth/register', { username, password: 
 // The same fill-in and merge the web client does (app-socket-channels.js).
 const fillMember = (u) => ({
   highScore: 0, statusText: '', avatar: null, avatarShape: 'circle', border: null,
-  borderTransform: null, animateProfile: 'trigger', isGuest: false, role: null, activity: null, birthday: null,
+  borderTransform: null, animateProfile: 'trigger', isGuest: false, bot: false, role: null, activity: null, birthday: null,
   ...u,
 });
 
