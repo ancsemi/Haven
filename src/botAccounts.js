@@ -4,14 +4,15 @@
 // instead of a password. Unlike a webhook it is a real member, so roles,
 // channels and every member feature apply to it as they would to a person.
 //
-// Who may do what with a bot:
-//   create one                  the admin, or Manage Bots
-//   token, name, picture,       the admin, Manage Bots, the bot's creator,
-//   enable or disable           and the people on its managers list
-//   change the managers list    the admin, Manage Bots, the bot's creator
-//   delete it                   Manage Bots while it has never posted; once
+// Who may do what with a bot. Bot Manager is the role permission; a bot's
+// Bot Creators are the people on its own list, plus whoever made it.
+//   make one                    the admin, or Bot Manager
+//   token, name, picture,       the admin, Bot Manager, and the bot's
+//   enable or disable           Bot Creators
+//   change its Bot Creators     the admin, or Bot Manager
+//   delete it                   Bot Manager while it has never posted; once
 //                               it has, only the admin, and its messages go
-// Its roles and channels are not a bot manager's to change: those go through
+// Its roles and channels are not a Bot Creator's to change: those go through
 // role management and Manage members, with the usual rules.
 
 const { nameRefusal } = require('./blockedNames');
@@ -21,7 +22,7 @@ const NO_PASSWORD = '!bot-no-password';
 
 function ensureTable(db) {
   db.exec(`
-    CREATE TABLE IF NOT EXISTS bot_managers (
+    CREATE TABLE IF NOT EXISTS bot_creators (
       bot_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       PRIMARY KEY (bot_id, user_id)
@@ -33,23 +34,27 @@ function getBot(db, botId) {
   return db.prepare('SELECT id, username, display_name, avatar, bot_disabled, bot_created_by FROM users WHERE id = ? AND is_bot = 1').get(botId) || null;
 }
 
-// What this person may do with the bot: { bot, manage, editManagers }, or
-// null when they may do nothing with it.
+// What this person may do with the bot: { bot, full }, where full means
+// the admin or Bot Manager, or null when they may do nothing with it.
 function access(db, actor, botId, userHasPermission) {
   const bot = Number.isInteger(botId) ? getBot(db, botId) : null;
   if (!bot || !actor) return null;
   const full = !!actor.isAdmin || !!userHasPermission(actor.id, 'manage_bots');
-  const creator = bot.bot_created_by === actor.id;
-  const manager = !!db.prepare('SELECT 1 FROM bot_managers WHERE bot_id = ? AND user_id = ?').get(bot.id, actor.id);
-  if (!full && !creator && !manager) return null;
-  return { bot, manage: true, editManagers: full || creator, full };
+  if (!full && !isCreatorOf(db, bot, actor.id)) return null;
+  return { bot, full };
 }
 
-// Whether this person manages any bot, for showing them the Bots page.
-function managesAny(db, userId) {
+function isCreatorOf(db, bot, userId) {
+  return bot.bot_created_by === userId
+    || !!db.prepare('SELECT 1 FROM bot_creators WHERE bot_id = ? AND user_id = ?').get(bot.id, userId);
+}
+
+// Whether this person is a Bot Creator of any bot, for showing them the
+// Bots page in Admin settings.
+function isBotCreator(db, userId) {
   return !!db.prepare(`
     SELECT 1 FROM users u WHERE u.is_bot = 1 AND (u.bot_created_by = ?
-      OR EXISTS (SELECT 1 FROM bot_managers m WHERE m.bot_id = u.id AND m.user_id = ?)) LIMIT 1
+      OR EXISTS (SELECT 1 FROM bot_creators c WHERE c.bot_id = u.id AND c.user_id = ?)) LIMIT 1
   `).get(userId, userId);
 }
 
@@ -80,4 +85,4 @@ function messageCount(db, botId) {
   return db.prepare('SELECT COUNT(*) AS n FROM messages WHERE user_id = ?').get(botId).n;
 }
 
-module.exports = { NO_PASSWORD, botIds, ensureTable, getBot, access, managesAny, checkName, messageCount };
+module.exports = { NO_PASSWORD, botIds, ensureTable, getBot, access, isBotCreator, checkName, messageCount };

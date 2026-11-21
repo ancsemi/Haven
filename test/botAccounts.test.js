@@ -1,7 +1,7 @@
 'use strict';
 
 // Bot accounts (src/botAccounts.js): made in Settings, signed in to with a
-// token, managed by a list of people, and able to post embeds and buttons
+// token, looked after by its Bot Creators, and able to post embeds and buttons
 // whose clicks come straight back over the bot's own connection.
 //
 //   node --test test/botAccounts.test.js
@@ -88,13 +88,18 @@ test('a bot account signs in with its token and works like a member', async () =
   assert.deepEqual(await h.ask(R, 'edit-bot-parts', { messageId: m.id, components: [{ type: 1, components: [{ type: 2, label: 'Yes', custom_id: 'yes', disabled: true }] }] }), { success: true });
   assert.equal((await swapped).components[0].components[0].disabled, true);
 
-  // Bob manages nothing until he is on the list, and even then cannot
-  // change the list or delete the bot.
+  // Bob sees no bot until he is one of its Bot Creators, and even then
+  // cannot change who they are or delete the bot.
   assert.deepEqual((await h.ask(B, 'get-bots')).bots, []);
   assert.ok((await h.ask(B, 'regenerate-bot-token', { botId })).error);
-  assert.deepEqual(await h.ask(A, 'add-bot-manager', { botId, userId: bob.id }), { success: true });
+  assert.deepEqual(await h.ask(A, 'add-bot-creator', { botId, userId: bob.id }), { success: true });
   assert.equal((await h.ask(B, 'get-bots')).bots[0].id, botId);
-  assert.ok((await h.ask(B, 'add-bot-manager', { botId, userId: admin.id })).error);
+  assert.ok((await h.ask(B, 'add-bot-creator', { botId, userId: admin.id })).error);
+  assert.ok((await h.ask(B, 'remove-bot-creator', { botId, userId: bob.id })).error);
+  // Signing in again, he is told he is a Bot Creator, which opens the
+  // Bots page in Admin settings to him.
+  const B2 = await h.connect(bob.token);
+  assert.equal((await h.next(B2, 'session-info')).botCreator, true);
   assert.ok((await h.ask(B, 'delete-bot', { botId })).error);
 
   // A new token signs the bot out and the old one stops working.

@@ -798,8 +798,8 @@ _syncSettingsNav() {
     const access = settingsSectionsAccess[target];
 
     if (isAdmin) return '*';
-    // Someone on a bot's managers list sees the Bots page for that bot.
-    if (target === 'section-bot-accounts' && this.user?.managesBots) return '*';
+    // A bot's Bot Creators see the Bots page, with only their bots on it.
+    if (target === 'section-bot-accounts' && this.user?.botCreator) return '*';
     if (!access) return null;
 
     // Simple permission list: any matching permission grants full access.

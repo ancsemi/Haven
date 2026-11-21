@@ -2295,8 +2295,8 @@ function setupSocketHandlers(io, db, opts = {}) {
     socket.emit('session-info', {
       id: socket.user.id, username: socket.user.username,
       isAdmin: socket.user.isAdmin,
-      // Shows the Bots page to someone who manages a bot without Manage Bots.
-      managesBots: botAccounts.managesAny(db, socket.user.id),
+      // Opens the Bots page in Admin settings to a bot's Bot Creators.
+      botCreator: botAccounts.isBotCreator(db, socket.user.id),
       botAccount: !!socket.user.botAccount,
       isSso: !!socket.user.isSso,
       e2ePassphrase: !!socket.user.e2ePassphrase,

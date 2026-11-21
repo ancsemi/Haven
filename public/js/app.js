@@ -68,7 +68,7 @@ import MessageContentMethods from './modules/app-message-content.js?v=4.29.86';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.77';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
 import ThreadMethods from './modules/app-threads.js?v=4.29.95';
-import AdminMethods    from './modules/app-admin.js?v=4.29.95';
+import AdminMethods    from './modules/app-admin.js?v=4.29.96';
 import BrandingMethods from './modules/app-branding.js?v=4.29.19';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.52';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.29.13';
@@ -96,7 +96,7 @@ import DesktopActivityMethods from './modules/app-desktop-activity.js?v=4.29.68'
 import LoginBrandingMethods from './modules/app-login-branding.js?v=4.27.4';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
 import BotComponentMethods from './modules/app-bot-components.js?v=4.29.94';
-import BotAccountMethods from './modules/app-bot-accounts.js?v=4.29.95';
+import BotAccountMethods from './modules/app-bot-accounts.js?v=4.29.96';
 import MessageGroupingMethods from './modules/message-grouping.js?v=4.25.1';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
 import BlockedNameMethods from './modules/app-blocked-names.js?v=4.29.15';
@@ -260,9 +260,10 @@ class HavenApp {
     // Admin tab that did nothing when clicked.)
     // Mirrors the access table in _syncSettingsNav (app-admin.js): anyone who
     // can see at least one admin section must also be allowed onto the tab.
-    this._hasAnyAdminSettingsAccess = () => this.user.isAdmin || [
+    // A bot's Bot Creators get the tab for the Bots page alone.
+    this._hasAnyAdminSettingsAccess = () => this.user.isAdmin || !!this.user.botCreator || [
       'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_roles',
-      'manage_server', 'manage_webhooks', 'view_audit_log', 'invite_users',
+      'manage_server', 'manage_webhooks', 'manage_bots', 'view_audit_log', 'invite_users',
       'ban_user', 'kick_user', 'view_all_members', 'manage_badges'
     ].some(p => this._hasPerm(p));
     // Global-only variant: excludes permissions granted via a channel-scoped

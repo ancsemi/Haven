@@ -1894,15 +1894,15 @@ X-Haven-Signature: sha256=<HMAC of the body with your callback secret>
 
 A webhook posts into one channel and hears it through a callback URL. A **bot account** is different: it is a member account that a program signs in to with a token, so it can do anything a member can, wherever its roles and channels let it. Use one for a bot that answers commands in many channels, reads threads, looks people up, or sets its own picture and status.
 
-**Making one.** Settings → Bots & data → **Bots** → Manage Bots → **+ New Bot**. This needs the **Manage Bots** permission (or the admin). The new bot gets the roles that are given to every new member, and joins the channels a new member joins. The page then shows:
+**Making one.** Settings → Admin → Bots & data → **Bots** → Manage Bots → **+ New Bot**. This needs the **Bot Manager** permission (or the admin). The new bot gets the roles that are given to every new member, and joins the channels a new member joins. The page then shows:
 
 - **Token**: shown once, when the bot is made or a new one is made. Copy it then. If it is lost, **Make new token**: the old one stops working at once and the bot is signed out. Tokens never expire.
 - **Name and Picture**: a bot's name follows the username rules (3 to 20 letters, numbers or underscores) and must be free. The bot can rename itself too.
 - **Enable / Disable**: while disabled, its token is refused and it is signed out. Enabling it again brings the same token back.
-- **Managers**: people who may change the token, name and picture and turn the bot on or off, without any other permission. The bot's creator and anyone with Manage Bots may change this list.
+- **Bot Creators**: people who may change the token, name and picture and turn the bot on or off, without any other permission. Whoever made the bot is one too. They see the Bots page in Admin settings with only their own bots on it. Only the admin and Bot Managers change this list.
 - **Channels**: add or remove the bot with the same rules as a channel's Manage members.
-- **Manage this bot's roles**: shown to people who can manage anyone's roles. Managers cannot change a bot's roles.
-- **Delete**: Manage Bots may delete a bot that has never posted. Once it has posted, only the admin can, and its messages are deleted with it.
+- **Manage this bot's roles**: shown to people who can manage anyone's roles. Bot Creators cannot change a bot's roles.
+- **Delete**: a Bot Manager may delete a bot that has never posted. Once it has posted, only the admin can, and its messages are deleted with it.
 
 A bot account has no password and cannot sign in on the login page. Its messages and its entry in the member list carry a **BOT** tag.
 

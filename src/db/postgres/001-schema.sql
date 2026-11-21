@@ -414,7 +414,7 @@ CREATE TABLE "message_highlights" (
   PRIMARY KEY ("message_id")
 );
 
-CREATE TABLE "bot_managers" (
+CREATE TABLE "bot_creators" (
   "bot_id" BIGINT NOT NULL,
   "user_id" BIGINT NOT NULL,
   PRIMARY KEY ("bot_id", "user_id")
@@ -943,9 +943,9 @@ ALTER TABLE "message_highlights" ADD CONSTRAINT "message_highlights_fk_1" FOREIG
 
 ALTER TABLE "message_highlights" ADD CONSTRAINT "message_highlights_fk_2" FOREIGN KEY ("message_id") REFERENCES "messages" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
-ALTER TABLE "bot_managers" ADD CONSTRAINT "bot_managers_fk_0" FOREIGN KEY ("bot_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+ALTER TABLE "bot_creators" ADD CONSTRAINT "bot_creators_fk_0" FOREIGN KEY ("bot_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
-ALTER TABLE "bot_managers" ADD CONSTRAINT "bot_managers_fk_1" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+ALTER TABLE "bot_creators" ADD CONSTRAINT "bot_creators_fk_1" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 ALTER TABLE "message_bot_parts" ADD CONSTRAINT "message_bot_parts_fk_0" FOREIGN KEY ("message_id") REFERENCES "messages" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 

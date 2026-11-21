@@ -16,9 +16,9 @@ _setupBotAccounts() {
   document.getElementById('create-bot-account-btn')?.addEventListener('click', () => this._createBotAccount());
   this.socket.on('bots-changed', () => {
     if (document.getElementById('bot-account-modal')?.style.display === 'flex') return this._loadBotAccounts();
-    // Being added to a bot's managers list opens the Bots page to you.
+    // Being made one of a bot's Bot Creators opens the Bots page to you.
     if (!this.user?.isAdmin && !this._hasPerm('manage_bots')) {
-      this.socket.emit('get-bots', {}, (res) => { if (res?.bots) this.user.managesBots = res.bots.length > 0; });
+      this.socket.emit('get-bots', {}, (res) => { if (res?.bots) this.user.botCreator = res.bots.length > 0; });
     }
   });
 },
@@ -35,7 +35,7 @@ _loadBotAccounts() {
   this.socket.emit('get-bots', {}, (res) => {
     if (res?.error) return this._showToast(res.error, 'error');
     this._botAccounts = res.bots || [];
-    this.user.managesBots = this._botAccounts.length > 0;
+    if (!res.canCreate) this.user.botCreator = this._botAccounts.length > 0;
     document.getElementById('create-bot-account-btn').style.display = res.canCreate ? '' : 'none';
     this._renderBotAccountList();
     if (this._botAccounts.some(b => b.id === this._selectedBotAccount)) this._showBotAccount(this._selectedBotAccount);
@@ -89,9 +89,9 @@ _showBotAccount(botId) {
   const esc = (s) => this._escapeHtml(s || '');
   const shown = this._botTokenShown?.id === bot.id ? this._botTokenShown.token : null;
   const canRoles = this.user?.isAdmin || this._hasPerm('promote_user');
-  const managers = bot.managers.length
-    ? bot.managers.map(m => `<div class="bot-account-row"><span>${esc(m.name)}</span>${bot.editManagers ? `<button class="btn-xs" data-remove-manager="${m.id}">${t('bot_accounts.remove')}</button>` : ''}</div>`).join('')
-    : `<p class="muted-text">${t('bot_accounts.no_managers')}</p>`;
+  const creators = bot.creators.length
+    ? bot.creators.map(c => `<div class="bot-account-row"><span>${esc(c.name)}</span>${bot.editCreators ? `<button class="btn-xs" data-remove-creator="${c.id}">${t('bot_accounts.remove')}</button>` : ''}</div>`).join('')
+    : `<p class="muted-text">${t('bot_accounts.no_creators')}</p>`;
 
   panel.innerHTML = `
     <div class="role-detail-form">
@@ -110,7 +110,7 @@ _showBotAccount(botId) {
         <input type="text" id="ba-name" value="${esc(bot.name)}" maxlength="20" class="settings-text-input" style="flex:1">
         <button class="btn-xs" id="ba-rename">${t('bot_accounts.rename')}</button>
       </div>
-      ${bot.creator ? `<small class="settings-hint">${esc(t('bot_accounts.made_by', { name: bot.creator.name }))}</small>` : ''}
+      ${bot.madeBy ? `<small class="settings-hint">${esc(t('bot_accounts.made_by', { name: bot.madeBy.name }))}</small>` : ''}
 
       <label class="settings-label" style="margin-top:8px">${t('bot_accounts.status')}</label>
       <label class="toggle-row" style="margin-bottom:8px">
@@ -128,12 +128,13 @@ _showBotAccount(botId) {
         : `<small class="settings-hint">${t('bot_accounts.token_hidden')}</small>`}
       <button class="btn-xs" id="ba-regenerate" style="margin:4px 0 12px">${t('bot_accounts.regenerate')}</button>
 
-      <label class="settings-label">${t('bot_accounts.managers')}</label>
-      <small class="settings-hint">${t('bot_accounts.managers_hint')}</small>
-      <div style="margin:6px 0">${managers}</div>
-      ${bot.editManagers ? `<div style="display:flex;gap:6px;margin-bottom:12px">
-        <input type="text" id="ba-manager-name" placeholder="${esc(t('bot_accounts.username'))}" class="settings-text-input" style="flex:1">
-        <button class="btn-xs" id="ba-add-manager">${t('bot_accounts.add')}</button>
+      <label class="settings-label">${t('bot_accounts.creators')}</label>
+      <small class="settings-hint">${t('bot_accounts.creators_hint')}</small>
+      <small class="settings-hint" style="display:block">${t('bot_accounts.creators_roles_hint')}</small>
+      <div style="margin:6px 0">${creators}</div>
+      ${bot.editCreators ? `<div style="display:flex;gap:6px;margin-bottom:12px">
+        <input type="text" id="ba-creator-name" placeholder="${esc(t('bot_accounts.username'))}" class="settings-text-input" style="flex:1">
+        <button class="btn-xs" id="ba-add-creator">${t('bot_accounts.add')}</button>
       </div>` : ''}
 
       <label class="settings-label">${t('bot_accounts.channels')}</label>
@@ -166,10 +167,10 @@ _showBotAccount(botId) {
   $('ba-copy')?.addEventListener('click', () => {
     navigator.clipboard.writeText(shown).then(() => { $('ba-copy').textContent = '✅'; }).catch(() => {});
   });
-  panel.querySelectorAll('[data-remove-manager]').forEach(btn => btn.addEventListener('click', () => emit('remove-bot-manager', { userId: Number(btn.dataset.removeManager) })));
-  $('ba-add-manager')?.addEventListener('click', () => {
-    const username = $('ba-manager-name').value.trim();
-    if (username) emit('add-bot-manager', { username });
+  panel.querySelectorAll('[data-remove-creator]').forEach(btn => btn.addEventListener('click', () => emit('remove-bot-creator', { userId: Number(btn.dataset.removeCreator) })));
+  $('ba-add-creator')?.addEventListener('click', () => {
+    const username = $('ba-creator-name').value.trim();
+    if (username) emit('add-bot-creator', { username });
   });
   $('ba-roles')?.addEventListener('click', () => this._openRoleAssignCenter(bot.id));
   $('ba-delete')?.addEventListener('click', async () => {

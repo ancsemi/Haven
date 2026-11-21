@@ -8,7 +8,7 @@
 //   set-bot-disabled { botId, disabled }
 //   rename-bot { botId, name }     also open to the bot itself
 //   bot-avatar-changed { botId }   after a new picture was uploaded or removed
-//   add-bot-manager / remove-bot-manager { botId, userId or username }
+//   add-bot-creator / remove-bot-creator { botId, userId or username }
 //   delete-bot { botId }
 //
 // Each answers through its callback: what was asked for, or { error }.
@@ -54,18 +54,18 @@ module.exports = function register(socket, ctx) {
   }
 
   function describe(bot, a) {
-    const managers = db.prepare(`
-      SELECT u.id, COALESCE(u.display_name, u.username) AS name FROM bot_managers m
-      JOIN users u ON u.id = m.user_id WHERE m.bot_id = ? ORDER BY LOWER(COALESCE(u.display_name, u.username))
+    const creators = db.prepare(`
+      SELECT u.id, COALESCE(u.display_name, u.username) AS name FROM bot_creators c
+      JOIN users u ON u.id = c.user_id WHERE c.bot_id = ? ORDER BY LOWER(COALESCE(u.display_name, u.username))
     `).all(bot.id);
-    const creator = bot.bot_created_by
+    const madeBy = bot.bot_created_by
       ? db.prepare('SELECT id, COALESCE(display_name, username) AS name FROM users WHERE id = ?').get(bot.bot_created_by)
       : null;
     const posted = bots.messageCount(db, bot.id) > 0;
     return {
       id: bot.id, name: bot.display_name || bot.username, avatar: bot.avatar || null,
-      disabled: !!bot.bot_disabled, creator: creator || null, managers,
-      editManagers: a.editManagers, hasMessages: posted,
+      disabled: !!bot.bot_disabled, madeBy: madeBy || null, creators,
+      editCreators: a.full, hasMessages: posted,
       canDelete: socket.user.isAdmin || (a.full && !posted),
     };
   }
@@ -78,7 +78,7 @@ module.exports = function register(socket, ctx) {
         ? db.prepare('SELECT id FROM users WHERE is_bot = 1 ORDER BY LOWER(username)').all()
         : db.prepare(`
             SELECT u.id FROM users u WHERE u.is_bot = 1 AND (u.bot_created_by = ?
-              OR EXISTS (SELECT 1 FROM bot_managers m WHERE m.bot_id = u.id AND m.user_id = ?))
+              OR EXISTS (SELECT 1 FROM bot_creators c WHERE c.bot_id = u.id AND c.user_id = ?))
             ORDER BY LOWER(u.username)
           `).all(socket.user.id, socket.user.id);
       const list = [];
@@ -149,7 +149,7 @@ module.exports = function register(socket, ctx) {
   socket.on('rename-bot', (data, cb) => {
     const done = reply(cb);
     const id = botId(data);
-    // A bot may rename itself; nobody else but its managers.
+    // A bot may rename itself; otherwise its Bot Creators or Bot Manager.
     const self = id === socket.user.id && !!socket.user.botAccount;
     const bot = self ? bots.getBot(db, id) : bots.access(db, socket.user, id, userHasPermission)?.bot;
     if (!bot) return done({ error: 'Bot not found' });
@@ -171,10 +171,11 @@ module.exports = function register(socket, ctx) {
     changed();
   });
 
-  function editManagers(data, cb, add) {
+  // Only the admin and Bot Manager change who a bot's Bot Creators are.
+  function editCreators(data, cb, add) {
     const done = reply(cb);
     const a = bots.access(db, socket.user, botId(data), userHasPermission);
-    if (!a || !a.editManagers) return done({ error: "You can't change who manages this bot" });
+    if (!a || !a.full) return done({ error: "You can't change this bot's Bot Creators" });
     // By id, or by the name typed into the page.
     const name = data && typeof data.username === 'string' ? data.username.trim() : '';
     const person = data && Number.isInteger(data.userId)
@@ -182,14 +183,14 @@ module.exports = function register(socket, ctx) {
       : name && db.prepare('SELECT id, is_bot FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(display_name) = LOWER(?) LIMIT 1').get(name, name);
     const userId = person ? person.id : null;
     if (!person || person.is_bot) return done({ error: 'User not found' });
-    if (add) db.prepare('INSERT OR IGNORE INTO bot_managers (bot_id, user_id) VALUES (?, ?)').run(a.bot.id, userId);
-    else db.prepare('DELETE FROM bot_managers WHERE bot_id = ? AND user_id = ?').run(a.bot.id, userId);
-    audit({ actor: socket.user, action: add ? 'bot_manager_add' : 'bot_manager_remove', target_type: 'user', target_id: a.bot.id, target_name: a.bot.username, details: { user: userId } });
+    if (add) db.prepare('INSERT OR IGNORE INTO bot_creators (bot_id, user_id) VALUES (?, ?)').run(a.bot.id, userId);
+    else db.prepare('DELETE FROM bot_creators WHERE bot_id = ? AND user_id = ?').run(a.bot.id, userId);
+    audit({ actor: socket.user, action: add ? 'bot_creator_add' : 'bot_creator_remove', target_type: 'user', target_id: a.bot.id, target_name: a.bot.username, details: { user: userId } });
     changed();
     done({ success: true });
   }
-  socket.on('add-bot-manager', (data, cb) => editManagers(data, cb, true));
-  socket.on('remove-bot-manager', (data, cb) => editManagers(data, cb, false));
+  socket.on('add-bot-creator', (data, cb) => editCreators(data, cb, true));
+  socket.on('remove-bot-creator', (data, cb) => editCreators(data, cb, false));
 
   socket.on('delete-bot', (data, cb) => {
     const done = reply(cb);
