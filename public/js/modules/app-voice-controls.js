@@ -292,6 +292,7 @@ _bindVoiceControls() {
   // Re-render voice user list when webcam status changes
   this.voice.onWebcamStatusChange = () => {
     if (this._lastVoiceUsers) this._renderVoiceUsers(this._lastVoiceUsers);
+    this._updateChannelVoiceIndicators?.();
   };
 
   // Surface a STUN/connectivity failure so external-network users aren't left
