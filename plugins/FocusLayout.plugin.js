@@ -719,7 +719,7 @@ html[data-fc-leave] .fc-banner { opacity: 1; transform: none; }
 html[data-focus-desktop="1"][data-fc-enter] [data-haven-region="main"] { animation: fc-in 1.4s var(--fc-ease) both; }
 @keyframes fc-in { 0%, 35% { opacity: 0; transform: translateY(-34px) scale(.97); filter: blur(7px); } 100% { opacity: 1; transform: none; filter: none; } }
 html[data-focus-desktop="1"][data-fc-leave] [data-haven-region="main"], html[data-fc-leave] .fc-side { opacity: 0; transform: translateY(34px) scale(.97); filter: blur(7px); }
-@media (prefers-reduced-motion: reduce) { html[data-focus-desktop="1"] *, .fc-side, .fc-dock *, .fc-banner { animation-duration: .01s !important; transition-duration: .01s !important; } }
+html.reduce-motion[data-focus-desktop="1"] *, html.reduce-motion .fc-side, html.reduce-motion .fc-dock *, html.reduce-motion .fc-banner { animation-duration: .01s !important; transition-duration: .01s !important; }
 `;
 if (typeof module !== 'undefined') module.exports = FocusLayout;
 if (typeof _win !== 'undefined') _win.FocusLayout = FocusLayout;

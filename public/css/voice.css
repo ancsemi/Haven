@@ -63,7 +63,7 @@
 .channel-voice-user .cvu-live { margin-left: auto; padding: 0 4px; border: 0; border-radius: 4px; background: none; font-size: 10px; line-height: 16px; cursor: pointer; animation: cvu-live-pulse 1.7s ease-in-out infinite; }
 .channel-voice-user .cvu-live:hover, .channel-voice-user .cvu-live:focus-visible { background: var(--bg-hover); animation: none; }
 @keyframes cvu-live-pulse { 50% { opacity: .45; } }
-@media (prefers-reduced-motion: reduce) { .channel-voice-user .cvu-live { animation: none; } }
+html.reduce-motion .channel-voice-user .cvu-live { animation: none; }
 .channel-voice-user .cvu-mic.is-muted,
 .channel-voice-user .cvu-deafen.is-deafened { opacity: 1; }
 
