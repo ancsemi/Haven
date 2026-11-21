@@ -1292,9 +1292,6 @@ app.get('/api/port-check', async (req, res) => {
     return res.json({ reachable: false, publicIp: null, error: 'Could not determine public IP. You may be offline.' });
   }
 
-  // Step 2: Check if port is reachable via external probe (#5923). A
-  // failed check (service down, changed API) falls through to the
-  // self-probe below instead of reporting the port as unreachable.
   let reachable = false;
   const { externalPort, queryPortchecker } = require('./src/portCheck');
   const checkPort = externalPort(process.env.PUBLIC_URL, port);
