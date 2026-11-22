@@ -307,4 +307,21 @@ function summary(embeds) {
   return e ? (e.title || e.description || e.author?.name || e.footer?.text || '').slice(0, 200) : '';
 }
 
-module.exports = { ensureTable, clean, record, lookup, get, findComponent, checkValues, summary, LIMITS, BUTTON, SELECT };
+// Every word and link a member would see, one per line, for AutoMod: a bot
+// account's embeds and buttons are held to the same rules as its text.
+function plainText({ embeds, components } = {}) {
+  const out = [];
+  for (const e of embeds || []) {
+    out.push(e.title, e.description, e.url, e.author?.name, e.author?.url, e.footer?.text);
+    for (const f of e.fields || []) out.push(f.name, f.value);
+  }
+  for (const row of components || []) {
+    for (const c of row.components || []) {
+      out.push(c.label, c.url, c.placeholder);
+      for (const o of c.options || []) out.push(o.label, o.description);
+    }
+  }
+  return out.filter(Boolean).join('\n');
+}
+
+module.exports = { plainText, ensureTable, clean, record, lookup, get, findComponent, checkValues, summary, LIMITS, BUTTON, SELECT };

@@ -1283,6 +1283,7 @@ module.exports = function register(socket, ctx) {
     // never reaches another client, which is the only way to stop the passive
     // IP leak from inline images and link-preview og:image fetches.
     if (enforceAutomod(content, { surface: channel.is_dm ? 'dm' : 'message', channelId: channel.id, markdown: true })) return;
+    if (parts.any && enforceAutomod(botComponents.plainText(parts), { surface: channel.is_dm ? 'dm' : 'message', channelId: channel.id, markdown: true })) return;
 
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) {
       return socket.emit('error-msg', 'This channel is read-only');
@@ -3066,6 +3067,7 @@ module.exports = function register(socket, ctx) {
 
     if (refuseYoungAccount(channel.id)) return;
     if (enforceAutomod(content, { surface: 'message', channelId: channel.id, markdown: true })) return;
+    if (parts.any && enforceAutomod(botComponents.plainText(parts), { surface: 'message', channelId: channel.id, markdown: true })) return;
     const tSlow = slowModeRefusal(channel.id);
     if (tSlow) return socket.emit('error-msg', tSlow);
 

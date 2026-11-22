@@ -81,9 +81,14 @@ module.exports = function register(socket, ctx) {
     const parts = botComponents.clean(data);
     if (parts.error) return reply({ error: parts.error });
     if (parts.embeds === null && parts.components === null) return reply({ error: 'Nothing to change' });
-    const msg = db.prepare('SELECT m.id, m.user_id, m.content, m.is_archived, c.code FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?').get(messageId);
+    const msg = db.prepare('SELECT m.id, m.user_id, m.content, m.is_archived, c.code, c.id AS channel_id FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?').get(messageId);
     if (!msg || msg.user_id !== socket.user.id) return reply({ error: 'You can only change your own messages' });
     if (msg.is_archived) return reply({ error: 'This message is protected. Unprotect it first.' });
+    // The new parts are held to AutoMod like the bot's text. Without the
+    // check there is nothing to run them through, so they are refused.
+    if (!ctx.enforceAutomod || ctx.enforceAutomod(botComponents.plainText(parts), { surface: 'edit', channelId: msg.channel_id, markdown: true })) {
+      return reply({ error: 'That message was blocked' });
+    }
     const before = botComponents.get(db, messageId);
     const next = {
       embeds: parts.embeds !== null ? parts.embeds : (before.embeds || []),
