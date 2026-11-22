@@ -751,6 +751,8 @@ _bindAdminControls() {
     host.innerHTML = html;
     const toggle = document.getElementById('guests-enabled');
     if (toggle) toggle.checked = (this.serverSettings?.guests_enabled === 'true');
+    const birch = document.getElementById('birch-cross-server-presence');
+    if (birch) birch.checked = (this.serverSettings?.birch_cross_server_presence === 'true');
     const voiceToggle = document.getElementById('guests-allow-voice');
     if (voiceToggle) voiceToggle.checked = (this.serverSettings?.guests_allow_voice !== 'false');
   };
@@ -758,6 +760,9 @@ _bindAdminControls() {
   document.getElementById('guests-enabled')?.addEventListener('change', (e) => {
     this.socket.emit('update-server-setting', { key: 'guests_enabled', value: e.target.checked ? 'true' : 'false' });
     this._showToast?.(t(e.target.checked ? 'settings.admin.guest_access.enabled' : 'settings.admin.guest_access.disabled'), 'success');
+  });
+  document.getElementById('birch-cross-server-presence')?.addEventListener('change', (e) => {
+    this.socket.emit('update-server-setting', { key: 'birch_cross_server_presence', value: e.target.checked ? 'true' : 'false' });
   });
   document.getElementById('guests-allow-voice')?.addEventListener('change', (e) => {
     this.socket.emit('update-server-setting', { key: 'guests_allow_voice', value: e.target.checked ? 'true' : 'false' });

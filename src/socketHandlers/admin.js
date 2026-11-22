@@ -177,7 +177,8 @@ module.exports = function register(socket, ctx) {
       'media_proxy_enabled', // (v3.43.0) server-side fetch + cache for remote images
       'fcm_enabled', // admin gate for Google FCM mobile push; off = FCM sends skipped (web-push unaffected)
       'fcm_hide_content',
-      'unicode_emoji_auto_update' // monthly refresh of the built-in emoji set from unicode.org, opt-in
+      'unicode_emoji_auto_update', // monthly refresh of the built-in emoji set from unicode.org, opt-in
+      'birch_cross_server_presence' // Birch cross-server presence, off by default
     ];
     if (!allowedKeys.includes(key)) return;
 

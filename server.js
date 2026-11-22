@@ -1611,6 +1611,16 @@ require('./src/routes/changelog')({ app, verifyToken });
 require('./src/routes/birch')({ app, verifyToken, birch });
 
 // ── Games list endpoint: discover available games ──
+app.get('/api/birch-presence', (req, res) => {
+  try {
+    const { getDb } = require('./src/database');
+    const row = getDb().prepare("SELECT value FROM server_settings WHERE key = 'birch_cross_server_presence'").get();
+    res.json({ enabled: row?.value === 'true', name: 'Birch cross-server presence' });
+  } catch {
+    res.json({ enabled: false, name: 'Birch cross-server presence' });
+  }
+});
+
 app.get('/api/games', (req, res) => {
   const gamesDir = path.join(__dirname, 'public', 'games');
   const fs2 = require('fs');
