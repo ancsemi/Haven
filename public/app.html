@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.29.97">
+  <link rel="stylesheet" href="/css/style.css?v=4.29.98">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.27.20"></script>
 </head>
@@ -690,6 +690,7 @@
               <span class="input-actions-divider" id="burn-divider" style="display:none"></span>
               <button id="burn-btn" class="btn-burn" data-i18n-title="app.input_bar.burn_btn" title="Burn after read (DM only)" style="display:none">🔥</button>
             </div>
+            <div id="composer-overflow" class="composer-overflow"></div>
             <div id="emoji-picker" class="emoji-picker" style="display:none"></div>
             <div id="gif-picker" class="gif-picker" style="display:none">
               <div class="gif-picker-tabs">
@@ -1701,6 +1702,14 @@
             <input type="checkbox" id="compact-composer">
           </label>
           <small class="settings-hint" style="display:block" data-i18n="settings.layout.composer.compact_hint">Upload, emoji, GIF and the rest sit behind a single + at the start of the message box, so the box gets the room.</small>
+          <small class="settings-hint" style="display:block" data-i18n="settings.layout.composer.buttons_hint">Move a button up or down to reorder it. Untick one to keep it in the + menu instead of the bar. Tick only Emoji and GIF to keep them in the bar.</small>
+          <div class="toolbar-order-wrap">
+            <div class="toolbar-order-head">
+              <span data-i18n="settings.layout.composer.buttons">Message box buttons</span>
+              <button type="button" class="btn-sm" id="composer-buttons-reset" data-i18n="settings.toolbar_icons.reset">Reset</button>
+            </div>
+            <div id="composer-buttons-list" class="toolbar-order-list"></div>
+          </div>
         </div>
       </div>
 
@@ -5628,7 +5637,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.97"></script>
+  <script type="module" src="/js/app.js?v=4.29.98"></script>
   <script src="/js/plugin-loader.js?v=4.29.63"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
