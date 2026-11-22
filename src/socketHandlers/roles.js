@@ -647,7 +647,10 @@ module.exports = function register(socket, ctx) {
     }
     const transparent = data.transparent ? 1 : 0;
     const icon = isString(data.icon, 1, 512) && /^\/uploads\//i.test(data.icon) ? data.icon : null;
-    const maxUploadMb = isInt(data.maxUploadMb) && data.maxUploadMb >= 1 && data.maxUploadMb <= 102400 ? data.maxUploadMb : null;
+    // How much a role may upload is the admin's to set: a role manager could
+    // otherwise raise the limit for a role and hand it out (or, on a group,
+    // let everyone take it).
+    const maxUploadMb = socket.user.isAdmin && isInt(data.maxUploadMb) && data.maxUploadMb >= 1 && data.maxUploadMb <= 102400 ? data.maxUploadMb : null;
 
     // A non-admin cannot create a role at or above their own level (they'd be
     // unable to assign it anyway, and it must not sit at/over their rank).
@@ -778,7 +781,7 @@ module.exports = function register(socket, ctx) {
       if (data.linkChannelAccess !== undefined) {
         updates.push('link_channel_access = ?'); values.push(data.linkChannelAccess ? 1 : 0);
       }
-      if (data.maxUploadMb !== undefined) {
+      if (data.maxUploadMb !== undefined && socket.user.isAdmin) {
         const cap = isInt(data.maxUploadMb) && data.maxUploadMb >= 1 && data.maxUploadMb <= 102400 ? data.maxUploadMb : null;
         updates.push('max_upload_mb = ?'); values.push(cap);
       }
@@ -1675,6 +1678,10 @@ module.exports = function register(socket, ctx) {
     const cb = typeof callback === 'function' ? callback : () => {};
     if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
     if (!Array.isArray(data.groupIds)) return cb({ error: 'Invalid group data' });
+    // A group can open channels and carry an upload limit. A guest sees only
+    // the channels the admin chose for guests, and a bot only what it was
+    // given, so neither picks groups for itself.
+    if (socket.user.isGuest || socket.user.botAccount) return cb({ error: 'Groups are not available to this account' });
 
     const groupIds = [...new Set(data.groupIds.map(id => isInt(id) ? id : null).filter(id => id !== null))];
     try {
