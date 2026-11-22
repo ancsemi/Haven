@@ -64,13 +64,56 @@ function* walk(obj, prefix = '') {
   }
 }
 
+// Translated text is put into the page as markup, and a translation PR is
+// the easiest change for a stranger to get merged. So a translation may use
+// only the tags the English text for the same key uses, written exactly the
+// same way (a link keeps its address). Anything else is refused.
+const TAG = /<\/?[a-zA-Z!?][^>]*>?/g;
+const tagsOf = (s) => (String(s).match(TAG) || []).map(t => t.replace(/\s+/g, ' ').trim());
+
+// A command hint such as "/gif <query>" names what to type, and the name is
+// translated ("<recherche>"). That is allowed where the English text has one
+// too, as long as it is plain words and not the name of a real element.
+const ELEMENTS = new Set(('a abbr address area article aside audio b base bdi bdo blockquote body br button canvas caption cite code col colgroup '
+  + 'data datalist dd del details dfn dialog div dl dt em embed fieldset figcaption figure font footer form frame frameset h1 h2 h3 h4 h5 h6 '
+  + 'head header hgroup hr html i iframe image img input ins kbd label legend li link main map mark marquee math menu meta meter nav noscript '
+  + 'object ol optgroup option output p param picture pre progress q rp rt ruby s samp script section select slot small source span '
+  + 'strong style sub summary sup svg table tbody td template textarea tfoot th thead time title tr track u ul var video wbr xmp').split(' '));
+const isPlaceholder = (tag) => /^<[^<>="'`\/&:;()]+>$/.test(tag) && !ELEMENTS.has(tag.slice(1, -1).trim().split(/\s+/)[0].toLowerCase());
+
+function stringAt(obj, dotted) {
+  let cur = obj;
+  for (const part of dotted.split('.')) {
+    if (cur === null || typeof cur !== 'object') return undefined;
+    cur = cur[part];
+  }
+  return typeof cur === 'string' ? cur : undefined;
+}
+
+function markupErrors(data, masterData) {
+  const errors = [];
+  for (const [k, t] of walk(data)) {
+    if (t !== 'string' || k.startsWith('_meta')) continue;
+    const value = stringAt(data, k);
+    const used = tagsOf(value);
+    if (/javascript:|data:text\/html/i.test(value)) errors.push(`Key "${k}" contains a script or data address`);
+    if (!used.length) continue;
+    const english = tagsOf(stringAt(masterData, k) || '');
+    const allowed = new Set(english);
+    const hints = english.some(isPlaceholder);
+    const extra = used.filter(tag => !allowed.has(tag) && !(hints && isPlaceholder(tag)));
+    if (extra.length) errors.push(`Key "${k}" has markup the English text does not: ${[...new Set(extra)].slice(0, 3).join(' ')}`);
+  }
+  return errors;
+}
+
 function buildShape(obj) {
   const map = new Map();
   for (const [k, t] of walk(obj)) map.set(k, t);
   return map;
 }
 
-function validateLocale(filePath, master) {
+function validateLocale(filePath, master, masterData) {
   const result = { file: filePath, errors: [], warnings: [] };
   let data;
   try {
@@ -111,6 +154,7 @@ function validateLocale(filePath, master) {
       result.errors.push(`Key "${k}" type mismatch: en.json has "${masterType}", this file has "${t}"`);
     }
   }
+  if (masterData) result.errors.push(...markupErrors(data, masterData));
   // Missing keys (warn only)
   let missing = 0;
   for (const k of master.keys()) {
@@ -124,9 +168,10 @@ function validateLocale(filePath, master) {
 }
 
 function main() {
-  let master;
+  let master, masterData;
   try {
-    master = buildShape(loadJson(MASTER_FILE));
+    masterData = loadJson(MASTER_FILE);
+    master = buildShape(masterData);
   } catch (err) {
     console.error(`FATAL: cannot load master locale ${MASTER_FILE}: ${err.message}`);
     process.exit(2);
@@ -145,7 +190,7 @@ function main() {
   let failed = 0;
   for (const file of targets) {
     const rel = path.relative(process.cwd(), file);
-    const res = validateLocale(file, master);
+    const res = validateLocale(file, master, path.basename(file) === 'en.json' ? null : masterData);
     if (res.errors.length === 0) {
       console.log(`✓ ${rel}  (${res.warnings.length} warning${res.warnings.length === 1 ? '' : 's'})`);
     } else {
