@@ -19,13 +19,13 @@
 //
 //   node scripts/community-status.js [out.json] [previous.json]
 //
-// HOST overrides the server (default haven.moviethingy.xyz).
+// HOST overrides the server (default community.haven-app.com).
 
 const fs = require('fs');
 const https = require('https');
 const tls = require('tls');
 
-const HOST = process.env.HOST || 'haven.moviethingy.xyz';
+const HOST = process.env.HOST || 'community.haven-app.com';
 const OUT = process.argv[2] || 'status.json';
 const PREV = process.argv[3] || null;
 const TIMEOUT_MS = 15000;
