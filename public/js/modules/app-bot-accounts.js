@@ -165,7 +165,7 @@ _showBotAccount(botId) {
     });
   });
   $('ba-copy')?.addEventListener('click', () => {
-    navigator.clipboard.writeText(shown).then(() => { $('ba-copy').textContent = '✅'; }).catch(() => {});
+    navigator.clipboard.writeText(shown).then(() => { $('ba-copy').textContent = '✅'; }).catch(err => console.warn('[bots] could not copy the token', err));
   });
   panel.querySelectorAll('[data-remove-creator]').forEach(btn => btn.addEventListener('click', () => emit('remove-bot-creator', { userId: Number(btn.dataset.removeCreator) })));
   $('ba-add-creator')?.addEventListener('click', () => {

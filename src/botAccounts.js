@@ -16,6 +16,9 @@
 // role management and Manage members, with the usual rules.
 
 const { nameRefusal } = require('./blockedNames');
+const createPermissions = require('./socketHandlers/permissions');
+
+const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
 // Never a bcrypt hash, so no password can ever match it.
 const NO_PASSWORD = '!bot-no-password';
@@ -31,7 +34,7 @@ function ensureTable(db) {
 }
 
 function getBot(db, botId) {
-  return db.prepare('SELECT id, username, display_name, avatar, bot_disabled, bot_created_by FROM users WHERE id = ? AND is_bot = 1').get(botId) || null;
+  return db.prepare('SELECT id, username, display_name, avatar, bot_disabled, bot_created_by, is_admin FROM users WHERE id = ? AND is_bot = 1').get(botId) || null;
 }
 
 // What this person may do with the bot: { bot, full }, where full means
@@ -41,6 +44,14 @@ function access(db, actor, botId, userHasPermission) {
   if (!bot || !actor) return null;
   const full = !!actor.isAdmin || !!userHasPermission(actor.id, 'manage_bots');
   if (!full && !isCreatorOf(db, bot, actor.id)) return null;
+  // Whoever holds a bot's token acts with the bot's roles. So nobody but
+  // the admin manages a bot that outranks them, or one that is the admin:
+  // a new token would hand them that rank.
+  if (!actor.isAdmin) {
+    if (bot.is_admin) return null;
+    const { getUserEffectiveLevel } = createPermissions(db);
+    if (getUserEffectiveLevel(bot.id) > getUserEffectiveLevel(actor.id)) return null;
+  }
   return { bot, full };
 }
 
@@ -64,6 +75,9 @@ function checkName(db, raw, botId = null) {
   const name = typeof raw === 'string' ? raw.trim() : '';
   if (name.length < 3 || name.length > 20) return { error: 'A bot name must be 3 to 20 characters' };
   if (!/^[a-zA-Z0-9_]+$/.test(name)) return { error: 'A bot name may use letters, numbers and underscores only' };
+  // The ADMIN_USERNAME name is what admin recovery and first-run setup
+  // trust, so no bot takes it (registration refuses it the same way).
+  if (name.toLowerCase() === ADMIN_USERNAME) return { error: 'That name is already taken on this server' };
   const blocked = nameRefusal(db, name);
   if (blocked) return { error: blocked };
   const taken = db.prepare(`

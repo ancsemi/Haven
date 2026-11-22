@@ -7,10 +7,10 @@
 //   components: up to 5 action rows (type 1), each holding up to 5 buttons
 //               (type 2) or one dropdown (type 3, Discord's string select)
 //
-// Only bots post these. A bot has no account to sign in with, so the webhook
-// API is the only way in. A click or a pick is sent to the bot's callback URL
-// (socketHandlers/botInteractions.js); the bot answers through the same API,
-// with a private reply to the person or by editing the message.
+// Only bots post these: a webhook through its API, a bot account over its
+// own connection. A click or a pick goes back to the bot
+// (socketHandlers/botInteractions.js), which answers with a private reply
+// to the person or by editing the message.
 //
 // Everything is checked and trimmed here, so the client can trust the shape
 // it is handed. Text is cleaned like message text; links must be http(s) and

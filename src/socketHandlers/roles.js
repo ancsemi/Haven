@@ -1841,8 +1841,10 @@ module.exports = function register(socket, ctx) {
       if (!userId) return cb({ error: 'Invalid user' });
       if (userId === socket.user.id) return cb({ error: 'Cannot transfer to yourself' });
 
-      const targetUser = db.prepare('SELECT id, username, is_admin FROM users WHERE id = ?').get(userId);
+      const targetUser = db.prepare('SELECT id, username, is_admin, is_bot FROM users WHERE id = ?').get(userId);
       if (!targetUser) return cb({ error: 'User not found' });
+      // A bot is run by whoever holds its token, so it never becomes the admin.
+      if (targetUser.is_bot) return cb({ error: 'A bot cannot be made the admin' });
       if (targetUser.is_admin) return cb({ error: 'User is already an admin' });
 
       try {
