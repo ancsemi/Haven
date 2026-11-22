@@ -47,6 +47,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 
 ### Fixed
+- Auto-cleanup follows the files of the messages it deletes. It trusted any file path written in a message, so a message naming someone's avatar, an emoji or a sound could take that file with it when it was cleaned up. It now only removes real message attachments that nothing else uses.
 - The admin recovery page now has the same limit on wrong passwords per account as the login page.
 - A webhook's token kept working after the person who made it was kicked from its channel or lost the role the channel requires. It now stops, the same way it already did for a banned maker.
 - The setup installer page now answers only its own page. While setup was open, another website open in the same browser could have sent it requests, including the one that creates the admin account.

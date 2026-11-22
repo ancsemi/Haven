@@ -294,13 +294,17 @@ function stripRoleMentions(content, roleNames) {
 // With `ignoreMessagesAfter` (a message id), only messages older than that
 // one keep a file: a link pasted after a self destructing message cannot keep
 // its file alive, but a file the sender had already shared in the open stays.
-function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null } = {}) {
+// With `anyOwner`, for the server's own cleanup of messages it has already
+// deleted, whose authors may be several people: the file must still be a
+// recorded attachment that nothing else points at, or a file from before
+// uploads were recorded that nothing points at; it need not be the caller's.
+function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null, anyOwner = false } = {}) {
   const owners = new Set((ownerIds || []).filter(id => Number.isInteger(id)));
   // A message with no author (one Ferry carried from Discord) may take the
   // files recorded with no owner: the copies Ferry made of that message's
   // Discord files.
   const authorless = (ownerIds || []).some(id => id === null);
-  if (!owners.size && !authorless) return [];
+  if (!owners.size && !authorless && !anyOwner) return [];
   const ownership = db.prepare('SELECT user_id, scope FROM upload_ownership WHERE rel_path = ?');
   const before = Number.isInteger(ignoreMessagesAfter) ? ignoreMessagesAfter : Number.MAX_SAFE_INTEGER;
   // A protected message keeps its files whenever it was posted.
@@ -322,8 +326,8 @@ function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null 
   for (const relPath of new Set(relPaths || [])) {
     if (typeof relPath !== 'string' || !relPath || out.length >= 200) continue;
     const own = ownership.get(relPath);
-    if (!own || (own.scope !== 'channel' && own.scope !== 'dm')) continue;
-    if (own.user_id === null ? !authorless : !owners.has(own.user_id)) continue;
+    if (own ? (own.scope !== 'channel' && own.scope !== 'dm') : !anyOwner) continue;
+    if (!anyOwner && (own.user_id === null ? !authorless : !owners.has(own.user_id))) continue;
     const ref = '/uploads/' + relPath;
     try {
       if (inMessages.get(ref, before)) continue;
