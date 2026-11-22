@@ -63,6 +63,8 @@ test('a bot can post pictures and files that are stored on the server', async t 
     const channel = db.prepare("INSERT INTO channels (name, code, created_by, is_dm) VALUES ('Bots', 'abcd1234', ?, 0)").run(admin.lastInsertRowid);
     db.prepare('INSERT INTO webhooks (channel_id, name, token, created_by) VALUES (?, ?, ?, ?)').run(channel.lastInsertRowid, 'Relay', '${okToken}', admin.lastInsertRowid);
     db.prepare('INSERT INTO webhooks (channel_id, name, token, created_by) VALUES (?, ?, ?, ?)').run(channel.lastInsertRowid, 'NoUpload', '${noUploadToken}', plain.lastInsertRowid);
+    // A bot's maker is in the bot's channel: its token stops working otherwise.
+    db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channel.lastInsertRowid, plain.lastInsertRowid);
     db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('blocked_upload_extensions', 'exe')").run();
     // Everyone may upload by default; this person is denied it on their own.
     db.prepare("INSERT INTO user_role_perms (user_id, role_id, permission, allowed) VALUES (?, (SELECT id FROM roles ORDER BY id LIMIT 1), 'upload_files', 0)").run(plain.lastInsertRowid);
