@@ -37,6 +37,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 
 ### Fixed
+- Searching the reaction picker finds flags and Haven's other built-in image emoji by country or name ("usa", "america", "canada"). It only looked at standard emoji before, so those searches came back empty, and an empty search now says so.
 - A name with a gradient role color now shows its gradient in the reply line above a message, instead of a single flat color.
 - A message or thread reply refused by slow mode was thrown away with the notice. It now comes back in the box to send once the wait is over (reported by TestUser).
 - When an admin switched text or media on or off for the channel you had open, the message box and its buttons stayed as they were until you changed channels. They now update right away (thanks rajuriprathik-a11y, #5909).
