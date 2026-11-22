@@ -47,6 +47,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 
 ### Fixed
+- The admin recovery page now has the same limit on wrong passwords per account as the login page.
 - A webhook's token kept working after the person who made it was kicked from its channel or lost the role the channel requires. It now stops, the same way it already did for a banned maker.
 - The setup installer page now answers only its own page. While setup was open, another website open in the same browser could have sent it requests, including the one that creates the admin account.
 - An account with no channels is put into the open ones when it connects. That included ordinary sub-channels sitting under a private channel. Those are no longer joined.

@@ -1779,8 +1779,13 @@ router.post('/admin-recover', authLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // The same per-account limit on wrong passwords as the login page.
+    // Without it this route was a second door to guess the admin's password
+    // at, held back only by a limit per address.
+    if (_pwBlocked(user.id, req.ip)) return res.status(429).json({ error: PW_BLOCKED_MSG });
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
+      _notePwFail(user.id, req.ip);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     // The password alone is not enough when the account has two-factor on:

@@ -82,3 +82,16 @@ test('guessing from many addresses closes the account to strangers, not to its o
   const notAdmin = await post('/api/auth/admin-recover', { username: 'owner', password: PW }, { ip: '198.51.100.7' });
   assert.strictEqual(notAdmin.status, 401);
 });
+
+test('admin recovery holds the admin password to the same per-account limit', async () => {
+  const PW = 'recoverlimits123';
+  const reg = await post('/api/auth/register', { username: 'admin', password: PW, eulaVersion: '2.0', ageVerified: true }, { ip: '198.51.100.20' });
+  assert.ok(reg.body.token, JSON.stringify(reg.body));
+  const recover = (password, ip) => post('/api/auth/admin-recover', { username: 'admin', password }, { ip });
+  for (let i = 0; i < 20; i++) {
+    const r = await recover('wrong-guess', `192.0.2.${i + 1}`);
+    assert.strictEqual(r.status, 401, `guess ${i} is just wrong`);
+  }
+  const stranger = await recover(PW, '192.0.2.200');
+  assert.strictEqual(stranger.status, 429, 'a new address is refused even with the right password');
+});
