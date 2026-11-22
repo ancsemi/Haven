@@ -4,7 +4,9 @@
 //
 //   node scripts/update.js git|release [--wait-pid N] [--port N] [--no-restart] [--early]
 //
-// git      git pull, for installs cloned from GitHub
+// git      move a clone from GitHub to the latest release's tag. Never to the
+//          tip of main: main holds work that has not been released, and an
+//          update is a release (stable, or the newest of any kind with --early)
 // release  download the latest release from GitHub and copy it over this folder,
 //          for installs made by Install Haven.bat, install.sh or a zip
 //
@@ -67,6 +69,31 @@ function unpackRelease(data) {
 }
 
 // Only ever called with the fixed commands below, never with outside input.
+// The release a git install moves to, or null when this install is already
+// there or ahead of it (a developer's clone of main, for one).
+async function gitTarget() {
+  const headers = { 'User-Agent': 'haven-updater', Accept: 'application/vnd.github+json' };
+  const { tag_name: tag } = await releaseChannel.latestRelease({ early, headers });
+  // The tag goes into a git command, so it must look like one of ours.
+  if (!/^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(String(tag))) throw new Error(`unexpected release tag "${tag}"`);
+  // require, not JSON.parse: package.json may start with a byte order mark.
+  const current = require(path.join(ROOT, 'package.json')).version;
+  if (releaseChannel.compareVersions(tag, current) <= 0) {
+    log(`This install is on ${current}, the latest release is ${tag}. Nothing to update.`);
+    return null;
+  }
+  return tag;
+}
+
+// Fetches that one tag and checks it out. A clone made by the installer is
+// shallow, and stays shallow. Local edits that the release would overwrite
+// make git refuse, and the install is left as it was.
+function checkoutRelease(tag) {
+  const shallow = spawnSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: ROOT, encoding: 'utf8' }).stdout.trim() === 'true';
+  run(`git fetch ${shallow ? '--depth 1 ' : ''}origin refs/tags/${tag}:refs/tags/${tag}`);
+  run(`git checkout --detach ${tag}`);
+}
+
 function run(command) {
   log(`> ${command}`);
   // shell: npm is a .cmd file on Windows, which Node only starts through a shell.
@@ -113,18 +140,23 @@ async function main() {
 
   // Download while Haven is still up, so a failed download costs no downtime.
   let release = null;
+  let tag = null;
   let ok = true;
   if (mode === 'release') {
     try { release = await downloadRelease(); } catch (err) { log(`Update failed: ${err.message}`); ok = false; }
+  } else {
+    try { tag = await gitTarget(); } catch (err) { log(`Update failed: ${err.message}`); ok = false; }
   }
   if (waitPid) await waitForExit(waitPid);
 
   if (ok) {
     try {
-      if (mode === 'git') run('git pull --ff-only');
-      else unpackRelease(release.data);
-      run('npm install --no-audit --no-fund');
-      log(release ? `Updated to ${release.tag}` : 'Updated');
+      if (mode === 'release') unpackRelease(release.data);
+      else if (tag) checkoutRelease(tag);
+      if (release || tag) {
+        run('npm install --no-audit --no-fund');
+        log(`Updated to ${release ? release.tag : tag}`);
+      }
     } catch (err) {
       log(`Update failed: ${err.message}`);
       ok = false;

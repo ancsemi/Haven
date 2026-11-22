@@ -164,24 +164,25 @@ echo ""
 echo "  [2/3] Downloading Haven..."
 
 if [ -f "$INSTALL_DIR/package.json" ]; then
-    echo "        Haven already downloaded, updating..."
-    if [ -d "$INSTALL_DIR/.git" ] && command -v git &> /dev/null; then
-        cd "$INSTALL_DIR"
-        git pull --ff-only origin main 2>/dev/null || true
-        echo "        Updated via git"
-    fi
+    # Updating is Haven's own job (Settings > Admin > Update Now), which moves
+    # to the next release. This script leaves an existing install as it is.
+    echo "        Haven is already downloaded."
 else
-    if command -v git &> /dev/null; then
-        echo "        Cloning from GitHub..."
-        git clone --depth 1 https://github.com/ancsemi/Haven.git "$INSTALL_DIR"
-    else
-        echo "        Downloading ZIP from GitHub..."
-        TMP_ZIP=$(mktemp /tmp/haven-XXXXXX.zip)
-        curl -fsSL "https://github.com/ancsemi/Haven/archive/refs/heads/main.zip" -o "$TMP_ZIP"
-        unzip -q "$TMP_ZIP" -d /tmp
-        mv /tmp/Haven-main "$INSTALL_DIR"
-        rm -f "$TMP_ZIP"
+    # The latest release, never the tip of main: main holds work that has not
+    # been released yet.
+    HAVEN_TAG=$(curl -fsSL "https://api.github.com/repos/ancsemi/Haven/releases/latest" 2>/dev/null | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+    if ! printf '%s' "$HAVEN_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+        echo -e "  ${RED}[!] Could not find the latest Haven release. Check your internet connection and try again.${NC}"
+        exit 1
     fi
+    echo "        Latest release: $HAVEN_TAG"
+    # The release archive, not a git clone: Update Now in Settings then
+    # moves this install from release to release.
+    echo "        Downloading from GitHub..."
+    TMP_OUT=$(mktemp -d /tmp/haven-XXXXXX)
+    curl -fsSL "https://github.com/ancsemi/Haven/archive/refs/tags/$HAVEN_TAG.tar.gz" | tar -xz -C "$TMP_OUT"
+    mv "$TMP_OUT"/Haven-* "$INSTALL_DIR"
+    rm -rf "$TMP_OUT"
 fi
 
 if [ ! -f "$INSTALL_DIR/package.json" ]; then
