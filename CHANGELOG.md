@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.30.0] - Unreleased
 
 ### Added
+- Two new desktop layouts in Settings > Layout (thanks Amnibro, #5928). Focus puts the conversation that needs you in the middle, with menus in a dock along the bottom, and moves you to the next thing to answer when you send. Focus Classic shows one list at a time (Server, DMs, Activity, You) beside the chat. Both are off unless you pick them. In a call, the channel list also shows a red dot next to anyone sharing their screen; click it to watch.
 - Drag a soundboard sound onto another to put it where you want it (asked for by Raidenphantom). The order is yours alone and follows you to every device; the Soundboard panel, the pop-up and the pop-out all use it, and sounds you have not moved keep their place after the ones you have.
 - Small text: a line that starts with `-# ` shows small and muted, the way Discord does, so it also reads right in messages that come across Ferry (asked for by test1). The formatting menu has a Small text row.
 - More profile customization (thanks Bo0sted, #5900): pick a banner color in Edit Profile or let it follow your avatar, upload and crop a banner picture (with its own size limit in Uploads & Limits), and give your profile card a two-color theme it fades between.
@@ -40,6 +41,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 
 ### Fixed
+- Settings > Internet Access said the port was not reachable on every server, because the outside check it relies on changed how it is asked (reported by s007m77, fixed by Amnibro, #5923). It asks the new way, checks the public port when Haven sits behind a reverse proxy, and falls back to testing the address itself when the service gives no answer.
 - Searching the reaction picker finds flags and Haven's other built-in image emoji by country or name ("usa", "america", "canada"). It only looked at standard emoji before, so those searches came back empty, and an empty search now says so.
 - A name with a gradient role color now shows its gradient in the reply line above a message, instead of a single flat color.
 - A message or thread reply refused by slow mode was thrown away with the notice. It now comes back in the box to send once the wait is over (reported by TestUser).

@@ -2,7 +2,7 @@
    HAVEN: Multi-Theme Stylesheet
    Themes: Haven (default), Discord, Matrix, Tron, HALO, LoTR
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-@import url('/css/voice.css?v=4.29.71');
+@import url('/css/voice.css?v=4.29.99');
 @import url('/css/music.css?v=4.27.17');
 @import url('/css/style-themes.css?v=4.27.19');
 @import url('/css/style-themes-win95-light.css?v=4.24.16');
@@ -22,7 +22,7 @@
 @import url('/css/style-streams-markdown.css?v=4.29.82');
 @import url('/css/style-presence-connections.css?v=4.29.65');
 @import url('/css/style-media-controls.css?v=4.29.63');
-@import url('/css/style-roles-layout-polls.css?v=4.29.93');
+@import url('/css/style-roles-layout-polls.css?v=4.29.99');
 @import url('/css/style-admin-panels.css?v=4.27.9');
 @import url('/css/style-channel-types.css?v=4.27.42');
 @import url('/css/style-gallery-ferry-forums.css?v=4.29.66');
