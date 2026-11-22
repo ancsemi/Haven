@@ -3,8 +3,73 @@
 // login, recovery codes, the encryption passphrase, and deleting your
 // account or your messages.
 
+const COMPOSER_BUTTONS = { upload: 'media.upload_file_title', emoji: 'app.input_bar.emoji_btn', gif: 'app.input_bar.gif_btn', poll: 'app.input_bar.poll_btn', time: 'app.input_bar.time_btn', format: 'app.input_bar.format_btn', voice: 'app.input_bar.voice_btn', 'self-destruct': 'app.input_bar.self_destruct_btn', silent: 'app.input_bar.silent_btn', highlight: 'app.input_bar.highlight_btn', burn: 'app.input_bar.burn_btn' };
 export default {
 
+_composerButtonsCfg() {
+  let c;
+  try { c = JSON.parse(localStorage.getItem('haven_composer_buttons') || '{}') || {}; } catch { c = {}; }
+  const keys = Object.keys(COMPOSER_BUTTONS);
+  return { order: [...new Set([...(Array.isArray(c.order) ? c.order : []), ...keys])].filter(k => keys.includes(k)), folded: (Array.isArray(c.folded) ? c.folded : []).filter(k => keys.includes(k)) };
+},
+_applyComposerButtons() {
+  const box = document.querySelector('#message-input-area .input-actions-box');
+  const menu = document.getElementById('composer-overflow');
+  if (!box || !menu) return;
+  const root = document.documentElement;
+  const { order, folded } = this._composerButtonsCfg();
+  const compact = root.hasAttribute('data-compact-composer');
+  this._composerBoxOrigin = this._composerBoxOrigin || [...box.children];
+  this._composerBoxOrigin.forEach(el => box.appendChild(el));
+  const custom = folded.length > 0 || order.some((k, i) => k !== Object.keys(COMPOSER_BUTTONS)[i]);
+  order.forEach((k, i) => {
+    const b = document.getElementById(`${k}-btn`);
+    if (!b) return;
+    b.style.order = custom ? String(i + 1) : '';
+    if (!compact && folded.includes(k)) menu.appendChild(b);
+  });
+  root.toggleAttribute('data-composer-custom', custom);
+  const shown = [...menu.children].some(b => b.style.display !== 'none');
+  root.toggleAttribute('data-composer-folded', shown);
+  if (!shown) this._closeComposerMenu?.();
+},
+_setupComposerButtons() {
+  const list = document.getElementById('composer-buttons-list');
+  const save = (cfg) => {
+    localStorage.setItem('haven_composer_buttons', JSON.stringify(cfg));
+    this._applyComposerButtons();
+    render();
+  };
+  const render = () => {
+    if (!list) return;
+    const { order, folded } = this._composerButtonsCfg();
+    list.innerHTML = order.map((k, i) => `<div class="toolbar-order-item"><span class="toolbar-order-item-label">${t(COMPOSER_BUTTONS[k]).split(/[:(]/)[0].trim()}</span><div class="toolbar-order-item-controls"><input type="checkbox" data-fold="${k}" title="${t('settings.layout.composer.in_bar')}"${folded.includes(k) ? '' : ' checked'}><button type="button" class="toolbar-order-move" data-dir="-1" data-key="${k}"${i === 0 ? ' disabled' : ''} title="${t('media_runtime.move_up')}">▲</button><button type="button" class="toolbar-order-move" data-dir="1" data-key="${k}"${i === order.length - 1 ? ' disabled' : ''} title="${t('media_runtime.move_down')}">▼</button></div></div>`).join('');
+  };
+  list?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.toolbar-order-move');
+    if (!btn) return;
+    const cfg = this._composerButtonsCfg();
+    const i = cfg.order.indexOf(btn.dataset.key);
+    const j = i + Number(btn.dataset.dir);
+    if (i < 0 || j < 0 || j >= cfg.order.length) return;
+    [cfg.order[i], cfg.order[j]] = [cfg.order[j], cfg.order[i]];
+    save(cfg);
+  });
+  list?.addEventListener('change', (e) => {
+    const box = e.target.closest('[data-fold]');
+    if (!box) return;
+    const cfg = this._composerButtonsCfg();
+    cfg.folded = cfg.folded.filter(k => k !== box.dataset.fold).concat(box.checked ? [] : [box.dataset.fold]);
+    save(cfg);
+  });
+  document.getElementById('composer-buttons-reset')?.addEventListener('click', () => {
+    localStorage.removeItem('haven_composer_buttons');
+    this._applyComposerButtons();
+    render();
+  });
+  this._applyComposerButtons();
+  render();
+},
 _bindSettings() {
   // ── Settings popout modal ────────────────────────────
   const openSettingsModal = () => {
@@ -238,25 +303,30 @@ _bindSettings() {
   // opens; the buttons keep their own handlers, only their home moves.
   const plusBtn = document.getElementById('composer-plus-btn');
   const actionsBox = document.querySelector('#message-input-area .input-actions-box');
+  const overflow = document.getElementById('composer-overflow');
+  const menus = [actionsBox, overflow].filter(Boolean);
   this._closeComposerMenu = () => {
-    actionsBox?.classList.remove('open');
+    menus.forEach(m => m.classList.remove('open'));
     plusBtn?.setAttribute('aria-expanded', 'false');
   };
   if (plusBtn && actionsBox) {
     plusBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const open = !actionsBox.classList.contains('open');
-      actionsBox.classList.toggle('open', open);
+      const menu = document.documentElement.hasAttribute('data-compact-composer') ? actionsBox : overflow;
+      const open = !menu.classList.contains('open');
+      this._closeComposerMenu();
+      menu.classList.toggle('open', open);
       plusBtn.setAttribute('aria-expanded', String(open));
     });
     // Picking a tool closes the menu; the tool's own picker takes over.
-    actionsBox.addEventListener('click', (e) => {
-      if (document.documentElement.hasAttribute('data-compact-composer') && e.target.closest('button')) setTimeout(() => this._closeComposerMenu(), 0);
-    });
+    menus.forEach(m => m.addEventListener('click', (e) => {
+      if ((m === overflow || document.documentElement.hasAttribute('data-compact-composer')) && e.target.closest('button')) setTimeout(() => this._closeComposerMenu(), 0);
+    }));
     document.addEventListener('click', (e) => {
-      if (actionsBox.classList.contains('open') && !e.target.closest('.input-actions-box') && e.target !== plusBtn) this._closeComposerMenu();
+      if (menus.some(m => m.classList.contains('open')) && !e.target.closest('.input-actions-box, .composer-overflow') && e.target !== plusBtn) this._closeComposerMenu();
     });
   }
+  this._setupComposerButtons();
 
   // ── Formatting guide and command list (#5654) ─────────
   const formatBtn = document.getElementById('format-btn');

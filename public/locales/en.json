@@ -1758,7 +1758,10 @@
         "hide_send": "Hide the Send button",
         "hide_send_hint": "Enter still sends. Frees the end of the message box if you never click the button.",
         "compact": "Fold the buttons into one + button",
-        "compact_hint": "Upload, emoji, GIF and the rest sit behind a single + at the start of the message box, so the box gets the room."
+        "compact_hint": "Upload, emoji, GIF and the rest sit behind a single + at the start of the message box, so the box gets the room.",
+        "buttons": "Message box buttons",
+        "buttons_hint": "Move a button up or down to reorder it. Untick one to keep it in the + menu instead of the bar. Tick only Emoji and GIF to keep them in the bar.",
+        "in_bar": "Show in the bar"
       }
     },
     "toggle_style": {
@@ -4901,6 +4904,7 @@
     "codeblock": "Code block",
     "quote": "Quote",
     "heading": "Heading",
+    "subtext": "Small text",
     "list": "Bullet list",
     "numbered": "Numbered list",
     "link": "Link",

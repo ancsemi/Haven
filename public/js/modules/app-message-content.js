@@ -605,6 +605,7 @@ _formatContent(str, opts) {
     const level = hashes.length;
     return `${pre}<div class="chat-heading chat-h${level}">${text}</div>`;
   });
+  html = html.replace(/(^|\n)-#[ \t]+([^\n]+)/g, '$1<small class="chat-subtext">$2</small>');
 
   // ── Horizontal rules: --- or ___ on their own line (3+ chars) ──
   html = html.replace(/(^|\n)([-]{3,}|[_]{3,})\s*(?=\n|$)/g, '$1<hr class="chat-hr">');

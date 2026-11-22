@@ -828,7 +828,18 @@ _listenPresenceAndVoice() {
   // viewing the channel. It's also saved server-side, so it renders in history
   // on reload (unlike the old ephemeral welcome, which was never saved).
   this.socket.on('welcome-message', (data) => {
-    if (!data || !data.message || data.channelCode !== this.currentChannel) return;
+    if (!data || !data.message) return;
+    // In a channel that is not open it counts as unread, the same as it does
+    // after a reload, when the server counts it (#5930).
+    if (data.channelCode !== this.currentChannel) {
+      const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]').includes(data.channelCode);
+      if (data.message.user_id === this.user.id || muted || !this.channels.some(c => c.code === data.channelCode)) return;
+      this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
+      this._updateBadge(data.channelCode);
+      this._updateTabTitle?.();
+      this._updateDesktopBadge?.();
+      return;
+    }
     // Only append live when the newest messages are actually in view; if the
     // user is scrolled up in trimmed history it will load in order on scroll.
     // The message is persisted either way, so nothing is lost.

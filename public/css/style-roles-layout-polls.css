@@ -122,6 +122,7 @@ html.haven-background .role-gradient.role-shimmer,
 html.haven-background [class^="fx-"],
 html.haven-background [class*=" fx-"],
 html.haven-background .sidebar::after,
+html.haven-background .channel-voice-user .cvu-live,
 html.haven-background .main::before { animation-play-state: paused; }
 
 /* Role editor: the gradient switches and a sample name in the role's style. */

@@ -1293,32 +1293,20 @@ app.get('/api/port-check', async (req, res) => {
     return res.json({ reachable: false, publicIp: null, error: 'Could not determine public IP. You may be offline.' });
   }
 
-  // Step 2: Check if port is reachable via external probe
   let reachable = false;
+  const { externalPort, queryPortchecker } = require('./src/portCheck');
+  const checkPort = externalPort(process.env.PUBLIC_URL, port);
+  const probeHttps = /^https:/i.test(process.env.PUBLIC_URL || '') || (!process.env.PUBLIC_URL && useSSL);
   try {
-    reachable = await new Promise((resolve, reject) => {
-      const url = `https://portchecker.io/api/v1/query?host=${publicIp}&ports=${port}`;
-      const req = https.get(url, { timeout: 10000, agent: agentFor(url) }, (resp) => {
-        let data = '';
-        resp.on('data', chunk => data += chunk);
-        resp.on('end', () => {
-          try {
-            const result = JSON.parse(data);
-            // portchecker.io returns { host, ports: [{ port, status }] }
-            const portResult = result.ports?.find(p => p.port === parseInt(port));
-            resolve(portResult?.status === 'open');
-          } catch { resolve(false); }
-        });
-      });
-      req.on('error', () => resolve(false));
-      req.on('timeout', () => { req.destroy(); resolve(false); });
-    });
+    const verdict = await queryPortchecker(publicIp, checkPort, { agentFor });
+    if (verdict === null) throw new Error('port check service gave no answer');
+    reachable = verdict;
   } catch {
     // Fallback: try to connect to ourselves from public IP
     try {
-      const proto = useSSL ? https : http;
+      const proto = probeHttps ? https : http;
       reachable = await new Promise((resolve) => {
-        const req = proto.get(`${useSSL ? 'https' : 'http'}://${publicIp}:${port}/api/health`, {
+        const req = proto.get(`${probeHttps ? 'https' : 'http'}://${publicIp}:${checkPort}/api/health`, {
           timeout: 5000,
           // SECURITY NOTE: rejectUnauthorized:false is intentional here: this
           // connects to OUR OWN public IP to test reachability. Self-signed certs

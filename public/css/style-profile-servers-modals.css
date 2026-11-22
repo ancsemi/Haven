@@ -1286,7 +1286,8 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
 /* The toolbar glyphs are inline SVGs with hard-coded width/height attributes,
    so they ignore font size. Size them in rem here so they scale with it and
    stay proportional to the buttons around them. */
-.input-actions-box button svg {
+.input-actions-box button svg,
+.composer-overflow button svg {
   width: 1.25rem;
   height: 1.25rem;
 }
