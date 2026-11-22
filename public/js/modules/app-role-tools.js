@@ -398,8 +398,16 @@ export default {
     const note = limit ? `<div class="role-menu-limit">${this._escapeHtml(limit === 1 ? t('role_menu.pick_one_only') : t('role_menu.pick_up_to', { count: limit }))}</div>` : '';
     return `<div class="role-menu-widget" data-msg-id="${msgId}">${note}${menu.roles.map(r => `
       <button class="role-menu-btn${held.has(r.id) ? ' held' : ''}" type="button" data-msg-id="${msgId}" data-role-id="${r.id}" style="--role-c:${this._safeColor(r.color, '#aaa')};--role-fill:${this._roleFill(r, this._safeColor(r.color, '#aaa'))}" title="${this._escapeHtml(this._roleMenuTitle(msgId, r.id, held.has(r.id)))}">
-        <span class="rm-emoji">${this._emojiGlyphHtml(r.emoji, 18)}</span><span class="rm-name">${this._escapeHtml(r.name)}</span><span class="rm-state">${held.has(r.id) ? '✓' : '+'}</span>
+        <span class="rm-emoji">${this._emojiGlyphHtml(r.emoji, 18)}</span><span class="rm-name">${this._escapeHtml(r.name)}</span><span class="rm-count">${this._roleMenuCount(menu, r.id)}</span><span class="rm-state">${held.has(r.id) ? '✓' : '+'}</span>
       </button>`).join('')}</div>`;
+  },
+
+  // How many people picked the role, shown on its button. Nothing for a
+  // role nobody picked, or one whose holders are hidden (the server sends
+  // no numbers for those).
+  _roleMenuCount(menu, roleId) {
+    const total = Number(menu?.pickers?.[Number(roleId)]?.total) || 0;
+    return total > 0 ? String(total) : '';
   },
 
   _roleMenuTitle(msgId, roleId, held) {
@@ -413,7 +421,11 @@ export default {
     const menu = this._roleMenus?.get(String(msgId));
     if (!menu || !pickers) return;
     menu.pickers = pickers;
-    document.querySelectorAll(`.role-menu-btn[data-msg-id="${msgId}"]`).forEach(b => { b.title = this._roleMenuTitle(msgId, b.dataset.roleId, b.classList.contains('held')); });
+    document.querySelectorAll(`.role-menu-btn[data-msg-id="${msgId}"]`).forEach(b => {
+      b.title = this._roleMenuTitle(msgId, b.dataset.roleId, b.classList.contains('held'));
+      const count = b.querySelector('.rm-count');
+      if (count) count.textContent = this._roleMenuCount(menu, b.dataset.roleId);
+    });
   },
   _markSelfRole(roleId, held) {
     document.querySelectorAll(`.role-menu-btn[data-role-id="${roleId}"]`).forEach(b => {
