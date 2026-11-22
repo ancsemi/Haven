@@ -7,6 +7,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { loadServerPlugin } = require('../serverPlugins');
 
 const HOSTS = new Set(['opencode.ai', 'api.moonshot.ai', 'api.moonshot.cn', 'api.meta.ai', 'api.openai.com', 'api.x.ai', 'api.anthropic.com', 'generativelanguage.googleapis.com', 'openrouter.ai', 'api.mistral.ai', 'api.deepseek.com', 'api.groq.com']);
 const HEADERS = ['authorization', 'x-api-key', 'x-goog-api-key', 'anthropic-version', 'anthropic-beta', 'x-opencode-session'];
@@ -20,14 +21,11 @@ const SWEEP_QUEUE_LIMIT = 50;
 const SWEEP_PER_USER_PER_MIN = 10;
 
 // The plugin file carries the URL checks and the prompt. It is optional: an
-// admin may delete it, and the server must still start.
+// admin may delete it, and the server must still start. Because the server
+// runs it, only the copy shipped with this version is loaded
+// (src/serverPlugins.js).
 function loadPlugin(pluginPath) {
-  try {
-    return require(pluginPath);
-  } catch (e) {
-    console.warn('[AutoMod] AI link checks unavailable, plugin file not loaded:', e.message);
-    return null;
-  }
+  return loadServerPlugin(pluginPath);
 }
 
 module.exports = function registerAutomodRelay({ app, getModUser, verifyToken, isBanned, rateLimit, fetchImpl = (...a) => fetch(...a), profilePath = PROFILE, pluginPath = PLUGIN, settings = null }) {

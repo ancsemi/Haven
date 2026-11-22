@@ -19,6 +19,7 @@ const semver = require('semver');
 const https = require('node:https');
 const dns = require('node:dns');
 const net = require('node:net');
+const { isServerLoaded } = require('./serverPlugins');
 
 // Published from docs/blocklist.json by the website. The old github.io
 // address still redirects here and stays allowed for older servers.
@@ -299,6 +300,7 @@ function createExtensionUpdater({
         item.file.endsWith(extensionSuffix(item.type)),
       'Invalid installed filename.',
     );
+    assertValid(!isServerLoaded(item.file), 'This file is part of the server and is not updated here.');
     const file = path.join(dirs[item.type], item.file);
     assertValid(fs.lstatSync(file).isFile(), 'Extension must be a regular file, not a symlink.');
     return file;
@@ -336,7 +338,9 @@ function createExtensionUpdater({
     const result = [];
     const saved = readInstalledState();
     for (const type of ['plugin', 'theme']) {
-      for (const file of fs.readdirSync(dirs[type]).filter(f => f.endsWith(extensionSuffix(type)))) {
+      // A plugin the server itself runs is server code (src/serverPlugins.js):
+      // it is never checked, offered or replaced here, whatever its header says.
+      for (const file of fs.readdirSync(dirs[type]).filter(f => f.endsWith(extensionSuffix(type)) && !isServerLoaded(f))) {
         const key = type + ':' + file;
         const item = { type, file, key };
         const previous = saved[key];
