@@ -56,6 +56,8 @@ test('voice channels endpoint enforces permission and creator scope end to end',
     db.prepare("INSERT INTO channels (name, code, created_by, is_dm, voice_enabled, position) VALUES ('Restricted', '44444444', ?, 0, 1, 4)").run(owner.lastInsertRowid);
     db.prepare("INSERT INTO channels (name, code, created_by, is_dm, voice_enabled, position) VALUES ('Private DM', '55555555', ?, 1, 1, 5)").run(owner.lastInsertRowid);
     db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(member.lastInsertRowid, owner.lastInsertRowid);
+    // A bot's maker is in the bot's own channel: its token stops working otherwise.
+    db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(assigned.lastInsertRowid, owner.lastInsertRowid);
     db.prepare('INSERT INTO webhooks (channel_id, name, token, created_by, can_use_voice) VALUES (?, ?, ?, ?, 1)').run(assigned.lastInsertRowid, 'Voice Bot', '${token}', owner.lastInsertRowid);
     db.close();
   `], { cwd: root, env, encoding: 'utf8' });
