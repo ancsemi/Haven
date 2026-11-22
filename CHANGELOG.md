@@ -47,6 +47,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 
 ### Fixed
+- The setup installer page now answers only its own page. While setup was open, another website open in the same browser could have sent it requests, including the one that creates the admin account.
 - An account with no channels is put into the open ones when it connects. That included ordinary sub-channels sitting under a private channel. Those are no longer joined.
 - Phone and browser notifications went to everyone with a membership in the channel, which included banned accounts and people the channel's required roles keep out. They now go only to people who can open the channel, and a banned account can no longer sign a device up for them.
 - Guests can no longer join groups, which could open channels outside the ones the admin chose for guests. Joining a group no longer protects an account from the bulk remove tool. Only the admin sets a role's upload limit.
