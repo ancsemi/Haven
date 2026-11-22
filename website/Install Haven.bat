@@ -85,40 +85,43 @@ echo.
 echo  [2/3] Downloading Haven...
 
 if exist "%INSTALL_DIR%\package.json" (
-    echo        Haven already downloaded, updating...
-    pushd "%INSTALL_DIR%"
-
-    :: Try git pull if it's a git repo
-    if exist ".git" (
-        where git >nul 2>&1
-        if %ERRORLEVEL% EQU 0 (
-            git pull --ff-only origin main >nul 2>&1
-            echo        Updated via git
-        )
-    )
-    popd
+    rem Updating is Haven's own job: Settings, Admin, Update Now moves to the
+    rem next release. This installer leaves an existing install as it is.
+    echo        Haven is already downloaded.
     goto :HAVEN_READY
 )
 
-:: Try git clone first (faster, supports updates)
-where git >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    echo        Cloning from GitHub...
-    git clone --depth 1 https://github.com/ancsemi/Haven.git "%INSTALL_DIR%" 2>nul
-    if %ERRORLEVEL% EQU 0 goto :HAVEN_READY
+:: The latest release, never the tip of main: main holds work that has not
+:: been released yet.
+set "HAVEN_TAG="
+for /f "delims=" %%t in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $ProgressPreference = 'SilentlyContinue'; (Invoke-RestMethod -UseBasicParsing -Headers @{ 'User-Agent' = 'haven-installer' } -Uri 'https://api.github.com/repos/ancsemi/Haven/releases/latest').tag_name" 2^>nul') do set "HAVEN_TAG=%%t"
+echo %HAVEN_TAG%| findstr /R /X "v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*" >nul
+if errorlevel 1 (
+    color 0C
+    echo.
+    echo  [!] Could not find the latest Haven release. Check your
+    echo      internet connection and try again.
+    echo.
+    pause
+    exit /b 1
 )
+echo        Latest release: %HAVEN_TAG%
 
-:: Fallback: download ZIP via PowerShell
-echo        Downloading ZIP from GitHub...
+:: The release ZIP, not a git clone: Update Now in Settings then moves
+:: this install from release to release.
+echo        Downloading from GitHub...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
   "$zip = \"$env:TEMP\haven-download.zip\";" ^
+  "$out = \"$env:TEMP\haven-extract\";" ^
   "$ProgressPreference = 'SilentlyContinue';" ^
-  "Invoke-WebRequest -Uri 'https://github.com/ancsemi/Haven/archive/refs/heads/main.zip' -OutFile $zip -UseBasicParsing;" ^
-  "Expand-Archive -Path $zip -DestinationPath $env:TEMP -Force;" ^
+  "Invoke-WebRequest -Uri 'https://github.com/ancsemi/Haven/archive/refs/tags/%HAVEN_TAG%.zip' -OutFile $zip -UseBasicParsing;" ^
+  "if (Test-Path $out) { Remove-Item $out -Recurse -Force };" ^
+  "Expand-Archive -Path $zip -DestinationPath $out -Force;" ^
   "if (Test-Path '%INSTALL_DIR%') { Remove-Item '%INSTALL_DIR%' -Recurse -Force };" ^
-  "Move-Item \"$env:TEMP\Haven-main\" '%INSTALL_DIR%';" ^
+  "Move-Item (Get-ChildItem $out -Directory | Select-Object -First 1).FullName '%INSTALL_DIR%';" ^
   "Remove-Item $zip -Force -ErrorAction SilentlyContinue;" ^
+  "Remove-Item $out -Recurse -Force -ErrorAction SilentlyContinue;" ^
   "Write-Host '  [OK] Haven downloaded!';"
 
 if not exist "%INSTALL_DIR%\package.json" (

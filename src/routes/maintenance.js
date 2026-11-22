@@ -460,7 +460,7 @@ module.exports = function registerMaintenance(deps) {
         runnable: true,
         mode: 'git',
         command: 'node scripts/update.js git',
-        message: 'Haven pulls the latest code from GitHub, reinstalls dependencies and starts again. It is offline for a minute or two; this page reconnects by itself.',
+        message: 'Haven moves to the latest release from GitHub, reinstalls dependencies and starts again. It is offline for a minute or two; this page reconnects by itself.',
       };
       // Install Haven.bat, install.sh and release zips have no git history, so
       // the updater downloads the latest release and copies it over the code.
