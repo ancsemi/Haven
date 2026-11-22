@@ -155,6 +155,7 @@ const { startDdns, getDdnsStatus, triggerDdnsNow } = require('./src/ddns');
 const { initFcm, setFcmAdminEnabled, setFcmHideContent } = require('./src/fcm');
 const threadNotify = require('./src/threadNotify');
 const { takeSilent } = require('./src/silentMessages');
+const botComponents = require('./src/botComponents');
 
 const app = express();
 const BOT_AUDIO_DIR = path.join(UPLOADS_DIR, 'bot-audio');
@@ -1722,8 +1723,12 @@ app.post('/api/webhooks/:token', webhookLimiter, webhookBody, async (req, res) =
   const silentPick = takeSilent(typeof req.body.content === 'string' ? req.body.content.trim() : '', req.body.silent);
   const silent = silentPick.silent;
   let content = sanitizeText(silentPick.content.trim());
-  if ((!content && !files.length) || content.length > 4000) {
-    return res.status(400).json({ error: files.length ? 'Content max 4000 chars' : 'Content required (max 4000 chars)' });
+  // Embeds, buttons and dropdowns (src/botComponents.js), in Discord's shapes.
+  const parts = botComponents.clean(req.body);
+  if (parts.error) return res.status(400).json({ error: parts.error });
+  const hasParts = !!(parts.embeds?.length || parts.components?.length);
+  if ((!content && !files.length && !hasParts) || content.length > 4000) {
+    return res.status(400).json({ error: files.length || hasParts ? 'Content max 4000 chars' : 'Content required (max 4000 chars)' });
   }
 
   // Optional overrides per-message
@@ -1766,6 +1771,11 @@ app.post('/api/webhooks/:token', webhookLimiter, webhookBody, async (req, res) =
   const ephemeral = req.body.ephemeral === true;
   if (ephemeral && files.length) {
     return res.status(400).json({ error: 'Files cannot be sent with ephemeral' });
+  }
+  // A click is checked against the stored message, and an ephemeral one is
+  // never stored.
+  if (ephemeral && parts.components?.length) {
+    return res.status(400).json({ error: 'Buttons and dropdowns cannot be sent with ephemeral' });
   }
   let recipientId = null;
   if (ephemeral) {
@@ -1817,6 +1827,8 @@ app.post('/api/webhooks/:token', webhookLimiter, webhookBody, async (req, res) =
     thread_id: threadId,
     silent: silent || undefined,
   };
+  if (parts.embeds?.length) message.embeds = parts.embeds;
+  if (parts.components?.length) message.components = parts.components;
 
   if (ephemeral) {
     let deliveredSockets = 0;
@@ -1855,6 +1867,7 @@ app.post('/api/webhooks/:token', webhookLimiter, webhookBody, async (req, res) =
     'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to, thread_id, webhook_id, silent) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)'
   ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo, threadId, webhook.id, silent ? 1 : 0);
   message.id = result.lastInsertRowid;
+  if (hasParts) botComponents.record(db, message.id, parts);
 
   // Broadcast to all clients in this channel
   if (io && threadId) {
@@ -1890,7 +1903,7 @@ app.post('/api/webhooks/:token', webhookLimiter, webhookBody, async (req, res) =
     // Bot posts never pushed, and a browser with push on leaves its pop-ups
     // to the push, so those people heard nothing at all.
     if (socketRuntime?.sendPushNotifications) {
-      socketRuntime.sendPushNotifications(webhook.channel_id, webhook.channel_code, webhook.channel_name, 0, username, content,
+      socketRuntime.sendPushNotifications(webhook.channel_id, webhook.channel_code, webhook.channel_name, 0, username, content || botComponents.summary(parts.embeds),
         { silent, replyToUserId: replyContext?.user_id || undefined });
     }
   }

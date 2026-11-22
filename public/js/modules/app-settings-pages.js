@@ -18,7 +18,7 @@ const SETTINGS_PAGES = {
     ['safety', '🛡️', 'settings.pages.safety', 'Safety', ['section-moderation', 'section-automod', 'section-security', 'section-modmode', 'section-audit-log']],
     ['content', '😎', 'settings.pages.content', 'Content', ['section-emojis', 'section-stickers', 'section-gifs', 'section-sounds-admin', 'section-tags-admin', 'section-uploads', 'section-cleanup']],
     ['network', '📡', 'settings.pages.network', 'Network & scale', ['section-connectivity', 'section-large-server', 'section-tunnel']],
-    ['tools', '🤖', 'settings.pages.tools', 'Bots & data', ['section-bots', 'section-ferry', 'section-import', 'section-backup', 'section-template']]
+    ['tools', '🤖', 'settings.pages.tools', 'Bots & data', ['section-bots', 'section-bot-accounts', 'section-ferry', 'section-import', 'section-backup', 'section-template']]
   ]
 };
 export default {

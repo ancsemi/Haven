@@ -11,10 +11,10 @@ const Database = require('better-sqlite3');
 process.env.HAVEN_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'haven-media-token-'));
 const mediaProxy = require('../src/mediaProxy');
 
-test('a media token stops working once its account is banned or deleted', async t => {
+test('a media token stops working once its account is banned, disabled or deleted', async t => {
   const db = new Database(':memory:');
   t.after(() => db.close());
-  db.exec('CREATE TABLE users (id INTEGER PRIMARY KEY, password_version INTEGER DEFAULT 1); CREATE TABLE bans (user_id INTEGER PRIMARY KEY);');
+  db.exec('CREATE TABLE users (id INTEGER PRIMARY KEY, password_version INTEGER DEFAULT 1, bot_disabled INTEGER DEFAULT 0); CREATE TABLE bans (user_id INTEGER PRIMARY KEY);');
   db.prepare('INSERT INTO users (id) VALUES (3)').run();
   const asyncDb = { prepare: sql => ({
     async get(...params) {
@@ -36,6 +36,12 @@ test('a media token stops working once its account is banned or deleted', async 
   assert.equal(mediaProxy.verifyToken(token, db), null);
   assert.equal(await mediaProxy.verifyTokenAsync(token, asyncDb), null);
   db.prepare('DELETE FROM bans').run();
+  // A disabled bot is refused at once, and works again when enabled.
+  db.prepare('UPDATE users SET bot_disabled = 1 WHERE id = 3').run();
+  assert.equal(mediaProxy.verifyToken(token, db), null);
+  assert.equal(await mediaProxy.verifyTokenAsync(token, asyncDb), null);
+  db.prepare('UPDATE users SET bot_disabled = 0 WHERE id = 3').run();
+  assert.equal(mediaProxy.verifyToken(token, db), 3);
   db.prepare('DELETE FROM users').run();
   assert.equal(mediaProxy.verifyToken(token, db), null);
   assert.equal(await mediaProxy.verifyTokenAsync(token, asyncDb), null);

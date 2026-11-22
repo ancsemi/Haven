@@ -414,6 +414,19 @@ CREATE TABLE "message_highlights" (
   PRIMARY KEY ("message_id")
 );
 
+CREATE TABLE "bot_creators" (
+  "bot_id" BIGINT NOT NULL,
+  "user_id" BIGINT NOT NULL,
+  PRIMARY KEY ("bot_id", "user_id")
+);
+
+CREATE TABLE "message_bot_parts" (
+  "message_id" BIGINT,
+  "embeds" TEXT,
+  "components" TEXT,
+  PRIMARY KEY ("message_id")
+);
+
 CREATE TABLE "message_quotes" (
   "message_id" BIGINT,
   "quote_of" BIGINT NOT NULL,
@@ -805,6 +818,9 @@ CREATE TABLE "users" (
   "totp_enabled" BIGINT DEFAULT 0,
   "encrypted_servers" TEXT DEFAULT NULL,
   "official_mode" BIGINT NOT NULL DEFAULT 0,
+  "is_bot" BIGINT NOT NULL DEFAULT 0,
+  "bot_disabled" BIGINT NOT NULL DEFAULT 0,
+  "bot_created_by" BIGINT DEFAULT NULL,
   PRIMARY KEY ("id")
 );
 
@@ -926,6 +942,12 @@ ALTER TABLE "message_highlights" ADD CONSTRAINT "message_highlights_fk_0" FOREIG
 ALTER TABLE "message_highlights" ADD CONSTRAINT "message_highlights_fk_1" FOREIGN KEY ("role_id") REFERENCES "roles" ("id") ON DELETE SET NULL ON UPDATE NO ACTION;
 
 ALTER TABLE "message_highlights" ADD CONSTRAINT "message_highlights_fk_2" FOREIGN KEY ("message_id") REFERENCES "messages" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+
+ALTER TABLE "bot_creators" ADD CONSTRAINT "bot_creators_fk_0" FOREIGN KEY ("bot_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+
+ALTER TABLE "bot_creators" ADD CONSTRAINT "bot_creators_fk_1" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+
+ALTER TABLE "message_bot_parts" ADD CONSTRAINT "message_bot_parts_fk_0" FOREIGN KEY ("message_id") REFERENCES "messages" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 ALTER TABLE "message_quotes" ADD CONSTRAINT "message_quotes_fk_0" FOREIGN KEY ("quote_of") REFERENCES "messages" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 

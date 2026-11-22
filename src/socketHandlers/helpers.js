@@ -203,7 +203,7 @@ const VALID_ROLE_PERMS = [
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
   'manage_channel_settings',
   'create_channel', 'create_temp_channel', 'invite_users',
-  'upload_files', 'use_voice', 'use_tts', 'send_self_destruct', 'manage_webhooks', 'mention_everyone', 'view_history',
+  'upload_files', 'use_voice', 'use_tts', 'send_self_destruct', 'manage_webhooks', 'manage_bots', 'mention_everyone', 'view_history',
   'use_ferry',
   'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue',
   'manage_tags', 'manage_badges',

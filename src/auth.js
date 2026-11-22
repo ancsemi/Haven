@@ -449,7 +449,7 @@ router.post('/guest-login', authLimiter, async (req, res) => {
  * lands in exactly the same state as someone who signed up with a password.
  * Every step is best-effort; none of it is worth failing a signup over.
  */
-function provisionNewUser(db, userId, username, io) {
+function provisionNewUser(db, userId, username, io, { welcome = true } = {}) {
   // Auto-assign roles flagged as auto_assign to new users
   try {
     const autoRoles = db.prepare("SELECT id FROM roles WHERE auto_assign = 1 AND scope = 'server'").all();
@@ -481,7 +481,8 @@ function provisionNewUser(db, userId, username, io) {
   // everyone (replacing the old live-only flash that vanished on reload and
   // only showed to whoever happened to be watching that channel). Gated on
   // the admin welcome_message template; an empty template turns it off.
-  try {
+  // A new bot is not greeted.
+  if (welcome) try {
     const wmRow = db.prepare("SELECT value FROM server_settings WHERE key = 'welcome_message'").get();
     const template = wmRow && typeof wmRow.value === 'string' ? wmRow.value.trim() : '';
     if (template) {
@@ -766,6 +767,8 @@ router.post('/login', authLimiter, async (req, res) => {
     // than failing as "invalid credentials"; otherwise someone who signed up
     // through SSO just sees their password rejected forever, with no hint that
     // they are meant to use the SSO button.
+    // A bot account has no password either: it connects with its token.
+    if (user.is_bot) return res.status(401).json({ error: 'Invalid credentials' });
     if (user.oidc_subject && !hasLocalPassword(user)) {
       return res.status(401).json({ error: 'This account signs in through SSO. Use the SSO button on the login page.' });
     }
@@ -1545,9 +1548,10 @@ function _currentPwv(userId) {
   if (hit && now - hit.at < _PWV_CACHE_MS) return hit.pwv;
   let pwv = null;
   try {
-    const row = getDb().prepare('SELECT password_version FROM users WHERE id = ?').get(userId);
+    const row = getDb().prepare('SELECT password_version, bot_disabled FROM users WHERE id = ?').get(userId);
     // No row means the account is gone: its tokens are no longer sessions.
-    pwv = row ? (row.password_version || 1) : 'gone';
+    // A disabled bot's token is refused the same way until it is enabled.
+    pwv = row && !row.bot_disabled ? (row.password_version || 1) : 'gone';
   } catch (err) {
     // Could not check whether the token was revoked: refuse it rather than
     // accept a possibly revoked session.
@@ -1590,12 +1594,12 @@ async function verifyTokenAsync(token, opts = {}) {
     if (decoded && decoded.id && !decoded.purpose) {
       let row;
       try {
-        row = await getAsyncDb().prepare('SELECT password_version FROM users WHERE id = ?').get(decoded.id);
+        row = await getAsyncDb().prepare('SELECT password_version, bot_disabled FROM users WHERE id = ?').get(decoded.id);
       } catch (err) {
         console.warn('[auth] could not check the session, refusing it:', err.message);
         return null;
       }
-      if (!row || (decoded.pwv || 1) !== (row.password_version || 1)) return null;
+      if (!row || row.bot_disabled || (decoded.pwv || 1) !== (row.password_version || 1)) return null;
     }
     return decoded;
   } catch {
@@ -1606,6 +1610,17 @@ async function verifyTokenAsync(token, opts = {}) {
 // Called right after password_version is written so the change takes effect
 // immediately instead of waiting out the cache.
 function _forgetPwv(userId) { _pwvCache.delete(userId); }
+
+// A bot account's token (src/botAccounts.js). Making one moves the account's
+// password version on, so any token handed out before stops working. It
+// never expires: the bot runs unattended, and regenerating or disabling it
+// is how access is taken away.
+function issueBotToken(db, bot) {
+  const pwv = (db.prepare('SELECT password_version FROM users WHERE id = ?').get(bot.id)?.password_version || 1) + 1;
+  db.prepare('UPDATE users SET password_version = ? WHERE id = ?').run(pwv, bot.id);
+  _forgetPwv(bot.id);
+  return jwt.sign({ id: bot.id, username: bot.username, isAdmin: false, displayName: bot.username, pwv, bot: true }, JWT_SECRET);
+}
 
 // ── Account Recovery Codes ─────────────────────────────
 // Users generate these in advance. Each is a one-time token that can reset
@@ -2499,4 +2514,4 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
   }
 });
 
-module.exports = { router, verifyToken, verifyTokenAsync, generateChannelCode, generateToken, generateTokenAsync, generateConnectToken, authLimiter, acceptTotpCode, totpLimited, noteTotpFail };
+module.exports = { router, verifyToken, verifyTokenAsync, issueBotToken, forgetSession: _forgetPwv, provisionNewUser, generateChannelCode, generateToken, generateTokenAsync, generateConnectToken, authLimiter, acceptTotpCode, totpLimited, noteTotpFail };

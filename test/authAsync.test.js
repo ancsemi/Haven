@@ -151,7 +151,7 @@ for (const backend of ['sqlite', 'postgres']) {
     if (fixture) await driver.prepare('CREATE UNIQUE INDEX eula_user_version ON eula_acceptances (user_id, version)').run();
     db.async = driver;
     SQL.login = `SELECT * FROM users WHERE ${driver.sql.caseInsensitiveEqual('username')}`;
-    const versionSql = 'SELECT password_version FROM users WHERE id = ?';
+    const versionSql = 'SELECT password_version, bot_disabled FROM users WHERE id = ?';
     const expectedQueries = Object.values(SQL).flatMap(sql =>
       [SQL.validate, SQL.password, SQL.totp, SQL.recovery, SQL.servers].includes(sql) ? [versionSql, sql] : [sql]);
     t.after(async () => { db.async = sqliteAsync; if (fixture) await fixture.close(); });

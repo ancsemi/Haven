@@ -96,6 +96,27 @@ module.exports = function register(socket, ctx) {
     );
   }
 
+  // Signs the account out everywhere, takes it out of every list and call,
+  // then deletes it. Shared with bot accounts (socketHandlers/botAccounts.js).
+  function removeAccount(targetUser, scrubMessages, reason) {
+    const uid = targetUser.id;
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && s.user.id === uid) {
+        s.emit('banned', { reason: 'Your account has been deleted by an admin.' });
+        s.disconnect(true);
+      }
+    }
+    for (const [code, users] of channelUsers) {
+      if (users.has(uid)) {
+        users.delete(uid);
+        emitOnlineUsers(code);
+      }
+    }
+    removeUserFromVoice(uid);
+    db.transaction(() => purgeUserCascade(uid, targetUser, socket.user.id, scrubMessages, reason))();
+  }
+  ctx.removeAccount = removeAccount;
+
   // ── Kick user ───────────────────────────────────────────
   socket.on('kick-user', async (data) => {
     if (!data || typeof data !== 'object') return;
@@ -521,27 +542,8 @@ module.exports = function register(socket, ctx) {
 
     const reason = typeof data.reason === 'string' ? data.reason.trim().slice(0, 500) : '';
 
-    for (const [, s] of io.sockets.sockets) {
-      if (s.user && s.user.id === data.userId) {
-        s.emit('banned', { reason: 'Your account has been deleted by an admin.' });
-        s.disconnect(true);
-      }
-    }
-
-    for (const [code, users] of channelUsers) {
-      if (users.has(data.userId)) {
-        users.delete(data.userId);
-        emitOnlineUsers(code);
-      }
-    }
-    removeUserFromVoice(data.userId);
-
-    const purge = db.transaction((uid) => {
-      purgeUserCascade(uid, targetUser, socket.user.id, data.scrubMessages, reason);
-    });
-
     try {
-      purge(data.userId);
+      removeAccount(targetUser, data.scrubMessages, reason);
     } catch (err) {
       console.error('Delete user error:', err);
       return socket.emit('error-msg', 'Failed to delete user');
