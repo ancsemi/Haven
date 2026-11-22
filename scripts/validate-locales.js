@@ -96,7 +96,7 @@ function markupErrors(data, masterData) {
     if (t !== 'string' || k.startsWith('_meta')) continue;
     const value = stringAt(data, k);
     const used = tagsOf(value);
-    if (/javascript:|data:text\/html/i.test(value)) errors.push(`Key "${k}" contains a script or data address`);
+    if (/\bjavascript:|\bdata:text\/html/i.test(value)) errors.push(`Key "${k}" contains a script or data address`);
     if (!used.length) continue;
     const english = tagsOf(stringAt(masterData, k) || '');
     const allowed = new Set(english);
