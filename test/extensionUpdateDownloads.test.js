@@ -70,7 +70,7 @@ function createDownloadFixture(responses, addresses = {}) {
   };
   const context = vm.createContext({
     module: { exports: {} }, exports: {}, Buffer, URL,
-    require: name => name === 'node:https' ? https : name === 'node:dns' ? dns : require(name),
+    require: name => name === 'node:https' ? https : name === 'node:dns' ? dns : require(name.startsWith('./') ? '../src/' + name.slice(2) : name),
     Date: { now: () => clock },
     setTimeout(handler, duration) {
       const id = ++nextTimer;
