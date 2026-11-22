@@ -141,7 +141,7 @@ const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTran
 const { initFerry, stopFerry } = require('./src/ferry');
 const { threadExtras: forumBlogThreadExtras } = require('./src/forumBlog');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
-const { CREATOR_NOT_BANNED_SQL } = require('./src/botAccess');
+const { CREATOR_NOT_BANNED_SQL, tokenStillReaches } = require('./src/botAccess');
 const { cleanWebhookName, cleanWebhookAvatarUrl } = require('./src/webhookFields');
 const { validHighScore, isKnownGame } = require('./src/highScores');
 const protectedMessages = require('./src/protectedMessages');
@@ -1693,9 +1693,13 @@ app.get('/api/webhooks/:token', webhookLimiter, (req, res) => {
 // Same rule as getWebhookByToken: a banned person's bots stop posting.
 function findWebhook(token) {
   if (!token || typeof token !== 'string' || token.length !== 64) return null;
-  return require('./src/database').getDb().prepare(
-    `SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0 AND ${CREATOR_NOT_BANNED_SQL}`
+  const db = require('./src/database').getDb();
+  const row = db.prepare(
+    `SELECT w.*, c.code as channel_code, c.name as channel_name, c.role_gate FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0 AND ${CREATOR_NOT_BANNED_SQL}`
   ).get(token) || null;
+  // The token stops working once its maker can no longer open the channel
+  // (src/botAccess.js).
+  return row && tokenStillReaches(db, row) ? row : null;
 }
 
 // A bot can send files with its message as multipart/form-data
@@ -2622,14 +2626,15 @@ const automod = require('./src/routes/automodRelay')({
 function getWebhookByToken(token) {
   if (!token || typeof token !== 'string' || token.length !== 64) return null;
   const { getDb } = require('./src/database');
-  return getDb().prepare(`
+  const row = getDb().prepare(`
     SELECT w.id, w.name, w.channel_id, w.callback_url, w.can_moderate,
-           w.can_use_voice, w.created_by, c.code AS channel_code
+           w.can_use_voice, w.created_by, c.code AS channel_code, c.role_gate
     FROM webhooks w
     LEFT JOIN channels c ON c.id = w.channel_id
     WHERE w.token = ? AND w.is_active = 1 AND COALESCE(c.is_dm, 0) = 0
       AND ${CREATOR_NOT_BANNED_SQL}
   `).get(token);
+  return row && tokenStillReaches(getDb(), row) ? row : undefined;
 }
 
 function getBotCurrentVoiceChannel(webhookId) {
