@@ -598,7 +598,7 @@ module.exports = function register(socket, ctx) {
           `SELECT u.id, u.username, u.display_name FROM users u
            WHERE u.id IN (${ph}) AND u.is_admin = 0 AND u.id != ?
              AND NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
-                             WHERE ur.user_id = u.id AND r.auto_assign = 0)`
+                             WHERE ur.user_id = u.id AND r.auto_assign = 0 AND r.level > 0)`
         ).all(...requested, socket.user.id);
       } catch (err) {
         console.error('bulk-remove-users select error:', err);
@@ -686,11 +686,12 @@ module.exports = function register(socket, ctx) {
     // Hard exclusions keep staff safe no matter what filters are set. A
     // deliberately-granted (non-auto-assign) role marks staff; the default role
     // every account receives on registration is auto_assign and must not shield
-    // a bot from cleanup.
+    // a bot from cleanup. Neither does a group (level 0), which anyone can
+    // give themselves.
     const where = [
       'u.is_admin = 0',
       'u.id != @actorId',
-      'NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id AND r.auto_assign = 0)'
+      'NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id AND r.auto_assign = 0 AND r.level > 0)'
     ];
     const params = { actorId: socket.user.id };
     if (joinedWithinHours) { where.push("u.created_at >= datetime('now', @joinWindow)"); params.joinWindow = `-${joinedWithinHours} hours`; }
