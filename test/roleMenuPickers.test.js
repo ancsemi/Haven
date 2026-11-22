@@ -82,3 +82,16 @@ test('the server lists who holds each role the menu hands out, live and on load'
   const withMenu = (await history).messages.find(m => m.roleMenu);
   assert.deepEqual(withMenu.roleMenu.pickers[water], { names: [], total: 0 }, 'a reaction left behind by a role someone no longer holds is not listed');
 });
+
+test('each button shows how many people picked its role, and a live update changes the number', () => {
+  const html = app._renderRoleMenu(7, { roles, held: [], pickers: { 1: { names: ['ann', 'bob'], total: 9 }, 2: { names: [], total: 0 } } });
+  assert.match(html, /data-role-id="1"[\s\S]*?<span class="rm-count">9<\/span>/);
+  assert.match(html, /data-role-id="2"[\s\S]*?<span class="rm-count"><\/span>/, 'nothing for a role nobody picked');
+  assert.match(app._renderRoleMenu(8, { roles, held: [] }), /<span class="rm-count"><\/span>/, 'nothing when the server sends no numbers');
+  const count = { textContent: '' };
+  buttons = [{ ...fakeButton(7, 1, false), querySelector: (sel) => (sel === '.rm-count' ? count : null) }];
+  app._refreshRoleMenuPickers(7, { 1: { names: ['ann'], total: 12 } });
+  assert.equal(count.textContent, '12');
+  app._refreshRoleMenuPickers(7, { 1: { names: [], total: 0 } });
+  assert.equal(count.textContent, '');
+});

@@ -1266,6 +1266,8 @@ html.reduce-motion .forum-unread-dot { animation: none; }
 /* A held gradient role fills the button with its gradient. */
 .role-menu-btn.held { background: var(--role-fill, var(--role-c, var(--accent))); color: #fff; }
 .role-menu-btn .rm-state { opacity: 0.8; font-weight: 700; }
+.role-menu-btn .rm-count { font-size: 0.8em; font-weight: 600; opacity: 0.75; font-variant-numeric: tabular-nums; }
+.role-menu-btn .rm-count:empty { display: none; }
 .role-menu-btn:disabled { opacity: 0.6; cursor: wait; }
 
 /* A bot's managers and channels on the Bots page (app-bot-accounts.js) */

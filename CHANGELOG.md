@@ -47,6 +47,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 
 ### Fixed
+- Role menus show how many people picked each role again, as a number on its button (reported by QUAKEMAN). The count went missing when the row of reaction chips under a role menu was removed in 4.29; hovering a button still lists who.
 - With AI link checks on, one very long crafted message could hold the server up for a second or two. The link check now reads long text in pieces.
 - Auto-cleanup follows the files of the messages it deletes. It trusted any file path written in a message, so a message naming someone's avatar, an emoji or a sound could take that file with it when it was cleaned up. It now only removes real message attachments that nothing else uses.
 - The admin recovery page now has the same limit on wrong passwords per account as the login page.
