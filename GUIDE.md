@@ -947,6 +947,21 @@ static-auth-secret=YOUR_RANDOM_SECRET_HERE
 # Only if coturn is behind a router (home server, NAT'd VM, Docker bridge).
 # Leave this out when the machine holds its public IP directly.
 external-ip=YOUR_PUBLIC_IP
+
+# Every signed-in Haven member is given a login for this relay. These lines
+# stop a member from using it to reach this machine or the rest of your
+# local network; a relay only needs to reach people out on the internet.
+no-multicast-peers
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
 ```
 
 Then add to your Haven `.env`:
