@@ -47,6 +47,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 
 ### Fixed
+- Phone and browser notifications went to everyone with a membership in the channel, which included banned accounts and people the channel's required roles keep out. They now go only to people who can open the channel, and a banned account can no longer sign a device up for them.
 - Guests can no longer join groups, which could open channels outside the ones the admin chose for guests. Joining a group no longer protects an account from the bulk remove tool. Only the admin sets a role's upload limit.
 - The Admin role no longer carries the admin-only permissions (transfer admin, manage roles, manage server, delete channel, view all channels). The admin has those without the role, and on the role they passed to anyone else it was given to. Existing servers have them taken off once at startup; a permission the admin puts back on purpose stays.
 - A welcome message for a new member did not mark its channel unread until the app was reloaded (reported by quakeman00, #5930). It now counts as unread right away in a channel you do not have open.
