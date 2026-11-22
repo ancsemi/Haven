@@ -622,6 +622,9 @@
   font-size: 0.8125rem;
 }
 .soundboard-btn.hidden-sound { opacity: 0.4; }
+.soundboard-btn { user-select: none; }
+.soundboard-btn.sb-dragging { opacity: 0.5; cursor: grabbing; }
+.soundboard-btn.sb-drop-target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 /* Eye (hide/unhide) toggle on each tile. Always rendered with a reserved
    width and at low opacity so it never shifts the tile contents on hover. */
 .soundboard-btn .sb-hide-btn {

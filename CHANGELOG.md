@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.30.0] - Unreleased
 
 ### Added
+- Drag a soundboard sound onto another to put it where you want it (asked for by Raidenphantom). The order is yours alone and follows you to every device; the Soundboard panel, the pop-up and the pop-out all use it, and sounds you have not moved keep their place after the ones you have.
 - Small text: a line that starts with `-# ` shows small and muted, the way Discord does, so it also reads right in messages that come across Ferry (asked for by test1). The formatting menu has a Small text row.
 - More profile customization (thanks Bo0sted, #5900): pick a banner color in Edit Profile or let it follow your avatar, upload and crop a banner picture (with its own size limit in Uploads & Limits), and give your profile card a two-color theme it fades between.
 - Call settings everywhere (thanks Roolk, #5903): Settings has a new Voice & video page with every call setting, usable without joining a call, plus Test microphone (with Hear myself) and Test camera. The fullscreen call popup shows the same full set of settings instead of three dropdowns.
