@@ -4,6 +4,11 @@
 docker-entrypoint.sh text eol=lf
 Dockerfile text eol=lf
 * text=auto eol=lf
+# Batch files are kept with Windows line endings, byte for byte, wherever
+# they are served from (the website, a release zip, a clone). cmd.exe misreads
+# a batch file with Unix line endings: it can jump into the middle of a line
+# after a goto or a call, and run the fragments as commands.
+*.bat -text
 
 # Force UTF-8 (with a working-tree BOM) on the public landing pages and
 # anything else that holds emoji. PowerShell 5.1's Set-Content defaults to
