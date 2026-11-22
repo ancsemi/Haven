@@ -184,3 +184,24 @@ test('a banned account gets nothing from the scan routes', async () => {
   assert.equal((await call('POST /api/automod/scan', { url: 'https://example.com/' }, 'banned')).code, 401);
   assert.equal((await call('GET /api/automod/local-status', null, 'banned')).code, 401);
 });
+
+test('the link sweep reads a long message in pieces, finds a link deep inside it and stays quick on crafted text', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../src/routes/automodRelay.js'), 'utf8');
+  const piece = Number(/const SWEEP_PIECE = (\d+);/.exec(src)[1]);
+  const overlap = Number(/const SWEEP_OVERLAP = (\d+);/.exec(src)[1]);
+  const Plugin = require('../plugins/AutoModQuarantine.plugin.js');
+  const am = new Plugin();
+  const links = (text) => {
+    const found = new Set();
+    for (let at = 0; at < text.length; at += piece - overlap) am.extractUrls(text.slice(at, at + piece)).forEach(h => found.add(h.url));
+    return [...found];
+  };
+  // A link that straddles a piece boundary is still whole in the next piece.
+  for (const pad of [piece - 10, piece - overlap + 5, 3 * piece + 17, 40000]) {
+    assert.deepEqual(links('x'.repeat(pad) + ' see https://unknown-shop.net/deal ' + 'y'.repeat(5000)), ['https://unknown-shop.net/deal'], `pad ${pad}`);
+  }
+  const started = Date.now();
+  links('['.repeat(120000) + '.');
+  assert.ok(Date.now() - started < 1500, `crafted text took ${Date.now() - started} ms`);
+  assert.match(src, /for \(const \{ url \} of sweepLinks\(content\)\)/);
+});
