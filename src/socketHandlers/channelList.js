@@ -11,6 +11,12 @@ const automod = require('../automod');
 const createPermissions = require('./permissions');
 const createAsyncPermissions = require('./asyncPermissions');
 
+// A sub-channel is only open when the channel it sits under is. Left alone,
+// "not private" on the sub-channel itself would put people into the ordinary
+// sub-channels of a private channel they were never invited to.
+const OPEN_PARENT = `(parent_channel_id IS NULL OR parent_channel_id IN (
+  SELECT id FROM channels WHERE is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private')))`;
+
 // Puts an account into the channels a new member joins: the admin's default
 // join channels, or every open channel when none are set. Never a channel
 // whose code is hidden. Returns how many it joined. Also used for a new bot
@@ -27,7 +33,7 @@ function joinDefaultChannels(db, userId) {
     if (ids.length > 0) {
       const ph = ids.map(() => '?').join(',');
       targetRows = db.prepare(
-        `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') AND id IN (${ph})`
+        `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') AND ${OPEN_PARENT} AND id IN (${ph})`
       ).all(...ids);
     }
   } catch {
@@ -36,7 +42,7 @@ function joinDefaultChannels(db, userId) {
 
   if (targetRows.length === 0) {
     targetRows = db.prepare(
-      "SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') ORDER BY position, name"
+      `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') AND ${OPEN_PARENT} ORDER BY position, name`
     ).all();
   }
 
@@ -369,7 +375,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
             if (ids.length > 0) {
               const ph = ids.map(() => '?').join(',');
               targetRows = await driver.prepare(
-                `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') AND id IN (${ph})`
+                `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') AND ${OPEN_PARENT} AND id IN (${ph})`
               ).all(...ids);
             }
           } catch {
@@ -378,7 +384,7 @@ module.exports = function createChannelLists({ db, userHasPermission, roleGateAl
 
           if (targetRows.length === 0) {
             targetRows = await driver.prepare(
-              "SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') ORDER BY position, name"
+              `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') AND ${OPEN_PARENT} ORDER BY position, name`
             ).all();
           }
 
