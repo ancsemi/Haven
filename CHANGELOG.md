@@ -54,6 +54,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - A channel's right-click menu could open partly off the top of the screen, with its first items out of reach, when it fit neither below nor above the channel (most often in voice, where the menu is longer). It now stays on screen, and scrolls if the window is too short for all of it (reported by gitty).
 - In the Compact layout, the channel list shrank to a sliver on shorter windows when Join a Channel and Create Channel were showing, wherever they sat in the sidebar. Channels and Direct Messages now keep a usable height and the sidebar scrolls for the rest (reported by gitty).
 - On a phone's browser, scrolling down the login and register page kept bouncing back up to the top. The page now scrolls like any other.
+- A forum post you were writing was lost when you closed the New Post window, switched forums or reloaded, and a refused post that came back after you had left the forum was lost too (reported by gitty). Each forum now keeps its own unfinished post, title, text, tags and the 18+ mark, and brings it back the next time you press New Post. Posting it or pressing Cancel clears it.
 
 ## [4.29.0] - 2026-11-14
 

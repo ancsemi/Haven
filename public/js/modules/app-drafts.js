@@ -5,6 +5,9 @@
 
 const MAX_DRAFTS = 50;
 const MAX_LEN = 8000;
+const MAX_FORUM = 30000;
+const FORUM = 'forum:';
+const cap = (code) => (code.startsWith(FORUM) ? MAX_FORUM : MAX_LEN);
 
 export default {
 
@@ -19,7 +22,7 @@ _draftStore() {
     const saved = JSON.parse(localStorage.getItem(this._draftKey()) || '{}');
     if (saved && typeof saved === 'object') {
       for (const [code, text] of Object.entries(saved)) {
-        if (typeof text === 'string' && text) this._drafts[code] = text.slice(0, MAX_LEN);
+        if (typeof text === 'string' && text) this._drafts[code] = text.slice(0, cap(code));
       }
     }
   } catch (err) {
@@ -38,11 +41,22 @@ _draftKeep(code, text) {
   if (!code) return;
   const store = this._draftStore();
   delete store[code];
-  if (text && text.trim()) store[code] = text.slice(0, MAX_LEN);
+  if (text && text.trim()) store[code] = text.slice(0, cap(code));
   const codes = Object.keys(store);
   for (let i = 0; i < codes.length - MAX_DRAFTS; i++) delete store[codes[i]];
 },
 
+_forumDraftGet(code) {
+  try {
+    const d = JSON.parse(this._draftStore()[FORUM + code] || 'null');
+    return d && typeof d === 'object' ? d : null;
+  } catch { return null; }
+},
+_forumDraftKeep(code, d) {
+  if (!code) return;
+  this._draftKeep(FORUM + code, d && ((d.title || '').trim() || (d.body || '').trim()) ? JSON.stringify({ title: d.title || '', body: d.body || '', tags: d.tags || [], nsfw: !!d.nsfw }) : '');
+  this._draftPersist();
+},
 // Sending empties the box without an input event, so the text that went out
 // would otherwise stay saved and come back as a draft on the next visit.
 _draftSent() {
