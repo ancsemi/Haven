@@ -10,6 +10,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ### Added
 - Drag a soundboard sound onto another to put it where you want it (asked for by Raidenphantom). The order is yours alone and follows you to every device; the Soundboard panel, the pop-up and the pop-out all use it, and sounds you have not moved keep their place after the ones you have.
+- Small text: a line that starts with `-# ` shows small and muted, the way Discord does, so it also reads right in messages that come across Ferry (asked for by test1). The formatting menu has a Small text row.
+- More profile customization (thanks Bo0sted, #5900): pick a banner color in Edit Profile or let it follow your avatar, upload and crop a banner picture (with its own size limit in Uploads & Limits), and give your profile card a two-color theme it fades between.
+- Call settings everywhere (thanks Roolk, #5903): Settings has a new Voice & video page with every call setting, usable without joining a call, plus Test microphone (with Hear myself) and Test camera. The fullscreen call popup shows the same full set of settings instead of three dropdowns.
+- The quick reaction row leads with your favorites, then the reactions you use most, then the usual defaults (thanks Amnibro, #5902). A row you customized still wins, and its editor has a Reset to automatic button.
 - Pick your name color: someone who holds several colored roles can choose which one colors their name, in Settings > Role Display. Automatic (the default) uses the highest role as before. Only the name color changes; the role badge still shows the highest role in its own color.
 - Do Not Disturb now keeps your notifications quiet (asked for by TGS). While your status is Do Not Disturb the chat plays no message, mention, reply, join or leave sounds, shows no desktop pop-up, and the server sends your phone and browser no push; your own send sound and the sound you pick in Settings still play, and unread counts still show in the sidebar. Away and Invisible are unchanged, and Invisible already stays on across logins.
 - Custom theme: a switch under the color picker lets you pick the highlight color (buttons, selections, links) on its own, so it no longer has to share a hue with the background. Off by default; with it off Custom looks as before (reported by qNemo).
@@ -35,6 +39,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 
 ### Fixed
+- Searching the reaction picker finds flags and Haven's other built-in image emoji by country or name ("usa", "america", "canada"). It only looked at standard emoji before, so those searches came back empty, and an empty search now says so.
 - A name with a gradient role color now shows its gradient in the reply line above a message, instead of a single flat color.
 - A message or thread reply refused by slow mode was thrown away with the notice. It now comes back in the box to send once the wait is over (reported by TestUser).
 - When an admin switched text or media on or off for the channel you had open, the message box and its buttons stayed as they were until you changed channels. They now update right away (thanks rajuriprathik-a11y, #5909).
@@ -51,6 +56,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - A channel's right-click menu could open partly off the top of the screen, with its first items out of reach, when it fit neither below nor above the channel (most often in voice, where the menu is longer). It now stays on screen, and scrolls if the window is too short for all of it (reported by gitty).
 - In the Compact layout, the channel list shrank to a sliver on shorter windows when Join a Channel and Create Channel were showing, wherever they sat in the sidebar. Channels and Direct Messages now keep a usable height and the sidebar scrolls for the rest (reported by gitty).
 - On a phone's browser, scrolling down the login and register page kept bouncing back up to the top. The page now scrolls like any other.
+- A forum post you were writing was lost when you closed the New Post window, switched forums or reloaded, and a refused post that came back after you had left the forum was lost too (reported by gitty). Each forum now keeps its own unfinished post, title, text, tags and the 18+ mark, and brings it back the next time you press New Post. Posting it or pressing Cancel clears it.
 
 ## [4.29.0] - 2026-11-14
 
