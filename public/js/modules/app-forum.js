@@ -719,7 +719,8 @@ _forumAppendOlder(messages) {
 _openForumComposer(existing = null, draft = null) {
   const code = this.currentChannel;
   const tags = this._forumTagsOf(code);
-  const picked = new Set(existing && Array.isArray(existing.tags) ? existing.tags : (draft && draft.tags) || []);
+  draft = existing ? null : (draft || this._forumDraftGet(code));
+  const picked = new Set(existing && Array.isArray(existing.tags) ? existing.tags : ((draft && draft.tags) || []).filter(n => tags.some(tg => tg.name === n)));
   // The author can rewrite the body from here too; it goes through the
   // ordinary edit path, so it gets the same checks as any message (#5650).
   const canEditBody = !!(existing && this.user && existing.user_id === this.user.id);
@@ -751,14 +752,17 @@ _openForumComposer(existing = null, draft = null) {
       <div class="modal-footer">${canDelete ? `<button type="button" class="btn-sm btn-danger forum-post-delete" id="forum-post-delete">🗑️ ${t('forum.delete_topic')}</button>` : ''}<button type="button" class="btn-sm" id="forum-post-cancel">${t('modals.common.cancel')}</button><button type="button" class="btn-sm btn-accent" id="forum-post-go">${existing ? t('modals.common.save') : t('forum.post')}</button></div>
     </div>`;
   document.body.appendChild(overlay);
+  let titleEl;
+  const keep = () => !existing && this._forumDraftKeep(code, { title: titleEl.value, body: overlay.querySelector('#forum-post-body')?.value, tags: [...picked], nsfw: !!overlay.querySelector('#forum-post-nsfw')?.checked });
   const close = () => overlay.remove();
   overlay.querySelector('.modal-close').addEventListener('click', close);
-  overlay.querySelector('#forum-post-cancel').addEventListener('click', close);
+  overlay.querySelector('#forum-post-cancel').addEventListener('click', () => { !existing && this._forumDraftKeep(code, null); close(); });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   overlay.querySelectorAll('.forum-tag-chip').forEach(c => c.addEventListener('click', () => {
     const name = c.dataset.tag;
     if (picked.has(name)) picked.delete(name); else if (picked.size < 5) picked.add(name);
     c.classList.toggle('active', picked.has(name));
+    keep();
   }));
   const bodyInput = overlay.querySelector('#forum-post-body');
   if (bodyInput) {
@@ -791,8 +795,9 @@ _openForumComposer(existing = null, draft = null) {
     this.socket.emit('delete-message', { messageId: existing.id, attachments: this._getMessageAttachments?.(existing.id) });
     close();
   });
-  const titleEl = overlay.querySelector('#forum-post-title');
+  titleEl = overlay.querySelector('#forum-post-title');
   titleEl.focus();
+  overlay.addEventListener('input', keep);
   overlay.querySelector('#forum-post-go').addEventListener('click', () => {
     if (bodyInput && Number(bodyInput.dataset.uploading) > 0) { this._showToast(t('forum.wait_upload'), 'info'); return; }
     const title = titleEl.value.trim();
@@ -815,6 +820,7 @@ _openForumComposer(existing = null, draft = null) {
     const nsfw = !!overlay.querySelector('#forum-post-nsfw')?.checked;
     // Kept for a moment so a refusal can reopen the post as it was (#5742).
     this._forumPostDraft = { code, title, body, tags: [...picked], nsfw, at: Date.now() };
+    this._forumDraftKeep(code, null);
     // Blog mode: several pictures or files in one new post become one piece
     // each, so every one can be tagged and commented on (#5763). The post
     // keeps its text and the first file; the rest follow as the author's own
@@ -928,9 +934,8 @@ async _forumUploadIntoBody(fileList, textarea, code) {
 _forumRestoreDraft() {
   const d = this._forumPostDraft;
   this._forumPostDraft = null;
-  if (!d || Date.now() - d.at > 15000 || d.code !== this.currentChannel) return;
-  if (document.getElementById('forum-post-modal')) return;
-  this._openForumComposer(null, d);
+  if (!d || Date.now() - d.at > 15000) return;
+  d.code !== this.currentChannel ? this._forumDraftKeep(d.code, d) : (!document.getElementById('forum-post-modal') && this._openForumComposer(null, d));
 },
 
 _forumEditTopicMeta(messageId) {

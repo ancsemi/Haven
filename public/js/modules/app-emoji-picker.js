@@ -1100,6 +1100,13 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
         : this.customEmojis;
       if (customMatching.length > 0) addSection(t('emoji.categories.custom'), customMatching.map(ce => `:${ce.name}:`));
     }
+    if (!grid.firstChild) {
+      const none = document.createElement('p');
+      none.className = 'muted-text';
+      none.style.cssText = 'padding:12px;font-size:0.75rem;text-align:center';
+      none.textContent = t('emoji.no_results');
+      grid.appendChild(none);
+    }
   };
 
   renderAll('');
