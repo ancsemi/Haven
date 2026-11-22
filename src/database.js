@@ -1,6 +1,6 @@
 const { fromEnv } = require('./db');
 const { ensureSearchIndex } = require('./searchIndex');
-const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('./roleDefaults');
+const { seedDefaultRoles, createAdminRole, grantAdminRole, trimAdminRolePerms } = require('./roleDefaults');
 const { migrateGroupDmTrust } = require('./groupDmSchema');
 const { migrateSelfDms } = require('./selfDmSchema');
 const { applyDefaultUpdates } = require('./settingDefaults');
@@ -1535,6 +1535,7 @@ function initDatabase() {
       })();
     }
   } catch (err) { console.error('Admin role conversion failed:', err); }
+  try { trimAdminRolePerms(db); } catch (err) { console.error('Admin role permission trim failed:', err); }
 
   // ── Role menus: a message people react to, or click, to give themselves a role ──
   db.exec(`

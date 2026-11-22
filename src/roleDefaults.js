@@ -59,12 +59,32 @@ function getAdminRoleId(db) {
 }
 
 function createAdminRole(db, { name = 'Admin', color = '#e74c3c', icon = null } = {}) {
-  const { VALID_ROLE_PERMS } = require('./socketHandlers/helpers');
+  const { VALID_ROLE_PERMS, ADMIN_ONLY_PERMS } = require('./socketHandlers/helpers');
   const id = db.prepare("INSERT INTO roles (name, level, scope, color, icon) VALUES (?, 99, 'server', ?, ?)")
     .run(name, color, icon).lastInsertRowid;
   const insertPerm = db.prepare('INSERT OR IGNORE INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
-  VALID_ROLE_PERMS.forEach(p => insertPerm.run(id, p));
+  // Not the admin-only ones. The admin has those through is_admin, and on a
+  // role they would pass to anyone, or any bot, the role was later given to.
+  VALID_ROLE_PERMS.filter(p => !ADMIN_ONLY_PERMS.includes(p)).forEach(p => insertPerm.run(id, p));
   return id;
+}
+
+/**
+ * One-time: Admin roles made before the rule above also hold the admin-only
+ * permissions. Take them off. The admin loses nothing.
+ */
+function trimAdminRolePerms(db) {
+  if (db.prepare("SELECT 1 FROM server_settings WHERE key = 'admin_role_perms_trimmed'").get()) return;
+  const { ADMIN_ONLY_PERMS } = require('./socketHandlers/helpers');
+  db.transaction(() => {
+    const id = getAdminRoleId(db);
+    if (id) {
+      const marks = ADMIN_ONLY_PERMS.map(() => '?').join(',');
+      const n = db.prepare(`DELETE FROM role_permissions WHERE role_id = ? AND permission IN (${marks})`).run(id, ...ADMIN_ONLY_PERMS).changes;
+      if (n) console.log(`[roles] Took ${n} admin-only permission(s) off the Admin role; the admin keeps them without it`);
+    }
+    db.prepare("INSERT OR REPLACE INTO server_settings (key, value) VALUES ('admin_role_perms_trimmed', '1')").run();
+  })();
 }
 
 /** Give the Admin role to someone who has just become admin. */
@@ -77,4 +97,4 @@ function grantAdminRole(db, userId) {
   }
 }
 
-module.exports = { MEMBER_PERMS, MOD_PERMS, CHANNEL_MOD_PERMS, seedDefaultRoles, getAdminRoleId, createAdminRole, grantAdminRole };
+module.exports = { MEMBER_PERMS, MOD_PERMS, CHANNEL_MOD_PERMS, seedDefaultRoles, getAdminRoleId, createAdminRole, grantAdminRole, trimAdminRolePerms };
