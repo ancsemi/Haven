@@ -152,11 +152,12 @@ module.exports = function registerLinkPreview(deps) {
       return res.status(500).json({ error: PREVIEW_FAILED });
     }
 
-    const userId = await mediaProxy.verifyTokenAsync((req.query.mt || '').trim());
+    // ?mt[]=x arrives as an array: anything that is not text is no token.
+    const userId = await mediaProxy.verifyTokenAsync(typeof req.query.mt === 'string' ? req.query.mt.trim() : '');
     if (!userId) return res.status(401).json({ error: 'Invalid or expired media token' });
     if (!_mediaRateOk(userId)) return res.status(429).json({ error: 'Rate limited' });
 
-    const url = (req.query.url || '').trim();
+    const url = typeof req.query.url === 'string' ? req.query.url.trim() : '';
     if (!url || url.length > 2048) return res.status(400).json({ error: 'Missing or oversized url' });
 
     // Serve straight from disk when we already hold it: no upstream request,

@@ -58,7 +58,7 @@ server. They are also on [YouTube](https://www.youtube.com/@Haven-App_Tutorials)
 Apps and browser talk to the same server and see the same thing, so nobody has to
 install anything to be included.
 
-**Want to look around first?** The [community server](https://haven.moviethingy.xyz/?invite=da0b9be7)
+**Want to look around first?** The [community server](https://community.haven-app.com/?invite=da0b9be7)
 is open, no code needed, just sign up. Volunteer-hosted, thanks MutantRabbit.
 
 ---

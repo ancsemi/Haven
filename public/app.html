@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.29.99">
+  <link rel="stylesheet" href="/css/style.css?v=4.29.102">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.27.20"></script>
 </head>
@@ -1594,7 +1594,8 @@
           <div class="settings-nav-item settings-nav-admin" data-target="section-tags-admin" style="display:none">🏷️ <span data-i18n="settings.nav.tags">Tags</span></div>
 
           <div class="settings-nav-group-label settings-nav-admin" style="display:none" data-i18n="settings.nav.group_integrations">Integrations</div>
-          <div class="settings-nav-item settings-nav-admin" data-target="section-bots" style="display:none">🤖 <span data-i18n="settings.nav.bots">Bots</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-bots" style="display:none">🪝 <span data-i18n="settings.nav.bots">Webhooks</span></div>
+          <div class="settings-nav-item settings-nav-admin" data-target="section-bot-accounts" style="display:none">🤖 <span data-i18n="settings.nav.bot_accounts">Bots</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-ferry" style="display:none">🛶 <span data-i18n="settings.nav.ferry">Ferry</span></div>
           <div class="settings-nav-item settings-nav-admin" data-target="section-import" style="display:none">📦 <span data-i18n="settings.nav.import">Import</span></div>
 
@@ -3865,15 +3866,24 @@
           </div>
         </div>
 
-        <!-- Webhooks / Bots (Admin only) -->
+        <!-- Webhooks -->
         <div class="admin-settings" id="section-bots" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-          <h5 class="settings-section-subtitle">🤖 <span data-i18n="settings.admin.bots_title">Webhooks / Bots</span></h5>
-          <small class="settings-hint" data-i18n="settings.admin.bots_hint">Create and manage webhook bots that can post messages to channels.</small>
+          <h5 class="settings-section-subtitle">🪝 <span data-i18n="settings.admin.bots_title">Webhooks</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.bots_hint">Create and manage webhooks that post messages to a channel.</small>
           <div style="margin-top:8px;">
-            <button class="btn-sm btn-full btn-accent" id="open-bot-editor-btn">⚙️ <span data-i18n="settings.admin.manage_bots_btn">Manage Bots</span></button>
+            <button class="btn-sm btn-full btn-accent" id="open-bot-editor-btn">⚙️ <span data-i18n="settings.admin.manage_bots_btn">Manage Webhooks</span></button>
           </div>
           <div id="webhooks-list" style="margin-top:8px;">
-            <p class="muted-text" data-i18n="settings.admin.no_bots">No bots configured</p>
+            <p class="muted-text" data-i18n="settings.admin.no_bots">No webhooks configured</p>
+          </div>
+        </div>
+
+        <!-- Bots: member accounts a program signs in to with a token -->
+        <div class="admin-settings" id="section-bot-accounts" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🤖 <span data-i18n="bot_accounts.section_title">Bots</span></h5>
+          <small class="settings-hint" data-i18n="bot_accounts.section_hint">Bots are accounts a program signs in to with a token. Like any member, their roles decide what they can do.</small>
+          <div style="margin-top:8px;">
+            <button class="btn-sm btn-full btn-accent" id="open-bot-accounts-btn">⚙️ <span data-i18n="bot_accounts.open_btn">Manage Bots</span></button>
           </div>
         </div>
 
@@ -4353,17 +4363,34 @@
     </div>
   </div>
 
-  <!-- Bot Management Modal -->
+  <!-- Bot accounts -->
+  <div class="modal-overlay" id="bot-account-modal" style="display:none">
+    <div class="modal modal-wide">
+      <h3>🤖 <span data-i18n="bot_accounts.title">Bots</span></h3>
+      <div class="role-editor-layout">
+        <div class="role-sidebar">
+          <div id="bot-account-list" class="role-list-sidebar"></div>
+          <button class="btn-sm btn-accent btn-full" id="create-bot-account-btn" data-i18n="bot_accounts.new_btn" style="margin-top:8px;display:none">+ New Bot</button>
+        </div>
+        <div class="role-detail" id="bot-account-detail"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" id="close-bot-account-modal-btn" data-i18n="modals.common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Webhook Management Modal -->
   <div class="modal-overlay" id="bot-modal" style="display:none">
     <div class="modal modal-wide">
-      <h3>🤖 <span data-i18n="modals.bot_mgmt.title">Bot Management</span></h3>
+      <h3>🪝 <span data-i18n="modals.bot_mgmt.title">Webhooks</span></h3>
       <div class="role-editor-layout">
         <div class="role-sidebar">
           <div id="bot-list-sidebar" class="role-list-sidebar"></div>
-          <button class="btn-sm btn-accent btn-full" id="create-bot-btn" data-i18n="modals.bot_mgmt.new_bot_btn" style="margin-top:8px;">+ New Bot</button>
+          <button class="btn-sm btn-accent btn-full" id="create-bot-btn" data-i18n="modals.bot_mgmt.new_bot_btn" style="margin-top:8px;">+ New Webhook</button>
         </div>
         <div class="role-detail" id="bot-detail-panel">
-          <p class="muted-text" style="padding:20px;text-align:center" data-i18n="modals.bot_mgmt.select_or_create">Select a bot to edit, or create a new one</p>
+          <p class="muted-text" style="padding:20px;text-align:center" data-i18n="modals.bot_mgmt.select_or_create">Select a webhook to edit, or create a new one</p>
         </div>
       </div>
       <div class="modal-actions">
@@ -5637,7 +5664,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.29.101"></script>
+  <script type="module" src="/js/app.js?v=4.29.103"></script>
   <script src="/js/plugin-loader.js?v=4.29.63"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn, execSync } = require('child_process');
 const os = require('os');
+const crypto = require('crypto');
 
 const HAVEN_DIR = path.resolve(__dirname, '..');
 const IS_WIN = process.platform === 'win32';
@@ -18,8 +19,56 @@ const DATA_DIR = IS_WIN
 // from Settings, because a backup can be many gigabytes.
 const UPLOADED_BACKUP = path.join(DATA_DIR, 'tmp-restore', 'installer-backup.zip');
 
+// ── Only the installer's own page may drive it ────────────
+// This server can create the admin account and restore a backup, and it
+// listens on this computer while setup is open. Any other website open in
+// the same browser can send requests to an address on this computer, so
+// "the request came from this computer" proves nothing. Two checks:
+//
+//   - a key made for this run, written into the page when it is served and
+//     sent back in a header with every request. Another site cannot read
+//     this page, so it cannot learn the key, and a browser will not let it
+//     send the header;
+//   - the address the browser asked for must be this server's own. That
+//     stops a site whose name is pointed at 127.0.0.1 from loading the page
+//     (and the key) as if it were its own.
+const RUN_KEY = crypto.randomBytes(24).toString('hex');
+const KEY_HEADER = 'x-haven-installer';
+
+function ownAddress(req) {
+  const port = server.address() && server.address().port;
+  const hosts = [`127.0.0.1:${port}`, `localhost:${port}`];
+  if (!hosts.includes(String(req.headers.host || '').toLowerCase())) return false;
+  const origin = req.headers.origin;
+  return !origin || hosts.some(h => origin === `http://${h}`);
+}
+
+function hasRunKey(req) {
+  const sent = Buffer.from(String(req.headers[KEY_HEADER] || ''));
+  const want = Buffer.from(RUN_KEY);
+  return sent.length === want.length && crypto.timingSafeEqual(sent, want);
+}
+
 // ── Serve the installer HTML ──────────────────────────────
-const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+// The page gets the key and sends it with every request it makes.
+const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8').replace('<head>', `<head>
+<script>
+(function () {
+  var key = '${RUN_KEY}';
+  var realFetch = window.fetch;
+  window.fetch = function (url, options) {
+    options = options || {};
+    var headers = new Headers(options.headers || {});
+    headers.set('X-Haven-Installer', key);
+    return realFetch(url, Object.assign({}, options, { headers: headers }));
+  };
+  var realSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function () {
+    this.setRequestHeader('X-Haven-Installer', key);
+    return realSend.apply(this, arguments);
+  };
+})();
+</script>`);
 
 // ── HTTP Server ───────────────────────────────────────────
 const server = http.createServer((req, res) => {
@@ -28,11 +77,19 @@ const server = http.createServer((req, res) => {
   if (host !== '127.0.0.1' && host !== '::1' && host !== '::ffff:127.0.0.1') {
     res.writeHead(403); res.end('Forbidden'); return;
   }
+  if (!ownAddress(req)) {
+    res.writeHead(403); res.end('Forbidden'); return;
+  }
 
   if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY' });
     res.end(indexHtml);
     return;
+  }
+
+  // Everything past the page itself needs this run's key.
+  if (!hasRunKey(req)) {
+    res.writeHead(403); res.end('Forbidden'); return;
   }
 
   if (req.method === 'GET' && req.url === '/api/check') {

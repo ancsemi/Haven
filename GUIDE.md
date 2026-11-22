@@ -947,6 +947,21 @@ static-auth-secret=YOUR_RANDOM_SECRET_HERE
 # Only if coturn is behind a router (home server, NAT'd VM, Docker bridge).
 # Leave this out when the machine holds its public IP directly.
 external-ip=YOUR_PUBLIC_IP
+
+# Every signed-in Haven member is given a login for this relay. These lines
+# stop a member from using it to reach this machine or the rest of your
+# local network; a relay only needs to reach people out on the internet.
+no-multicast-peers
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
 ```
 
 Then add to your Haven `.env`:
@@ -1603,7 +1618,7 @@ Haven has a built-in bot API powered by webhooks. Bots can send messages, edit a
 
 ### Creating a Bot
 
-1. Go to **Settings → Admin → Bots** (or open a channel's settings and look for the webhook/bot option)
+1. Go to **Settings → Bots & data → Webhooks** (or open a channel's settings and look for the webhook option)
 2. Create a new webhook. Give it a name, optionally set an avatar URL and a callback URL
 3. Copy the **Webhook Token** (64-character hex string). This is your bot's API key
 
@@ -1676,6 +1691,90 @@ curl -F 'payload_json={"content":"Forwarded from Discord"}' \
 - Files cannot be sent with `ephemeral`, since an ephemeral message is never stored.
 
 
+### Embeds, Buttons and Dropdowns
+
+Bot messages can carry embeds, buttons and dropdowns in the same JSON shapes Discord uses, so a payload built for a Discord webhook or bot works here as it is. Add `embeds` and `components` to the Sending Messages body. `content` becomes optional when either is present.
+
+```
+POST https://your-server.com/api/webhooks/<token>
+Content-Type: application/json
+
+{
+  "embeds": [{
+    "title": "Build #12 passed",
+    "url": "https://ci.example.com/12",
+    "description": "All **412** tests green",
+    "color": 5763719,
+    "fields": [
+      { "name": "Branch", "value": "main", "inline": true },
+      { "name": "Time", "value": "3m 10s", "inline": true }
+    ],
+    "thumbnail": { "url": "https://ci.example.com/logo.png" },
+    "footer": { "text": "CI" },
+    "timestamp": "2026-11-20T10:00:00Z"
+  }],
+  "components": [
+    { "type": 1, "components": [
+      { "type": 2, "style": 1, "label": "Re-run", "custom_id": "rerun" },
+      { "type": 2, "style": 4, "label": "Cancel", "custom_id": "cancel", "emoji": { "name": "🛑" } },
+      { "type": 2, "style": 5, "label": "Open log", "url": "https://ci.example.com/12" }
+    ]},
+    { "type": 1, "components": [
+      { "type": 3, "custom_id": "notify", "placeholder": "Who should hear about failures?",
+        "min_values": 1, "max_values": 2,
+        "options": [
+          { "label": "Me", "value": "me", "description": "Just you" },
+          { "label": "The team", "value": "team", "emoji": { "name": "👥" } }
+        ] }
+    ]}
+  ]
+}
+```
+
+**Embeds** (up to 10 per message, 6000 characters across all of them): `title` (256), `description` (4096, markdown), `url`, `color` (a number, `0xRRGGBB`), `timestamp` (ISO 8601), `author` (`name`, `url`, `icon_url`), `footer` (`text`, `icon_url`), `thumbnail.url`, `image.url`, and up to 25 `fields` (`name` 256, `value` 1024, `inline`). Links must be `http` or `https`. Pictures must be `https` links (shown through the media proxy) or this server's `/uploads/` files.
+
+**Components** are up to 5 action rows (`"type": 1`). A row holds up to 5 buttons, or one dropdown:
+
+- **Button** (`"type": 2`): `style` 1 primary, 2 secondary, 3 success (green), 4 danger (red), or 5 link; a `label` (80) and/or an `emoji` (`{ "name": "👍" }`, unicode only); `disabled`. Styles 1 to 4 need a `custom_id` (100); a link button needs a `url` instead and just opens it.
+- **Dropdown** (`"type": 3`, Discord's string select): `custom_id`, 1 to 25 `options` (`label`, `value`, optional `description`, `emoji`, `default`), `placeholder` (150), `min_values` (0 to 25, default 1), `max_values` (1 to 25, default 1), `disabled`.
+
+Each `custom_id` must be unique within the message. Discord's user, role, channel and mentionable selects, premium buttons and Components V2 layouts are not supported. Buttons and dropdowns cannot be sent with `ephemeral`, but embeds can.
+
+A payload that breaks a rule is refused with `400` and the reason, for example `{ "error": "components[0].components[1].custom_id is required" }`.
+
+#### Handling clicks and picks
+
+When someone clicks a button or picks from a dropdown, Haven checks it (they can read the channel, the button exists and is not disabled, the picks are the dropdown's own values) and sends it to your bot's `callback_url`, signed like every other event:
+
+```
+POST <your callback_url>
+Content-Type: application/json
+X-Haven-Event: interaction
+X-Haven-Signature: sha256=<HMAC of the body with your callback secret>
+
+{
+  "event": "interaction",
+  "timestamp": "2026-11-20T10:01:00.000Z",
+  "channelId": "<channel code>",
+  "interaction": {
+    "id": "6f1c0a52-...",
+    "type": "component",
+    "message_id": 124,
+    "thread_id": null,
+    "custom_id": "notify",
+    "component_type": 3,
+    "values": ["me", "team"],
+    "user": { "id": 7, "username": "alice" }
+  }
+}
+```
+
+`values` is there only for a dropdown. Answer with any `2xx` within 5 seconds; otherwise the person sees "The bot did not answer". Interactions always reach the bot that posted the message, whatever its `subscribed_events`. Then reply with the API you already have:
+
+- a private answer to the person who clicked: POST with `"ephemeral": true, "recipient_id": <interaction.user.id>`
+- a message everyone sees: POST as usual, with `"reply_to": <message_id>` if you like
+- change the message itself (a vote count, a greyed-out button): PATCH it, below
+
 ### Editing Messages
 
 ```
@@ -1686,6 +1785,8 @@ Content-Type: application/json
 ```
 
 A bot can edit the messages it posted itself (use the `message_id` it got back when posting), and nobody else's. The message shows as edited. Returns `{ "success": true, "message_id": 124 }`.
+
+The body may also hold `embeds` and `components`, which replace the message's own; an empty list (`"components": []`) removes them, and leaving the key out keeps them. `content` can be left out when only those change, and `"content": ""` removes the text as long as an embed or component is left.
 
 ### Deleting Messages
 
@@ -1803,6 +1904,51 @@ X-Haven-Signature: sha256=<HMAC of the body with your callback secret>
 - Bot posts (its own included) are not sent back, so a bot cannot loop on itself.
 - DMs never reach a bot, and a bot only hears its channel while the person who made it can still read that channel.
 - The callback URL must be reachable from the server. A bot on your own network (`192.168.x`, `localhost`, a sibling Docker container) needs `HAVEN_ALLOW_PRIVATE_CALLBACKS=true` in `.env`. A failed delivery is retried once, and the last result shows on the bot's card in Settings.
+
+### Bot Accounts
+
+A webhook posts into one channel and hears it through a callback URL. A **bot account** is different: it is a member account that a program signs in to with a token, so it can do anything a member can, wherever its roles and channels let it. Use one for a bot that answers commands in many channels, reads threads, looks people up, or sets its own picture and status.
+
+**Making one.** Settings → Admin → Bots & data → **Bots** → Manage Bots → **+ New Bot**. This needs the **Bot Manager** permission (or the admin). The new bot gets the roles that are given to every new member, and joins the channels a new member joins. The page then shows:
+
+- **Token**: shown once, when the bot is made or a new one is made. Copy it then. If it is lost, **Make new token**: the old one stops working at once and the bot is signed out. Tokens never expire.
+- **Name and Picture**: a bot's name follows the username rules (3 to 20 letters, numbers or underscores) and must be free. The bot can rename itself too.
+- **Enable / Disable**: while disabled, its token is refused and it is signed out. Enabling it again brings the same token back.
+- **Bot Creators**: people who may change the token, name and picture and turn the bot on or off, without any other permission. Whoever made the bot is one too. They see the Bots page in Admin settings with only their own bots on it. Only the admin and Bot Managers change this list.
+- **Channels**: add or remove the bot with the same rules as a channel's Manage members.
+- **Manage this bot's roles**: shown to people who can manage anyone's roles. Bot Creators cannot change a bot's roles.
+- **Delete**: a Bot Manager may delete a bot that has never posted. Once it has posted, only the admin can, and its messages are deleted with it.
+
+A bot account has no password and cannot sign in on the login page. Its messages and its entry in the member list carry a **BOT** tag.
+
+**Connecting.** A bot uses the same Socket.IO connection as the app, with the token as `auth.token`:
+
+```js
+const { io } = require('socket.io-client');
+const socket = io('https://your-server.com', { auth: { token: process.env.HAVEN_BOT_TOKEN } });
+socket.on('session-info', (me) => console.log('signed in as', me.username, me.botAccount));
+socket.emit('get-channels');
+socket.on('new-message', ({ channelCode, message }) => { /* answer commands */ });
+```
+
+From there it uses the app's own events, as a member does: `join-channel`, `send-message`, `send-thread-message`, `edit-message`, `delete-message`, `set-status`, and so on. Its picture is set with `POST /api/upload-avatar` (the token as a Bearer token) and then `set-avatar`. It renames itself with `rename-bot { botId, name }`, using its own id.
+
+**Embeds, buttons and dropdowns.** `send-message` and `send-thread-message` take the same `embeds` and `components` as a webhook (see Embeds, Buttons and Dropdowns above), and the text may be empty when there is an embed. Only bot accounts may send them. A click or a pick comes straight back over the bot's connection, with no callback URL:
+
+```js
+socket.on('bot-interaction', ({ channelCode, interaction }) => {
+  // interaction: { id, type: 'component', message_id, thread_id, custom_id,
+  //                component_type, values, user: { id, username } }
+});
+```
+
+The person who clicked sees "This bot is offline" when the bot is not connected. To change a message's embeds or components, for example to update a count or grey a button out, send `edit-bot-parts`:
+
+```js
+socket.emit('edit-bot-parts', { messageId, components: [] }, (res) => { /* { success } or { error } */ });
+```
+
+As with a webhook's edit, a list given replaces the message's own, an empty list removes them, and a list left out stays as it is.
 
 ---
 

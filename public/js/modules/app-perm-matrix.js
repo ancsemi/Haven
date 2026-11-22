@@ -3,7 +3,7 @@ const PERM_GROUPS = [
   { key: 'moderate', perms: ['delete_message', 'delete_lower_messages', 'pin_message', 'archive_messages', 'kick_user', 'mute_user', 'ban_user', 'ban_ip', 'read_only_override'] },
   { key: 'channels', perms: ['rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels', 'manage_channel_settings', 'create_channel', 'create_temp_channel', 'delete_channel'] },
   { key: 'people', perms: ['invite_users', 'view_all_members', 'view_channel_members', 'view_all_channels', 'promote_user', 'manage_display_names', 'manage_badges'] },
-  { key: 'media', perms: ['manage_webhooks', 'use_ferry', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'manage_tags'] },
+  { key: 'media', perms: ['manage_webhooks', 'manage_bots', 'use_ferry', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'manage_tags'] },
   { key: 'server', perms: ['manage_roles', 'manage_server', 'view_audit_log'] },
 ];
 

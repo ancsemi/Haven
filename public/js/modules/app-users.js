@@ -185,7 +185,7 @@ _renderUserItem(u, scoreLookup) {
   // expect long-term presence.
   const guestBadge = u.isGuest
     ? `<span class="user-role-badge guest-badge" style="color:#888;border:1px solid #555" title="${t('users.guest_hint')}">${t('users.guest_badge')}</span>`
-    : '';
+    : u.bot ? '<span class="bot-badge">BOT</span>' : '';
 
   // Build tooltip
   const tooltipRole = u.role ? `<div class="tooltip-role" style="color:${roleColor}">● ${this._escapeHtml(u.role.name)}</div>` : '';

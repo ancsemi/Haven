@@ -1,11 +1,13 @@
 const { fromEnv } = require('./db');
 const { ensureSearchIndex } = require('./searchIndex');
-const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('./roleDefaults');
+const { seedDefaultRoles, createAdminRole, grantAdminRole, trimAdminRolePerms } = require('./roleDefaults');
 const { migrateGroupDmTrust } = require('./groupDmSchema');
 const { migrateSelfDms } = require('./selfDmSchema');
 const { applyDefaultUpdates } = require('./settingDefaults');
 const messageHighlights = require('./messageHighlights');
 const messageQuotes = require('./messageQuotes');
+const botComponents = require('./botComponents');
+const botAccounts = require('./botAccounts');
 const modCases = require('./modCases');
 const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
@@ -1421,6 +1423,12 @@ function initDatabase() {
   // ── Migration: encrypted server list for cross-device sync ──────────
   addColumn('users', 'encrypted_servers', "TEXT DEFAULT NULL");
 
+  // Bot accounts (src/botAccounts.js): a member account a program signs in
+  // to with a token, never a password.
+  addColumn('users', 'is_bot', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('users', 'bot_disabled', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('users', 'bot_created_by', 'INTEGER DEFAULT NULL');
+
   // ── Migration: send_self_destruct (#5725) ──
   // Self-destructing messages came out open to everyone. The permission that
   // now controls them starts out on every role that may delete its own
@@ -1527,6 +1535,7 @@ function initDatabase() {
       })();
     }
   } catch (err) { console.error('Admin role conversion failed:', err); }
+  try { trimAdminRolePerms(db); } catch (err) { console.error('Admin role permission trim failed:', err); }
 
   // ── Role menus: a message people react to, or click, to give themselves a role ──
   db.exec(`
@@ -1715,6 +1724,8 @@ function initDatabase() {
   applyDefaultUpdates(db);
   messageHighlights.ensureTable(db);
   messageQuotes.ensureTable(db);
+  botComponents.ensureTable(db);
+  botAccounts.ensureTable(db);
   modCases.ensureTable(db);
   migrateImportedAuthors(db);
   forumUnread.ensureTable(db);

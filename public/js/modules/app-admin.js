@@ -773,6 +773,7 @@ _syncSettingsNav() {
     'section-large-server': [],   // admin only: the relay opens ports on the host
     'section-tunnel':       ['manage_server'],
     'section-bots':         ['manage_server', 'manage_webhooks'],
+    'section-bot-accounts': ['manage_bots'],
     'section-ferry':        [],
     'section-custom-tos':   [],
     'section-import':       ['manage_server'],
@@ -797,6 +798,8 @@ _syncSettingsNav() {
     const access = settingsSectionsAccess[target];
 
     if (isAdmin) return '*';
+    // A bot's Bot Creators see the Bots page, with only their bots on it.
+    if (target === 'section-bot-accounts' && this.user?.botCreator) return '*';
     if (!access) return null;
 
     // Simple permission list: any matching permission grants full access.
