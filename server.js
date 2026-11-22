@@ -884,6 +884,14 @@ app.post('/api/push/subscribe', express.json(), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  // A banned account gets no new place to be notified. If the ban cannot be
+  // checked, refuse rather than sign the device up.
+  try {
+    if (require('./src/database').getDb().prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id)) return res.status(403).json({ error: 'Not allowed' });
+  } catch (err) {
+    console.warn('[push] could not check the ban list, refusing the subscription:', err.message);
+    return res.status(500).json({ error: 'Could not save the subscription' });
+  }
 
   const { endpoint, keys } = req.body || {};
   if (typeof endpoint !== 'string' || !endpoint || endpoint.length > 2048 ||
