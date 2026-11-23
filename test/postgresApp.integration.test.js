@@ -1149,6 +1149,134 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     assert.deepEqual(await privateRequest(custom, 'PUT', { volume: 0 }), { status: 200, body: { ok: true, name: 'Profile sound', volume: 0 } });
     assert.equal((await sounds()).find(sound => sound.name === 'Profile sound').volume, 0);
   });
+  await t.test('room posting settings reach connected members and govern their next actions', async st => {
+    const room = await db.prepare("INSERT INTO channels (name, code, type_id) VALUES ('Posting settings', 'a5500001', 1) RETURNING id, code").get();
+    const member = await fixtureAccount('RoomSettingsMember');
+    await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(room.id, member.id);
+    const admin = (await connect(adminAccount.token)).socket;
+    const viewer = (await connect(member.token)).socket;
+    st.after(async () => {
+      admin.disconnect(); viewer.disconnect();
+      await db.prepare('DELETE FROM channels WHERE id = ?').run(room.id);
+    });
+    await Promise.all([admin, viewer].map(client => emit(client, 'get-channels', 'channels-list')));
+    const slow = interval => ({ code: room.code, interval });
+    const send = (content, event) => emit(viewer, 'send-message', event, { code: room.code, content });
+    assert.match(await emit(viewer, 'set-slow-mode', 'error-msg', slow(20)), /permission/);
+
+    const live = packet(viewer, 'slow-mode-updated', data => data.code === room.code);
+    const listed = packet(viewer, 'channels-list', rows => rows.some(ch => ch.id === room.id && ch.slow_mode_interval === 20));
+    admin.emit('set-slow-mode', slow(20));
+    assert.deepEqual(await live, slow(20));
+    await listed;
+    const first = await send('first under slow mode', 'new-message');
+    assert.match(await send('too soon', 'error-msg'), /Slow mode/);
+
+    async function toggle(permission, enabled) {
+      const event = packet(viewer, 'channel-permission-updated', data => data.code === room.code);
+      admin.emit('toggle-channel-permission', { code: room.code, permission });
+      assert.deepEqual(await event, { code: room.code, permission, enabled });
+    }
+    const readOnlyList = packet(viewer, 'channels-list', rows => rows.some(ch => ch.id === room.id && ch.read_only === 1));
+    await toggle('read_only', true);
+    const readOnlyRoom = (await readOnlyList).find(ch => ch.id === room.id);
+    assert.equal(readOnlyRoom.canOverrideReadOnly, false);
+    assert.equal(readOnlyRoom.type_id, null);
+    assert.match(await send('blocked in read-only', 'error-msg'), /read-only/);
+    await toggle('read_only', false);
+    await toggle('text', false);
+    assert.match(await send('blocked in text-off', 'error-msg'), /Text messages are disabled/);
+    await toggle('reactions', false);
+    assert.match(await emit(viewer, 'add-reaction', 'error-msg', { messageId: first.message.id, emoji: '👍' }), /Reactions are disabled/);
+  });
+  await t.test('room organization respects scoped access and audit pages hide codes from moderators', async st => {
+    const addRoom = db.prepare('INSERT INTO channels (name, code, parent_channel_id, role_gate) VALUES (?, ?, ?, ?) RETURNING id, code, name');
+    const parent = await addRoom.get('Organize parent', 'a5500002', null, null);
+    const first = await addRoom.get('First child', 'a5500003', parent.id, null);
+    const second = await addRoom.get('Second child', 'a5500004', parent.id, null);
+    const editorRole = await db.prepare("INSERT INTO roles (name, scope) VALUES ('Room organizer', 'channel') RETURNING id").get();
+    const auditRole = await db.prepare("INSERT INTO roles (name, scope) VALUES ('Audit reader', 'server') RETURNING id").get();
+    const hidden = await addRoom.get('Gated child', 'a5500005', parent.id, JSON.stringify({ mode: 'all', roles: [editorRole.id] }));
+    const editor = await fixtureAccount('RoomSettingsEditor');
+    const ordinary = await fixtureAccount('RoomAuditVisitor');
+    const grant = db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
+    for (const permission of ['manage_channel_settings', 'manage_sub_channels', 'rename_sub_channel', 'set_channel_topic']) {
+      await grant.run(editorRole.id, permission);
+    }
+    await grant.run(auditRole.id, 'view_audit_log');
+    const assign = db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id) VALUES (?, ?, ?)');
+    await assign.run(editor.id, editorRole.id, parent.id);
+    await assign.run(editor.id, auditRole.id, null);
+    const membership = db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)');
+    for (const room of [parent, first, second, hidden]) await membership.run(room.id, editor.id);
+    await membership.run(first.id, ordinary.id);
+    const admin = (await connect(adminAccount.token)).socket;
+    const moderator = (await connect(editor.token)).socket;
+    const viewer = (await connect(ordinary.token)).socket;
+    st.after(async () => {
+      admin.disconnect(); moderator.disconnect(); viewer.disconnect();
+      await db.prepare('DELETE FROM channels WHERE id IN (?, ?, ?, ?)').run(hidden.id, second.id, first.id, parent.id);
+      await db.prepare('DELETE FROM roles WHERE id IN (?, ?)').run(editorRole.id, auditRole.id);
+    });
+    const [visible] = await Promise.all([moderator, viewer, admin].map(client => emit(client, 'get-channels', 'channels-list')));
+    assert.equal(visible.some(ch => ch.id === hidden.id), false);
+
+    const name = 'Renamed ' + first.code;
+    const renamed = packet(viewer, 'channel-renamed', data => data.code === first.code);
+    moderator.emit('rename-channel', { code: first.code, name });
+    assert.deepEqual(await renamed, { code: first.code, name });
+    const former = await db.prepare('SELECT former_names FROM channels WHERE id = ?').get(first.id);
+    assert.deepEqual(JSON.parse(former.former_names), [first.name]);
+
+    const topic = packet(viewer, 'channel-topic-changed', data => data.code === first.code);
+    moderator.emit('set-channel-topic', { code: first.code, topic: '  Read the room rules  ' });
+    assert.deepEqual(await topic, { code: first.code, topic: 'Read the room rules' });
+    await emit(moderator, 'set-notification-type', 'toast', { code: first.code, type: 'announcement' });
+    assert.match(await emit(moderator, 'toggle-welcome-channel', 'error-msg', { code: first.code }), /Only admins/);
+    await emit(admin, 'toggle-welcome-channel', 'toast', { code: first.code });
+
+    const sorted = packet(moderator, 'channels-list', rows => rows.some(ch => ch.id === parent.id && ch.sort_alphabetical === 4));
+    moderator.emit('set-sort-alphabetical', { code: parent.code, mode: 'dynamic' });
+    await sorted;
+    await Promise.all([
+      emit(moderator, 'set-channel-category', 'toast', { code: first.code, category: 'Organizer Notes' }),
+      emit(admin, 'set-channel-category', 'toast', { code: second.code, category: 'organizer notes' }),
+    ]);
+    const reordered = packet(moderator, 'channels-list', rows =>
+      rows.find(ch => ch.id === first.id)?.position === 2 && rows.find(ch => ch.id === second.id)?.position === 1);
+    moderator.emit('reorder-channels', { order: [{ code: first.code, position: 2 }, { code: second.code, position: 1 }] });
+    await reordered;
+    for (const other of [parent, hidden]) {
+      assert.match(await emit(moderator, 'reorder-channels', 'error-msg', {
+        order: [{ code: first.code, position: 20 }, { code: other.code, position: 21 }],
+      }), /permission/);
+    }
+    const [savedFirst, savedSecond] = await db.prepare(
+      'SELECT position, category, notification_type, show_welcome FROM channels WHERE id IN (?, ?) ORDER BY id'
+    ).all(first.id, second.id);
+    assert.equal(savedFirst.position, 2);
+    assert.equal(savedSecond.position, 1);
+    assert.equal(savedFirst.category.toLowerCase(), 'organizer notes');
+    assert.equal(savedSecond.category, savedFirst.category);
+    assert.equal(savedFirst.notification_type, 'announcement');
+    assert.equal(savedFirst.show_welcome, 1);
+
+    const audit = (client, opts) => client.timeout(10000).emitWithAck('get-audit-log', opts);
+    assert.deepEqual(await audit(viewer, {}), { error: 'Permission denied' });
+    const renameFilter = { action: 'channel_rename', actorUsername: 'ROOMSETTINGSEDITOR' };
+    const adminRows = await audit(admin, renameFilter);
+    assert.deepEqual(JSON.parse(adminRows.rows[0].details), { code: first.code, oldName: first.name, newName: name });
+    const modRows = await audit(moderator, renameFilter);
+    assert.equal(modRows.rows[0].target_name, 'Renamed (code hidden)');
+    assert.equal(JSON.parse(modRows.rows[0].details).code, '(code hidden)');
+    assert.ok(modRows.actions.includes('channel_setting_update'));
+    const filter = { action: 'channel_setting_update', actorUsername: editor.username, limit: 1 };
+    const page = await audit(moderator, filter);
+    assert.equal(page.hasMore, true);
+    assert.equal(JSON.parse(page.rows[0].details).setting, 'notification_type');
+    const older = await audit(moderator, { ...filter, beforeId: page.rows[0].id });
+    assert.equal(JSON.parse(older.rows[0].details).setting, 'topic');
+  });
   await t.test('a restart preserves identities, settings and the default room', async () => {
     const before = await db.prepare('SELECT value FROM server_settings WHERE key = ?').get('server_fingerprint');
     await stop();

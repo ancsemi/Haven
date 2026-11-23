@@ -15,6 +15,7 @@ const { createPostgresMessageActions } = require('./postgresMessageActions');
 const { createPostgresThreads, emitThreadRead, historyThreads } = require('./postgresThreads');
 const { createPostgresPresence, channelMembers } = require('./postgresPresence');
 const { createPostgresProfiles } = require('./postgresProfiles');
+const { createPostgresChannelSettings } = require('./postgresChannelSettings');
 const { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS } = require('./settingEffects');
 const { compatibleThemeFiles, validatedThemeDefault, themePreferenceAllowed } = require('../themeMetadata');
 const { cleanChannelOrder, deletableKeys } = require('./users');
@@ -40,6 +41,11 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     db, userHasPermission: permissions.userHasPermission, roleGateAllows: permissions.roleGateAllows,
     getUserEffectiveLevel: permissions.getUserEffectiveLevel,
   });
+  const registerChannelSettings = createPostgresChannelSettings({ io, db, permissions, broadcastChannelLists, logAudit });
+  const listSubscribers = new Set();
+  const listRequests = new WeakMap();
+  let listBroadcastRunning = false;
+  let listBroadcastAgain = false;
   const viewers = new Map();
   const floods = new Map();
   const settings = async () => Object.fromEntries((await db.prepare('SELECT key, value FROM server_settings').all()).map(row => [row.key, row.value]));
@@ -69,6 +75,50 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       next(new Error('Server error, try again'));
     }
   });
+
+  async function currentAccount(socket) {
+    const account = await db.prepare('SELECT username, is_admin FROM users WHERE id = ?').get(socket.user.id);
+    if (!account || account.username !== socket.user.username || !await verifyTokenAsync(socket.sessionToken) ||
+        await db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(socket.user.id)) return null;
+    return account;
+  }
+
+  async function sendChannelList(socket, isAdmin, shared) {
+    const request = {};
+    listRequests.set(socket, request);
+    const rooms = [];
+    const channels = await lists.getEnrichedChannelsAsync(socket.user.id, isAdmin, room => rooms.push(room), shared);
+    // A direct get-channels request can overlap a server-pushed refresh.
+    if (!socket.connected || listRequests.get(socket) !== request) return;
+    for (const room of rooms) socket.join(room);
+    socket.emit('channels-list', channels);
+  }
+
+  function broadcastChannelLists() {
+    if (listBroadcastRunning) { listBroadcastAgain = true; return; }
+    if (listSubscribers.size) runChannelListBroadcast();
+  }
+
+  async function runChannelListBroadcast() {
+    listBroadcastRunning = true;
+    try {
+      do {
+        listBroadcastAgain = false;
+        const shared = { latest: new Map() };
+        for (const socket of [...listSubscribers]) {
+          if (!socket.connected) continue;
+          try {
+            const account = await currentAccount(socket);
+            if (account && socket.connected) await sendChannelList(socket, !!account.is_admin, shared);
+          } catch (err) {
+            console.warn('[postgres-preview] channel list refresh failed:', err.code || err.message);
+          }
+        }
+      } while (listBroadcastAgain);
+    } finally {
+      listBroadcastRunning = false;
+    }
+  }
 
   async function accessible(socket, code) {
     if (typeof code !== 'string' || !/^[a-f0-9]{8}$/i.test(code)) throw new Error('Invalid channel code');
@@ -105,8 +155,8 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
           const history = (floods.get(socket.user.id) || []).filter(at => now - at < 10000);
           if (history.length >= 400) throw new Error('Too many requests');
           history.push(now); floods.set(socket.user.id, history);
-          const account = await db.prepare('SELECT username, is_admin FROM users WHERE id = ?').get(socket.user.id);
-          if (!account || account.username !== socket.user.username || !await verifyTokenAsync(socket.sessionToken) || await db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(socket.user.id)) {
+          const account = await currentAccount(socket);
+          if (!account) {
             socket.emit('session-invalidated');
             socket.disconnect(true);
             return;
@@ -128,8 +178,8 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     });
 
     on('get-channels', async () => {
-      const channels = await lists.getEnrichedChannelsAsync(socket.user.id, socket.user.isAdmin, room => socket.join(room));
-      socket.emit('channels-list', channels);
+      listSubscribers.add(socket);
+      await sendChannelList(socket, socket.user.isAdmin);
     });
     on('get-server-settings', async () => {
       const saved = await settings();
@@ -368,12 +418,14 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
     });
 
     registerProfiles(socket, on, accessible);
+    registerChannelSettings(socket, on);
     registerBootstrapReads(socket, on, db, permissions, accessible);
     registerKeys(socket, on, db, io);
     // Cosmetic presence pings do not write anything until their full feature
     // paths are migrated. They still go through session/rate checks.
     for (const event of ['visibility-change','get-my-badges','get-user-badges','get-game-activity','user-active']) on(event, async () => {});
     socket.on('disconnect', () => {
+      listSubscribers.delete(socket);
       const code = viewers.get(socket.id);
       viewers.delete(socket.id);
       presence.refreshUser(socket.user.id, code).catch(err => console.warn('[postgres-preview] presence cleanup failed:', err.code || err.message));
@@ -397,8 +449,8 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
   });
   return {
     state: { channelUsers: viewers }, activity: null,
-    logAudit, broadcastChannelLists: () => {},
-    close: () => { viewers.clear(); floods.clear(); posting.close(); },
+    logAudit, broadcastChannelLists,
+    close: () => { viewers.clear(); floods.clear(); listSubscribers.clear(); posting.close(); },
   };
 }
 
