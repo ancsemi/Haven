@@ -144,3 +144,85 @@ test('add everyone stays out of hidden-code channels and private parents, and le
 
   I.disconnect();
 });
+
+test('manage members: add and remove together, remove all, and who may remove whom', async (t) => {
+  const admin = await h.register('madmin');
+  const creator = await h.register('mcreator');
+  const mod = await h.register('mmod');
+  const senior = await h.register('msenior');
+  const one = await h.register('mone');
+  const two = await h.register('mtwo');
+  const guest = await h.register('mguest');
+  const db = new Database(path.join(h.dataDir, 'haven.db'));
+  db.pragma('busy_timeout = 5000');
+  t.after(() => db.close());
+  db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(admin.id);
+  db.prepare('UPDATE users SET is_guest = 1 WHERE id = ?').run(guest.id);
+
+  const role = (name, level, perm, shown = 1) => {
+    const id = Number(db.prepare("INSERT INTO roles (name, level, scope, color, show_on_profile) VALUES (?, ?, 'server', '#ccc', ?)").run(name, level, shown).lastInsertRowid);
+    if (perm) db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)').run(id, perm);
+    return id;
+  };
+  const give = db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id) VALUES (?, ?, NULL)');
+  give.run(mod.id, role('MInviter', 30, 'invite_users'));
+  give.run(senior.id, role('MSenior', 60, null));
+  const secret = role('MSecret', 10, null, 0);
+  give.run(one.id, secret);
+
+  const insert = db.prepare('INSERT INTO channels (name, code, created_by, is_private) VALUES (?, ?, ?, ?)');
+  const open = insert.run('plaza', 'def00001', admin.id, 0).lastInsertRowid;
+  const priv = insert.run('den', 'def00002', creator.id, 1).lastInsertRowid;
+  const join = db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)');
+  for (const u of [admin, mod, senior, one, guest]) join.run(open, u.id);
+  for (const u of [creator, one, senior]) join.run(priv, u.id);
+  // Someone left with no channel at all is put back in the public ones by
+  // the channel list, so everyone here keeps a second channel.
+  const spare = insert.run('spare', 'def00003', admin.id, 0).lastInsertRowid;
+  for (const u of [admin, creator, mod, senior, one, two]) join.run(spare, u.id);
+  const members = (id) => db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ? ORDER BY user_id').all(id).map(r => r.user_id);
+
+  const A = await h.connect(admin.token);
+  const M = await h.connect(mod.token);
+  const C = await h.connect(creator.token);
+  const O = await h.connect(one.token);
+
+  // The list says who each person may take out, and hides a hidden role.
+  const list = await h.ask(M, 'get-channel-add-members', { code: 'def00001' });
+  const row = (id) => list.users.find(u => u.id === id);
+  assert.ok(list.canAdd, JSON.stringify(list.error));
+  assert.strictEqual(row(one.id).removable, true, 'a member ranked below');
+  assert.strictEqual(row(senior.id).removable, false, 'someone ranked above');
+  assert.strictEqual(row(admin.id).removable, false, 'the admin');
+  assert.strictEqual(row(mod.id).removable, false, 'yourself');
+  assert.strictEqual(row(two.id).removable, false, 'not a member');
+  assert.ok(!list.users.some(u => u.id === guest.id), 'guests are the admin\'s to manage');
+  assert.ok(!list.roles.some(r => r.name === 'MSecret') && !row(one.id).roles.includes(secret), 'a hidden role stays hidden');
+  assert.ok((await h.ask(A, 'get-channel-add-members', { code: 'def00001' })).roles.some(r => r.name === 'MSecret'), 'the admin sees it');
+
+  // Add one and remove one in a single save; the ones out of reach stay.
+  const res = await h.ask(M, 'update-channel-members', { code: 'def00001', add: [two.id], remove: [one.id, senior.id, admin.id, mod.id, guest.id] });
+  assert.deepStrictEqual([res.added, res.removed], [1, 1], JSON.stringify(res));
+  assert.deepStrictEqual(members(open), [admin.id, mod.id, senior.id, two.id, guest.id].sort((a, b) => a - b));
+
+  // A plain member may do neither.
+  const refused = await h.ask(O, 'update-channel-members', { code: 'def00001', remove: [two.id] });
+  assert.ok(refused.error, JSON.stringify(refused));
+  assert.ok(members(open).includes(two.id));
+
+  // A private channel's creator removes anyone else in it, whatever their rank.
+  const byCreator = await h.ask(C, 'update-channel-members', { code: 'def00002', remove: [one.id, senior.id, creator.id] });
+  assert.strictEqual(byCreator.removed, 2, JSON.stringify(byCreator));
+  assert.deepStrictEqual(members(priv), [creator.id]);
+
+  // Remove all, by the admin: everyone but the admin goes.
+  const everyone = members(open);
+  const all = await h.ask(A, 'update-channel-members', { code: 'def00001', remove: everyone });
+  assert.strictEqual(all.removed, everyone.length - 1, JSON.stringify(all));
+  assert.deepStrictEqual(members(open), [admin.id]);
+
+  assert.ok((await h.ask(A, 'update-channel-members', { code: 'def00001', add: [], remove: [] })).error, 'nothing to do');
+  assert.ok((await h.ask(A, 'update-channel-members', { code: 'def00001', add: ['x'] })).error, 'ids only');
+
+  A.disconnect(); M.disconnect(); C.disconnect(); O.disconnect();
+});

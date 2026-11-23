@@ -101,15 +101,15 @@ function issueToken(userId, pwv = 1) {
 }
 
 // A token outlives the session it came from by up to two days, so it is only
-// honoured while the account still exists and is not banned. Returns the
-// account's password version, or null. A failed check refuses the token
-// rather than serving a possibly banned account.
+// honoured while the account still exists, is not banned and is not a
+// disabled bot. Returns the account's password version, or null. A failed
+// check refuses the token rather than serving a possibly banned account.
 let _accountCheckWarnedAt = 0;
 function _accountPwv(userId, db) {
   try {
     const conn = db || require('./database').getDb();
-    const row = conn.prepare('SELECT password_version FROM users WHERE id = ?').get(userId);
-    if (!row) return null;
+    const row = conn.prepare('SELECT password_version, bot_disabled FROM users WHERE id = ?').get(userId);
+    if (!row || row.bot_disabled) return null;
     if (conn.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(userId)) return null;
     return Number(row.password_version) || 1;
   } catch (err) {
@@ -146,8 +146,8 @@ function verifyToken(token, db = null) {
 async function _accountPwvAsync(userId, db) {
   try {
     const conn = db || require('./database').getAsyncDb();
-    const row = await conn.prepare('SELECT password_version FROM users WHERE id = ?').get(userId);
-    if (!row) return null;
+    const row = await conn.prepare('SELECT password_version, bot_disabled FROM users WHERE id = ?').get(userId);
+    if (!row || row.bot_disabled) return null;
     if (await conn.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(userId)) return null;
     return Number(row.password_version) || 1;
   } catch (err) {

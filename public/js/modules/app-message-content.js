@@ -605,6 +605,7 @@ _formatContent(str, opts) {
     const level = hashes.length;
     return `${pre}<div class="chat-heading chat-h${level}">${text}</div>`;
   });
+  html = html.replace(/(^|\n)-#[ \t]+([^\n]+)/g, '$1<small class="chat-subtext">$2</small>');
 
   // ── Horizontal rules: --- or ___ on their own line (3+ chars) ──
   html = html.replace(/(^|\n)([-]{3,}|[_]{3,})\s*(?=\n|$)/g, '$1<hr class="chat-hr">');
@@ -957,13 +958,15 @@ _renderReplyBanner(replyCtx) {
   let color = this._getUserColor(replyCtx.username);
   const ownName = !replyCtx.is_webhook && !replyCtx.imported_from && !replyCtx.persona_username;
   const member = ownName ? this._memberById?.(replyCtx.user_id) : null;
-  if ((localStorage.getItem('haven-role-display') || 'colored-name') === 'colored-name' && member?.role?.color) {
-    color = this._safeColor(member.role.color, color);
-  }
+  const role = (localStorage.getItem('haven-role-display') || 'colored-name') === 'colored-name' && member?.role?.color ? member.role : null;
+  if (role) color = this._safeColor(role.color, color);
+  // A gradient role paints the name here as it does on the message.
+  const name = this._getNickname(replyCtx.user_id, replyCtx.username);
+  const nameHtml = role ? this._roleNameHtml(role, name) : this._escapeHtml(name);
   return `
     <div class="reply-banner" data-reply-msg-id="${replyCtx.id}">
       <span class="reply-line" style="background:${color}"></span>
-      <span class="reply-author" style="color:${color}">${this._escapeHtml(this._getNickname(replyCtx.user_id, replyCtx.username))}</span>
+      <span class="reply-author" style="color:${color}">${nameHtml}</span>
       <span class="reply-preview">${this._escapeHtml(previewText)}</span>
     </div>
   `;
@@ -1189,7 +1192,7 @@ _startEditMessage(msgEl, msgId) {
     // in app-ui.js can't fire here because we stopPropagation above, so it's
     // re-handled locally; _activeEditTextarea (set above) routes the pick into
     // this textarea rather than the main composer.
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === 'e') {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && this._shortcutKey(e) === 'e') {
       e.preventDefault();
       this._activeEditTextarea = textarea;
       this._toggleEmojiPicker();

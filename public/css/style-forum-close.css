@@ -1,0 +1,21 @@
+/* Close topic / Reopen topic: a labeled button on a forum card, in the open
+   topic's header, and an Open | Closed switch in the edit window. */
+.forum-topic-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 0.5rem; }
+.forum-close-btn {
+  display: inline-flex; align-items: center; gap: 0.3rem; flex: none;
+  padding: 0.15rem 0.55rem; border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--text-secondary); font: inherit; font-size: 0.75rem;
+  line-height: 1.4; white-space: nowrap; cursor: pointer;
+}
+.forum-close-btn:hover { border-color: var(--accent); color: var(--accent); }
+/* Picture cards are narrow: the lock alone, with the words in its tooltip. */
+.messages.forum-gallery .forum-close-btn span { display: none; }
+.thread-forum-bar .forum-close-btn, .thread-panel .forum-close-btn { font-size: 0.8rem; padding: 0.25rem 0.7rem; }
+
+.forum-state-field small { color: var(--text-muted); font-size: 0.75rem; }
+.forum-state-switch { display: inline-flex; align-self: flex-start; border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
+.forum-state-switch label { cursor: pointer; }
+.forum-state-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.forum-state-switch label span { display: block; padding: 0.35rem 0.9rem; font-size: 0.85rem; color: var(--text-secondary); }
+.forum-state-switch input:checked + span { background: var(--accent); color: var(--accent-text, #fff); font-weight: 600; }
+.forum-state-switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }

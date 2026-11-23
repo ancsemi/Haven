@@ -15,7 +15,7 @@ function fixture() {
   db.exec(`
     CREATE TABLE upload_ownership (rel_path TEXT PRIMARY KEY, user_id INTEGER, bytes INTEGER, scope TEXT);
     CREATE TABLE messages (id INTEGER PRIMARY KEY, content TEXT, is_archived INTEGER DEFAULT 0);
-    CREATE TABLE users (id INTEGER PRIMARY KEY, avatar TEXT, border TEXT);
+    CREATE TABLE users (id INTEGER PRIMARY KEY, avatar TEXT, border TEXT, banner TEXT);
     CREATE TABLE user_personas (id INTEGER PRIMARY KEY, avatar TEXT);
     CREATE TABLE webhooks (id INTEGER PRIMARY KEY, avatar_url TEXT);
     CREATE TABLE roles (id INTEGER PRIMARY KEY, icon TEXT);
@@ -47,6 +47,14 @@ test('only the author\'s own, unused attachments are released', () => {
   assert.deepEqual(out.sort(), ['mine-dm.bin', 'mine.png']);
 });
 
+test('a file someone uses as their banner is kept', () => {
+  const db = fixture();
+  db.prepare('INSERT INTO upload_ownership (rel_path, user_id, bytes, scope) VALUES (?, 1, 0, ?)').run('banner-pic.png', 'channel');
+  assert.deepEqual(releasableUploads(db, ['banner-pic.png'], [1]), ['banner-pic.png']);
+  db.prepare('INSERT INTO users (banner) VALUES (?)').run('/uploads/banner-pic.png');
+  assert.deepEqual(releasableUploads(db, ['banner-pic.png'], [1]), []);
+});
+
 test('someone else\'s file is never released, whoever deletes', () => {
   const db = fixture();
   assert.deepEqual(releasableUploads(db, ['theirs.png'], [1]), []);
@@ -67,4 +75,16 @@ test('a file waiting in a scheduled message is kept', () => {
   const db = fixture();
   db.prepare('INSERT INTO scheduled_messages (content) VALUES (?)').run('later\n[file:a.txt](/uploads/mine.png|1 KB)');
   assert.deepEqual(releasableUploads(db, ['mine.png'], [1]), []);
+});
+
+test('a message with no author takes the copies Ferry made, and nothing else', () => {
+  const db = fixture();
+  db.prepare('INSERT INTO upload_ownership (rel_path, user_id, bytes, scope) VALUES (?, NULL, 0, ?)').run('from-discord.png', 'channel');
+  assert.deepEqual(releasableUploads(db, ['from-discord.png', 'mine.png', 'unknown-legacy.png'], [null]), ['from-discord.png']);
+});
+
+test('a member cannot release a copy Ferry made by naming it', () => {
+  const db = fixture();
+  db.prepare('INSERT INTO upload_ownership (rel_path, user_id, bytes, scope) VALUES (?, NULL, 0, ?)').run('from-discord.png', 'channel');
+  assert.deepEqual(releasableUploads(db, ['from-discord.png'], [1]), []);
 });

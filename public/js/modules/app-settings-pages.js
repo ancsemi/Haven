@@ -2,6 +2,7 @@ const SETTINGS_PAGES = {
   user: [
     ['look', '🎨', 'settings.pages.look', 'Appearance', ['section-layout', 'section-toolbar-icons', 'section-role-display', 'section-reaction-size', 'section-banner-display', 'section-toggle-style']],
     ['chat', '💬', 'settings.pages.chat', 'Chat & media', ['section-chat-behavior', 'section-image-display', 'section-embed-size', 'section-soundboard-mode']],
+    ['voice', '🎧', 'settings.pages.voice', 'Voice & video', ['section-call-settings']],
     ['alerts', '🔔', 'settings.pages.alerts', 'Notifications', ['section-sounds', 'section-push', 'section-whats-new']],
     ['profile', '🎮', 'settings.pages.profile', 'Profile & activity', ['section-activity', 'section-score-badges']],
     ['security', '🔒', 'settings.pages.security', 'Account & security', ['section-password', 'section-e2e-passphrase', 'section-2fa', 'section-recovery', 'section-sessions', 'section-delete-account']],
@@ -17,7 +18,7 @@ const SETTINGS_PAGES = {
     ['safety', '🛡️', 'settings.pages.safety', 'Safety', ['section-moderation', 'section-automod', 'section-security', 'section-modmode', 'section-audit-log']],
     ['content', '😎', 'settings.pages.content', 'Content', ['section-emojis', 'section-stickers', 'section-gifs', 'section-sounds-admin', 'section-tags-admin', 'section-uploads', 'section-cleanup']],
     ['network', '📡', 'settings.pages.network', 'Network & scale', ['section-connectivity', 'section-large-server', 'section-tunnel']],
-    ['tools', '🤖', 'settings.pages.tools', 'Bots & data', ['section-bots', 'section-ferry', 'section-import', 'section-backup', 'section-template']]
+    ['tools', '🤖', 'settings.pages.tools', 'Bots & data', ['section-bots', 'section-bot-accounts', 'section-ferry', 'section-import', 'section-backup', 'section-template']]
   ]
 };
 export default {

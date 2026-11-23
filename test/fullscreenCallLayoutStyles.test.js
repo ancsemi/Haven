@@ -83,3 +83,125 @@ test('fullscreen sharing is green and leave is a red circle with its themed X', 
   assert.match(leave, /background:\s*var\(--danger\)/);
   assert.match(leave, /color:\s*var\(--danger-text\)/);
 });
+
+test('the stream grid covers the fullscreen tile and places its cells itself', () => {
+  const grid = declarationsFor('.fullscreen-stream-grid:not([hidden])');
+  assert.match(grid, /position:\s*absolute/);
+  assert.match(grid, /inset:\s*0/);
+
+  const cell = declarationsFor('.fullscreen-stream-cell');
+  assert.match(cell, /position:\s*absolute/);
+  assert.match(cell, /overflow:\s*hidden/);
+});
+
+test('grid cells contain their stream so a shape change before the next layout is not cropped', () => {
+  const video = declarationsFor('.fullscreen-stream-cell video');
+  assert.match(video, /object-fit:\s*contain\s*!important/);
+  assert.match(video, /width:\s*100%\s*!important/);
+  assert.match(video, /height:\s*100%\s*!important/);
+});
+
+test("while the grid shows, it covers the tile's own video and hides its label", () => {
+  // The stall watchdog counts frames of the tile's own video, and a video
+  // that is display:none may stop counting them, so it is covered, not hidden.
+  assert.match(declarationsFor('.fullscreen-stream-grid:not([hidden])'), /background:\s*#000/);
+  assert.equal(rules.some(rule => rule.selectors.some(selector => /fullscreen-grid-active > video/.test(selector))), false);
+  for (const label of [
+    '.webcam-tile.is-fullscreen.fullscreen-grid-active > .webcam-tile-label',
+    '.screen-share-tile.is-fullscreen.fullscreen-grid-active > .screen-share-tile-label',
+  ]) {
+    assert.match(declarationsFor(label), /display:\s*none\s*!important/);
+  }
+});
+
+test('the stream list is a popup like call settings, and the old dropdown is gone', () => {
+  const popover = declarationsFor('.fullscreen-stream-popover:not([hidden])');
+  assert.match(popover, /position:\s*absolute/);
+  assert.match(popover, /bottom:\s*calc\(100% \+ 0\.625rem\)/);
+  assert.match(popover, /overflow:\s*auto/);
+  assert.equal(stylesheet.includes('.fullscreen-stream-select'), false);
+});
+
+test('a grid cell is one big button that shows its stream full size', () => {
+  const focus = declarationsFor('.fullscreen-stream-cell-focus');
+  assert.match(focus, /position:\s*absolute/);
+  assert.match(focus, /inset:\s*0/);
+  assert.match(focus, /background:\s*transparent/);
+  assert.match(focus, /cursor:\s*zoom-in/);
+});
+
+test('a grid stream is ringed in the accent color on hover and keyboard focus', () => {
+  const ring = /box-shadow:\s*inset 0 0 0 2px var\(--accent\)/;
+  for (const selector of [
+    '.fullscreen-stream-cell:hover .fullscreen-stream-cell-focus',
+    '.fullscreen-stream-cell-focus:focus-visible',
+  ]) assert.match(declarationsFor(selector), ring, selector);
+  // Cells are placed to the pixel by the layout, so the ring is drawn inside
+  // them rather than as a border that would make them bigger.
+  assert.doesNotMatch(declarationsFor('.fullscreen-stream-cell'), /border:/);
+});
+
+test('the full-size stream shows it can be clicked back to the grid', () => {
+  for (const tile of ['.webcam-tile', '.screen-share-tile']) {
+    for (const mode of ['.is-fullscreen', '.haven-manual-fullscreen']) {
+      assert.match(declarationsFor(`${tile}${mode}.fullscreen-stream-focused > video`), /cursor:\s*zoom-out/);
+    }
+  }
+});
+
+test('the remove button sits above the cell button and shows on hover, focus or touch', () => {
+  const zIndex = selector => Number(declarationsFor(selector).match(/z-index:\s*(\d+)/)[1]);
+  assert.ok(zIndex('.fullscreen-stream-cell-remove') > zIndex('.fullscreen-stream-cell-focus'));
+  assert.match(declarationsFor('.fullscreen-stream-cell-remove'), /opacity:\s*0/);
+  const shown = declarationsFor('.fullscreen-stream-cell:hover .fullscreen-stream-cell-remove');
+  assert.match(shown, /opacity:\s*1/);
+  assert.ok(rules.some(rule => rule.selectors.includes('.fullscreen-stream-cell:focus-within .fullscreen-stream-cell-remove')));
+  assert.match(stylesheet, /@media \(hover: none\) \{\s*\.fullscreen-stream-cell-remove,\s*\.fullscreen-stream-cell-volume \{ opacity: 1; \}/);
+});
+
+test('the volume slider sits above the cell button and shows like the remove button', () => {
+  const zIndex = selector => Number(declarationsFor(selector).match(/z-index:\s*(\d+)/)[1]);
+  const volume = declarationsFor('.fullscreen-stream-cell-volume');
+  assert.match(volume, /position:\s*absolute/);
+  assert.match(volume, /opacity:\s*0/);
+  assert.doesNotMatch(volume, /display:/, 'a display value would show a slider meant to be hidden');
+  assert.ok(zIndex('.fullscreen-stream-cell-volume') > zIndex('.fullscreen-stream-cell-focus'));
+  for (const selector of [
+    '.fullscreen-stream-cell:hover .fullscreen-stream-cell-volume',
+    '.fullscreen-stream-cell:focus-within .fullscreen-stream-cell-volume',
+  ]) assert.match(declarationsFor(selector), /opacity:\s*1/);
+});
+
+test('a fullscreen bar button marked hidden is really hidden', () => {
+  // .fullscreen-call-control sets a display value, which would otherwise win
+  // over the hidden attribute and leave Back to grid showing at all times.
+  assert.match(declarationsFor('.fullscreen-call-control'), /display:\s*inline-flex/);
+  assert.match(declarationsFor('.fullscreen-call-control[hidden]'), /display:\s*none/);
+});
+
+test("the volume slider draws Haven's own rounded track with room for its ends and thumb", () => {
+  const volume = declarationsFor('.fullscreen-stream-cell-volume');
+  // The browser's own slider box clips the rounded track Haven draws for
+  // every slider unless its look is switched off, as .stream-vol-slider does.
+  assert.match(volume, /-webkit-appearance:\s*none/);
+  assert.match(volume, /(^|[^-])appearance:\s*none/);
+  // The thumb is 0.875rem plus a 2px border each side, so the box is taller.
+  assert.match(volume, /height:\s*1\.25rem/);
+  assert.match(volume, /box-sizing:\s*content-box/);
+  // A pill like the stream's name label, with padding so the ends are clear.
+  assert.match(volume, /padding:\s*0 0\.5rem/);
+  assert.match(volume, /border-radius:\s*999px/);
+  assert.match(volume, /background:\s*rgba\(0,\s*0,\s*0,\s*0\.6\)/);
+});
+
+test("a stream's name only makes room for its volume slider while the slider shows", () => {
+  // A narrow stream, an upright phone camera say, would otherwise have its
+  // name cut short all the time for a slider that only appears on hover.
+  assert.match(declarationsFor('.fullscreen-stream-cell-label'), /max-width:\s*calc\(100% - 1rem\)/);
+  const room = /max-width:\s*calc\(100% - min\(7rem, 40%\) - 2\.5rem\)/;
+  for (const selector of [
+    '.fullscreen-stream-cell:hover:has(.fullscreen-stream-cell-volume:not([hidden])) .fullscreen-stream-cell-label',
+    '.fullscreen-stream-cell:focus-within:has(.fullscreen-stream-cell-volume:not([hidden])) .fullscreen-stream-cell-label',
+  ]) assert.match(declarationsFor(selector), room, selector);
+  assert.match(stylesheet, /@media \(hover: none\) \{[^}]*\{ opacity: 1; \}\s*\.fullscreen-stream-cell:has\(\.fullscreen-stream-cell-volume:not\(\[hidden\]\)\) \.fullscreen-stream-cell-label \{ max-width: calc\(100% - min\(7rem, 40%\) - 2\.5rem\); \}/);
+});

@@ -6,6 +6,7 @@ const UPLOAD_PATH_EXACT_RE = /^\/uploads\/((?!(?:bot-audio|deleted-attachments|s
 const storage = require('../storage');
 const { isSafeUploadRelPath } = storage;
 const { isString, isInt, releasableUploads, CHANNEL_NAME_RE, NEW_DMS_PER_HOUR } = require('./helpers');
+const { removeChannelMember } = require('../channelMemberRemoval');
 
 // The files the messages in these channels point at, kept per author, read
 // before the rows go. A file only goes with its own uploader's messages
@@ -1862,29 +1863,7 @@ module.exports = function register(socket, ctx) {
     if (!targetUser) return cb({ error: 'User not found' });
     const membershipCheck = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channelId, targetUserId);
     if (!membershipCheck) return cb({ error: `${targetUser.username} is not in #${channel.name}` });
-    db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?').run(channelId, targetUserId);
-    const subs = db.prepare('SELECT id, code FROM channels WHERE parent_channel_id = ?').all(channelId);
-    const delSub = db.prepare('DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?');
-    subs.forEach(s => delSub.run(s.id, targetUserId));
-    // Roles held in that channel go with the membership; kept, a removed
-    // Channel Mod could still act there.
-    const delScoped = db.prepare('DELETE FROM user_roles WHERE user_id = ? AND channel_id = ?');
-    [channelId, ...subs.map(s => s.id)].forEach(id => delScoped.run(targetUserId, id));
-    // Out of the call too, before the code rotates below.
-    ctx.liveAccess?.cutOff(targetUserId, [channel.code, ...subs.map(s => s.code)], 'You were removed from this channel');
-    const targetSockets = [...io.sockets.sockets.values()].filter(s => s.user && s.user.id === targetUserId);
-    for (const ts of targetSockets) {
-      if (ts.currentChannel === channel.code || subs.some(sub => sub.code === ts.currentChannel)) ts.currentChannel = null;
-      ts.leave(`channel:${channel.code}`);
-      subs.forEach(sub => ts.leave(`channel:${sub.code}`));
-      ts.emit('channels-list', getEnrichedChannels(targetUserId, ts.user.isAdmin, (room) => ts.join(room)));
-      ts.emit('toast', { message: `You were removed from #${channel.name}`, type: 'warning' });
-    }
-    const channelRoom = channelUsers.get(channel.code);
-    if (channelRoom) {
-      channelRoom.delete(targetUserId);
-      emitOnlineUsers(channel.code);
-    }
+    removeChannelMember(ctx, channel, targetUserId);
     if (typeof rotatePrivateCodesAfterRemoval === 'function') rotatePrivateCodesAfterRemoval(channelId);
     cb({ success: true });
     _audit({ actor: socket.user, action: 'channel_member_remove',

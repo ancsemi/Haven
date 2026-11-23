@@ -21,6 +21,10 @@ _renderUserBarAvatar() {
     face.textContent = initial;
     face.style.backgroundColor = color;
   };
+  // Your picture border sits over the face, under the connection light.
+  face.parentElement?.querySelector(':scope > .pfp-border')?.remove();
+  const marker = this._pfpBorderMarker?.(this.user.border, this.user.borderTransform, this.user.animateProfile);
+  if (marker) face.insertAdjacentHTML('afterend', marker);
   if (!this.user.avatar) { showInitial(); return; }
   face.style.backgroundColor = '';
   face.innerHTML = `<img ${this._imgSrcAttr(this.user.avatar)}${this._animAttr(this.user.animateProfile)} alt="">`;
@@ -282,6 +286,37 @@ _bindPeople() {
     if (e.key === 'Enter') this._saveRename();
   });
 
+  // Banner color: picking one sets it, Match avatar goes back to following
+  // the avatar. Both wait for Save like the rest of Edit Profile.
+  document.getElementById('banner-color-input').addEventListener('input', (e) => {
+    this._pendingBannerColor = this._safeHexColor(e.target.value);
+    this._refreshBannerColorPreview();
+    this._markAvatarUnsaved();
+  });
+  document.getElementById('banner-color-auto-btn').addEventListener('click', () => {
+    this._pendingBannerColor = null;
+    this._refreshBannerColorPreview();
+    this._markAvatarUnsaved();
+  });
+
+  // Profile theme: either swatch turns it on with both colors as shown, No
+  // theme turns it off. Saved with the rest of Edit Profile.
+  for (const id of ['profile-theme-top', 'profile-theme-bottom']) {
+    document.getElementById(id).addEventListener('input', () => {
+      this._pendingProfileTheme = this._cleanProfileTheme({
+        top: document.getElementById('profile-theme-top').value,
+        bottom: document.getElementById('profile-theme-bottom').value,
+      });
+      this._refreshProfileThemePreview();
+      this._markAvatarUnsaved();
+    });
+  }
+  document.getElementById('profile-theme-off-btn').addEventListener('click', () => {
+    this._pendingProfileTheme = null;
+    this._refreshProfileThemePreview();
+    this._markAvatarUnsaved();
+  });
+
   document.getElementById('rename-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
       e.currentTarget.style.display = 'none';
@@ -310,12 +345,15 @@ _openRenameModal() {
   if (bioInput) bioInput.value = this.user.bio || '';
   this._bioOpened = bioInput ? bioInput.value : null;
   this._syncBirthdayEditor();
+  this._pendingBannerColor = this.user.bannerColor || null;
+  this._pendingProfileTheme = this.user.profileTheme || null;
   // Load personas list (#86, #5349)
   this._loadPersonas?.();
   this._loadRoles(() => this._renderUserProfileGroupsList());
   this._updateAvatarPreview();
   this._resetAvatarEditState();
   this._resetBorderEditState();
+  this._resetBannerEditState();
   // Sync shape picker buttons
   const picker = document.getElementById('avatar-shape-picker');
   if (picker) {
@@ -326,6 +364,8 @@ _openRenameModal() {
     this._pendingAvatarShape = currentShape;
   }
   this._applyAvatarPreviewShape?.();
+  this._refreshBannerColorPreview();
+  this._refreshProfileThemePreview();
 },
 
 _saveRename() {
@@ -361,10 +401,58 @@ _saveRename() {
   if (birthday || hidden !== (this.user.birthdayHidden === true) || hideYear !== (this.user.birthdayHideYear !== false)) {
     this.socket.emit('set-birthday', birthday ? { birthday, hidden, hideYear } : { hidden, hideYear });
   }
+  if (this._pendingBannerColor !== (this.user.bannerColor || null)) {
+    this.socket.emit('set-banner-color', { color: this._pendingBannerColor });
+  }
+  const theme = this._pendingProfileTheme || null;
+  if (JSON.stringify(theme) !== JSON.stringify(this.user.profileTheme || null)) {
+    this.socket.emit('set-profile-theme', theme || { top: null, bottom: null });
+  }
   // Also commit any pending avatar and groups changes
   this._commitAvatarSettings();
   this._GroupManagerSaveGroups();
   document.getElementById('rename-modal').style.display = 'none';
+},
+
+// The banner preview in Edit Profile, painted the way the card will be: the
+// picked color, else the avatar's (a new picture is sampled first), else the
+// name color.
+async _refreshBannerColorPreview() {
+  const preview = document.getElementById('banner-color-preview');
+  if (!preview) return;
+  const run = (this._bannerPreviewRun = (this._bannerPreviewRun || 0) + 1);
+  const picked = this._pendingBannerColor || null;
+  const shown = picked || await this._pendingAvatarColor() || this._getUserColor(this.user.username);
+  // A newer change landed while a picture was being sampled; that one paints.
+  if (run !== this._bannerPreviewRun) return;
+  this._paintProfileBanner(preview, shown);
+  document.getElementById('banner-color-input').value = shown;
+  document.getElementById('banner-color-auto-btn').disabled = !picked;
+  document.getElementById('banner-color-note').textContent =
+    t(picked ? 'modals.edit_profile.banner_color_picked' : 'modals.edit_profile.banner_color_following');
+},
+
+// The profile theme preview in Edit Profile. With a theme it is painted the
+// way the card will be; with none it shows, faded, what picking a color
+// would start from: the banner color fading to a darker shade of it.
+_refreshProfileThemePreview() {
+  const preview = document.getElementById('profile-theme-preview');
+  if (!preview) return;
+  let theme = this._pendingProfileTheme || null;
+  const on = !!theme;
+  if (!on) {
+    const top = this._pendingBannerColor || (this.user.avatar ? this.user.avatarColor : null)
+      || this._getUserColor(this.user.username);
+    const dark = (i) => Math.round(parseInt(top.slice(i, i + 2), 16) * 0.35).toString(16).padStart(2, '0');
+    theme = { top, bottom: `#${dark(1)}${dark(3)}${dark(5)}` };
+  }
+  this._applyProfileTheme(preview, theme);
+  preview.classList.toggle('theme-off', !on);
+  document.getElementById('profile-theme-top').value = theme.top;
+  document.getElementById('profile-theme-bottom').value = theme.bottom;
+  document.getElementById('profile-theme-off-btn').disabled = !on;
+  document.getElementById('profile-theme-note').textContent =
+    t(on ? 'modals.edit_profile.theme_on_note' : 'modals.edit_profile.theme_off_note');
 },
 
 // A birthday is set once and never changed, so the date field locks for good

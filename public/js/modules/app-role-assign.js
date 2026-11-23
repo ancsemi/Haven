@@ -1,7 +1,7 @@
 // The Role Assignment center: pick people and channels, then set the
 // roles and permissions they get there.
 
-import { ALL_PERMS, ADMIN_ONLY_PERMS, PERM_LABELS } from './perm-catalog.js?v=4.24.15';
+import { ALL_PERMS, ADMIN_ONLY_PERMS, PERM_LABELS } from './perm-catalog.js?v=4.29.95';
 
 export default {
 

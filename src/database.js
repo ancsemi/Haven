@@ -1,11 +1,13 @@
 const { fromEnv } = require('./db');
 const { ensureSearchIndex } = require('./searchIndex');
-const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('./roleDefaults');
+const { seedDefaultRoles, createAdminRole, grantAdminRole, trimAdminRolePerms } = require('./roleDefaults');
 const { migrateGroupDmTrust } = require('./groupDmSchema');
 const { migrateSelfDms } = require('./selfDmSchema');
 const { applyDefaultUpdates } = require('./settingDefaults');
 const messageHighlights = require('./messageHighlights');
 const messageQuotes = require('./messageQuotes');
+const botComponents = require('./botComponents');
+const botAccounts = require('./botAccounts');
 const modCases = require('./modCases');
 const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
@@ -421,6 +423,7 @@ function initDatabase() {
   insertSetting.run('max_poll_options', '10');            // max poll answer options (2-25)
   insertSetting.run('max_message_chars', '2000');         // max characters per message (200-100000)
   insertSetting.run('max_avatar_mb', '2');               // max profile picture / border / persona avatar size in MB (1-10)
+  insertSetting.run('max_banner_mb', '5');               // max profile banner size in MB (1-20)
   insertSetting.run('max_sound_kb', '1024');              // max soundboard file size in KB (256-10240)
   insertSetting.run('max_emoji_kb', '256');               // max emoji file size in KB (64-1024)
   insertSetting.run('max_sticker_kb', '1024');            // max sticker file size in KB (256-10240), #5392
@@ -488,6 +491,7 @@ function initDatabase() {
   // ntfy) can turn it off under Settings → Security → FCM Privacy. Off skips FCM
   // sends only, so web-push to browsers is unaffected.
   insertSetting.run('fcm_enabled', 'true');
+  insertSetting.run('fcm_hide_content', 'false');
 
   // Unique server fingerprint: used by the multi-server sidebar to detect "self"
   const crypto = require('crypto');
@@ -633,6 +637,18 @@ function initDatabase() {
 
   // ── Migration: bio column ─────────────────────────────────
   addColumn('users', 'bio', "TEXT DEFAULT ''");
+
+  // ── Migration: banner color the member picked, and the one their avatar
+  // gives (worked out by the client when it uploads the avatar). Both NULL
+  // means the card falls back to the color of their name.
+  addColumn('users', 'banner_color', "TEXT DEFAULT NULL");
+  addColumn('users', 'avatar_color', "TEXT DEFAULT NULL");
+  // ── Migration: banner picture (an /uploads/ path), shown over the color.
+  addColumn('users', 'banner', "TEXT DEFAULT NULL");
+  // ── Migration: profile theme, two colors the card fades between from top
+  // to bottom. Both set, or both NULL for no theme.
+  addColumn('users', 'profile_theme_top', "TEXT DEFAULT NULL");
+  addColumn('users', 'profile_theme_bottom', "TEXT DEFAULT NULL");
 
   // ── Migration: birthday (YYYY-MM-DD) and when it was set (ISO UTC).
   // A birthday is set once and never changes; birthday_hidden keeps it off
@@ -1055,6 +1071,8 @@ function initDatabase() {
   // sounds and pop-ups. The device reports it when it registers.
   addColumn('push_subscriptions', 'scope', "TEXT NOT NULL DEFAULT 'all'");
   addColumn('fcm_tokens', 'scope', "TEXT NOT NULL DEFAULT 'all'");
+  addColumn('fcm_tokens', 'push_p256dh', 'TEXT DEFAULT NULL');
+  addColumn('fcm_tokens', 'push_auth', 'TEXT DEFAULT NULL');
 
   // ── Migration: per-user channel notification prefs ──────
   // Before 3.20.2 these lived only in localStorage, which meant the server
@@ -1405,6 +1423,12 @@ function initDatabase() {
   // ── Migration: encrypted server list for cross-device sync ──────────
   addColumn('users', 'encrypted_servers', "TEXT DEFAULT NULL");
 
+  // Bot accounts (src/botAccounts.js): a member account a program signs in
+  // to with a token, never a password.
+  addColumn('users', 'is_bot', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('users', 'bot_disabled', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('users', 'bot_created_by', 'INTEGER DEFAULT NULL');
+
   // ── Migration: send_self_destruct (#5725) ──
   // Self-destructing messages came out open to everyone. The permission that
   // now controls them starts out on every role that may delete its own
@@ -1511,6 +1535,7 @@ function initDatabase() {
       })();
     }
   } catch (err) { console.error('Admin role conversion failed:', err); }
+  try { trimAdminRolePerms(db); } catch (err) { console.error('Admin role permission trim failed:', err); }
 
   // ── Role menus: a message people react to, or click, to give themselves a role ──
   db.exec(`
@@ -1699,6 +1724,8 @@ function initDatabase() {
   applyDefaultUpdates(db);
   messageHighlights.ensureTable(db);
   messageQuotes.ensureTable(db);
+  botComponents.ensureTable(db);
+  botAccounts.ensureTable(db);
   modCases.ensureTable(db);
   migrateImportedAuthors(db);
   forumUnread.ensureTable(db);

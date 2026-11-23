@@ -279,6 +279,8 @@ CREATE TABLE "fcm_tokens" (
   "token" TEXT NOT NULL,
   "created_at" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
   "scope" TEXT NOT NULL DEFAULT 'all',
+  "push_p256dh" TEXT DEFAULT NULL,
+  "push_auth" TEXT DEFAULT NULL,
   PRIMARY KEY ("id")
 );
 
@@ -409,6 +411,19 @@ CREATE TABLE "message_highlights" (
   "role_id" BIGINT,
   "user_id" BIGINT NOT NULL,
   "created_at" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT date_trunc('second', CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
+  PRIMARY KEY ("message_id")
+);
+
+CREATE TABLE "bot_creators" (
+  "bot_id" BIGINT NOT NULL,
+  "user_id" BIGINT NOT NULL,
+  PRIMARY KEY ("bot_id", "user_id")
+);
+
+CREATE TABLE "message_bot_parts" (
+  "message_id" BIGINT,
+  "embeds" TEXT,
+  "components" TEXT,
   PRIMARY KEY ("message_id")
 );
 
@@ -784,6 +799,11 @@ CREATE TABLE "users" (
   "birthday_set_at" TEXT DEFAULT NULL,
   "birthday_hide_year" BIGINT DEFAULT 1,
   "birthday_hidden" BIGINT DEFAULT 0,
+  "banner_color" TEXT DEFAULT NULL,
+  "avatar_color" TEXT DEFAULT NULL,
+  "banner" TEXT DEFAULT NULL,
+  "profile_theme_top" TEXT DEFAULT NULL,
+  "profile_theme_bottom" TEXT DEFAULT NULL,
   "public_key" TEXT DEFAULT NULL,
   "signing_key" TEXT DEFAULT NULL,
   "signing_backup" TEXT DEFAULT NULL,
@@ -798,6 +818,9 @@ CREATE TABLE "users" (
   "totp_enabled" BIGINT DEFAULT 0,
   "encrypted_servers" TEXT DEFAULT NULL,
   "official_mode" BIGINT NOT NULL DEFAULT 0,
+  "is_bot" BIGINT NOT NULL DEFAULT 0,
+  "bot_disabled" BIGINT NOT NULL DEFAULT 0,
+  "bot_created_by" BIGINT DEFAULT NULL,
   PRIMARY KEY ("id")
 );
 
@@ -919,6 +942,12 @@ ALTER TABLE "message_highlights" ADD CONSTRAINT "message_highlights_fk_0" FOREIG
 ALTER TABLE "message_highlights" ADD CONSTRAINT "message_highlights_fk_1" FOREIGN KEY ("role_id") REFERENCES "roles" ("id") ON DELETE SET NULL ON UPDATE NO ACTION;
 
 ALTER TABLE "message_highlights" ADD CONSTRAINT "message_highlights_fk_2" FOREIGN KEY ("message_id") REFERENCES "messages" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+
+ALTER TABLE "bot_creators" ADD CONSTRAINT "bot_creators_fk_0" FOREIGN KEY ("bot_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+
+ALTER TABLE "bot_creators" ADD CONSTRAINT "bot_creators_fk_1" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+
+ALTER TABLE "message_bot_parts" ADD CONSTRAINT "message_bot_parts_fk_0" FOREIGN KEY ("message_id") REFERENCES "messages" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 ALTER TABLE "message_quotes" ADD CONSTRAINT "message_quotes_fk_0" FOREIGN KEY ("quote_of") REFERENCES "messages" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 

@@ -1,6 +1,8 @@
 'use strict';
 
 const crypto = require('crypto');
+const botAccounts = require('../botAccounts');
+const { pushReaders } = require('../pushReaders');
 const path   = require('path');
 const fs     = require('fs');
 const webpush = require('web-push');
@@ -11,7 +13,7 @@ const { sendFcm, isFcmEnabled } = require('../fcm');
 const { DATA_DIR } = require('../paths');
 const HAVEN_VERSION = require('../../package.json').version;
 
-const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline, maskSpoilers, toReplyContext } = require('./helpers');
+const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme, VALID_ROLE_PERMS, filterIdleOnline, maskSpoilers, toReplyContext } = require('./helpers');
 const { socketClientIp } = require('../clientIp');
 const automod = require('../automod');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
@@ -70,7 +72,11 @@ const registerTags       = require('./tags');
 const registerChannelTypes = require('./channelTypes');
 const registerMemberDefaults = require('./memberDefaults');
 const registerGameActivity = require('./gameActivity');
+const registerAppActivity = require('./appActivity');
 const registerMessageHighlights = require('./messageHighlights');
+const registerBotInteractions = require('./botInteractions');
+const registerBotAccounts = require('./botAccounts');
+const registerNameColor = require('./nameColor');
 const registerModCases = require('./modCases');
 const registerPermExceptions = require('./permExceptions');
 const modCases = require('../modCases');
@@ -780,7 +786,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   // about a third.
   const MEMBER_DEFAULTS = {
     highScore: 0, statusText: '', avatar: null, avatarShape: 'circle', border: null,
-    borderTransform: null, animateProfile: 'trigger', isGuest: false, role: null, activity: null, birthday: null,
+    borderTransform: null, animateProfile: 'trigger', isGuest: false, bot: false, role: null, activity: null, birthday: null,
   };
   function slimMember(u) {
     const out = {};
@@ -847,14 +853,14 @@ function setupSocketHandlers(io, db, opts = {}) {
       // reading every account on the server for each update (a two-person DM
       // included) was the cost that grew with the size of the server.
       const statusRows = db.prepare(`
-        SELECT u.id, u.status, u.status_text, u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.is_guest,
+        SELECT u.id, u.status, u.status_text, u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.is_guest, u.is_bot,
                CASE WHEN u.birthday_hidden = 0 THEN substr(u.birthday, 6) END as birthday
         FROM users u
         JOIN channel_members cm ON cm.user_id = u.id
         JOIN channels c ON c.id = cm.channel_id
         WHERE c.code = ?
       `).all(code);
-      statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null, avatarShape: r.avatar_shape || 'circle', border: r.border || null, borderTransform: parseBorderTransform(r.border_transform), animateProfile: r.animate_profile || 'trigger', isGuest: !!r.is_guest, birthday: r.birthday || null }; });
+      statusRows.forEach(r => { statusMap[r.id] = { status: r.status || 'online', statusText: r.status_text || '', avatar: r.avatar || null, avatarShape: r.avatar_shape || 'circle', border: r.border || null, borderTransform: parseBorderTransform(r.border_transform), animateProfile: r.animate_profile || 'trigger', isGuest: !!r.is_guest, bot: !!r.is_bot, birthday: r.birthday || null }; });
     } catch { /* runs on every presence change; members then show default status and avatar */ }
 
     const channel = db.prepare('SELECT id, role_gate, is_dm FROM channels WHERE code = ?').get(code);
@@ -903,6 +909,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         borderTransform: statusMap[m.id]?.borderTransform || null,
         animateProfile: statusMap[m.id]?.animateProfile || 'trigger',
         isGuest: statusMap[m.id]?.isGuest || false,
+        bot: statusMap[m.id]?.bot || false,
         birthday: statusMap[m.id]?.birthday || null,
         role: roleOf(m.id),
         // null unless the user opted in; getPublicActivity applies their
@@ -924,6 +931,7 @@ function setupSocketHandlers(io, db, opts = {}) {
             borderTransform: statusMap[s.user.id]?.borderTransform || s.user.borderTransform || null,
             animateProfile: statusMap[s.user.id]?.animateProfile || s.user.animate_profile || 'trigger',
             isGuest: statusMap[s.user.id]?.isGuest || !!s.user.isGuest,
+            bot: statusMap[s.user.id]?.bot || !!s.user.botAccount,
             birthday: statusMap[s.user.id]?.birthday || null,
             role: roleOf(s.user.id),
             activity: activity.getPublicActivity(s.user.id)
@@ -1278,12 +1286,17 @@ function setupSocketHandlers(io, db, opts = {}) {
       // onlyUserIds narrows a push to some members, such as the author of a
       // message someone just started a thread on.
       const only = Array.isArray(pushOpts.onlyUserIds) ? new Set(pushOpts.onlyUserIds) : null;
+      // A push carries the sender, the channel and the start of the message,
+      // so it goes only to people who could open the channel and read it. A
+      // membership row is not enough: a ban leaves it in place, and so does
+      // a required role the person does not hold.
+      const canRead = pushReaders(db, channelId, roleGateAllows);
       const subs = db.prepare(`
         SELECT ps.endpoint, ps.p256dh, ps.auth, ps.user_id, ps.scope
         FROM push_subscriptions ps
         JOIN channel_members cm ON cm.user_id = ps.user_id
         WHERE cm.channel_id = ? AND ps.user_id != ?
-      `).all(channelId, senderUserId).filter(s => !only || only.has(s.user_id));
+      `).all(channelId, senderUserId).filter(s => (!only || only.has(s.user_id)) && canRead(s.user_id));
 
       // 3.20.2 (#5399 follow-up): pull the per-user mute set for this
       // channel up front so we can skip both web-push AND FCM for anyone
@@ -1363,6 +1376,7 @@ function setupSocketHandlers(io, db, opts = {}) {
           WHERE cm.channel_id = ? AND cm.user_id != ?
         `).all(channelId, senderUserId)
           .filter(m => !only || only.has(m.user_id))
+          .filter(m => canRead(m.user_id))
           .filter(m => !activeUserIds.has(m.user_id))
           .filter(m => !mutedUserIds.has(m.user_id))
           .filter(m => !quietFor.has(m.user_id))
@@ -1370,12 +1384,12 @@ function setupSocketHandlers(io, db, opts = {}) {
 
         if (inactiveMembers.length) {
           const placeholders = inactiveMembers.map(() => '?').join(',');
-          const fcmRows = db.prepare(`SELECT token, user_id, scope FROM fcm_tokens WHERE user_id IN (${placeholders})`).all(...inactiveMembers);
+          const fcmRows = db.prepare(`SELECT token, user_id, scope, push_p256dh, push_auth FROM fcm_tokens WHERE user_id IN (${placeholders})`).all(...inactiveMembers);
           const fcmPinged = pingedAmong(fcmRows);
-          const tokens = fcmRows.filter(r => r.scope !== 'mentions' || fcmPinged.has(r.user_id)).map(r => r.token);
+          const devices = fcmRows.filter(r => r.scope !== 'mentions' || fcmPinged.has(r.user_id)).map(r => ({ token: r.token, p256dh: r.push_p256dh, auth: r.push_auth }));
 
-          if (tokens.length) {
-            sendFcm(tokens, title, body, { channelCode, tag: `haven-${channelCode}` })
+          if (devices.length) {
+            sendFcm(devices, title, body, { channelCode, tag: `haven-${channelCode}` })
               .then(res => {
                 if (res.failedTokens && res.failedTokens.length) {
                   const ph = res.failedTokens.map(() => '?').join(',');
@@ -1469,6 +1483,33 @@ function setupSocketHandlers(io, db, opts = {}) {
       }
       _recordWebhookDelivery(bot.id, 0, msg.slice(0, 200));
       console.error(`Webhook callback failed for bot ${bot.id} → ${bot.callback_url}: ${msg}`);
+    }
+  }
+
+  // A click or pick on one bot's own buttons goes to that bot alone, and the
+  // person waits on the answer, so there is one try and the result comes back.
+  async function deliverBotInteraction(bot, body) {
+    if (!bot.callback_url || !isSafeCallbackUrl(bot.callback_url)) return { ok: false };
+    const payload = JSON.stringify({ event: 'interaction', timestamp: new Date().toISOString(), ...body });
+    const headers = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Haven-Webhook/1.1',
+      'X-Haven-Event': 'interaction'
+    };
+    if (bot.callback_secret) {
+      headers['X-Haven-Signature'] =
+        'sha256=' + crypto.createHmac('sha256', bot.callback_secret).update(payload).digest('hex');
+    }
+    try {
+      const resp = await postWebhookCallback(bot.callback_url, payload, headers, {
+        allowPrivateCallbacks: ALLOW_PRIVATE_CALLBACKS,
+        timeoutMs: 5000
+      });
+      _recordWebhookDelivery(bot.id, resp.status, resp.ok ? null : `HTTP ${resp.status}`);
+      return { ok: resp.ok };
+    } catch (err) {
+      _recordWebhookDelivery(bot.id, 0, ((err && err.message) || String(err)).slice(0, 200));
+      return { ok: false };
     }
   }
 
@@ -2020,10 +2061,16 @@ function setupSocketHandlers(io, db, opts = {}) {
 
       try {
         // created_at feeds the automod new-account link gate (v3.42.0).
-        let uRow = accountDb.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio FROM users WHERE id = ?').get(user.id);
+        let uRow = accountDb.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, is_bot, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio, banner_color, avatar_color, banner, profile_theme_top, profile_theme_bottom FROM users WHERE id = ?').get(user.id);
         if (asyncAccountReads) uRow = await uRow;
-        if (!uRow || uRow.username !== user.username) {
+        // A bot keeps its token through a rename (src/botAccounts.js), so
+        // its name is read from the account rather than the token.
+        if (!uRow || (!uRow.is_bot && uRow.username !== user.username)) {
           return next(new Error('Session expired'));
+        }
+        if (uRow.is_bot) {
+          socket.user.username = uRow.username;
+          socket.user.botAccount = true;
         }
         const dbPwv = uRow.password_version || 1;
         const tokenPwv = user.pwv || 1;
@@ -2043,6 +2090,10 @@ function setupSocketHandlers(io, db, opts = {}) {
         socket.user.birthdayHideYear = uRow.birthday_hide_year !== 0;
         socket.user.birthdayHidden = uRow.birthday_hidden !== 0;
         socket.user.bio = uRow.bio || '';
+        socket.user.bannerColor = cleanHexColor(uRow.banner_color);
+        socket.user.avatarColor = uRow.avatar ? cleanHexColor(uRow.avatar_color) : null;
+        socket.user.banner = isValidUploadPath(uRow.banner) ? uRow.banner : null;
+        socket.user.profileTheme = cleanProfileTheme(uRow.profile_theme_top, uRow.profile_theme_bottom);
         // (#12) The client needs this to ask for the right secret: an SSO
         // account unlocks E2E with its encryption passphrase, not a password.
         socket.user.isSso = !!uRow.oidc_subject;
@@ -2051,7 +2102,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
         let anyAdmin = accountDb.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
         if (asyncAccountReads) anyAdmin = await anyAdmin;
-        if (!anyAdmin && uRow.username.toLowerCase() === ADMIN_USERNAME && !uRow.is_admin) {
+        if (!anyAdmin && !uRow.is_bot && uRow.username.toLowerCase() === ADMIN_USERNAME && !uRow.is_admin) {
           if (db.async.kind !== 'sqlite') throw new Error('PostgreSQL admin bootstrap is not migrated yet');
           uRow.is_admin = require('../adminBootstrap')(db, user.id, ADMIN_USERNAME);
         }
@@ -2251,6 +2302,9 @@ function setupSocketHandlers(io, db, opts = {}) {
     socket.emit('session-info', {
       id: socket.user.id, username: socket.user.username,
       isAdmin: socket.user.isAdmin,
+      // Opens the Bots page in Admin settings to a bot's Bot Creators.
+      botCreator: botAccounts.isBotCreator(db, socket.user.id),
+      botAccount: !!socket.user.botAccount,
       isSso: !!socket.user.isSso,
       e2ePassphrase: !!socket.user.e2ePassphrase,
       displayName: socket.user.displayName,
@@ -2269,6 +2323,12 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Their own bio, the full birthday, its privacy and when it was set,
       // for Edit Profile.
       bio: socket.user.bio || '',
+      // The banner color they picked; null means it follows their avatar,
+      // whose color comes along so Edit Profile can preview it.
+      bannerColor: socket.user.bannerColor || null,
+      avatarColor: socket.user.avatarColor || null,
+      banner: socket.user.banner || null,
+      profileTheme: socket.user.profileTheme || null,
       birthday: socket.user.birthday || null,
       birthdaySetAt: socket.user.birthdaySetAt || null,
       birthdayHideYear: socket.user.birthdayHideYear !== false,
@@ -2351,6 +2411,8 @@ function setupSocketHandlers(io, db, opts = {}) {
       // a ceiling of its own.
       voiceSpeaking: { max: 100, windowMs: 10000 },
       webcamLifecycle: { max: 20, windowMs: 10000 },
+      // Each click on a bot's button is a request to the bot's own server.
+      botInteraction: { max: 10, windowMs: 10000 },
     };
 
     function floodCheck(bucket, scope = '') {
@@ -2475,6 +2537,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       }
       if (!verdict || verdict.ok) return false;
 
+      // Says which kind of text was refused, so the app can give back a
+      // message or forum post that was just sent instead of losing it.
+      socket.emit('automod-refused', { surface: opts.surface || 'message' });
       socket.emit('error-msg', verdict.message);
 
       let outcome = { count: 0, action: 'none' };
@@ -2719,7 +2784,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       liveAccess,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode, rotatePrivateCodesAfterRemoval,
       // Push / webhooks
-      sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, dmCalls,
+      sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, deliverBotInteraction, dmCalls,
       // Ferry (Discord bridge)
       ferry, ferryLinksFor, parseFerryTarget, ferryRelay, ferryRelayReply, ferryReactionChanged,
       // Slash commands
@@ -2776,7 +2841,11 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerChannelTypes(socket, ctx);
     registerMemberDefaults(socket, ctx);
     registerGameActivity(socket, ctx);
+    registerAppActivity(socket, ctx);
     registerMessageHighlights(socket, ctx);
+    registerBotInteractions(socket, ctx);
+    registerBotAccounts(socket, ctx);
+    registerNameColor(socket, ctx);
     registerModCases(socket, ctx);
     registerForumUnread(socket, ctx);
     registerThreadReadState(socket, ctx);

@@ -9,22 +9,12 @@
 #      is fully contained in public/locales/ AND doesn't touch en.json;
 #      en is the master, so changes to it still need a normal review).
 #   3. Run `scripts/validate-locales.js` against the changed files to
-#      check JSON validity, _meta fields, and shape compatibility with
-#      en.json (no type mismatches that would break i18n lookup).
+#      check JSON validity, _meta fields, shape compatibility with
+#      en.json (no type mismatches that would break i18n lookup), and
+#      that a translation has no markup the English text does not have.
 #   4. If translations-only AND validation passes, label the PR
-#      `translations-only` and enable auto-merge (squash). The PR will
-#      be merged by GitHub once any other required status checks pass.
-#   5. If the repo has no required reviews, the PR merges immediately.
-#      Otherwise it just sits with auto-merge enabled until a reviewer
-#      approves (the label makes them easy to find).
-#
-# Why not also approve automatically?
-#   GitHub deliberately forbids the github-actions bot from approving
-#   PRs (a PR author can't be its own approver, and that token is
-#   considered to be the PR author's account for fork PRs). If you
-#   want fully unattended merging without branch protection approval
-#   requirements, just don't require reviews on PRs touching
-#   public/locales/**. Auto-merge does the rest.
+#      `translations-only` so it is easy to find. A person still reads
+#      and merges it: nothing here merges a PR.
 #
 # Security: this workflow runs on `pull_request` (NOT pull_request_target),
 # so PRs from forks cannot read repo secrets. Validation runs in a
@@ -123,17 +113,11 @@ jobs:
           gh pr edit "${{ github.event.pull_request.number }}" \
             --add-label "translations-only" || true
           # The label may not exist yet, so create it then retry
-          gh label create "translations-only" --color "0E8A16" --description "Auto-mergeable translation update" 2>/dev/null || true
+          gh label create "translations-only" --color "0E8A16" --description "Touches only translation files" 2>/dev/null || true
           gh pr edit "${{ github.event.pull_request.number }}" \
             --add-label "translations-only" || true
 
-      - name: Enable auto-merge on translations-only PR
-        if: steps.changes.outputs.translations_only == 'true' && success()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # If branch protection allows it, this merges as soon as checks pass.
-          # If reviews are required, the PR sits with auto-merge enabled
-          # until a maintainer approves.
-          gh pr merge "${{ github.event.pull_request.number }}" --auto --squash || \
-            echo "Could not enable auto-merge (likely disabled at repo level; that's fine, label is still set)."
+      # No auto-merge. Translated text is put into the page as markup, so a
+      # translation is read by a person before it goes in, like any other
+      # change. The validator above refuses markup the English text does not
+      # have; the label only says the PR touches nothing but locale files.

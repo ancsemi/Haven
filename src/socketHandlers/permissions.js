@@ -1,5 +1,6 @@
 // ── Permission system helpers (factory, closes over db) ──
 const roleGate = require('../roleGate');
+const nameColor = require('../nameColor');
 const { parseRoleGate } = roleGate;
 
 // A failed read of the per-user overrides (user_role_perms) means an explicit
@@ -202,8 +203,11 @@ module.exports = function createPermissions(db) {
   }
 
   // The role that styles the user: the highest one that is not transparent.
+  // The highest role that shows. Its colors are those of the role the person
+  // picked for their name, when they picked one (src/nameColor.js).
   function getUserHighestRole(userId, channelId = null) {
-    return getUserAllRoles(userId, channelId).find(r => !r.transparent) || null;
+    const roles = getUserAllRoles(userId, channelId);
+    return nameColor.withNameColor(db, userId, roles.find(r => !r.transparent) || null, roles);
   }
 
   // Returns every role that applies to `userId` in `channelId`'s context:

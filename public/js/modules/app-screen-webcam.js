@@ -33,18 +33,45 @@ _createFullscreenCallToolbar(tile) {
   addButton('fullscreen-call-camera', 'voice.panel.camera', '📷', () => this._toggleWebcam?.());
   addButton('fullscreen-call-share', 'voice.screen_share', '🖥️', () => this._toggleScreenShare?.());
 
-  const picker = document.createElement('select');
-  picker.className = 'fullscreen-stream-select';
-  picker.title = t('voice_runtime.stream');
-  picker.setAttribute('aria-label', t('voice_runtime.stream'));
-  picker.addEventListener('click', event => event.stopPropagation());
-  picker.addEventListener('change', (event) => {
-    event.stopPropagation();
-    this._selectFullscreenStream(tile, picker.value);
+  // Which streams fill the screen: a checklist, so several can be shown at
+  // once in a grid (#5899). Its rows are built by _refreshFullscreenStreamPicker.
+  const streamPopover = document.createElement('div');
+  streamPopover.className = 'fullscreen-stream-popover';
+  streamPopover.hidden = true;
+  streamPopover.setAttribute('role', 'group');
+  streamPopover.setAttribute('aria-label', t('voice_runtime.streams'));
+  const streamTrigger = addButton('fullscreen-call-streams', 'voice_runtime.streams', '', () => {
+    this._toggleFullscreenStreamPopover(tile, streamPopover, streamTrigger);
   });
-  toolbar.appendChild(picker);
+  streamTrigger.setAttribute('aria-expanded', 'false');
+  // One click to the grid: back to it while one of its streams is shown full
+  // size, otherwise every live stream at once. See _syncFullscreenGridButton.
+  const backToGrid = addButton('fullscreen-call-grid', 'voice_runtime.back_to_grid', '▦', () => {
+    if (this._fullscreenCallFocusedTile) this._unfocusFullscreenStream(tile);
+    else this._setFullscreenShowAll(tile, true);
+  });
+  backToGrid.hidden = true;
+  const showAllLabel = document.createElement('label');
+  showAllLabel.className = 'fullscreen-stream-choice fullscreen-stream-choice-all';
+  const showAll = document.createElement('input');
+  showAll.type = 'checkbox';
+  showAll.className = 'fullscreen-stream-all';
+  showAll.addEventListener('change', (event) => {
+    event.stopPropagation();
+    this._setFullscreenShowAll(tile, showAll.checked);
+  });
+  const showAllText = document.createElement('span');
+  showAllText.textContent = t('voice_runtime.show_all_streams');
+  showAllLabel.appendChild(showAll);
+  showAllLabel.appendChild(showAllText);
+  streamPopover.appendChild(showAllLabel);
+  const streamChoices = document.createElement('div');
+  streamChoices.className = 'fullscreen-stream-choices';
+  streamPopover.appendChild(streamChoices);
+  streamPopover.addEventListener('click', event => event.stopPropagation());
+  toolbar.appendChild(streamPopover);
   if (!this._fullscreenStreamPickers) this._fullscreenStreamPickers = new Map();
-  this._fullscreenStreamPickers.set(picker, tile);
+  this._fullscreenStreamPickers.set(streamPopover, tile);
 
   const audioPopover = document.createElement('div');
   audioPopover.className = 'fullscreen-audio-popover';
@@ -52,61 +79,25 @@ _createFullscreenCallToolbar(tile) {
   audioPopover.setAttribute('role', 'group');
   audioPopover.setAttribute('aria-label', t('voice.panel.call_settings'));
   const audioTrigger = addButton('fullscreen-call-audio', 'voice.panel.call_settings', '⚙️', () => {
+    this._closeFullscreenPopover(tile, streamPopover, streamTrigger);
     this._toggleFullscreenAudioPopover(tile, audioPopover, audioTrigger);
   });
   audioTrigger.setAttribute('aria-expanded', 'false');
-  const addDeviceSelect = (kind, labelKey, id) => {
-    const label = document.createElement('label');
-    label.textContent = t(labelKey);
-    const select = document.createElement('select');
-    select.id = `${tile.id || 'fullscreen'}-${kind}-device`;
-    select.className = `fullscreen-device-select fullscreen-device-${kind}`;
-    select.dataset.deviceKind = kind;
-    select.setAttribute('aria-label', t(labelKey));
-    select.addEventListener('click', event => event.stopPropagation());
-    select.addEventListener('change', (event) => {
-      event.stopPropagation();
-      this._applyVoiceDeviceSelection?.(kind, select.value);
-    });
-    label.appendChild(select);
-    audioPopover.appendChild(label);
-    select.dataset.sourceId = id;
-  };
-  addDeviceSelect('input', 'voice_settings.input', 'voice-input-device');
-  addDeviceSelect('camera', 'voice_settings.camera', 'voice-cam-device');
-  addDeviceSelect('output', 'voice_settings.output', 'voice-output-device');
-  const volumeLabel = document.createElement('label');
-  volumeLabel.textContent = t('settings.sounds_section.volume');
-  const volume = document.createElement('input');
-  volume.type = 'range';
-  volume.min = '0';
-  volume.max = '200';
-  volume.className = 'fullscreen-call-volume';
-  volume.setAttribute('aria-label', t('settings.sounds_section.volume'));
-  volume.addEventListener('click', event => event.stopPropagation());
-  volume.addEventListener('input', (event) => {
-    event.stopPropagation();
-    const value = Number(volume.value) / 100;
-    this.voice?.setVoiceMasterVolume?.(value);
-    const mainSlider = document.getElementById('voice-master-volume');
-    if (mainSlider) mainSlider.value = volume.value;
-    this._syncFullscreenCallVolume();
-  });
-  volumeLabel.appendChild(volume);
-  audioPopover.appendChild(volumeLabel);
   audioPopover.addEventListener('click', event => event.stopPropagation());
   audioPopover.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     event.preventDefault();
-    this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
+    this._closeFullscreenPopover(tile, audioPopover, audioTrigger);
     audioTrigger.focus();
   });
   toolbar.appendChild(audioPopover);
   toolbar.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape' || audioPopover.hidden) return;
+    if (event.key !== 'Escape') return;
+    const open = [[audioPopover, audioTrigger], [streamPopover, streamTrigger]].find(([popover]) => !popover.hidden);
+    if (!open) return;
     event.preventDefault();
-    this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
-    audioTrigger.focus();
+    this._closeFullscreenPopover(tile, ...open);
+    open[1].focus();
   });
   addButton('fullscreen-call-leave', 'voice.disconnect', '✕', () => {
     if (!this.voice?.inVoice) return;
@@ -115,6 +106,19 @@ _createFullscreenCallToolbar(tile) {
   });
   addButton('fullscreen-call-exit', 'media.exit_fullscreen', '⛶', () => this._exitFullscreenCallControls());
 
+  // Several streams are shown here, each in a video of its own, covering the
+  // tile's own video. It goes before the toolbar so the controls stay on top,
+  // and after the tile's video so that stays its first video.
+  const grid = document.createElement('div');
+  grid.className = 'fullscreen-stream-grid';
+  grid.hidden = true;
+  grid.setAttribute('role', 'group');
+  grid.setAttribute('aria-label', t('voice_runtime.streams'));
+  // A click on the tile itself leaves a stream shown full size; and a
+  // double-click would toggle the page's focus mode behind fullscreen.
+  grid.addEventListener('click', event => event.stopPropagation());
+  grid.addEventListener('dblclick', event => event.stopPropagation());
+  tile.appendChild(grid);
   tile.appendChild(toolbar);
   if (!this._fullscreenCallToolbars) this._fullscreenCallToolbars = new Set();
   this._fullscreenCallToolbars.add(toolbar);
@@ -141,7 +145,9 @@ _bindFullscreenCallTile(tile, toolbar) {
       if (this._fullscreenCallActiveTile) this._endFullscreenCallTile(this._fullscreenCallActiveTile);
       this._fullscreenCallActiveTile = tile;
       this._fullscreenCallOriginalStream = tile._fullscreenCallSourceStream || tile.querySelector('video')?.srcObject || null;
-      this._fullscreenCallSelectedTile = tile;
+      this._fullscreenCallSelectedTiles = [tile];
+      this._fullscreenCallFocusedTile = null;
+      this._fullscreenCallShowAll = false;
       tile._fullscreenCallOriginalLabel = this._fullscreenStreamLabelNode(tile)?.textContent ?? null;
       this._setFullscreenVideoSource(tile, tile, this._fullscreenCallOriginalStream);
       this._revealFullscreenCallControls(tile);
@@ -151,6 +157,12 @@ _bindFullscreenCallTile(tile, toolbar) {
     }
   };
   const onActivity = () => this._revealFullscreenCallControls(tile);
+  // Clicking the stream shown full size goes back to the grid. The second
+  // click of a double-click is ignored so it does not undo the first.
+  const onClick = (event) => {
+    if (event?.detail > 1 || this._fullscreenCallActiveTile !== tile || !this._fullscreenCallFocusedTile) return;
+    this._unfocusFullscreenStream(tile);
+  };
   // Controls are up only while the pointer is over the screen: hide them the
   // moment it leaves, unless the settings popup is open.
   const onPointerLeave = () => {
@@ -166,13 +178,14 @@ _bindFullscreenCallTile(tile, toolbar) {
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
   tile.addEventListener('mouseleave', onPointerLeave);
+  tile.addEventListener('click', onClick);
   tile.addEventListener('mousemove', onActivity);
   tile.addEventListener('touchstart', onActivity, { passive: true });
   tile.addEventListener('focusin', onActivity);
   toolbar.addEventListener('focusin', onActivity);
   toolbar.addEventListener('click', event => event.stopPropagation());
   toolbar.addEventListener('dblclick', event => event.stopPropagation());
-  this._fullscreenCallTileBindings.set(tile, { toolbar, onFullscreenChange, onActivity, onPointerLeave });
+  this._fullscreenCallTileBindings.set(tile, { toolbar, onFullscreenChange, onActivity, onPointerLeave, onClick });
 },
 
 // The element in fullscreen, including the WebKit-prefixed API older Safari uses.
@@ -192,15 +205,18 @@ _exitDocumentFullscreen() {
 // settings popup closed, no idle state. Safe to call more than once.
 _endFullscreenCallTile(tile) {
   if (this._fullscreenCallActiveTile !== tile) return;
+  this._hideFullscreenStreamGrid(tile);
   this._setFullscreenVideoSource(tile, tile, this._fullscreenCallOriginalStream);
   this._restoreFullscreenStreamLabel(tile);
-  const toolbar = this._fullscreenCallTileBindings?.get(tile)?.toolbar;
-  const audioPopover = toolbar?.querySelector('.fullscreen-audio-popover');
-  const audioTrigger = toolbar?.querySelector('.fullscreen-call-audio');
-  if (audioPopover && audioTrigger) this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
+  this._closeFullscreenPopovers(tile, this._fullscreenCallTileBindings?.get(tile)?.toolbar);
   this._fullscreenCallActiveTile = null;
   this._fullscreenCallOriginalStream = null;
-  this._fullscreenCallSelectedTile = null;
+  this._fullscreenCallSelectedTiles = null;
+  this._fullscreenCallFocusedTile = null;
+  this._fullscreenCallShowAll = false;
+  tile.classList.remove('fullscreen-stream-focused');
+  const backToGrid = tile.querySelector('.fullscreen-call-grid');
+  if (backToGrid) backToGrid.hidden = true;
   tile._fullscreenCallOriginalLabel = null;
   clearTimeout(tile._fullscreenControlsTimer);
   tile.classList.remove('fullscreen-controls-idle');
@@ -241,42 +257,55 @@ _exitFullscreenCallControls() {
 
 _toggleFullscreenAudioPopover(tile, popover, trigger) {
   if (!popover.hidden) {
-    this._closeFullscreenAudioPopover(tile, popover, trigger);
+    this._closeFullscreenPopover(tile, popover, trigger);
     return;
   }
   popover.hidden = false;
   tile.classList.add('fullscreen-popup-open');
   trigger.setAttribute('aria-expanded', 'true');
-  this._populateFullscreenAudioPopover(popover);
+  this._watchFullscreenPopoverOutside(tile, popover, trigger);
+  // The same controls as the voice sidebar, built fresh for each opening and
+  // destroyed on close so no meter loop or subscription outlives the popup.
+  popover._callSettingsPanel?.destroy();
+  popover._callSettingsPanel = this._mountFullscreenCallSettings?.(popover) || null;
 },
 
-_closeFullscreenAudioPopover(tile, popover, trigger) {
+// Every way out of either popup (its button, Escape, a click outside,
+// leaving fullscreen, the tile going away) comes through here. Only Call
+// settings has a panel to destroy.
+_closeFullscreenPopover(tile, popover, trigger) {
+  if (popover._fullscreenOutsideClick) {
+    document.removeEventListener?.('pointerdown', popover._fullscreenOutsideClick, true);
+    popover._fullscreenOutsideClick = null;
+  }
   popover.hidden = true;
   tile.classList.remove('fullscreen-popup-open');
   trigger.setAttribute('aria-expanded', 'false');
+  popover._callSettingsPanel?.destroy();
+  popover._callSettingsPanel = null;
 },
 
-async _populateFullscreenAudioPopover(popover) {
-  try { await this._populateAudioDevices?.(); } catch { /* existing device panel owns enumeration errors */ }
-  for (const select of popover.querySelectorAll('select[data-device-kind]')) {
-    const source = document.getElementById(select.dataset.sourceId);
-    if (!source) continue;
-    const options = Array.from(source.options || []).map(option => option.cloneNode(true));
-    select.replaceChildren(...options);
-    select.value = source.value;
-    select.disabled = !!source.disabled;
-    select.title = source.title || '';
-  }
-  this._syncFullscreenCallVolume();
+// An open popup closes on a click anywhere outside it, a click on a stream
+// included. Its own button is left to toggle it.
+_watchFullscreenPopoverOutside(tile, popover, trigger) {
+  const onPointerDown = (event) => {
+    const target = event?.target;
+    if (popover.contains?.(target) || trigger.contains?.(target)) return;
+    this._closeFullscreenPopover(tile, popover, trigger);
+  };
+  popover._fullscreenOutsideClick = onPointerDown;
+  document.addEventListener('pointerdown', onPointerDown, true);
 },
 
-_syncFullscreenCallVolume() {
-  const mainSlider = document.getElementById('voice-master-volume');
-  const volume = this.voice?._voiceMasterLevel?.() ??
-    (mainSlider ? Number(mainSlider.value) / 100 : 1);
-  for (const toolbar of this._fullscreenCallToolbars || []) {
-    const slider = toolbar.querySelector('.fullscreen-call-volume');
-    if (slider) slider.value = String(Math.round(volume * 100));
+// Closes the stream list and the call settings popup of a tile's toolbar.
+_closeFullscreenPopovers(tile, toolbar) {
+  for (const [popoverClass, triggerClass] of [
+    ['.fullscreen-audio-popover', '.fullscreen-call-audio'],
+    ['.fullscreen-stream-popover', '.fullscreen-call-streams'],
+  ]) {
+    const popover = toolbar?.querySelector(popoverClass);
+    const trigger = toolbar?.querySelector(triggerClass);
+    if (popover && trigger) this._closeFullscreenPopover(tile, popover, trigger);
   }
 },
 
@@ -385,81 +414,479 @@ _updateFullscreenTileSource(tile, stream) {
   }
   const activeTile = this._fullscreenCallActiveTile;
   if (!activeTile) return;
-  if (tile === activeTile) {
-    this._fullscreenCallOriginalStream = stream;
-    if (this._fullscreenCallSelectedTile && this._fullscreenCallSelectedTile !== tile) {
-      const selected = this._fullscreenCallSelectedTile;
-      const selectedStream = selected._fullscreenCallSourceStream || selected.querySelector('video')?.srcObject;
-      this._setFullscreenVideoSource(activeTile, selected, selectedStream || null);
-    } else {
-      this._setFullscreenVideoSource(activeTile, tile, stream);
-    }
-  } else if (this._fullscreenCallSelectedTile === tile && stream) {
-    this._setFullscreenVideoSource(activeTile, tile, stream);
+  if (tile === activeTile) this._fullscreenCallOriginalStream = stream;
+  // The tile's own code has just set its video to the new stream; put back
+  // what fullscreen shows. A stream that ended is handled once it is gone.
+  if (tile === activeTile || (stream && this._fullscreenCallSelectedTiles?.includes(tile))) {
+    this._applyFullscreenSelection();
   }
+  this._refreshFullscreenStreamPicker();
 },
 
 _setFullscreenVideoSource(targetTile, sourceTile, stream) {
   const video = targetTile?.querySelector('video');
   if (!video) return;
-  video.srcObject = stream;
+  // Setting the same stream again restarts the video, so leave it be.
+  if (video.srcObject !== stream) video.srcObject = stream;
   video.style.transform = sourceTile?._fullscreenCallMirrored ? 'scaleX(-1)' : '';
   const selectedSource = this._listLiveFullscreenStreams().find(item => item.tile === sourceTile);
   const label = this._fullscreenStreamLabelNode(targetTile);
   if (selectedSource && label) label.textContent = selectedSource.label;
 },
 
-_handleFullscreenSourceEnded(tile) {
+// Shows the chosen streams in the fullscreen tile: one fills it through the
+// tile's own video, several share it in the grid.
+_applyFullscreenSelection() {
   const activeTile = this._fullscreenCallActiveTile;
-  if (activeTile && this._fullscreenCallSelectedTile === tile) {
-    const fallback = this._listLiveFullscreenStreams(tile)[0];
-    if (fallback) {
-      this._setFullscreenVideoSource(activeTile, fallback.tile, fallback.stream);
-      this._fullscreenCallSelectedTile = fallback.tile;
-    } else {
-      this._exitFullscreenCallControls();
-    }
+  if (!activeTile) return;
+  const selected = this._fullscreenCallSelectedTiles || [activeTile];
+  // A stream is only shown full size out of a grid it is still part of.
+  if (selected.length < 2 || !selected.includes(this._fullscreenCallFocusedTile)) {
+    this._fullscreenCallFocusedTile = null;
   }
+  const focused = this._fullscreenCallFocusedTile;
+  activeTile.classList.toggle('fullscreen-stream-focused', !!focused);
+  this._syncFullscreenGridButton(activeTile);
+  if (selected.length < 2 || focused) {
+    // Focused: the grid keeps its cells, so going back does not restart them.
+    if (focused) this._pauseFullscreenStreamGrid(activeTile);
+    else this._hideFullscreenStreamGrid(activeTile);
+    const source = focused || selected[0] || activeTile;
+    const stream = source === activeTile
+      ? this._fullscreenCallOriginalStream
+      : (source._fullscreenCallSourceStream || source.querySelector('video')?.srcObject || null);
+    this._setFullscreenVideoSource(activeTile, source, stream);
+    return;
+  }
+  this._setFullscreenVideoSource(activeTile, activeTile, this._fullscreenCallOriginalStream);
+  this._renderFullscreenStreamGrid(activeTile, selected);
+},
+
+// The grid button is up while one stream of the grid is shown full size
+// (Back to grid), and while some live streams are left out (Show all).
+_syncFullscreenGridButton(tile, live = this._listLiveFullscreenStreams().length) {
+  const button = tile.querySelector('.fullscreen-call-grid');
+  if (!button) return;
+  const focused = !!this._fullscreenCallFocusedTile;
+  const shown = (this._fullscreenCallSelectedTiles || [tile]).length;
+  button.hidden = !focused && !(live > 1 && shown < live);
+  button.title = t(focused ? 'voice_runtime.back_to_grid' : 'voice_runtime.show_all_streams_now');
+  button.setAttribute('aria-label', button.title);
+},
+
+// Shows one stream of the grid full size; the others stay ticked.
+_focusFullscreenStream(fullscreenTile, sourceTileId) {
+  if (this._fullscreenElement() !== fullscreenTile || this._fullscreenCallActiveTile !== fullscreenTile) return;
+  const source = this._fullscreenCallSelectedTiles?.find(item => item.id === sourceTileId);
+  if (!source) return;
+  const grid = fullscreenTile.querySelector('.fullscreen-stream-grid');
+  const fromGrid = !!grid?.contains?.(document.activeElement);
+  this._fullscreenCallFocusedTile = source;
+  this._applyFullscreenSelection();
+  this._refreshFullscreenStreamPicker();
+  // The button that was clicked is now hidden: keep keyboard focus on screen.
+  if (fromGrid) fullscreenTile.querySelector('.fullscreen-call-grid')?.focus();
+},
+
+_unfocusFullscreenStream(fullscreenTile) {
+  const focused = this._fullscreenCallFocusedTile;
+  if (this._fullscreenCallActiveTile !== fullscreenTile || !focused) return;
+  const backToGrid = fullscreenTile.querySelector('.fullscreen-call-grid');
+  const fromButton = !!backToGrid && document.activeElement === backToGrid;
+  this._fullscreenCallFocusedTile = null;
+  this._applyFullscreenSelection();
+  this._refreshFullscreenStreamPicker();
+  if (fromButton) {
+    const cell = Array.from(fullscreenTile.querySelectorAll('.fullscreen-stream-cell'))
+      .find(item => item.dataset.sourceId === focused.id);
+    cell?.querySelector('.fullscreen-stream-cell-focus')?.focus();
+  }
+},
+
+// A stream can no longer be shown: take it out of what fullscreen shows,
+// falling back to another live stream, or leaving fullscreen if none is left.
+_dropFullscreenSource(tile) {
+  const selected = this._fullscreenCallSelectedTiles;
+  if (!this._fullscreenCallActiveTile || !selected?.includes(tile)) return;
+  const rest = selected.filter(item => item !== tile);
+  if (!rest.length) {
+    const fallback = this._listLiveFullscreenStreams(tile)[0];
+    if (!fallback) {
+      this._exitFullscreenCallControls();
+      return;
+    }
+    rest.push(fallback.tile);
+  }
+  this._fullscreenCallSelectedTiles = rest;
+  this._applyFullscreenSelection();
+},
+
+_handleFullscreenSourceEnded(tile) {
+  this._dropFullscreenSource(tile);
   this._refreshFullscreenStreamPicker();
 },
 
-_refreshFullscreenStreamPicker() {
-  const streams = this._listLiveFullscreenStreams();
-  // Rebuilding an open dropdown closes it, and this runs on many events, so
-  // the options are only rebuilt when a stream or its label actually changed.
-  const signature = streams.map(item => `${item.tile.id}\u0000${item.label}`).join('\u0001');
-  for (const [picker] of this._fullscreenStreamPickers || []) {
-    const currentValue = this._fullscreenCallSelectedTile?.id || this._fullscreenCallActiveTile?.id || '';
-    if (picker._fullscreenStreamSignature !== signature) {
-      picker.replaceChildren();
-      for (const item of streams) {
-        const option = document.createElement('option');
-        option.value = item.tile.id;
-        option.textContent = item.label;
-        picker.appendChild(option);
-      }
-      picker._fullscreenStreamSignature = signature;
+_refreshFullscreenStreamPicker(excludeTile = null) {
+  const streams = this._listLiveFullscreenStreams(excludeTile);
+  const activeTile = this._fullscreenCallActiveTile;
+  if (activeTile && this._fullscreenCallShowAll) {
+    const selected = this._fullscreenCallSelectedTiles || [activeTile];
+    const added = streams.filter(item => !selected.includes(item.tile)).map(item => item.tile);
+    if (added.length) {
+      this._fullscreenCallSelectedTiles = [...selected, ...added];
+      this._applyFullscreenSelection();
     }
-    const nextValue = streams.some(item => item.tile.id === currentValue) ? currentValue : streams[0]?.tile.id;
-    if (nextValue !== undefined && picker.value !== nextValue) picker.value = nextValue;
-    picker.disabled = streams.length < 2;
+  }
+  // Rebuilding the list moves focus off a ticked box, and this runs on many
+  // events, so the rows are only rebuilt when a stream or its label changed.
+  const signature = streams.map(item => `${item.tile.id}\u0000${item.label}`).join('\u0001');
+  for (const [popover, owner] of this._fullscreenStreamPickers || []) {
+    const list = popover.querySelector('.fullscreen-stream-choices');
+    if (list && popover._fullscreenStreamSignature !== signature) {
+      list.replaceChildren(...streams.map((item) => {
+        const row = document.createElement('label');
+        row.className = 'fullscreen-stream-choice';
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.className = 'fullscreen-stream-option';
+        box.value = item.tile.id;
+        box.addEventListener('change', (event) => {
+          event.stopPropagation();
+          this._setFullscreenStreamShown(owner, box.value, box.checked);
+        });
+        const text = document.createElement('span');
+        text.className = 'fullscreen-stream-choice-label';
+        text.textContent = item.label;
+        row.appendChild(box);
+        row.appendChild(text);
+        return row;
+      }));
+      popover._fullscreenStreamSignature = signature;
+    }
+    const isActive = owner === activeTile;
+    const shown = isActive ? (this._fullscreenCallSelectedTiles || [owner]) : [owner];
+    const shownIds = new Set(shown.map(item => item.id));
+    const boxes = Array.from(popover.querySelectorAll('.fullscreen-stream-option'));
+    const tickedCount = boxes.filter(box => shownIds.has(box.value)).length;
+    for (const box of boxes) {
+      box.checked = shownIds.has(box.value);
+      // The last stream shown stays: fullscreen always shows something.
+      box.disabled = box.checked && tickedCount < 2;
+    }
+    const showAll = popover.querySelector('.fullscreen-stream-all');
+    if (showAll) showAll.checked = isActive && !!this._fullscreenCallShowAll;
+    const trigger = popover.parentNode?.querySelector?.('.fullscreen-call-streams');
+    if (trigger) {
+      const shownStreams = streams.filter(item => shownIds.has(item.tile.id));
+      trigger.textContent = shownStreams.length > 1
+        ? t('voice_runtime.stream_other', { count: shownStreams.length })
+        : (shownStreams[0]?.label || t('voice_runtime.streams'));
+      trigger.disabled = streams.length < 2;
+    }
+    // A stream that starts or ends changes whether any are left out.
+    if (isActive) this._syncFullscreenGridButton(owner, streams.length);
   }
 },
 
-_selectFullscreenStream(fullscreenTile, sourceTileId) {
-  if (this._fullscreenElement() !== fullscreenTile || !fullscreenTile.parentNode) return;
-  const sourceTile = document.getElementById(sourceTileId);
-  if (!sourceTile || !sourceTile.parentNode) return;
-  const stream = this._listLiveFullscreenStreams().find(item => item.tile === sourceTile)?.stream;
-  if (!stream || !fullscreenTile.querySelector('video')) {
+_setFullscreenStreamShown(fullscreenTile, sourceTileId, shown) {
+  if (this._fullscreenElement() !== fullscreenTile || this._fullscreenCallActiveTile !== fullscreenTile) {
     this._refreshFullscreenStreamPicker();
     return;
   }
-  if (!this._fullscreenCallOriginalStream) this._fullscreenCallOriginalStream = fullscreenTile.querySelector('video').srcObject;
-  this._setFullscreenVideoSource(fullscreenTile, sourceTile, stream);
-  this._fullscreenCallActiveTile = fullscreenTile;
-  this._fullscreenCallSelectedTile = sourceTile;
+  const source = this._listLiveFullscreenStreams().find(item => item.tile.id === sourceTileId)?.tile;
+  const selected = (this._fullscreenCallSelectedTiles || [fullscreenTile]).filter(item => item.id !== sourceTileId);
+  if (shown && source) selected.push(source);
+  if (selected.length) {
+    this._fullscreenCallSelectedTiles = selected;
+    this._fullscreenCallFocusedTile = null;
+    this._fullscreenCallShowAll = false;
+    this._applyFullscreenSelection();
+  }
   this._refreshFullscreenStreamPicker();
+},
+
+_setFullscreenShowAll(fullscreenTile, showAll) {
+  if (this._fullscreenElement() !== fullscreenTile || this._fullscreenCallActiveTile !== fullscreenTile) {
+    this._refreshFullscreenStreamPicker();
+    return;
+  }
+  const streams = this._listLiveFullscreenStreams();
+  this._fullscreenCallShowAll = showAll;
+  this._fullscreenCallFocusedTile = null;
+  if (showAll) {
+    if (streams.length) this._fullscreenCallSelectedTiles = streams.map(item => item.tile);
+  } else {
+    // Back to the stream fullscreen started on, while it is still live.
+    const own = streams.find(item => item.tile === fullscreenTile) || streams[0];
+    if (own) this._fullscreenCallSelectedTiles = [own.tile];
+  }
+  this._applyFullscreenSelection();
+  this._refreshFullscreenStreamPicker();
+},
+
+_toggleFullscreenStreamPopover(tile, popover, trigger) {
+  if (!popover.hidden) {
+    this._closeFullscreenPopover(tile, popover, trigger);
+    return;
+  }
+  const toolbar = popover.parentNode;
+  const audioPopover = toolbar?.querySelector('.fullscreen-audio-popover');
+  const audioTrigger = toolbar?.querySelector('.fullscreen-call-audio');
+  if (audioPopover && audioTrigger) this._closeFullscreenPopover(tile, audioPopover, audioTrigger);
+  this._refreshFullscreenStreamPicker();
+  popover.hidden = false;
+  tile.classList.add('fullscreen-popup-open');
+  trigger.setAttribute('aria-expanded', 'true');
+  this._watchFullscreenPopoverOutside(tile, popover, trigger);
+},
+
+// ── Fullscreen stream grid ────────────────────────────
+
+_renderFullscreenStreamGrid(tile, selected) {
+  const grid = tile.querySelector('.fullscreen-stream-grid');
+  if (!grid) return;
+  const items = this._listLiveFullscreenStreams().filter(item => selected.includes(item.tile));
+  const current = Array.from(grid.querySelectorAll('.fullscreen-stream-cell'));
+  const byId = new Map(current.map(cell => [cell.dataset.sourceId, cell]));
+  const cells = items.map((item) => {
+    const cell = byId.get(item.tile.id) || this._createFullscreenStreamCell(tile, item.tile.id);
+    byId.delete(item.tile.id);
+    const video = cell.querySelector('video');
+    if (video.srcObject !== item.stream) {
+      video.srcObject = item.stream;
+      Promise.resolve(video.play?.()).catch(() => { /* autoplay refused: the muted video starts on the next frame */ });
+    }
+    video.style.transform = item.tile._fullscreenCallMirrored ? 'scaleX(-1)' : '';
+    cell.querySelector('.fullscreen-stream-cell-label').textContent = item.label;
+    const focusButton = cell.querySelector('.fullscreen-stream-cell-focus');
+    focusButton.title = t('voice_runtime.focus_stream', { name: item.label });
+    focusButton.setAttribute('aria-label', focusButton.title);
+    const removeButton = cell.querySelector('.fullscreen-stream-cell-remove');
+    removeButton.title = t('voice_runtime.remove_from_view', { name: item.label });
+    removeButton.setAttribute('aria-label', removeButton.title);
+    cell._fullscreenSourceTile = item.tile;
+    const volume = cell.querySelector('.fullscreen-stream-cell-volume');
+    const userId = item.tile._fullscreenCallUserId;
+    // Your own camera or share is not played back to you.
+    volume.hidden = userId == null || (this.user?.id != null && String(userId) === String(this.user.id));
+    const isCamera = (item.tile.className || '').split(/\s+/).includes('webcam-tile');
+    volume.title = t(isCamera ? 'voice_runtime.voice_volume_of' : 'voice_runtime.stream_volume_of', { name: item.label });
+    volume.setAttribute('aria-label', volume.title);
+    if (!volume.hidden && document.activeElement !== volume) volume.value = String(this._fullscreenCellVolume(item.tile));
+    return cell;
+  });
+  for (const cell of byId.values()) {
+    const video = cell.querySelector('video');
+    if (video) video.srcObject = null;
+  }
+  // Only reorder when the cells changed: moving a playing video is not free.
+  if (cells.length !== current.length || cells.some((cell, index) => cell !== current[index])) {
+    grid.replaceChildren(...cells);
+  }
+  grid.hidden = false;
+  tile.classList.add('fullscreen-grid-active');
+  if (!grid._fullscreenResizeObserver && typeof ResizeObserver === 'function') {
+    grid._fullscreenResizeObserver = new ResizeObserver(() => this._scheduleFullscreenGridLayout(tile));
+    grid._fullscreenResizeObserver.observe(grid);
+  }
+  this._layoutFullscreenStreamGrid(tile);
+},
+
+_createFullscreenStreamCell(tile, sourceId) {
+  const cell = document.createElement('div');
+  cell.className = 'fullscreen-stream-cell';
+  cell.dataset.sourceId = sourceId;
+  const video = document.createElement('video');
+  video.className = 'fullscreen-stream-cell-video';
+  video.autoplay = true;
+  video.playsInline = true;
+  // A copy of a tile's picture: its sound already plays from the call.
+  video.muted = true;
+  // The stream's shape is known once it loads, and changes when a sharer
+  // resizes their window or a phone turns.
+  const relayout = () => this._scheduleFullscreenGridLayout(tile);
+  video.addEventListener('loadedmetadata', relayout);
+  video.addEventListener('resize', relayout);
+  // The whole cell is a button that shows its stream full size. The second
+  // click of a double-click is ignored, or it would land on the full-size
+  // stream and go straight back.
+  const focusButton = document.createElement('button');
+  focusButton.type = 'button';
+  focusButton.className = 'fullscreen-stream-cell-focus';
+  focusButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (event.detail > 1) return;
+    this._focusFullscreenStream(tile, sourceId);
+  });
+  const label = document.createElement('span');
+  label.className = 'fullscreen-stream-cell-label';
+  const removeButton = document.createElement('button');
+  removeButton.type = 'button';
+  removeButton.className = 'fullscreen-stream-cell-remove';
+  removeButton.textContent = '✕';
+  removeButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    this._setFullscreenStreamShown(tile, sourceId, false);
+  });
+  const volume = document.createElement('input');
+  volume.type = 'range';
+  volume.className = 'fullscreen-stream-cell-volume';
+  volume.min = '0';
+  volume.max = '200';
+  volume.addEventListener('click', event => event.stopPropagation());
+  volume.addEventListener('dblclick', event => event.stopPropagation());
+  volume.addEventListener('input', (event) => {
+    event.stopPropagation();
+    const source = cell._fullscreenSourceTile;
+    if (!source) return;
+    const val = parseInt(volume.value, 10);
+    const isCamera = (source.className || '').split(/\s+/).includes('webcam-tile');
+    if (isCamera) this._setFullscreenVoiceVolume(source._fullscreenCallUserId, val);
+    else this._setScreenStreamVolume(source, source._fullscreenCallUserId, val);
+  });
+  cell.appendChild(video);
+  cell.appendChild(focusButton);
+  cell.appendChild(label);
+  cell.appendChild(volume);
+  cell.appendChild(removeButton);
+  return cell;
+},
+
+// Hides the grid behind a stream shown full size, keeping its cells playing.
+_pauseFullscreenStreamGrid(tile) {
+  const grid = tile?.querySelector('.fullscreen-stream-grid');
+  if (grid) grid.hidden = true;
+  tile?.classList.remove('fullscreen-grid-active');
+},
+
+_hideFullscreenStreamGrid(tile) {
+  const grid = tile?.querySelector('.fullscreen-stream-grid');
+  if (!grid) return;
+  grid._fullscreenResizeObserver?.disconnect();
+  grid._fullscreenResizeObserver = null;
+  if (grid._fullscreenLayoutFrame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(grid._fullscreenLayoutFrame);
+  grid._fullscreenLayoutFrame = null;
+  for (const video of Array.from(grid.querySelectorAll('video'))) video.srcObject = null;
+  grid.replaceChildren();
+  grid.hidden = true;
+  grid._fullscreenLayoutKey = null;
+  tile.classList.remove('fullscreen-grid-active');
+},
+
+_scheduleFullscreenGridLayout(tile) {
+  const grid = tile.querySelector('.fullscreen-stream-grid');
+  if (!grid || grid.hidden) return;
+  if (typeof requestAnimationFrame !== 'function') {
+    this._layoutFullscreenStreamGrid(tile);
+    return;
+  }
+  if (grid._fullscreenLayoutFrame) return;
+  grid._fullscreenLayoutFrame = requestAnimationFrame(() => {
+    grid._fullscreenLayoutFrame = null;
+    this._layoutFullscreenStreamGrid(tile);
+  });
+},
+
+_layoutFullscreenStreamGrid(tile) {
+  const grid = tile.querySelector('.fullscreen-stream-grid');
+  if (!grid || grid.hidden) return;
+  const cells = Array.from(grid.querySelectorAll('.fullscreen-stream-cell'));
+  const width = grid.clientWidth || globalThis.innerWidth || 1280;
+  const height = grid.clientHeight || globalThis.innerHeight || 720;
+  // Until a stream has loaded its shape is unknown; most are 16:9.
+  const ratios = cells.map((cell) => {
+    const video = cell.querySelector('video');
+    return video?.videoWidth > 0 && video?.videoHeight > 0 ? video.videoWidth / video.videoHeight : 16 / 9;
+  });
+  const { key, rects } = this._computeFullscreenGridLayout(ratios, width, height, {
+    gap: 8,
+    previousKey: grid._fullscreenLayoutKey,
+  });
+  grid._fullscreenLayoutKey = key;
+  cells.forEach((cell, index) => {
+    const rect = rects[index];
+    cell.style.left = `${(rect.x / width) * 100}%`;
+    cell.style.top = `${(rect.y / height) * 100}%`;
+    cell.style.width = `${(rect.w / width) * 100}%`;
+    cell.style.height = `${(rect.h / height) * 100}%`;
+  });
+},
+
+// Places streams of any shape on a width × height screen. Streams keep their
+// order and are split into rows: a row shares one height and each stream in
+// it is as wide as its shape needs, so an upright phone camera gets a narrow
+// slot instead of a wide one padded with black. Every split into rows is
+// tried (only rows of even size past ten streams) and the one showing the
+// most picture wins. previousKey is the split in use: it is kept unless
+// another shows clearly more, so the grid does not jump about.
+// Returns { key, rects }, a rect { x, y, w, h } in pixels per stream.
+_computeFullscreenGridLayout(ratios, width, height, { gap = 0, previousKey = null } = {}) {
+  const count = ratios.length;
+  if (!count) return { key: '', rects: [] };
+  const evaluate = (rowSizes) => {
+    let start = 0;
+    const rows = rowSizes.map((size) => {
+      let sum = 0;
+      for (let index = start; index < start + size; index++) sum += ratios[index];
+      start += size;
+      // The height at which this row exactly fills the width.
+      return { size, sum, height: Math.max(0, width - gap * (size - 1)) / sum };
+    });
+    const available = Math.max(0, height - gap * (rows.length - 1));
+    const total = rows.reduce((acc, row) => acc + row.height, 0);
+    if (total > available) rows.forEach((row) => { row.height *= available / total; });
+    const score = rows.reduce((acc, row) => acc + row.height * row.height * row.sum, 0);
+    return { key: rowSizes.join(','), rows, score };
+  };
+  const candidates = [];
+  if (count <= 10) {
+    // Each bit says whether a new row starts after that stream.
+    for (let mask = 0; mask < 2 ** (count - 1); mask++) {
+      const sizes = [];
+      let size = 1;
+      for (let index = 0; index < count - 1; index++) {
+        if (mask & (1 << index)) {
+          sizes.push(size);
+          size = 1;
+        } else {
+          size++;
+        }
+      }
+      sizes.push(size);
+      candidates.push(sizes);
+    }
+  } else {
+    for (let rowCount = 1; rowCount <= count; rowCount++) {
+      candidates.push(Array.from({ length: rowCount },
+        (_, index) => Math.floor(count / rowCount) + (index < count % rowCount ? 1 : 0)));
+    }
+  }
+  let best = null;
+  for (const sizes of candidates) {
+    const result = evaluate(sizes);
+    if (!best || result.score > best.score) best = result;
+  }
+  const previous = String(previousKey || '').split(',').map(Number);
+  if (previousKey && previous.every(size => Number.isInteger(size) && size > 0) &&
+      previous.reduce((acc, size) => acc + size, 0) === count && previousKey !== best.key) {
+    const kept = evaluate(previous);
+    if (best.score <= kept.score * 1.1) best = kept;
+  }
+  const rects = [];
+  const blockHeight = best.rows.reduce((acc, row) => acc + row.height, 0) + gap * (best.rows.length - 1);
+  let y = Math.max(0, (height - blockHeight) / 2);
+  let index = 0;
+  for (const row of best.rows) {
+    const rowWidth = row.height * row.sum + gap * (row.size - 1);
+    let x = Math.max(0, (width - rowWidth) / 2);
+    for (let item = 0; item < row.size; item++, index++) {
+      const w = row.height * ratios[index];
+      rects.push({ x, y, w, h: row.height });
+      x += w + gap;
+    }
+    y += row.height + gap;
+  }
+  return { key: best.key, rects };
 },
 
 _handleFullscreenTileRemoval(tile) {
@@ -468,25 +895,18 @@ _handleFullscreenTileRemoval(tile) {
   if (activeTile === tile) {
     this._exitFullscreenCallControls();
     this._endFullscreenCallTile(tile);
-  } else if (activeTile && this._fullscreenCallSelectedTile === tile) {
-    const fallback = this._listLiveFullscreenStreams(tile)[0];
-    if (fallback) {
-      this._setFullscreenVideoSource(activeTile, fallback.tile, fallback.stream);
-      this._fullscreenCallSelectedTile = fallback.tile;
-    } else {
-      this._exitFullscreenCallControls();
-    }
+  } else {
+    this._dropFullscreenSource(tile);
   }
   const binding = this._fullscreenCallTileBindings?.get(tile);
   if (binding) {
     binding.toolbar.hidden = true;
     tile.classList.remove('is-fullscreen');
-    const audioPopover = binding.toolbar.querySelector('.fullscreen-audio-popover');
-    const audioTrigger = binding.toolbar.querySelector('.fullscreen-call-audio');
-    if (audioPopover && audioTrigger) this._closeFullscreenAudioPopover(tile, audioPopover, audioTrigger);
+    this._closeFullscreenPopovers(tile, binding.toolbar);
     document.removeEventListener?.('fullscreenchange', binding.onFullscreenChange);
     document.removeEventListener?.('webkitfullscreenchange', binding.onFullscreenChange);
     tile.removeEventListener?.('mouseleave', binding.onPointerLeave);
+    tile.removeEventListener?.('click', binding.onClick);
     tile.removeEventListener?.('mousemove', binding.onActivity);
     tile.removeEventListener?.('touchstart', binding.onActivity);
     tile.removeEventListener?.('focusin', binding.onActivity);
@@ -497,23 +917,64 @@ _handleFullscreenTileRemoval(tile) {
       if (owner === tile) this._fullscreenStreamPickers.delete(picker);
     });
   }
-  this._refreshFullscreenStreamPicker();
+  // The tile may still be on the page with a live stream; it is going.
+  this._refreshFullscreenStreamPicker(tile);
 },
 
 _handleFullscreenTileHidden(tile) {
-  const activeTile = this._fullscreenCallActiveTile;
-  if (activeTile === tile) {
-    this._exitFullscreenCallControls();
-  } else if (activeTile && this._fullscreenCallSelectedTile === tile) {
-    const fallback = this._listLiveFullscreenStreams(tile)[0];
-    if (fallback) {
-      this._setFullscreenVideoSource(activeTile, fallback.tile, fallback.stream);
-      this._fullscreenCallSelectedTile = fallback.tile;
-    } else {
-      this._exitFullscreenCallControls();
-    }
+  if (this._fullscreenCallActiveTile === tile) this._exitFullscreenCallControls();
+  else this._dropFullscreenSource(tile);
+  this._refreshFullscreenStreamPicker(tile);
+},
+
+// Sets a screen share's audio volume (0-200) from its tile's slider or from
+// its stream in the fullscreen grid, and keeps both showing it.
+_setScreenStreamVolume(tile, userId, val) {
+  this.voice?.setStreamVolume?.(userId, val / 100);
+  const slider = tile.querySelector('.stream-vol-slider');
+  const pct = tile.querySelector('.stream-vol-pct');
+  const muteBtn = tile.querySelector('.stream-mute-btn');
+  if (slider) slider.value = String(val);
+  if (pct) pct.textContent = val + '%';
+  if (muteBtn) {
+    muteBtn.textContent = val === 0 ? '🔇' : '🔊';
+    muteBtn.dataset.muted = val === 0 ? 'true' : 'false';
+    muteBtn.classList.toggle('muted', val === 0);
   }
-  this._refreshFullscreenStreamPicker();
+  try {
+    const vols = JSON.parse(localStorage.getItem('haven_stream_volumes') || '{}');
+    vols[userId] = val;
+    localStorage.setItem('haven_stream_volumes', JSON.stringify(vols));
+  } catch { /* storage blocked or corrupt: the volume holds for this session only */ }
+  this._syncFullscreenCellVolumes();
+},
+
+// A camera carries no sound, so its slider in the grid is the person's voice
+// volume, the same one their menu in the voice panel sets.
+_setFullscreenVoiceVolume(userId, val) {
+  this._setVoiceVolume?.(userId, val);
+  this.voice?.setVolume?.(userId, val / 100);
+  this._syncFullscreenCellVolumes();
+},
+
+// What a grid cell's slider shows: a share's tile slider (0 while muted), or
+// the person's voice volume for a camera.
+_fullscreenCellVolume(sourceTile) {
+  const isCamera = (sourceTile.className || '').split(/\s+/).includes('webcam-tile');
+  if (isCamera) return this._getVoiceVolume?.(sourceTile._fullscreenCallUserId) ?? 100;
+  if (sourceTile.querySelector('.stream-mute-btn')?.dataset.muted === 'true') return 0;
+  return parseInt(sourceTile.querySelector('.stream-vol-slider')?.value ?? '100', 10);
+},
+
+_syncFullscreenCellVolumes() {
+  const grid = this._fullscreenCallActiveTile?.querySelector('.fullscreen-stream-grid');
+  for (const cell of Array.from(grid?.querySelectorAll('.fullscreen-stream-cell') || [])) {
+    const slider = cell.querySelector('.fullscreen-stream-cell-volume');
+    const source = cell._fullscreenSourceTile;
+    // Leave a slider being dragged alone.
+    if (!slider || slider.hidden || !source || document.activeElement === slider) continue;
+    slider.value = String(this._fullscreenCellVolume(source));
+  }
 },
 
 _cleanupFullscreenCallTiles() {
@@ -608,7 +1069,8 @@ async _toggleWebcam() {
       btn.title = t('voice.stop_camera');
       btn.classList.add('sharing');
       this._handleWebcamStream(this.user.id, this.voice.webcamStream);
-      this._showToast(t('voice.camera_started'), 'success');
+      if (this.voice.webcamFellBack) this._showToast(t('voice.camera_fallback'), 'info');
+      else this._showToast(t('voice.camera_started'), 'success');
     } else {
       this._showToast(t('voice.camera_error'), 'error');
     }
@@ -653,6 +1115,9 @@ _handleWebcamStream(userId, stream) {
       // Double-click to toggle focus mode (expand tile full-size)
       tile.addEventListener('dblclick', (e) => {
         e.preventDefault();
+        // In fullscreen the page's focus mode is out of sight; a double-click
+        // there would only leave the layout changed on the way out.
+        if (this._fullscreenCallActiveTile === tile) return;
         this._toggleWebcamFocus(tile);
       });
 
@@ -738,7 +1203,9 @@ _handleWebcamStream(userId, stream) {
 
     const videoEl = tile.querySelector('video');
     tile._fullscreenCallMirrored = userId === this.user.id;
-    if (this._fullscreenCallActiveTile !== tile || this._fullscreenCallSelectedTile === tile) {
+    const shownInFullscreen = this._fullscreenCallSelectedTiles;
+    if (this._fullscreenCallActiveTile !== tile || !shownInFullscreen ||
+        shownInFullscreen.length > 1 || shownInFullscreen[0] === tile) {
       videoEl.style.transform = tile._fullscreenCallMirrored ? 'scaleX(-1)' : '';
     }
     if (videoEl.srcObject === stream) videoEl.srcObject = null;
@@ -1135,21 +1602,12 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
           muteBtn.dataset.muted = 'true';
           muteBtn.classList.add('muted');
         }
+        this._syncFullscreenCellVolumes();
       });
 
       volSlider.addEventListener('input', (e) => {
         e.stopPropagation();
-        const val = parseInt(volSlider.value);
-        this.voice.setStreamVolume(userId, val / 100);
-        volPct.textContent = val + '%';
-        muteBtn.textContent = val === 0 ? '🔇' : '🔊';
-        muteBtn.dataset.muted = val === 0 ? 'true' : 'false';
-        muteBtn.classList.toggle('muted', val === 0);
-        try {
-          const vols = JSON.parse(localStorage.getItem('haven_stream_volumes') || '{}');
-          vols[userId] = val;
-          localStorage.setItem('haven_stream_volumes', JSON.stringify(vols));
-        } catch { /* storage blocked or corrupt: the volume holds for this session only */ }
+        this._setScreenStreamVolume(tile, userId, parseInt(volSlider.value));
       });
 
       controls.appendChild(muteBtn);
@@ -1160,6 +1618,9 @@ _handleScreenStream(userId, stream, { force = false } = {}) {
       // Double-click to toggle focus mode (expand tile to fill chat area)
       tile.addEventListener('dblclick', (e) => {
         e.preventDefault();
+        // In fullscreen the page's focus mode is out of sight; a double-click
+        // there would only leave the layout changed on the way out.
+        if (this._fullscreenCallActiveTile === tile) return;
         this._toggleStreamFocus(tile);
       });
 

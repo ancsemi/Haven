@@ -671,6 +671,39 @@ _setupRoleDisplayPicker() {
   this._setupPicker(pickerId, storageKey, allowedValues, defaultValue, dataKey, onChange);
 },
 
+// ── Name color ──
+// Someone who holds several colored roles picks which one colors their name
+// (src/nameColor.js). The row stays hidden while there is nothing to choose.
+
+_setupNameColorPicker() {
+  const row = document.getElementById('name-color-row');
+  const select = document.getElementById('name-color-select');
+  if (!row || !select || !this.socket) return;
+  const fill = (data) => {
+    const choices = data && Array.isArray(data.choices) ? data.choices : [];
+    row.style.display = choices.length > 1 ? '' : 'none';
+    select.innerHTML = `<option value="">${this._escapeHtml(t('settings.role_display.name_color_auto'))}</option>`
+      + choices.map(r => `<option value="${Number(r.id)}">${this._escapeHtml(r.name)}</option>`).join('');
+    select.value = data && data.chosen ? String(data.chosen) : '';
+  };
+  const load = () => this.socket.emit('get-name-color', fill);
+  select.addEventListener('change', () => {
+    this.socket.emit('set-name-color', { roleId: select.value ? Number(select.value) : null }, (data) => {
+      if (data && data.error) {
+        this._showToast?.(t('settings.role_display.name_color_failed'), 'error');
+        load();
+        return;
+      }
+      fill(data);
+    });
+  });
+  // Roles can change between visits, so the list is read each time Settings opens.
+  ['open-settings-btn', 'mobile-settings-btn'].forEach(id => {
+    document.getElementById(id)?.addEventListener('click', load);
+  });
+  load();
+},
+
 // ── Toolbar Icon Style Picker ──
 
 _setupToolbarIconPicker() {

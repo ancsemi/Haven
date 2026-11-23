@@ -92,6 +92,14 @@ _roleNameHtml(role, text) {
   return `<span class="role-gradient${look.shimmer ? ' role-shimmer' : ''}" style="--role-c1:${look.c1};--role-c2:${look.c2}">${this._roleEmojiSafe(safe)}</span>`;
 },
 
+/** The role in its own colors, for drawing the role itself (its badge).
+ *  Someone who picked another role for their name color carries that color
+ *  on `role`, and the role's own under own_* (src/nameColor.js). */
+_roleOwn(role) {
+  if (!role || role.own_color === undefined) return role;
+  return { ...role, color: role.own_color, color2: role.own_color2, color_shimmer: role.own_color_shimmer };
+},
+
 /** Emoji inside a gradient name, each run wrapped in its own span so CSS can
  *  draw them in their own colors instead of as gradient silhouettes (#5720).
  *  Takes already escaped HTML: entities are plain ASCII and never match. */
@@ -539,7 +547,7 @@ _findNamedEmoji(name) {
 
 _autoEmoteWords(text) {
   const names = new Set((this.customEmojis || []).map(e => e.name));
-  try { if (localStorage.getItem('haven-emote-words') !== 'true') return text; } catch { return text; }
+  try { if (localStorage.getItem('haven-emote-words') !== 'true') return text; } catch { return text; } // private mode: storage is unavailable, so the setting is off
   return !text || !names.size || text.startsWith('/') ? text : text.split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) => i % 2 ? part : part.replace(/(?<!\S)[A-Za-z0-9_-]{1,30}(?!\S)/g, w => names.has(w) ? `:${w}:` : w)).join('');
 },
 
@@ -929,6 +937,44 @@ _getUserColor(username) {
     hash = ((hash << 5) - hash) + ch.charCodeAt(0);
   }
   return colors[Math.abs(hash) % colors.length];
+},
+
+// A profile color from the server, only if it is an exact #rrggbb. The server
+// checks it too; this is the last stop before it reaches a style.
+_safeHexColor(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
+},
+
+// The color an avatar mostly is, for the default banner. Pixels are binned
+// coarsely and the fullest bin wins, then averaged, so a photo gives its main
+// color rather than a muddy mean. Transparent pixels are skipped. Resolves
+// null when the image can't be read; the banner then uses the name color.
+async _sampleAvatarColor(file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const D = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = D; canvas.height = D;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bmp, 0, 0, D, D);
+    bmp.close?.();
+    const data = ctx.getImageData(0, 0, D, D).data;
+    const bins = new Map();
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) continue;
+      const key = (data[i] >> 5) << 6 | (data[i + 1] >> 5) << 3 | (data[i + 2] >> 5);
+      const bin = bins.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+      bin.n++; bin.r += data[i]; bin.g += data[i + 1]; bin.b += data[i + 2];
+      bins.set(key, bin);
+    }
+    let best = null;
+    for (const bin of bins.values()) if (!best || bin.n > best.n) best = bin;
+    if (!best) return null;
+    const hex = (v) => Math.round(v / best.n).toString(16).padStart(2, '0');
+    return `#${hex(best.r)}${hex(best.g)}${hex(best.b)}`;
+  } catch {
+    return null; // an image the browser cannot decode has no colour to offer
+  }
 },
 
 _isScrolledToBottom() {

@@ -40,7 +40,7 @@ const ask = (sock, event, payload) => new Promise((res) => sock.emit(event, payl
 // The same fill-in the web client does for slimmed member entries (app-socket.js).
 const fillMember = (u) => ({
   highScore: 0, statusText: '', avatar: null, avatarShape: 'circle', border: null,
-  borderTransform: null, animateProfile: 'trigger', isGuest: false, role: null, activity: null, birthday: null,
+  borderTransform: null, animateProfile: 'trigger', isGuest: false, bot: false, role: null, activity: null, birthday: null,
   ...u,
 });
 

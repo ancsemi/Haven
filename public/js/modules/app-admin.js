@@ -439,6 +439,8 @@ _applyServerSettings() {
     }
     const maxAvatarMb = document.getElementById('max-avatar-mb');
     if (maxAvatarMb) maxAvatarMb.value = this.serverSettings.max_avatar_mb || '2';
+    const maxBannerMb = document.getElementById('max-banner-mb');
+    if (maxBannerMb) maxBannerMb.value = this.serverSettings.max_banner_mb || '5';
     const maxEmojiKb = document.getElementById('max-emoji-kb');
     if (maxEmojiKb) {
       maxEmojiKb.value = this.serverSettings.max_emoji_kb || '256';
@@ -771,6 +773,7 @@ _syncSettingsNav() {
     'section-large-server': [],   // admin only: the relay opens ports on the host
     'section-tunnel':       ['manage_server'],
     'section-bots':         ['manage_server', 'manage_webhooks'],
+    'section-bot-accounts': ['manage_bots'],
     'section-ferry':        [],
     'section-custom-tos':   [],
     'section-import':       ['manage_server'],
@@ -795,6 +798,8 @@ _syncSettingsNav() {
     const access = settingsSectionsAccess[target];
 
     if (isAdmin) return '*';
+    // A bot's Bot Creators see the Bots page, with only their bots on it.
+    if (target === 'section-bot-accounts' && this.user?.botCreator) return '*';
     if (!access) return null;
 
     // Simple permission list: any matching permission grants full access.
@@ -925,6 +930,7 @@ _snapshotAdminSettings() {
     max_tag_len: this.serverSettings.max_tag_len || '20',
     max_sound_kb: this.serverSettings.max_sound_kb || '1024',
     max_avatar_mb: this.serverSettings.max_avatar_mb || '2',
+    max_banner_mb: this.serverSettings.max_banner_mb || '5',
     max_emoji_kb: this.serverSettings.max_emoji_kb || '256',
     max_sticker_kb: this.serverSettings.max_sticker_kb || '1024',
     max_poll_options: this.serverSettings.max_poll_options || '10',
@@ -1116,6 +1122,12 @@ _saveAdminSettings() {
   const maxAvatarMb = String(Math.max(1, Math.min(10, parseInt(document.getElementById('max-avatar-mb')?.value) || 2)));
   if (maxAvatarMb !== (snap.max_avatar_mb || '2')) {
     this.socket.emit('update-server-setting', { key: 'max_avatar_mb', value: maxAvatarMb });
+    changed = true;
+  }
+
+  const maxBannerMb = String(Math.max(1, Math.min(20, parseInt(document.getElementById('max-banner-mb')?.value) || 5)));
+  if (maxBannerMb !== (snap.max_banner_mb || '5')) {
+    this.socket.emit('update-server-setting', { key: 'max_banner_mb', value: maxBannerMb });
     changed = true;
   }
 
@@ -1381,6 +1393,8 @@ _cancelAdminSettings() {
     if (msk) msk.value = snap.max_sound_kb || '1024';
     const mam = document.getElementById('max-avatar-mb');
     if (mam) mam.value = snap.max_avatar_mb || '2';
+    const mbm = document.getElementById('max-banner-mb');
+    if (mbm) mbm.value = snap.max_banner_mb || '5';
     const mek = document.getElementById('max-emoji-kb');
     if (mek) mek.value = snap.max_emoji_kb || '256';
     const mstk = document.getElementById('max-sticker-kb');

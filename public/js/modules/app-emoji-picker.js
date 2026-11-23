@@ -72,7 +72,7 @@ _toneEmoji(emoji) {
 
 _getEmojiFavorites() {
   // A malformed stored list reads as no favorites; the server cleans what it saves.
-  try { const list = JSON.parse(this._userPrefs?.emoji_favorites || '[]'); return Array.isArray(list) ? list : []; } catch { return []; }
+  try { const list = JSON.parse(this._userPrefs?.emoji_favorites || '[]'); return Array.isArray(list) ? list : []; } catch { return []; } // not JSON: no favorites
 },
 _toggleEmojiFavorite(emoji) {
   if (!this._prefsReceived) return;
@@ -660,7 +660,15 @@ _getQuickEmojis() {
   if (saved) {
     try { const arr = JSON.parse(saved); if (Array.isArray(arr) && arr.length === 8) return arr; } catch { /* corrupt saved list: use the defaults below */ }
   }
-  return ['👍','👎','😂','❤️','🔥','💯','😮','😢'];
+  const ok = (e) => !/^:[a-zA-Z0-9_-]+:$/.test(e) || !!this._findNamedEmoji?.(e.slice(1, -1));
+  const favorites = this._getEmojiFavorites().filter(ok);
+  return [...new Set([...(favorites.length ? favorites : this._reactionUsage().filter(ok)), '👍', '👎', '😂', '❤️', '🔥', '💯', '😮', '😢'])].slice(0, 8);
+},
+_reactionUsage(add) {
+  let counts = {};
+  try { const c = JSON.parse(localStorage.getItem('haven_reaction_usage') || '{}'); counts = c && typeof c === 'object' && !Array.isArray(c) ? c : {}; } catch { counts = {}; } // private mode or bad data: start counting afresh
+  if (add) try { counts[add] = (Number(counts[add]) || 0) + 1; localStorage.setItem('haven_reaction_usage', JSON.stringify(counts)); } catch { return []; } // private mode: usage is not kept
+  return Object.keys(counts).filter(k => Number(counts[k]) > 0).sort((a, b) => counts[b] - counts[a] || (a < b ? -1 : a > b ? 1 : 0));
 },
 
 _saveQuickEmojis(emojis) {
@@ -755,6 +763,7 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
             current[activeSlot] = emoji;
             this._saveQuickEmojis(current);
             renderSlots();
+            resetBtn.style.display = '';
           }
         });
         row.appendChild(btn);
@@ -780,6 +789,7 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
             current[activeSlot] = `:${ce.name}:`;
             this._saveQuickEmojis(current);
             renderSlots();
+            resetBtn.style.display = '';
           }
         });
         row.appendChild(btn);
@@ -790,6 +800,20 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
   renderOptions();
   editor.appendChild(grid);
 
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'btn-sm';
+  resetBtn.style.cssText = 'margin:8px 8px 0;width:calc(100% - 16px)';
+  resetBtn.style.display = localStorage.getItem('haven_quick_emojis') ? '' : 'none';
+  resetBtn.textContent = t('emoji.customize_quick_reset');
+  resetBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    localStorage.removeItem('haven_quick_emojis');
+    current.splice(0, current.length, ...this._getQuickEmojis());
+    activeSlot = null;
+    resetBtn.style.display = 'none';
+    renderSlots();
+  });
+  editor.appendChild(resetBtn);
   // Done button
   const doneBtn = document.createElement('button');
   doneBtn.className = 'btn-sm btn-accent';
@@ -903,6 +927,7 @@ _showReactionPicker(msgEl, msgId) {
     }
     btn.addEventListener('click', () => {
       this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
+      this._reactionUsage(emoji);
       // Everything goes, not only this row: the full panel opened from its
       // "..." used to stay behind with nothing left to close it.
       this._closeReactionPickers();
@@ -1042,6 +1067,7 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
     this._bindEmojiFavorite(btn, emoji, () => { const top = grid.scrollTop; renderAll(searchInput.value.trim()); grid.scrollTop = top; });
     btn.addEventListener('click', () => {
       this.socket.emit('add-reaction', { messageId: msgId, emoji: value });
+      this._reactionUsage(emoji);
       this._closeReactionPickers();
     });
     return btn;
@@ -1073,6 +1099,13 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
         ? this.customEmojis.filter(e => e.name.toLowerCase().includes(lowerFilter) || 'custom'.includes(lowerFilter))
         : this.customEmojis;
       if (customMatching.length > 0) addSection(t('emoji.categories.custom'), customMatching.map(ce => `:${ce.name}:`));
+    }
+    if (!grid.firstChild) {
+      const none = document.createElement('p');
+      none.className = 'muted-text';
+      none.style.cssText = 'padding:12px;font-size:0.75rem;text-align:center';
+      none.textContent = t('emoji.no_results');
+      grid.appendChild(none);
     }
   };
 

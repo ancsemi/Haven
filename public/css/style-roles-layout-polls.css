@@ -114,6 +114,16 @@
   to { background-position: -200% 0; }
 }
 html.reduce-motion .role-gradient.role-shimmer { animation: none; }
+/* Looping decoration stops while Haven is in the background (hidden, or
+   another window has the keyboard): each of these redraws every frame, and
+   nobody is watching (#5911, app-accessibility.js). It carries on from where
+   it stopped. */
+html.haven-background .role-gradient.role-shimmer,
+html.haven-background [class^="fx-"],
+html.haven-background [class*=" fx-"],
+html.haven-background .sidebar::after,
+html.haven-background .channel-voice-user .cvu-live,
+html.haven-background .main::before { animation-play-state: paused; }
 
 /* Role editor: the gradient switches and a sample name in the role's style. */
 .role-gradient-opts {

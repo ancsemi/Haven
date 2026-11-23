@@ -13,6 +13,7 @@ const { auditHttp } = require('../httpAudit');
 const { trimUploadsToLimit } = require('../uploadsTrim');
 const { findOrphanDms } = require('../orphanDms');
 const protectedMessages = require('../protectedMessages');
+const { releasableUploads } = require('../socketHandlers/helpers');
 
 // What auto-cleanup may remove from a message table aliased m: not protected
 // (nor a thread head holding a protected reply), not pinned, and not in a
@@ -68,18 +69,21 @@ module.exports = function registerMaintenance(deps) {
       // removes files: it follows the messages it deletes. It never scans the
       // uploads/ directory directly, so avatars, persona avatars, custom emojis,
       // soundboard sounds, stickers, and the server icon are never at risk (#5423).
+      //
+      // The paths come from message text, which anyone can write. So a path
+      // is only followed when it is a message attachment that nothing else
+      // uses (releasableUploads): naming someone's avatar, an emoji or a
+      // sound in a message, and letting the message be cleaned up, must not
+      // take that file with it.
       const relocateOrphanAttachments = async (relPaths) => {
-        for (const rel of relPaths) {
-          try {
-            const like = '%/uploads/' + rel.replace(/[\\%_]/g, '\\$&') + '%';
-            const still = db.prepare(
-              "SELECT 1 FROM messages WHERE content LIKE ? ESCAPE '\\' LIMIT 1"
-            ).get(like);
-            if (!still) await moveUploadToDeleted(rel);
-          } catch (err) {
-            console.warn(`[cleanup] Could not check whether ${rel} is still referenced:`, err.message);
-          }
+        let movable;
+        try {
+          movable = releasableUploads(db, relPaths, [], { anyOwner: true });
+        } catch (err) {
+          console.warn('[cleanup] Could not check which files are still in use, leaving them:', err.message);
+          return;
         }
+        for (const rel of movable) await moveUploadToDeleted(rel);
       };
 
       // 1. Delete messages older than N days (skip protected and pinned
@@ -188,13 +192,15 @@ module.exports = function registerMaintenance(deps) {
                 if (isSafeUploadRelPath(mm[1])) seen.add(mm[1]);
               }
             }
-            for (const fn of seen) await moveUploadToDeleted(fn);
             // Delete the channel: cascades to messages + read_positions +
             // channel_members + reactions etc. via the existing FKs.
             db.prepare('DELETE FROM channels WHERE id = ?').run(ch.id);
             for (const table of ['dm_group_keys', 'dm_group_epochs', 'dm_group_invites', 'dm_group_rewrap_requests']) {
               db.prepare(`DELETE FROM ${table} WHERE channel_id = ?`).run(ch.id);
             }
+            // The files go after the messages, and only the ones that were
+            // this DM's attachments and that nothing else still uses.
+            await relocateOrphanAttachments([...seen]);
             orphansDeleted++;
           } catch (e) {
             console.error('[orphan-DM] failed to clean', ch.code, e.message);
@@ -460,7 +466,7 @@ module.exports = function registerMaintenance(deps) {
         runnable: true,
         mode: 'git',
         command: 'node scripts/update.js git',
-        message: 'Haven pulls the latest code from GitHub, reinstalls dependencies and starts again. It is offline for a minute or two; this page reconnects by itself.',
+        message: 'Haven moves to the latest release from GitHub, reinstalls dependencies and starts again. It is offline for a minute or two; this page reconnects by itself.',
       };
       // Install Haven.bat, install.sh and release zips have no git history, so
       // the updater downloads the latest release and copies it over the code.

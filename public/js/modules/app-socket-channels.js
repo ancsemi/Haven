@@ -129,15 +129,7 @@ _listenChannelsAndMessages() {
     if (this.currentChannel) {
       const curCh = this.channels.find(c => c.code === this.currentChannel);
       if (curCh) {
-        const msgInputArea = document.getElementById('message-input-area');
-        const _textOff = curCh.text_enabled === 0;
-        const _mediaOff = curCh.media_enabled === 0;
-        // Per-channel, same reasoning as the composer gate in app-channels.js (#5468)
-        const _isReadOnly = curCh.read_only === 1 && !this.user?.isAdmin && !curCh.canOverrideReadOnly;
-        if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
-        if (msgInputArea) msgInputArea.classList.toggle('media-only', _textOff && !_mediaOff);
-        this._updateReadOnlyNote(curCh);
-        this._applyReactionLock?.();
+        this._updateComposerVisibility?.(curCh);
       }
     }
 
@@ -610,7 +602,7 @@ _listenPresenceAndVoice() {
   // put them back so everything reading a member sees the full shape.
   const fillMember = (u) => ({
     highScore: 0, statusText: '', avatar: null, avatarShape: 'circle', border: null,
-    borderTransform: null, animateProfile: 'trigger', isGuest: false, role: null, activity: null, birthday: null,
+    borderTransform: null, animateProfile: 'trigger', isGuest: false, bot: false, role: null, activity: null, birthday: null,
     ...u,
   });
 
@@ -836,7 +828,18 @@ _listenPresenceAndVoice() {
   // viewing the channel. It's also saved server-side, so it renders in history
   // on reload (unlike the old ephemeral welcome, which was never saved).
   this.socket.on('welcome-message', (data) => {
-    if (!data || !data.message || data.channelCode !== this.currentChannel) return;
+    if (!data || !data.message) return;
+    // In a channel that is not open it counts as unread, the same as it does
+    // after a reload, when the server counts it (#5930).
+    if (data.channelCode !== this.currentChannel) {
+      const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]').includes(data.channelCode);
+      if (data.message.user_id === this.user.id || muted || !this.channels.some(c => c.code === data.channelCode)) return;
+      this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
+      this._updateBadge(data.channelCode);
+      this._updateTabTitle?.();
+      this._updateDesktopBadge?.();
+      return;
+    }
     // Only append live when the newest messages are actually in view; if the
     // user is scrolled up in trimmed history it will load in order on scroll.
     // The message is persisted either way, so nothing is lost.
@@ -894,6 +897,16 @@ _listenPresenceAndVoice() {
     this._restoreRefusedDraft(msg);
     /^You are in a timeout/.test(msg) && (this._forumRestoreDraft?.(), this._showTimeoutNotice(msg));
     this._showToast(msg, 'error');
+  });
+
+  // Auto-mod refused what was just sent (a link or word the server does not
+  // allow): the text, or the forum post, comes back to fix and send again.
+  // The notice itself follows as an error-msg.
+  this.socket.on('automod-refused', (data) => {
+    const surface = data && data.surface;
+    if (surface !== 'message' && surface !== 'dm') return;
+    this._restoreRefusedDraft(null, true);
+    this._forumRestoreDraft?.();
   });
 
   // New accounts wait before posting (#5742). The server says how long is

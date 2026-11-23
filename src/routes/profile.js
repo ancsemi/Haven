@@ -7,6 +7,8 @@ const express = require('express');
 const { verifyToken } = require('../auth');
 const storage = require('../storage');
 const { avatarShape, animationMode, borderFit, setAvatarShape, setAnimationMode, setBorderFit } = require('../db/userProfiles');
+const { cleanHexColor } = require('../socketHandlers/helpers');
+const botAccounts = require('../botAccounts');
 
 module.exports = function registerProfile(deps) {
   const { uploadDiskGuard, app, recordUploadOwnership, releaseOwnUploads, verifyAdminFromDb, userHasPermission, upload, uploadLimiter } = deps;
@@ -16,10 +18,71 @@ module.exports = function registerProfile(deps) {
     .catch(err => console.warn(`[${what}] Could not release the old picture:`, err.message));
   // Profile pictures, borders and persona avatars share one size limit the
   // admin sets (Settings, Uploads & Limits): 1 to 10 MB, 2 MB by default.
+  // Whose picture this is: the signed in account, or a bot it manages when
+  // the request names one (src/botAccounts.js). Null when that is refused.
+  const avatarOwner = (user, rawBotId) => {
+    if (rawBotId === undefined || rawBotId === '') return user.id;
+    const { getDb } = require('../database');
+    const actor = { id: user.id, isAdmin: verifyAdminFromDb(user) };
+    const a = botAccounts.access(getDb(), actor, parseInt(rawBotId, 10), userHasPermission);
+    return a ? a.bot.id : null;
+  };
   const avatarMaxMb = () => {
     const { getDb } = require('../database');
     const n = parseInt(getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_avatar_mb'").get()?.value, 10);
     return n >= 1 && n <= 10 ? n : 2;
+  };
+  // The checks every profile picture upload shares (avatars, banners,
+  // borders, bot and persona avatars), once multer has the file: under
+  // maxMb when the route has a limit, bytes that really are the image type
+  // claimed, and the extension that type should have; then the file is
+  // handed to storage. A failed check is answered here, the upload removed,
+  // and gives null; otherwise the name the file is kept under.
+  const keepImageUpload = async (req, res, { maxMb = null, label = 'Image' } = {}) => {
+    const discard = () => { try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ } };
+    if (maxMb !== null && req.file.size > maxMb * 1024 * 1024) {
+      discard();
+      res.status(400).json({ error: `${label} must be under ${maxMb} MB` });
+      return null;
+    }
+    try {
+      const fd = fs.openSync(req.file.path, 'r');
+      const hdr = Buffer.alloc(12);
+      fs.readSync(fd, hdr, 0, 12, 0);
+      fs.closeSync(fd);
+      let validMagic = false;
+      if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
+      else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
+      else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
+      else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
+      if (!validMagic) {
+        discard();
+        res.status(400).json({ error: 'File content does not match image type' });
+        return null;
+      }
+    } catch {
+      discard();
+      res.status(400).json({ error: 'Failed to validate file' });
+      return null;
+    }
+    // Force safe extension
+    const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
+    const safeExt = mimeToExt[req.file.mimetype];
+    if (!safeExt) {
+      discard();
+      res.status(400).json({ error: 'Invalid file type' });
+      return null;
+    }
+    let finalName = req.file.filename;
+    if (path.extname(finalName).toLowerCase() !== safeExt) {
+      finalName = finalName.replace(/\.[^.]+$/, '') + safeExt;
+      fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), finalName));
+    }
+    try { await storage.admitUpload(req.file, finalName); } catch {
+      res.status(500).json({ error: 'Failed to store the upload' });
+      return null;
+    }
+    return finalName;
   };
   // ── Avatar upload endpoint (saves to /uploads, updates DB) ──
   app.post('/api/upload-avatar', uploadLimiter, uploadDiskGuard, (req, res) => {
@@ -34,62 +97,29 @@ module.exports = function registerProfile(deps) {
     upload.single('avatar')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      const maxMb = avatarMaxMb();
-      if (req.file.size > maxMb * 1024 * 1024) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: `Avatar must be under ${maxMb} MB` });
-      }
-
-      // Validate file magic bytes
-      try {
-        const fd = fs.openSync(req.file.path, 'r');
-        const hdr = Buffer.alloc(12);
-        fs.readSync(fd, hdr, 0, 12, 0);
-        fs.closeSync(fd);
-        let validMagic = false;
-        if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-        else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-        else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-        else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-        if (!validMagic) {
-          fs.unlinkSync(req.file.path);
-          return res.status(400).json({ error: 'File content does not match image type' });
-        }
-      } catch {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Failed to validate file' });
-      }
-
-      // Force safe extension
-      const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-      const safeExt = mimeToExt[req.file.mimetype];
-      if (!safeExt) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'Invalid file type' });
-      }
-      const currentExt = path.extname(req.file.filename).toLowerCase();
-      let finalName = req.file.filename;
-      if (currentExt !== safeExt) {
-        finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), finalName));
-      }
-      try { await storage.admitUpload(req.file, finalName); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
+      const finalName = await keepImageUpload(req, res, { maxMb: avatarMaxMb(), label: 'Avatar' });
+      if (!finalName) return;
       const avatarUrl = `/uploads/${finalName}`;
+      const ownerId = avatarOwner(user, req.body?.botId);
+      if (!ownerId) return res.status(403).json({ error: 'Insufficient permissions' });
 
-      recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
+      recordUploadOwnership(ownerId, finalName, req.file.size, 'profile');
 
-      // Update the user's avatar in the database
+      // Update the user's avatar in the database, with the color the client
+      // sampled from it for the default banner. A missing or malformed color
+      // just leaves the banner on the name color.
+      const avatarColor = cleanHexColor(req.body?.avatarColor);
       let oldAvatar = null;
       try {
         const db = getDb();
-        oldAvatar = db.prepare('SELECT avatar FROM users WHERE id = ?').get(user.id)?.avatar || null;
-        db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(avatarUrl, user.id);
+        oldAvatar = db.prepare('SELECT avatar FROM users WHERE id = ?').get(ownerId)?.avatar || null;
+        db.prepare('UPDATE users SET avatar = ?, avatar_color = ? WHERE id = ?').run(avatarUrl, avatarColor, ownerId);
         console.log(`[Avatar] ${user.username} uploaded avatar: ${avatarUrl}`);
       } catch (dbErr) {
         console.error('Avatar DB update error:', dbErr);
         return res.status(500).json({ error: 'Failed to save avatar' });
       }
-      await releaseOld(oldAvatar, user.id, 'Avatar');
+      await releaseOld(oldAvatar, ownerId, 'Avatar');
 
       res.json({ url: avatarUrl });
     });
@@ -100,15 +130,78 @@ module.exports = function registerProfile(deps) {
     const token = req.headers.authorization?.split(' ')[1];
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const ownerId = avatarOwner(user, req.body?.botId);
+    if (!ownerId) return res.status(403).json({ error: 'Insufficient permissions' });
     try {
       const { getDb } = require('../database');
-      const old = getDb().prepare('SELECT avatar FROM users WHERE id = ?').get(user.id)?.avatar || null;
-      getDb().prepare('UPDATE users SET avatar = NULL WHERE id = ?').run(user.id);
-      await releaseOld(old, user.id, 'Avatar');
+      const old = getDb().prepare('SELECT avatar FROM users WHERE id = ?').get(ownerId)?.avatar || null;
+      getDb().prepare('UPDATE users SET avatar = NULL, avatar_color = NULL WHERE id = ?').run(ownerId);
+      await releaseOld(old, ownerId, 'Avatar');
       res.json({ ok: true });
     } catch (err) {
       console.error('Avatar remove error:', err);
       res.status(500).json({ error: 'Failed to remove avatar' });
+    }
+  });
+
+  // Banners have their own size limit (Settings, Uploads & Limits): they are
+  // wide, and animated ones get big. 1 to 20 MB, 5 MB by default.
+  const bannerMaxMb = () => {
+    const { getDb } = require('../database');
+    const n = parseInt(getDb().prepare("SELECT value FROM server_settings WHERE key = 'max_banner_mb'").get()?.value, 10);
+    return n >= 1 && n <= 20 ? n : 5;
+  };
+
+  // ── Banner upload endpoint (mirrors avatar upload) ──
+  // A banner is part of who someone is, like their avatar, so it takes no
+  // permission beyond being signed in and not banned.
+  app.post('/api/upload-banner', uploadLimiter, uploadDiskGuard, (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    const user = token ? verifyToken(token) : null;
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { getDb } = require('../database');
+    const ban = getDb().prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
+    if (ban) return res.status(403).json({ error: 'Banned users cannot upload' });
+
+    upload.single('banner')(req, res, async (err) => {
+      if (err) return res.status(400).json({ error: err.message, code: err.code });
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+      const finalName = await keepImageUpload(req, res, { maxMb: bannerMaxMb(), label: 'Banner' });
+      if (!finalName) return;
+      const bannerUrl = `/uploads/${finalName}`;
+      recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
+
+      let oldBanner = null;
+      try {
+        const db = getDb();
+        oldBanner = db.prepare('SELECT banner FROM users WHERE id = ?').get(user.id)?.banner || null;
+        db.prepare('UPDATE users SET banner = ? WHERE id = ?').run(bannerUrl, user.id);
+        console.log(`[Banner] ${user.username} uploaded banner: ${bannerUrl}`);
+      } catch (dbErr) {
+        console.error('Banner DB update error:', dbErr);
+        return res.status(500).json({ error: 'Failed to save banner' });
+      }
+      await releaseOld(oldBanner, user.id, 'Banner');
+
+      res.json({ url: bannerUrl });
+    });
+  });
+
+  // ── Banner remove endpoint ──
+  app.post('/api/remove-banner', express.json(), async (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    const user = token ? verifyToken(token) : null;
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const { getDb } = require('../database');
+      const old = getDb().prepare('SELECT banner FROM users WHERE id = ?').get(user.id)?.banner || null;
+      getDb().prepare('UPDATE users SET banner = NULL WHERE id = ?').run(user.id);
+      await releaseOld(old, user.id, 'Banner');
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('Banner remove error:', err);
+      res.status(500).json({ error: 'Failed to remove banner' });
     }
   });
 
@@ -130,46 +223,8 @@ module.exports = function registerProfile(deps) {
     upload.single('border')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      const maxMb = avatarMaxMb();
-      if (req.file.size > maxMb * 1024 * 1024) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: `Border must be under ${maxMb} MB` });
-      }
-
-      // Validate file magic bytes
-      try {
-        const fd = fs.openSync(req.file.path, 'r');
-        const hdr = Buffer.alloc(12);
-        fs.readSync(fd, hdr, 0, 12, 0);
-        fs.closeSync(fd);
-        let validMagic = false;
-        if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-        else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-        else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-        else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-        if (!validMagic) {
-          fs.unlinkSync(req.file.path);
-          return res.status(400).json({ error: 'File content does not match image type' });
-        }
-      } catch {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Failed to validate file' });
-      }
-
-      // Force safe extension
-      const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-      const safeExt = mimeToExt[req.file.mimetype];
-      if (!safeExt) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'Invalid file type' });
-      }
-      const currentExt = path.extname(req.file.filename).toLowerCase();
-      let finalName = req.file.filename;
-      if (currentExt !== safeExt) {
-        finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), finalName));
-      }
-      try { await storage.admitUpload(req.file, finalName); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
+      const finalName = await keepImageUpload(req, res, { maxMb: avatarMaxMb(), label: 'Border' });
+      if (!finalName) return;
       const borderUrl = `/uploads/${finalName}`;
       recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
 
@@ -274,40 +329,8 @@ module.exports = function registerProfile(deps) {
     upload.single('avatar')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-      // Validate file magic bytes
-      try {
-        const fd = fs.openSync(req.file.path, 'r');
-        const hdr = Buffer.alloc(12);
-        fs.readSync(fd, hdr, 0, 12, 0);
-        fs.closeSync(fd);
-        let validMagic = false;
-        if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-        else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-        else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-        else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-        if (!validMagic) {
-          fs.unlinkSync(req.file.path);
-          return res.status(400).json({ error: 'File content does not match image type' });
-        }
-      } catch {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Failed to validate file' });
-      }
-
-      const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-      const safeExt = mimeToExt[req.file.mimetype];
-      if (!safeExt) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'Invalid file type' });
-      }
-      const currentExt = path.extname(req.file.filename).toLowerCase();
-      let finalName = req.file.filename;
-      if (currentExt !== safeExt) {
-        finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), finalName));
-      }
-      try { await storage.admitUpload(req.file, finalName); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
+      const finalName = await keepImageUpload(req, res);
+      if (!finalName) return;
       const avatarUrl = `/uploads/${finalName}`;
 
       // Update the webhook's avatar in DB
@@ -471,42 +494,8 @@ module.exports = function registerProfile(deps) {
     upload.single('avatar')(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      const maxMb = avatarMaxMb();
-      if (req.file.size > maxMb * 1024 * 1024) {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: `Avatar must be under ${maxMb} MB` });
-      }
-      try {
-        const fd = fs.openSync(req.file.path, 'r');
-        const hdr = Buffer.alloc(12);
-        fs.readSync(fd, hdr, 0, 12, 0);
-        fs.closeSync(fd);
-        let validMagic = false;
-        if (req.file.mimetype === 'image/jpeg') validMagic = hdr[0] === 0xFF && hdr[1] === 0xD8 && hdr[2] === 0xFF;
-        else if (req.file.mimetype === 'image/png') validMagic = hdr[0] === 0x89 && hdr[1] === 0x50 && hdr[2] === 0x4E && hdr[3] === 0x47;
-        else if (req.file.mimetype === 'image/gif') validMagic = hdr.slice(0, 6).toString().startsWith('GIF8');
-        else if (req.file.mimetype === 'image/webp') validMagic = hdr.slice(0, 4).toString() === 'RIFF' && hdr.slice(8, 12).toString() === 'WEBP';
-        if (!validMagic) {
-          fs.unlinkSync(req.file.path);
-          return res.status(400).json({ error: 'File content does not match image type' });
-        }
-      } catch {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Failed to validate file' });
-      }
-      const mimeToExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
-      const safeExt = mimeToExt[req.file.mimetype];
-      if (!safeExt) {
-        try { fs.unlinkSync(req.file.path); } catch { /* rejected temp upload may already be gone */ }
-        return res.status(400).json({ error: 'Invalid file type' });
-      }
-      const currentExt = path.extname(req.file.filename).toLowerCase();
-      let finalName = req.file.filename;
-      if (currentExt !== safeExt) {
-        finalName = req.file.filename.replace(/\.[^.]+$/, '') + safeExt;
-        fs.renameSync(req.file.path, path.join(path.dirname(req.file.path), finalName));
-      }
-      try { await storage.admitUpload(req.file, finalName); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
+      const finalName = await keepImageUpload(req, res, { maxMb: avatarMaxMb(), label: 'Avatar' });
+      if (!finalName) return;
       const avatarUrl = `/uploads/${finalName}`;
       recordUploadOwnership(user.id, finalName, req.file.size, 'profile');
 

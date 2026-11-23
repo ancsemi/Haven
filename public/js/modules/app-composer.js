@@ -576,6 +576,7 @@ _formatGuideRows() {
     { key: 'codeblock', before: '```\n', after: '\n```', block: true },
     { key: 'quote',     before: '> ',  after: '', block: true },
     { key: 'heading',   before: '# ',  after: '', block: true },
+    { key: 'subtext',   before: '-# ', after: '', block: true },
     { key: 'list',      before: '- ',  after: '', block: true },
     { key: 'numbered',  before: '1. ', after: '', block: true },
     { key: 'link',      before: '[',   after: '](https://example.com)' },
@@ -694,7 +695,7 @@ async _startVoiceMessage() {
   try {
     // The same microphone voice chat uses, when one was picked.
     const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-    const savedInputId = localStorage.getItem('haven_input_device') || '';
+    const savedInputId = this.callSettings.get('inputDevice');
     if (savedInputId) audio.deviceId = { exact: savedInputId };
     try { stream = await navigator.mediaDevices.getUserMedia({ audio }); }
     catch { delete audio.deviceId; stream = await navigator.mediaDevices.getUserMedia({ audio }); }

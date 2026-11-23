@@ -503,7 +503,7 @@ _bindSbHotkeyControls(grid, hotkeyMap, rerender) {
 _renderSoundboardSidebar(filter = '') {
   const grid = document.getElementById('sb-sidebar-grid');
   if (!grid) return;
-  const all = (this.customSounds || []).filter(s =>
+  const all = this._orderedSounds(this.customSounds || []).filter(s =>
     (!filter || s.name.toLowerCase().includes(filter.toLowerCase())) &&
     (!this._soundPrefs[s.name]?.hidden || this._showHiddenSounds)
   );
@@ -550,6 +550,7 @@ _renderSoundboardSidebar(filter = '') {
     });
   });
   this._bindSbHotkeyControls(grid, hotkeyMap, () => this._renderSoundboardSidebar(filter));
+  this._bindSoundReorder(grid, () => this._renderSoundboardSidebar(filter));
   // Persist open/closed state of each category.
   grid.querySelectorAll('details.sb-sidebar-group').forEach(d => {
     d.addEventListener('toggle', () => {
@@ -712,6 +713,52 @@ async _saveUserSoundPrefs() {
       body: JSON.stringify({ prefs: this._soundPrefs })
     });
   } catch (err) { console.warn('[Sounds] could not save sound preferences', err); }
+},
+
+_orderedSounds(list) {
+  const rank = (s) => { const v = this._soundPrefs[s.name]?.customOrder; return v == null || !Number.isFinite(Number(v)) ? Infinity : Number(v); };
+  return list.map((s, i) => [s, i]).sort((a, b) => (rank(a[0]) - rank(b[0])) || (a[1] - b[1])).map(x => x[0]);
+},
+async _moveSound(name, targetName) {
+  const names = this._orderedSounds(this.customSounds || []).map(s => s.name);
+  const from = names.indexOf(name);
+  const to = names.indexOf(targetName);
+  if (from < 0 || to < 0 || from === to) return false;
+  names.splice(to, 0, names.splice(from, 1)[0]);
+  names.forEach((n, i) => { this._soundPrefs[n] = { ...this._soundPrefs[n], customOrder: i }; });
+  await this._saveUserSoundPrefs();
+  return true;
+},
+_bindSoundReorder(grid, rerender) {
+  const buttons = [...grid.querySelectorAll('.soundboard-btn')];
+  const clear = () => buttons.forEach(b => b.classList.remove('sb-drop-target'));
+  buttons.forEach(btn => btn.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.pointerType === 'touch' || e.target.closest('.sb-hide-btn, .sb-hotkey-clear, .sb-hotkey-set')) return;
+    let moved = false;
+    let target = null;
+    const hit = (ev) => { const b = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.soundboard-btn'); return b && b !== btn && b.parentElement === btn.parentElement ? b : null; };
+    const move = (ev) => {
+      moved = moved || Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) > 6;
+      btn.classList.toggle('sb-dragging', moved);
+      target = moved ? hit(ev) : null;
+      clear();
+      target?.classList.add('sb-drop-target');
+    };
+    const up = async () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      document.removeEventListener('pointercancel', up);
+      btn.classList.remove('sb-dragging');
+      clear();
+      const stop = (ev) => ev.stopPropagation();
+      moved && document.addEventListener('click', stop, { capture: true, once: true });
+      moved && setTimeout(() => document.removeEventListener('click', stop, true), 0);
+      moved && target && (await this._moveSound(btn.dataset.name, target.dataset.name)) && rerender();
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    document.addEventListener('pointercancel', up);
+  }));
 },
 
 _updateSoundSelects(sounds) {
@@ -927,7 +974,7 @@ _renderSoundboard(filter = '') {
   if (pipGrid) grids.push(pipGrid);
   if (grids.length === 0) return;
 
-  let sounds = (this.customSounds || []).filter(s =>
+  let sounds = this._orderedSounds(this.customSounds || []).filter(s =>
     (!filter || s.name.toLowerCase().includes(filter.toLowerCase())) &&
     (!this._soundPrefs[s.name]?.hidden || this._showHiddenSounds)
   );
@@ -965,6 +1012,7 @@ _renderSoundboard(filter = '') {
       ? (document.getElementById('sb-pip-search')?.value?.trim() || '')
       : (document.getElementById('soundboard-search')?.value?.trim() || '');
     this._bindSbHotkeyControls(grid, hotkeyMap, () => this._renderSoundboard(currentFilter()));
+    this._bindSoundReorder(grid, () => this._renderSoundboard(currentFilter()));
 
     // Hide / show button (👁️)
     grid.querySelectorAll('.sb-hide-btn').forEach(el => {
@@ -1065,7 +1113,7 @@ _renderAssignTab() {
       const mainSel = document.getElementById(notifSelect);
       if (mainSel) mainSel.value = val;
       // Play preview
-      this.notifications.play(event);
+      this.notifications.play(event, { preview: true });
     });
   });
 },

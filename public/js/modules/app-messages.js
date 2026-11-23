@@ -457,9 +457,9 @@ _restyleMessageAuthors() {
     const title = all.length > 1 ? all.map(r => r.name).join('\n') : u.role.name;
     const badge = document.createElement('span');
     badge.className = 'user-role-badge msg-role-badge';
-    badge.style.color = this._safeColor(u.role.color, 'var(--text-muted)');
+    badge.style.color = this._safeColor(this._roleOwn(u.role).color, 'var(--text-muted)');
     badge.title = title;
-    badge.innerHTML = this._roleNameHtml(u.role, u.role.name)
+    badge.innerHTML = this._roleNameHtml(this._roleOwn(u.role), u.role.name)
       + (all.length > 1 ? ` <span class="msg-role-extra-count">+${all.length - 1}</span>` : '');
     const time = header.querySelector('.message-time');
     header.insertBefore(badge, time || null);
@@ -1022,6 +1022,15 @@ _createMessageEl(msg, prevMsg) {
     el.textContent = this._groupNoticeText?.(msg.content) || '';
     return el;
   }
+  if (msg && msg.type === 'missed_call') {
+    const el = document.createElement('div');
+    el.className = 'system-message missed-call-notice';
+    el.dataset.type = 'missed_call';
+    if (Number.isInteger(msg.id) && msg.id > 0) el.dataset.msgId = msg.id;
+    const mine = msg.user_id === this.user?.id;
+    el.textContent = `${mine ? t('calls.missed_own') : t('calls.missed', { name: this._getNickname(msg.user_id, msg.real_username || msg.username) })} · ${this._formatTime(msg.created_at)}`;
+    return el;
+  }
   const isImage = this._isImageUrl(msg.content);
   // The channel this message is drawn in. The pop-out DM draws while another
   // channel is open in the main pane, so it goes by the DM, not by the open
@@ -1046,6 +1055,7 @@ _createMessageEl(msg, prevMsg) {
 
   // The role menu first: it decides which reactions and lines it stands in for.
   const roleMenuHtml = msg.roleMenu ? this._renderRoleMenu(msg.id, msg.roleMenu) : '';
+  const botPartsHtml = this._botPartsHtml(msg);
   const reactionsHtml = this._renderReactions(msg.id, msg.reactions || []);
   const tagsHtml = this._renderAttachmentTags(msg.attachmentTags);
   const pollHtml = msg.poll ? this._renderPollWidget(msg.id, msg.poll) : '';
@@ -1204,7 +1214,7 @@ _createMessageEl(msg, prevMsg) {
       <span class="compact-time">${this._fmtTime(msg.created_at)}</span>
       <div class="message-body">
         <div class="message-content">${pinnedTag}${archivedTag}${ephemeralTag}${this._formatContent(this._roleMenuText(msg.id, msg.content), { e2e: !!msg._e2e })}${editedHtml}${statusSlotHtml}</div>
-        ${pollHtml}${roleMenuHtml}${destructHtml}
+        ${pollHtml}${roleMenuHtml}${botPartsHtml}${destructHtml}
         ${reactionsHtml}
         ${tagsHtml}
         ${threadHtml}
@@ -1250,7 +1260,7 @@ _createMessageEl(msg, prevMsg) {
     ? _allRoles.map(r => r.name).join('\n')
     : (onlineUser && onlineUser.role ? onlineUser.role.name : '');
   const msgRoleBadge = onlineUser && onlineUser.role
-    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle)}">${this._roleNameHtml(onlineUser.role, onlineUser.role.name)}${_allRoles.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles.length - 1}</span>` : ''}</span>`
+    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(this._roleOwn(onlineUser.role).color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle)}">${this._roleNameHtml(this._roleOwn(onlineUser.role), onlineUser.role.name)}${_allRoles.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles.length - 1}</span>` : ''}</span>`
     : '';
 
   // Role icon in chat
@@ -1275,7 +1285,7 @@ _createMessageEl(msg, prevMsg) {
 
   const botBadge = msg.imported_from === 'discord'
     ? '<span class="discord-badge">DISCORD</span>'
-    : msg.is_webhook ? '<span class="bot-badge">BOT</span>' : '';
+    : msg.is_webhook || msg.bot ? '<span class="bot-badge">BOT</span>' : '';
 
   // Persona badge (#86, #5349), shown when message was sent via a user persona
   const personaBadge = msg.persona_id
@@ -1353,7 +1363,7 @@ _createMessageEl(msg, prevMsg) {
           <span class="message-header-spacer"></span>
         </div>
         <div class="message-content">${this._formatContent(this._roleMenuText(msg.id, msg.content), { e2e: !!msg._e2e })}${editedHtml}</div>
-        ${pollHtml}${roleMenuHtml}${destructHtml}
+        ${pollHtml}${roleMenuHtml}${botPartsHtml}${destructHtml}
         ${reactionsHtml}
         ${tagsHtml}
         ${threadHtml}
@@ -1427,7 +1437,7 @@ _promoteCompactToFull(compactEl) {
     ? _allRoles2.map(r => r.name).join('\n')
     : (onlineUser && onlineUser.role ? onlineUser.role.name : '');
   const msgRoleBadge = onlineUser && onlineUser.role
-    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(onlineUser.role.color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle2)}">${this._roleNameHtml(onlineUser.role, onlineUser.role.name)}${_allRoles2.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles2.length - 1}</span>` : ''}</span>`
+    ? `<span class="user-role-badge msg-role-badge" style="color:${this._safeColor(this._roleOwn(onlineUser.role).color, 'var(--text-muted)')}" title="${this._escapeHtml(_roleTitle2)}">${this._roleNameHtml(this._roleOwn(onlineUser.role), onlineUser.role.name)}${_allRoles2.length > 1 ? ` <span class="msg-role-extra-count">+${_allRoles2.length - 1}</span>` : ''}</span>`
     : '';
 
   // Role icon in chat (compact-to-full)

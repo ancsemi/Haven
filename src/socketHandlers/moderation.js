@@ -96,6 +96,27 @@ module.exports = function register(socket, ctx) {
     );
   }
 
+  // Signs the account out everywhere, takes it out of every list and call,
+  // then deletes it. Shared with bot accounts (socketHandlers/botAccounts.js).
+  function removeAccount(targetUser, scrubMessages, reason) {
+    const uid = targetUser.id;
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && s.user.id === uid) {
+        s.emit('banned', { reason: 'Your account has been deleted by an admin.' });
+        s.disconnect(true);
+      }
+    }
+    for (const [code, users] of channelUsers) {
+      if (users.has(uid)) {
+        users.delete(uid);
+        emitOnlineUsers(code);
+      }
+    }
+    removeUserFromVoice(uid);
+    db.transaction(() => purgeUserCascade(uid, targetUser, socket.user.id, scrubMessages, reason))();
+  }
+  ctx.removeAccount = removeAccount;
+
   // ── Kick user ───────────────────────────────────────────
   socket.on('kick-user', async (data) => {
     if (!data || typeof data !== 'object') return;
@@ -521,27 +542,8 @@ module.exports = function register(socket, ctx) {
 
     const reason = typeof data.reason === 'string' ? data.reason.trim().slice(0, 500) : '';
 
-    for (const [, s] of io.sockets.sockets) {
-      if (s.user && s.user.id === data.userId) {
-        s.emit('banned', { reason: 'Your account has been deleted by an admin.' });
-        s.disconnect(true);
-      }
-    }
-
-    for (const [code, users] of channelUsers) {
-      if (users.has(data.userId)) {
-        users.delete(data.userId);
-        emitOnlineUsers(code);
-      }
-    }
-    removeUserFromVoice(data.userId);
-
-    const purge = db.transaction((uid) => {
-      purgeUserCascade(uid, targetUser, socket.user.id, data.scrubMessages, reason);
-    });
-
     try {
-      purge(data.userId);
+      removeAccount(targetUser, data.scrubMessages, reason);
     } catch (err) {
       console.error('Delete user error:', err);
       return socket.emit('error-msg', 'Failed to delete user');
@@ -598,7 +600,7 @@ module.exports = function register(socket, ctx) {
           `SELECT u.id, u.username, u.display_name FROM users u
            WHERE u.id IN (${ph}) AND u.is_admin = 0 AND u.id != ?
              AND NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
-                             WHERE ur.user_id = u.id AND r.auto_assign = 0)`
+                             WHERE ur.user_id = u.id AND r.auto_assign = 0 AND r.level > 0)`
         ).all(...requested, socket.user.id);
       } catch (err) {
         console.error('bulk-remove-users select error:', err);
@@ -686,11 +688,12 @@ module.exports = function register(socket, ctx) {
     // Hard exclusions keep staff safe no matter what filters are set. A
     // deliberately-granted (non-auto-assign) role marks staff; the default role
     // every account receives on registration is auto_assign and must not shield
-    // a bot from cleanup.
+    // a bot from cleanup. Neither does a group (level 0), which anyone can
+    // give themselves.
     const where = [
       'u.is_admin = 0',
       'u.id != @actorId',
-      'NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id AND r.auto_assign = 0)'
+      'NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id AND r.auto_assign = 0 AND r.level > 0)'
     ];
     const params = { actorId: socket.user.id };
     if (joinedWithinHours) { where.push("u.created_at >= datetime('now', @joinWindow)"); params.joinWindow = `-${joinedWithinHours} hours`; }

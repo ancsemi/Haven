@@ -60,6 +60,10 @@
 .channel-voice-user .cvu-mic,
 .channel-voice-user .cvu-deafen { font-size: 10px; flex-shrink: 0; position: relative; display: inline-block; opacity: 0.35; }
 .channel-voice-user .cvu-mic { color: var(--success); }
+.channel-voice-user .cvu-live { margin-left: auto; padding: 0 4px; border: 0; border-radius: 4px; background: none; font-size: 10px; line-height: 16px; cursor: pointer; animation: cvu-live-pulse 1.7s ease-in-out infinite; }
+.channel-voice-user .cvu-live:hover, .channel-voice-user .cvu-live:focus-visible { background: var(--bg-hover); animation: none; }
+@keyframes cvu-live-pulse { 50% { opacity: .45; } }
+html.reduce-motion .channel-voice-user .cvu-live { animation: none; }
 .channel-voice-user .cvu-mic.is-muted,
 .channel-voice-user .cvu-deafen.is-deafened { opacity: 1; }
 
@@ -614,6 +618,70 @@
 .bitrate-value:focus {
   border-color: var(--accent);
 }
+
+/* Settings, Voice & video: the same controls as the sidebar panel, with room
+   to breathe, and the microphone/camera test above them. */
+.call-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+.call-preview-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.call-preview-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.call-preview-loopback {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.call-preview-loopback-hint {
+  display: block;
+  margin-top: -4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.call-preview-video {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transform: scaleX(-1); /* like your own camera tile: a mirror */
+}
+.call-settings-page-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 34rem;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.call-settings-page-panel .voice-settings-row { min-height: 28px; flex-wrap: wrap; }
+.call-settings-page-panel .voice-settings-select {
+  max-width: none;
+  margin-bottom: 0;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+.call-settings-page-panel .ns-slider {
+  flex: 1;
+  width: auto;
+  min-width: 60px;
+}
+.call-settings-page-panel .settings-hint { flex-basis: 100%; }
 
 /* ═══════════════════════════════════════════════════════════
    PERSISTENT VOICE BAR (sidebar bottom)

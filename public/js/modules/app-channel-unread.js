@@ -577,6 +577,7 @@ _clearSeenUnread() {
 _fireNativeNotification(message, channelCode, opts) {
   // A silent message (app-silent.js) pops up nowhere.
   if (message && message.silent) return;
+  if (this.userStatus === 'dnd') return;
   // Server mute and members muted for you (app-server-mute.js). DMs still
   // come through a muted server, and with "except @mentions" so do those.
   const _muteCh = this.channels?.find(c => c.code === channelCode);
@@ -735,9 +736,11 @@ _updateChannelVoiceIndicators() {
         // server echo), so talkingState.get('self') reflects real-time mic level.
         const isTalking = this.voice && ((isSelf && this.voice.talkingState.get('self')) || this.voice.talkingState.get(u.id));
         const botBadge = u.isBot ? '<span class="bot-badge">BOT</span>' : '';
-        return `<div class="channel-voice-user${isTalking ? ' talking' : ''}" data-user-id="${u.id}" data-is-bot="${u.isBot ? 'true' : 'false'}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}${botBadge}</div>`;
+        const live = !isSelf && this.voice?.inVoice && this.voice.currentChannel === code && this.voice.screenSharers?.has(u.id) ? `<button type="button" class="cvu-live" title="${this._escapeHtml(t('users.stream_click_to_watch'))}" aria-label="${this._escapeHtml(t('users.stream_click_to_watch'))}">🔴</button>` : '';
+        return `<div class="channel-voice-user${isTalking ? ' talking' : ''}" data-user-id="${u.id}" data-is-bot="${u.isBot ? 'true' : 'false'}" data-username="${this._escapeHtml(u.username)}"><span class="cvu-mic${u.isMuted ? ' is-muted' : ''}" title="${u.isMuted ? 'Muted' : ''}">🎙️</span><span class="cvu-deafen${u.isDeafened ? ' is-deafened' : ''}" title="${u.isDeafened ? 'Deafened' : ''}">🔊</span>${this._escapeHtml(u.username)}${botBadge}${live}</div>`;
       }).join('');
       // Right-click on a left-sidebar voice user → same voice options menu
+      userList.querySelectorAll('.cvu-live').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); this._watchStream(parseInt(b.closest('.channel-voice-user').dataset.userId)); }));
       userList.querySelectorAll('.channel-voice-user').forEach(item => {
         item.addEventListener('contextmenu', (e) => {
           const userId = parseInt(item.dataset.userId);

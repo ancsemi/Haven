@@ -50,7 +50,7 @@ function isPortableEmoji(text) {
 const EMOJI_FAVORITES_MAX = 40;
 function cleanEmojiFavorites(raw) {
   let list;
-  try { list = JSON.parse(raw); } catch { return null; }
+  try { list = JSON.parse(raw); } catch { return null; } // not JSON: refused
   if (!Array.isArray(list)) return null;
   const kept = list.filter(e => typeof e === 'string' && e.length <= 32 && (UNICODE_EMOJI_RE.test(e) || NAMED_EMOJI_RE.test(e)));
   return JSON.stringify([...new Set(kept)].slice(0, EMOJI_FAVORITES_MAX));

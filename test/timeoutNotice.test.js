@@ -46,3 +46,35 @@ test('the error-msg listener restores a refused forum post and shows the notice 
   handlers['error-msg']('Message too long');
   assert.deepEqual(calls.map(c => c[0]).filter(k => ['_forumRestoreDraft', '_showTimeoutNotice', '_showToast'].includes(k)), ['_showToast']);
 });
+test('an auto-mod refusal of a message or post gives the draft back, other refusals do not', () => {
+  const handlers = {};
+  const calls = [];
+  const self = new Proxy({ socket: { on: (ev, fn) => { handlers[ev] = fn; } } }, { get: (target, key) => key in target ? target[key] : (...args) => { calls.push([String(key), ...args]); } });
+  const methods = load('app-socket-channels.js', { document: { getElementById: () => null, addEventListener() {}, querySelector: () => null }, window: {}, localStorage: { getItem: () => null }, t: k => k });
+  methods._listenPresenceAndVoice.call(self);
+  const restores = () => calls.map(c => c[0]).filter(k => ['_restoreRefusedDraft', '_forumRestoreDraft'].includes(k));
+  calls.length = 0;
+  handlers['automod-refused']({ surface: 'message' });
+  assert.deepEqual(restores(), ['_restoreRefusedDraft', '_forumRestoreDraft']);
+  calls.length = 0;
+  handlers['automod-refused']({ surface: 'profile' });
+  handlers['automod-refused']({ surface: 'edit' });
+  handlers['automod-refused'](null);
+  assert.deepEqual(restores(), []);
+});
+test('a slow-mode refusal gives the typed text back to the box it came from', () => {
+  const { _restoreRefusedDraft } = load('app-socket.js', { document: { getElementById: id => box }, Event: class { constructor(type) { this.type = type; } }, t: k => k });
+  const box = { value: '', dispatchEvent() {}, focus() { this.focused = true; } };
+  const self = { currentChannel: 'abc', _lastSendDraft: { text: 'hello there', code: 'abc', at: Date.now() } };
+  _restoreRefusedDraft.call(self, 'Slow mode: wait 12s before sending another message');
+  assert.equal(box.value, 'hello there');
+  assert.equal(self._lastSendDraft, null);
+  box.value = '';
+  self._lastSendDraft = { text: 'hi', code: 'abc', at: Date.now() };
+  _restoreRefusedDraft.call(self, 'Some other refusal');
+  assert.equal(box.value, '');
+  self._lastSendDraft = { text: 'reply', code: 'parent', at: Date.now(), inputId: 'thread-input' };
+  self._activeThreadParent = 'parent';
+  _restoreRefusedDraft.call(self, 'Slow mode: wait 3s before sending another message');
+  assert.equal(box.value, 'reply');
+});

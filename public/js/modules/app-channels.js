@@ -5,6 +5,49 @@ export default {
 
 // ── Channel Management ────────────────────────────────
 
+_updateComposerVisibility(channel) {
+  // Show/hide message input; keep upload button visible for media-only channels
+  const msgInputArea = document.getElementById('message-input-area');
+  const _textOff = !!(channel && channel.text_enabled === 0);
+  const _mediaOff = !!(channel && channel.media_enabled === 0);
+  // Read-only: hide the composer unless this viewer may actually post here.
+  // canOverrideReadOnly is decided per channel by the server. _hasPerm reads a
+  // flat list that merges every channel-scoped grant together, so holding the
+  // override in one channel used to reveal the composer in all of them, and the
+  // send was then refused. (#5468)
+  const _isReadOnly = channel && channel.read_only === 1 && !this.user?.isAdmin && !channel.canOverrideReadOnly;
+  if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
+  // A media-only channel has no text box to press Enter in, so the send
+  // button is the only way to post an attachment: it stays, even for
+  // someone who chose to hide it (#5880).
+  if (msgInputArea) msgInputArea.classList.toggle('media-only', _textOff && !_mediaOff);
+  this._updateReadOnlyNote?.(channel);
+  // Text-only elements
+  const _msgInput = document.getElementById('message-input');
+  const _sendBtn = document.getElementById('send-btn');
+  const _emojiBtn = document.getElementById('emoji-btn');
+  const _gifBtn = document.getElementById('gif-btn');
+  const _pollBtn = document.getElementById('poll-btn');
+  if (_msgInput) _msgInput.style.display = _textOff ? 'none' : '';
+  if (_sendBtn) _sendBtn.style.display = (_textOff && _mediaOff) ? 'none' : '';
+  if (_emojiBtn) _emojiBtn.style.display = _textOff ? 'none' : '';
+  if (_gifBtn) _gifBtn.style.display = _textOff ? 'none' : '';
+  if (_pollBtn) _pollBtn.style.display = _textOff ? 'none' : '';
+  const _timeBtn = document.getElementById('time-btn');
+  const _timeDivider = document.getElementById('time-divider');
+  if (_timeBtn) _timeBtn.style.display = _textOff ? 'none' : '';
+  if (_timeDivider) _timeDivider.style.display = _textOff ? 'none' : '';
+  // Upload button tied to media toggle
+  const _uploadBtn = document.getElementById('upload-btn');
+  if (_uploadBtn) _uploadBtn.style.display = _mediaOff ? 'none' : '';
+  this._applyReactionLock?.();
+  // Dividers: first one only if both upload and text buttons visible, rest if text is on
+  const _dividers = document.querySelectorAll('.input-actions-box .input-actions-divider');
+  if (_dividers[0]) _dividers[0].style.display = (!_textOff && !_mediaOff) ? '' : 'none';
+  if (_dividers[1]) _dividers[1].style.display = _textOff ? 'none' : '';
+  if (_dividers[2]) _dividers[2].style.display = _textOff ? 'none' : '';
+},
+
 async switchChannel(code) {
   if (this.currentChannel === code) return;
 
@@ -33,6 +76,7 @@ async switchChannel(code) {
     : channel ? `# ${channel.name}` : code;
 
   document.getElementById('channel-header-name').textContent = displayName;
+  this._markDmView(!!isDm);
   // Clear scramble cache so the effect picks up the new channel name
   const headerEl = document.getElementById('channel-header-name');
   if (headerEl) { delete headerEl.dataset.originalText; headerEl._scrambling = false; }
@@ -57,6 +101,7 @@ async switchChannel(code) {
   if (_sdDiv) _sdDiv.style.display = _sdHidden ? 'none' : '';
   this._setSelfDestructArmed(false);
   this._updateHighlightButton?.(isDm);
+  this._applyComposerButtons?.();
   const displayCode = channel ? (channel.display_code || code) : code;
   const isMaskedCode = (displayCode === '••••••••');
   document.getElementById('channel-code-display').textContent = isDm ? '' : displayCode;
@@ -143,53 +188,20 @@ async switchChannel(code) {
   // surprised when history disappears.
   this._updateDmCleanupNotice(channel);
 
-  // Show/hide message input; keep upload button visible for media-only channels
-  const msgInputArea = document.getElementById('message-input-area');
-  const _textOff = channel && channel.text_enabled === 0;
-  const _mediaOff = channel && channel.media_enabled === 0;
-  // Read-only: hide the composer unless this viewer may actually post here.
-  // canOverrideReadOnly is decided per channel by the server. _hasPerm reads a
-  // flat list that merges every channel-scoped grant together, so holding the
-  // override in one channel used to reveal the composer in all of them, and the
-  // send was then refused. (#5468)
-  const _isReadOnly = channel && channel.read_only === 1 && !this.user?.isAdmin && !channel.canOverrideReadOnly;
-  if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
-  // A media-only channel has no text box to press Enter in, so the send
-  // button is the only way to post an attachment: it stays, even for
-  // someone who chose to hide it (#5880).
-  if (msgInputArea) msgInputArea.classList.toggle('media-only', !!_textOff && !_mediaOff);
-  this._updateReadOnlyNote(channel);
-  // Text-only elements
-  const _msgInput = document.getElementById('message-input');
-  const _sendBtn = document.getElementById('send-btn');
-  const _emojiBtn = document.getElementById('emoji-btn');
-  const _gifBtn = document.getElementById('gif-btn');
-  const _pollBtn = document.getElementById('poll-btn');
-  if (_msgInput) _msgInput.style.display = _textOff ? 'none' : '';
-  if (_sendBtn) _sendBtn.style.display = (_textOff && _mediaOff) ? 'none' : '';
-  if (_emojiBtn) _emojiBtn.style.display = _textOff ? 'none' : '';
-  if (_gifBtn) _gifBtn.style.display = _textOff ? 'none' : '';
-  if (_pollBtn) _pollBtn.style.display = _textOff ? 'none' : '';
+  this._updateComposerVisibility(channel);
   // In a forum the composer starts topics, and says so. (#144)
+  const _msgInput = document.getElementById('message-input');
   if (_msgInput) {
     const _forumCh = this.channels && this.channels.find(c => c.code === code);
+    // A DM's box says who the message goes to (#5920).
+    const _dmTo = isDm && !channel.is_group && channel.dm_target
+      ? this._getNickname(channel.dm_target.id, channel.dm_target.username) : '';
     _msgInput.placeholder = (_forumCh && _forumCh.is_forum)
       ? t('app.messages.placeholder_forum')
+      : _dmTo ? t('app.messages.placeholder_dm', { name: _dmTo })
+      : isDm ? t('app.messages.placeholder_dm_group')
       : t(window.innerWidth <= 480 ? 'app.messages.placeholder_short' : 'header.message_placeholder_commands');
   }
-  const _timeBtn = document.getElementById('time-btn');
-  const _timeDivider = document.getElementById('time-divider');
-  if (_timeBtn) _timeBtn.style.display = _textOff ? 'none' : '';
-  if (_timeDivider) _timeDivider.style.display = _textOff ? 'none' : '';
-  // Upload button tied to media toggle
-  const _uploadBtn = document.getElementById('upload-btn');
-  if (_uploadBtn) _uploadBtn.style.display = _mediaOff ? 'none' : '';
-  this._applyReactionLock?.();
-  // Dividers: first one only if both upload and text buttons visible, rest if text is on
-  const _dividers = document.querySelectorAll('.input-actions-box .input-actions-divider');
-  if (_dividers[0]) _dividers[0].style.display = (!_textOff && !_mediaOff) ? '' : 'none';
-  if (_dividers[1]) _dividers[1].style.display = _textOff ? 'none' : '';
-  if (_dividers[2]) _dividers[2].style.display = _textOff ? 'none' : '';
 
   const messagesEl = document.getElementById('messages');
   messagesEl.innerHTML = '';
@@ -407,7 +419,16 @@ async _editTopic() {
   this.socket.emit('set-channel-topic', { code: this.currentChannel, topic: newTopic.slice(0, 256) });
 },
 
+// Marks the main pane as showing a DM, so it cannot be taken for a
+// channel (#5920): the header tag, and the accent line under the header.
+_markDmView(isDm) {
+  document.body.classList.toggle('viewing-dm', isDm);
+  const tag = document.getElementById('dm-private-tag');
+  if (tag) tag.style.display = isDm ? '' : 'none';
+},
+
 _showWelcome() {
+  this._markDmView(false);
   document.getElementById('message-area').style.display = 'none';
   document.getElementById('no-channel-msg').style.display = 'flex';
   document.getElementById('channel-header-name').textContent = t('header.select_channel');
@@ -520,23 +541,6 @@ _renderChannels() {
     } else {
       arr.sort((a, b) => sortByMode(a, b, globalSortMode));
     }
-
-    // Muted (unsubscribed) sub-channels go after the others, but inside
-    // their own category. Sinking them to the bottom of the whole list took
-    // them out of their category, which then showed twice: once for its
-    // channels and again further down for its muted ones.
-    const _subMuted = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
-    const byCategory = new Map();
-    for (const c of arr) {
-      const key = (c.category || '').toLowerCase();
-      if (!byCategory.has(key)) byCategory.set(key, []);
-      byCategory.get(key).push(c);
-    }
-    const regrouped = [];
-    for (const group of byCategory.values()) {
-      regrouped.push(...group.filter(c => !_subMuted.has(c.code)), ...group.filter(c => _subMuted.has(c.code)));
-    }
-    arr.splice(0, arr.length, ...regrouped);
   });
 
   // Sort parent channels: respect server-level sort mode & per-tag overrides

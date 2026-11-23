@@ -7,6 +7,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { loadServerPlugin } = require('../serverPlugins');
 
 const HOSTS = new Set(['opencode.ai', 'api.moonshot.ai', 'api.moonshot.cn', 'api.meta.ai', 'api.openai.com', 'api.x.ai', 'api.anthropic.com', 'generativelanguage.googleapis.com', 'openrouter.ai', 'api.mistral.ai', 'api.deepseek.com', 'api.groq.com']);
 const HEADERS = ['authorization', 'x-api-key', 'x-goog-api-key', 'anthropic-version', 'anthropic-beta', 'x-opencode-session'];
@@ -18,16 +19,16 @@ const MAX_QUEUE = 77;
 // member posting link after link can never crowd out a moderator's scan.
 const SWEEP_QUEUE_LIMIT = 50;
 const SWEEP_PER_USER_PER_MIN = 10;
+const SWEEP_MAX_CHARS = 120000;
+const SWEEP_PIECE = 3000;
+const SWEEP_OVERLAP = 700;
 
 // The plugin file carries the URL checks and the prompt. It is optional: an
-// admin may delete it, and the server must still start.
+// admin may delete it, and the server must still start. Because the server
+// runs it, only the copy shipped with this version is loaded
+// (src/serverPlugins.js).
 function loadPlugin(pluginPath) {
-  try {
-    return require(pluginPath);
-  } catch (e) {
-    console.warn('[AutoMod] AI link checks unavailable, plugin file not loaded:', e.message);
-    return null;
-  }
+  return loadServerPlugin(pluginPath);
 }
 
 module.exports = function registerAutomodRelay({ app, getModUser, verifyToken, isBanned, rateLimit, fetchImpl = (...a) => fetch(...a), profilePath = PROFILE, pluginPath = PLUGIN, settings = null }) {
@@ -140,9 +141,24 @@ module.exports = function registerAutomodRelay({ app, getModUser, verifyToken, i
     }
     return ++b.n <= SWEEP_PER_USER_PER_MIN;
   };
+  // This runs on what was sent, before the message handler has checked its
+  // length, and the link finder slows down badly on one very long crafted
+  // text. So the text is read in overlapping pieces (a link is far shorter
+  // than the overlap), and nothing past the longest message a server can
+  // allow is read at all.
+  const sweepLinks = (content) => {
+    const seen = new Map();
+    const end = Math.min(content.length, SWEEP_MAX_CHARS);
+    for (let at = 0; at < end && seen.size < 7; at += SWEEP_PIECE - SWEEP_OVERLAP) {
+      for (const hit of am.extractUrls(content.slice(at, Math.min(end, at + SWEEP_PIECE)))) {
+        if (!seen.has(hit.url)) seen.set(hit.url, hit);
+      }
+    }
+    return [...seen.values()].slice(0, 7);
+  };
   const sweep = (content, userId) => {
     if (typeof content !== 'string' || !content.includes('.') || !enabled() || !profile()) return;
-    for (const { url } of am.extractUrls(content).slice(0, 7)) {
+    for (const { url } of sweepLinks(content)) {
       const t = am.checkSourceTrust(url);
       if (!t.ok || t.trusted || fresh(url) || inflight.has(url)) continue;
       if (!sweepAllowed(userId)) return;

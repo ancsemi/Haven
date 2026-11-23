@@ -284,6 +284,7 @@
       var hsv = JSON.parse(localStorage.getItem('haven_custom_hsv'));
       if (hsv && typeof hsv.h === 'number') {
         var h = hsv.h, s = hsv.s, v = hsv.v;
+        var ac = hsv.a && typeof hsv.a.h === 'number' && typeof hsv.a.s === 'number' && typeof hsv.a.v === 'number' ? hsv.a : hsv;
         function _hsvRgb(h,s,v) {
           h=((h%360)+360)%360; var c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c,r,g,b;
           if(h<60){r=c;g=x;b=0}else if(h<120){r=x;g=c;b=0}else if(h<180){r=0;g=c;b=x}
@@ -295,10 +296,10 @@
         var vib = s; // vibrancy follows saturation for dramatic bg changes
         var bgSat = 0.05 + vib * 0.30;
         var bdrSat = 0.05 + vib * 0.25;
-        el.style.setProperty('--accent', _hex(h,s,v));
-        el.style.setProperty('--accent-hover', _hex(h,Math.max(s-.15,0),Math.min(v+.15,1)));
-        el.style.setProperty('--accent-dim', _hex(h,Math.min(s+.1,1),Math.max(v-.2,0)));
-        var rgb=_hsvRgb(h,s,v);
+        el.style.setProperty('--accent', _hex(ac.h,ac.s,ac.v));
+        el.style.setProperty('--accent-hover', _hex(ac.h,Math.max(ac.s-.15,0),Math.min(ac.v+.15,1)));
+        el.style.setProperty('--accent-dim', _hex(ac.h,Math.min(ac.s+.1,1),Math.max(ac.v-.2,0)));
+        var rgb=_hsvRgb(ac.h,ac.s,ac.v);
         el.style.setProperty('--accent-glow', 'rgba('+rgb.join(',')+',0.25)');
         el.style.setProperty('--bg-primary', _hex(h,bgSat,0.07+vib*0.03));
         el.style.setProperty('--bg-secondary', _hex(h,bgSat*0.85,0.09+vib*0.04));
@@ -309,7 +310,7 @@
         el.style.setProperty('--bg-card', _hex(h,bgSat*0.85,0.08+vib*0.04));
         el.style.setProperty('--border', _hex(h,bdrSat,0.16+vib*0.06));
         el.style.setProperty('--border-light', _hex(h,bdrSat,0.21+vib*0.06));
-        el.style.setProperty('--text-link', _hex((h+180)%360,.7,.95));
+        el.style.setProperty('--text-link', _hex((ac.h+180)%360,.7,.95));
       }
     } catch(e) { /* corrupt saved colours: keep the base theme */ }
   }

@@ -1,0 +1,71 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+const vm = require('node:vm');
+const ROOT = path.join(__dirname, '..');
+const KEYS = ['upload', 'emoji', 'gif', 'poll', 'time', 'format', 'voice', 'self-destruct', 'silent', 'highlight', 'burn'];
+const setup = (saved, compact = false) => {
+  const data = new Map(saved ? [['haven_composer_buttons', JSON.stringify(saved)]] : []);
+  const attrs = new Set(compact ? ['data-compact-composer'] : []);
+  const mk = (id) => ({ id, style: {}, parent: null, classList: { remove() {} } });
+  const box = { children: [], appendChild(el) { el.parent && el.parent.children.splice(el.parent.children.indexOf(el), 1); el.parent = this; this.children.push(el); } };
+  const menu = { children: [], appendChild: box.appendChild, classList: { remove() {} } };
+  KEYS.forEach((k, i) => { box.appendChild(mk(`${k}-btn`)); box.appendChild({ id: `div${i}`, style: {}, parent: null }); });
+  const byId = Object.fromEntries(box.children.map(el => [el.id, el]));
+  const document = { querySelector: () => box, getElementById: id => (id === 'composer-overflow' ? menu : byId[id] || null), documentElement: { hasAttribute: a => attrs.has(a), toggleAttribute: (a, on) => (on ? attrs.add(a) : attrs.delete(a)) } };
+  const context = vm.createContext({ module: { exports: {} }, localStorage: { getItem: k => (data.has(k) ? data.get(k) : null), setItem: (k, v) => data.set(k, v), removeItem: k => data.delete(k) }, document, t: k => k, window: {}, console });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'public/js/modules/app-settings.js'), 'utf8').replace(/^export default/m, 'module.exports ='), context, { filename: 'app-settings.js' });
+  return { app: { ...context.module.exports }, box, menu, attrs, byId, data };
+};
+const plain = (v) => JSON.parse(JSON.stringify(v));
+const ids = (el) => el.children.filter(c => c.id.endsWith('-btn')).map(c => c.id.replace('-btn', ''));
+test('the saved layout is cleaned: unknown buttons dropped, missing ones added in the usual order', () => {
+  const { app } = setup({ order: ['gif', 'bogus', 'emoji'], folded: ['poll', 'nope'] });
+  const cfg = app._composerButtonsCfg();
+  assert.deepEqual(plain(cfg.order), ['gif', 'emoji', 'upload', 'poll', 'time', 'format', 'voice', 'self-destruct', 'silent', 'highlight', 'burn']);
+  assert.deepEqual(plain(cfg.folded), ['poll']);
+  assert.deepEqual(plain(setup().app._composerButtonsCfg()), { order: KEYS, folded: [] });
+});
+test('buttons left out of the bar move into the + menu and the rest are ordered', () => {
+  const { app, box, menu, attrs, byId } = setup({ order: ['gif', 'emoji'], folded: KEYS.filter(k => k !== 'emoji' && k !== 'gif') });
+  app._closeComposerMenu = () => {};
+  app._applyComposerButtons();
+  assert.deepEqual(ids(box), ['emoji', 'gif']);
+  assert.deepEqual(ids(menu).sort(), KEYS.filter(k => k !== 'emoji' && k !== 'gif').sort());
+  assert.equal(byId['gif-btn'].style.order, '1');
+  assert.equal(byId['emoji-btn'].style.order, '2');
+  assert.ok(attrs.has('data-composer-folded') && attrs.has('data-composer-custom'));
+});
+test('the default layout puts every button and divider back where it started', () => {
+  const { app, box, menu, attrs, data } = setup({ order: [], folded: ['poll'] });
+  app._closeComposerMenu = () => {};
+  const before = box.children.map(c => c.id);
+  app._applyComposerButtons();
+  assert.equal(ids(menu).join(), 'poll');
+  assert.ok(attrs.has('data-composer-folded'));
+  data.delete('haven_composer_buttons');
+  app._applyComposerButtons();
+  assert.deepEqual(box.children.map(c => c.id), before);
+  assert.equal(menu.children.length, 0);
+  assert.ok(!attrs.has('data-composer-custom') && !attrs.has('data-composer-folded'));
+});
+test('folding everything into one + button leaves the bar alone', () => {
+  const { app, box, menu } = setup({ order: [], folded: ['poll', 'time'] }, true);
+  app._closeComposerMenu = () => {};
+  app._applyComposerButtons();
+  assert.equal(menu.children.length, 0);
+  assert.equal(ids(box).length, KEYS.length);
+});
+test('the settings list, the overflow menu and the + button are wired up', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'public/app.html'), 'utf8');
+  assert.match(html, /id="composer-overflow"/);
+  assert.match(html, /id="composer-buttons-list"/);
+  assert.match(html, /id="composer-buttons-reset"/);
+  const css = fs.readFileSync(path.join(ROOT, 'public/css/style-status-effects.css'), 'utf8');
+  assert.match(css, /\[data-composer-folded\] \.btn-composer-plus/);
+  assert.match(css, /\.composer-overflow\.open/);
+  const en = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/locales/en.json'), 'utf8'));
+  for (const k of ['buttons', 'buttons_hint', 'in_bar']) assert.ok(en.settings.layout.composer[k], k);
+});

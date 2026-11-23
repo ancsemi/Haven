@@ -141,7 +141,7 @@ const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTran
 const { initFerry, stopFerry } = require('./src/ferry');
 const { threadExtras: forumBlogThreadExtras } = require('./src/forumBlog');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
-const { CREATOR_NOT_BANNED_SQL } = require('./src/botAccess');
+const { CREATOR_NOT_BANNED_SQL, tokenStillReaches } = require('./src/botAccess');
 const { cleanWebhookName, cleanWebhookAvatarUrl } = require('./src/webhookFields');
 const { validHighScore, isKnownGame } = require('./src/highScores');
 const protectedMessages = require('./src/protectedMessages');
@@ -152,9 +152,10 @@ const {
 } = require('./src/botAudio');
 const { startTunnel, stopTunnel, getTunnelStatus, registerProcessCleanup } = require('./src/tunnel');
 const { startDdns, getDdnsStatus, triggerDdnsNow } = require('./src/ddns');
-const { initFcm, setFcmAdminEnabled } = require('./src/fcm');
+const { initFcm, setFcmAdminEnabled, setFcmHideContent } = require('./src/fcm');
 const threadNotify = require('./src/threadNotify');
 const { takeSilent } = require('./src/silentMessages');
+const botComponents = require('./src/botComponents');
 
 const app = express();
 const BOT_AUDIO_DIR = path.join(UPLOADS_DIR, 'bot-audio');
@@ -269,6 +270,7 @@ async function relocateUnreferencedUploads(db, relPaths, { ownerId = null } = {}
   const protectedUrlReferences = db.prepare(`
     SELECT avatar AS reference FROM users WHERE avatar LIKE '%/uploads/%'
     UNION ALL SELECT border FROM users WHERE border LIKE '%/uploads/%'
+    UNION ALL SELECT banner FROM users WHERE banner LIKE '%/uploads/%'
     UNION ALL SELECT avatar FROM user_personas WHERE avatar LIKE '%/uploads/%'
     UNION ALL SELECT avatar_url FROM webhooks WHERE avatar_url LIKE '%/uploads/%'
     UNION ALL SELECT icon FROM roles WHERE icon LIKE '%/uploads/%'
@@ -883,6 +885,14 @@ app.post('/api/push/subscribe', express.json(), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  // A banned account gets no new place to be notified. If the ban cannot be
+  // checked, refuse rather than sign the device up.
+  try {
+    if (require('./src/database').getDb().prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id)) return res.status(403).json({ error: 'Not allowed' });
+  } catch (err) {
+    console.warn('[push] could not check the ban list, refusing the subscription:', err.message);
+    return res.status(500).json({ error: 'Could not save the subscription' });
+  }
 
   const { endpoint, keys } = req.body || {};
   if (typeof endpoint !== 'string' || !endpoint || endpoint.length > 2048 ||
@@ -1291,32 +1301,20 @@ app.get('/api/port-check', async (req, res) => {
     return res.json({ reachable: false, publicIp: null, error: 'Could not determine public IP. You may be offline.' });
   }
 
-  // Step 2: Check if port is reachable via external probe
   let reachable = false;
+  const { externalPort, queryPortchecker } = require('./src/portCheck');
+  const checkPort = externalPort(process.env.PUBLIC_URL, port);
+  const probeHttps = /^https:/i.test(process.env.PUBLIC_URL || '') || (!process.env.PUBLIC_URL && useSSL);
   try {
-    reachable = await new Promise((resolve, reject) => {
-      const url = `https://portchecker.io/api/v1/query?host=${publicIp}&ports=${port}`;
-      const req = https.get(url, { timeout: 10000, agent: agentFor(url) }, (resp) => {
-        let data = '';
-        resp.on('data', chunk => data += chunk);
-        resp.on('end', () => {
-          try {
-            const result = JSON.parse(data);
-            // portchecker.io returns { host, ports: [{ port, status }] }
-            const portResult = result.ports?.find(p => p.port === parseInt(port));
-            resolve(portResult?.status === 'open');
-          } catch { resolve(false); }
-        });
-      });
-      req.on('error', () => resolve(false));
-      req.on('timeout', () => { req.destroy(); resolve(false); });
-    });
+    const verdict = await queryPortchecker(publicIp, checkPort, { agentFor });
+    if (verdict === null) throw new Error('port check service gave no answer');
+    reachable = verdict;
   } catch {
     // Fallback: try to connect to ourselves from public IP
     try {
-      const proto = useSSL ? https : http;
+      const proto = probeHttps ? https : http;
       reachable = await new Promise((resolve) => {
-        const req = proto.get(`${useSSL ? 'https' : 'http'}://${publicIp}:${port}/api/health`, {
+        const req = proto.get(`${probeHttps ? 'https' : 'http'}://${publicIp}:${checkPort}/api/health`, {
           timeout: 5000,
           // SECURITY NOTE: rejectUnauthorized:false is intentional here: this
           // connects to OUR OWN public IP to test reachability. Self-signed certs
@@ -1693,7 +1691,31 @@ app.get('/api/webhooks/:token', webhookLimiter, (req, res) => {
   });
 });
 
-app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' }), (req, res) => {
+// Same rule as getWebhookByToken: a banned person's bots stop posting.
+function findWebhook(token) {
+  if (!token || typeof token !== 'string' || token.length !== 64) return null;
+  const db = require('./src/database').getDb();
+  const row = db.prepare(
+    `SELECT w.*, c.code as channel_code, c.name as channel_name, c.role_gate FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0 AND ${CREATOR_NOT_BANNED_SQL}`
+  ).get(token) || null;
+  // The token stops working once its maker can no longer open the channel
+  // (src/botAccess.js).
+  return row && tokenStillReaches(db, row) ? row : null;
+}
+
+// A bot can send files with its message as multipart/form-data
+// (src/routes/webhookFiles.js); anything else is the usual JSON body.
+const webhookFiles = require('./src/routes/webhookFiles')({
+  uploadStorage, uploadDiskGuard, findWebhook, getDb: () => require('./src/database').getDb(),
+  verifyAdminFromDb, userHasPermission, recordUploadOwnership,
+});
+const webhookJson = express.json({ limit: '64kb' });
+function webhookBody(req, res, next) {
+  if (req.is('multipart/form-data')) return webhookFiles.parse(req, res, next);
+  return webhookJson(req, res, next);
+}
+
+app.post('/api/webhooks/:token', webhookLimiter, webhookBody, async (req, res) => {
   const { getDb } = require('./src/database');
   const db = getDb();
   const { token } = req.params;
@@ -1702,21 +1724,23 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     return res.status(400).json({ error: 'Invalid token' });
   }
 
-  // Same rule as getWebhookByToken: a banned person's bots stop posting.
-  const webhook = db.prepare(
-    `SELECT w.*, c.code as channel_code, c.name as channel_name FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0 AND ${CREATOR_NOT_BANNED_SQL}`
-  ).get(token);
-
+  const webhook = findWebhook(token);
   if (!webhook) {
     return res.status(404).json({ error: 'Webhook not found or inactive' });
   }
+  if (!req.body || typeof req.body !== 'object') req.body = {};
+  const files = Array.isArray(req.webhookFiles) ? req.webhookFiles : [];
 
   // A bot can post silently too: "silent": true, or "@silent" up front.
   const silentPick = takeSilent(typeof req.body.content === 'string' ? req.body.content.trim() : '', req.body.silent);
   const silent = silentPick.silent;
-  const content = sanitizeText(silentPick.content.trim());
-  if (!content || content.length > 4000) {
-    return res.status(400).json({ error: 'Content required (max 4000 chars)' });
+  let content = sanitizeText(silentPick.content.trim());
+  // Embeds, buttons and dropdowns (src/botComponents.js), in Discord's shapes.
+  const parts = botComponents.clean(req.body);
+  if (parts.error) return res.status(400).json({ error: parts.error });
+  const hasParts = !!(parts.embeds?.length || parts.components?.length);
+  if ((!content && !files.length && !hasParts) || content.length > 4000) {
+    return res.status(400).json({ error: files.length || hasParts ? 'Content max 4000 chars' : 'Content required (max 4000 chars)' });
   }
 
   // Optional overrides per-message
@@ -1757,6 +1781,14 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
   // Optional ephemeral delivery to a single recipient in this channel.
   // Ephemeral webhook messages are not persisted to chat history.
   const ephemeral = req.body.ephemeral === true;
+  if (ephemeral && files.length) {
+    return res.status(400).json({ error: 'Files cannot be sent with ephemeral' });
+  }
+  // A click is checked against the stored message, and an ephemeral one is
+  // never stored.
+  if (ephemeral && parts.components?.length) {
+    return res.status(400).json({ error: 'Buttons and dropdowns cannot be sent with ephemeral' });
+  }
   let recipientId = null;
   if (ephemeral) {
     const parsedRecipientId = parseInt(req.body.recipient_id, 10);
@@ -1807,6 +1839,8 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     thread_id: threadId,
     silent: silent || undefined,
   };
+  if (parts.embeds?.length) message.embeds = parts.embeds;
+  if (parts.components?.length) message.components = parts.components;
 
   if (ephemeral) {
     let deliveredSockets = 0;
@@ -1825,11 +1859,27 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     return res.status(200).json({ success: true, ephemeral: true, recipient_id: recipientId, delivered: deliveredSockets > 0 });
   }
 
+  // Files are stored only once everything else checked out, each on its own
+  // line after the text, the way the app sends a picture with a caption.
+  if (files.length) {
+    let stored;
+    try {
+      stored = await webhookFiles.store(files, webhook);
+    } catch (err) {
+      console.warn('[webhook-files] storing failed:', err.message);
+      return res.status(500).json({ error: 'Failed to store the upload' });
+    }
+    if (stored.error) return res.status(400).json({ error: stored.error });
+    content = [content, ...stored.lines].filter(Boolean).join('\n');
+    message.content = content;
+  }
+
   // Insert non-ephemeral messages into the DB/history.
   const result = db.prepare(
     'INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username, webhook_avatar, reply_to, thread_id, webhook_id, silent) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)'
   ).run(webhook.channel_id, null, content, username, avatarUrl || null, replyTo, threadId, webhook.id, silent ? 1 : 0);
   message.id = result.lastInsertRowid;
+  if (hasParts) botComponents.record(db, message.id, parts);
 
   // Broadcast to all clients in this channel
   if (io && threadId) {
@@ -1865,7 +1915,7 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
     // Bot posts never pushed, and a browser with push on leaves its pop-ups
     // to the push, so those people heard nothing at all.
     if (socketRuntime?.sendPushNotifications) {
-      socketRuntime.sendPushNotifications(webhook.channel_id, webhook.channel_code, webhook.channel_name, 0, username, content,
+      socketRuntime.sendPushNotifications(webhook.channel_id, webhook.channel_code, webhook.channel_name, 0, username, content || botComponents.summary(parts.embeds),
         { silent, replyToUserId: replyContext?.user_id || undefined });
     }
   }
@@ -2589,14 +2639,15 @@ const automod = require('./src/routes/automodRelay')({
 function getWebhookByToken(token) {
   if (!token || typeof token !== 'string' || token.length !== 64) return null;
   const { getDb } = require('./src/database');
-  return getDb().prepare(`
+  const row = getDb().prepare(`
     SELECT w.id, w.name, w.channel_id, w.callback_url, w.can_moderate,
-           w.can_use_voice, w.created_by, c.code AS channel_code
+           w.can_use_voice, w.created_by, c.code AS channel_code, c.role_gate
     FROM webhooks w
     LEFT JOIN channels c ON c.id = w.channel_id
     WHERE w.token = ? AND w.is_active = 1 AND COALESCE(c.is_dm, 0) = 0
       AND ${CREATOR_NOT_BANNED_SQL}
   `).get(token);
+  return row && tokenStillReaches(getDb(), row) ? row : undefined;
 }
 
 function getBotCurrentVoiceChannel(webhookId) {
@@ -3147,6 +3198,12 @@ try {
   // setting must not quietly turn it back on.
   setFcmAdminEnabled(false);
   console.error('[fcm] Could not read the FCM Privacy setting, leaving FCM off:', err.message);
+}
+try {
+  setFcmHideContent(db.prepare("SELECT value FROM server_settings WHERE key = 'fcm_hide_content'").get()?.value === 'true');
+} catch (err) {
+  setFcmHideContent(true);
+  console.error('[fcm] Could not read the hide message text setting, hiding it:', err.message);
 }
 initFcm(DATA_DIR);
 // Clean photos and videos uploaded before the privacy pass existed.

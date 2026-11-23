@@ -1,30 +1,42 @@
 'use strict';
 
-// "Add all members" for a channel that already exists: everyone on the server
-// becomes a member, as ticking Add all members does when a channel is made.
+// "Manage members" for a channel that already exists: the channel's
+// right-click menu lists everyone on the server with their roles, who is in
+// the channel is ticked, and ticking or unticking people adds or removes
+// them. Ticking everyone is Add all, unticking everyone is Remove all.
 //
-//   add-all-members { code } -> { success, added } or { error }
-//
-// "Add members" picks who: the channel's right-click menu lists everyone on
-// the server with their roles, and the chosen people join.
-//
-//   get-channel-add-members { code } -> { channel, users, roles } or { error }
+//   get-channel-add-members { code } -> { channel, users, roles, canAdd } or { error }
+//   update-channel-members { code, add, remove } -> { success, added, removed } or { error }
 //   add-channel-members { code, userIds } -> { success, added } or { error }
+//   add-all-members { code } -> { success, added } or { error }
+//   get-member-channels { userId } gives { channels } or { error }
+//     one person's side of the same rules, for a bot's page in Settings:
+//     the channels they are in, and those you may add them to or take
+//     them out of. Changes go through update-channel-members.
 //
-// Picking people works on a private channel too, for whoever may invite to
-// it one by one (the admin, its creator, or a moderator there), since it is
-// the same as inviting each of them.
+// Who may add: the admin, Invite Users or Manage Server on a public channel,
+// and on a private one whoever may invite to it one by one (its creator or a
+// moderator there), since it is the same as inviting each of them. Banned
+// people are left out, and guests too unless the admin does it.
 //
-// It takes what the switch at creation takes: the admin, Invite Users or
-// Manage Server, and reaching the channel. A private channel stays invite-only
-// and a DM is not a channel anyone else belongs in, so both are refused.
-// Banned people are left out, and guests too unless the admin does it. The new members get the channel in their list
-// straight away, and the member list is drawn again.
+// Who may remove: whoever may add (what you can add you can take out again),
+// and anyone with Kick in the channel. Nobody removes themselves here, and
+// only the admin removes an admin or a guest. A private channel's creator may
+// remove anyone else; everyone else only people ranked below them.
+//
+// add-all-members takes what the switch at creation takes and stays out of
+// private channels. The people added get the channel in their list straight
+// away, the people removed lose it, and the member list is drawn again.
 
 const { reachableChannelByCode } = require('./channelAccess');
+const { removeChannelMember } = require('../channelMemberRemoval');
+
+const MAX_IDS = 10000;
+const idList = (v) => (Array.isArray(v) && v.length <= MAX_IDS && v.every(Number.isInteger) ? [...new Set(v)] : null);
 
 module.exports = function register(socket, ctx) {
-  const { io, db, userHasPermission, broadcastChannelLists, emitOnlineUsers, logAudit } = ctx;
+  const { io, db, userHasPermission, getUserEffectiveLevel, broadcastChannelLists, emitOnlineUsers, logAudit, rotatePrivateCodesAfterRemoval } = ctx;
+  const audit = typeof logAudit === 'function' ? logAudit : () => {};
 
   socket.on('add-all-members', (data, callback) => {
     const cb = typeof callback === 'function' ? callback : () => {};
@@ -32,7 +44,7 @@ module.exports = function register(socket, ctx) {
     if (!/^[a-f0-9]{8}$/i.test(code)) return cb({ error: 'Invalid channel' });
     const allowed = socket.user.isAdmin || userHasPermission(socket.user.id, 'invite_users')
       || userHasPermission(socket.user.id, 'manage_server');
-    if (!allowed) return cb({ error: 'You don\'t have permission to add members' });
+    if (!allowed) return cb({ error: "You don't have permission to add members" });
     const channel = socket.user.isAdmin
       ? db.prepare('SELECT * FROM channels WHERE code = ?').get(code)
       : reachableChannelByCode(ctx, socket.user, code);
@@ -67,72 +79,151 @@ module.exports = function register(socket, ctx) {
     if (added) {
       broadcastChannelLists();
       emitOnlineUsers(channel.code);
-      if (typeof logAudit === 'function') {
-        logAudit({ actor: socket.user, action: 'channel_add_all_members', target_type: 'channel',
-          target_id: channel.id, target_name: channel.name, details: { added } });
-      }
+      audit({ actor: socket.user, action: 'channel_add_all_members', target_type: 'channel',
+        target_id: channel.id, target_name: channel.name, details: { added } });
     }
     cb({ success: true, added });
   });
 
-  // The channel, if this person may add people to it, else null.
-  function channelToAddTo(code) {
+  // The channel and what this person may do to its member list, or null when
+  // they may do nothing there (or cannot reach it).
+  function access(code) {
     if (typeof code !== 'string' || !/^[a-f0-9]{8}$/i.test(code)) return null;
     const channel = socket.user.isAdmin
       ? db.prepare('SELECT * FROM channels WHERE code = ?').get(code)
       : reachableChannelByCode(ctx, socket.user, code);
     if (!channel || channel.is_dm) return null;
-    if (socket.user.isAdmin) return channel;
+    if (socket.user.isAdmin) return { channel, canAdd: true, canRemove: true, creator: true };
     const parent = channel.parent_channel_id
       ? db.prepare('SELECT created_by, is_private, code_visibility FROM channels WHERE id = ?').get(channel.parent_channel_id)
       : null;
     const isPrivate = channel.is_private || channel.code_visibility === 'private'
       || !!(parent && (parent.is_private || parent.code_visibility === 'private'));
-    if (isPrivate) {
-      const creator = channel.created_by === socket.user.id || !!(parent && parent.created_by === socket.user.id);
-      return creator || userHasPermission(socket.user.id, 'kick_user', channel.id) ? channel : null;
+    const creator = isPrivate && (channel.created_by === socket.user.id || !!(parent && parent.created_by === socket.user.id));
+    const kick = !!userHasPermission(socket.user.id, 'kick_user', channel.id);
+    const canAdd = isPrivate
+      ? creator || kick
+      : !!(userHasPermission(socket.user.id, 'invite_users') || userHasPermission(socket.user.id, 'manage_server'));
+    const canRemove = canAdd || kick;
+    return canAdd || canRemove ? { channel, canAdd, canRemove, creator } : null;
+  }
+
+  // The channel, if this person may add people to it, else null.
+  function channelToAddTo(code) {
+    const a = access(code);
+    return a && a.canAdd ? a.channel : null;
+  }
+
+  // Whether this person may take that member out. target: { id, is_admin, is_guest }.
+  function removable(a, target, myLevel) {
+    if (!a.canRemove || target.id === socket.user.id) return false;
+    if (socket.user.isAdmin) return true;
+    if (target.is_admin || target.is_guest) return false;
+    if (a.creator) return true;
+    return getUserEffectiveLevel(target.id, a.channel.id) < myLevel;
+  }
+
+  function addMembers(channel, ids) {
+    const addedIds = [];
+    const lookup = db.prepare(`SELECT u.id, u.is_guest, (b.id IS NOT NULL) AS banned
+      FROM users u LEFT JOIN bans b ON b.user_id = u.id WHERE u.id = ?`);
+    const insert = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
+    // A top-level channel brings its public sub-channels along, as an invite does.
+    const subs = channel.parent_channel_id ? []
+      : db.prepare('SELECT id FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(channel.id);
+    db.transaction(() => {
+      for (const id of ids) {
+        const u = lookup.get(id);
+        if (!u || u.banned || (u.is_guest && !socket.user.isAdmin)) continue;
+        if (!insert.run(channel.id, id).changes) continue;
+        for (const sub of subs) insert.run(sub.id, id);
+        addedIds.push(id);
+      }
+    })();
+    return addedIds;
+  }
+
+  function announceAdded(channel, addedIds) {
+    const added = new Set(addedIds);
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && added.has(s.user.id)) s.emit('toast', { message: `${socket.user.displayName || socket.user.username} added you to #${channel.name}`, type: 'info' });
     }
-    const allowed = userHasPermission(socket.user.id, 'invite_users') || userHasPermission(socket.user.id, 'manage_server');
-    return allowed ? channel : null;
+    audit({ actor: socket.user, action: 'channel_add_members', target_type: 'channel',
+      target_id: channel.id, target_name: channel.name, details: { added: addedIds.length } });
   }
 
   socket.on('get-channel-add-members', (data, callback) => {
     const cb = typeof callback === 'function' ? callback : () => {};
-    let channel;
-    try { channel = channelToAddTo(data && data.code); } catch (err) {
-      console.warn('[add-members] check failed, denying:', err.message);
+    let a;
+    try { a = access(data && data.code); } catch (err) {
+      console.warn('[manage-members] check failed, denying:', err.message);
       return cb({ error: 'Could not load members' });
     }
-    if (!channel) return cb({ error: "You don't have permission to add members here" });
+    if (!a) return cb({ error: "You don't have permission to manage members here" });
+    const channel = a.channel;
     try {
       const members = new Set(db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channel.id).map(r => r.user_id));
+      // A role hidden on profile cards keeps who holds it hidden here too.
+      const shown = db.prepare('SELECT id, name, color, level, COALESCE(show_on_profile, 1) AS shown FROM roles ORDER BY level DESC, name').all()
+        .filter(r => socket.user.isAdmin || r.shown !== 0);
+      const shownIds = new Set(shown.map(r => r.id));
       const roleIds = new Map();
       for (const r of db.prepare('SELECT user_id, role_id FROM user_roles WHERE channel_id IS NULL').all()) {
+        if (!shownIds.has(r.role_id)) continue;
         if (!roleIds.has(r.user_id)) roleIds.set(r.user_id, []);
         roleIds.get(r.user_id).push(r.role_id);
       }
+      const myLevel = socket.user.isAdmin ? Infinity : getUserEffectiveLevel(socket.user.id, channel.id);
       const users = db.prepare(`
-        SELECT id, username, display_name, is_guest FROM users
+        SELECT id, username, display_name, is_guest, is_admin FROM users
         WHERE id NOT IN (SELECT user_id FROM bans) ORDER BY LOWER(COALESCE(display_name, username))
       `).all()
         // A guest only uses the channels the admin opened to guests.
         .filter(u => socket.user.isAdmin || !u.is_guest)
-        .map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username,
-          roles: roleIds.get(u.id) || [], inChannel: members.has(u.id) }));
+        .map(u => {
+          const inChannel = members.has(u.id);
+          return { id: u.id, username: u.username, displayName: u.display_name || u.username,
+            roles: roleIds.get(u.id) || [], inChannel, removable: inChannel && removable(a, u, myLevel) };
+        });
       const held = new Set([].concat(...roleIds.values()));
-      const roles = db.prepare('SELECT id, name, color, level FROM roles ORDER BY level DESC, name').all()
-        .filter(r => held.has(r.id)).map(r => ({ id: r.id, name: r.name, color: r.color }));
-      cb({ channel: { code: channel.code, name: channel.name }, users, roles });
+      const roles = shown.filter(r => held.has(r.id)).map(r => ({ id: r.id, name: r.name, color: r.color }));
+      cb({ channel: { code: channel.code, name: channel.name }, users, roles, canAdd: a.canAdd });
     } catch (err) {
-      console.error('[add-members] load failed:', err.message);
+      console.error('[manage-members] load failed:', err.message);
       cb({ error: 'Could not load members' });
+    }
+  });
+
+  socket.on('get-member-channels', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    const userId = data && Number.isInteger(data.userId) ? data.userId : null;
+    const target = userId && db.prepare('SELECT id, is_admin, is_guest FROM users WHERE id = ?').get(userId);
+    if (!target) return cb({ error: 'User not found' });
+    try {
+      const inIds = new Set(db.prepare('SELECT channel_id FROM channel_members WHERE user_id = ?').all(userId).map(r => r.channel_id));
+      const channels = [];
+      for (const ch of db.prepare('SELECT id, code, name, parent_channel_id FROM channels WHERE is_dm = 0 ORDER BY position, name').all()) {
+        const a = access(ch.code);
+        const inChannel = inIds.has(ch.id);
+        const myLevel = a && !socket.user.isAdmin ? getUserEffectiveLevel(socket.user.id, ch.id) : Infinity;
+        const canAdd = !!a && a.canAdd && !inChannel;
+        const canRemove = !!a && inChannel && removable(a, target, myLevel);
+        // Channels they are in are listed when this person can see them.
+        if (canAdd || canRemove || (inChannel && (a || reachableChannelByCode(ctx, socket.user, ch.code) || socket.user.isAdmin))) {
+          channels.push({ code: ch.code, name: ch.name, sub: !!ch.parent_channel_id, inChannel, canAdd, canRemove });
+        }
+      }
+      cb({ channels });
+    } catch (err) {
+      console.error('[member-channels] failed:', err.message);
+      cb({ error: 'Could not load channels' });
     }
   });
 
   socket.on('add-channel-members', (data, callback) => {
     const cb = typeof callback === 'function' ? callback : () => {};
-    const ids = data && Array.isArray(data.userIds) ? data.userIds : null;
-    if (!ids || !ids.length || ids.length > 10000 || !ids.every(Number.isInteger)) return cb({ error: 'Invalid request' });
+    const ids = data ? idList(data.userIds) : null;
+    if (!ids || !ids.length) return cb({ error: 'Invalid request' });
     let channel;
     try { channel = channelToAddTo(data.code); } catch (err) {
       console.warn('[add-members] check failed, denying:', err.message);
@@ -140,40 +231,66 @@ module.exports = function register(socket, ctx) {
     }
     if (!channel) return cb({ error: "You don't have permission to add members here" });
 
-    const addedIds = [];
-    try {
-      const lookup = db.prepare(`SELECT u.id, u.is_guest, (b.id IS NOT NULL) AS banned
-        FROM users u LEFT JOIN bans b ON b.user_id = u.id WHERE u.id = ?`);
-      const insert = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
-      // A top-level channel brings its public sub-channels along, as an invite does.
-      const subs = channel.parent_channel_id ? []
-        : db.prepare('SELECT id FROM channels WHERE parent_channel_id = ? AND is_private = 0').all(channel.id);
-      db.transaction(() => {
-        for (const id of new Set(ids)) {
-          const u = lookup.get(id);
-          if (!u || u.banned || (u.is_guest && !socket.user.isAdmin)) continue;
-          if (!insert.run(channel.id, id).changes) continue;
-          for (const sub of subs) insert.run(sub.id, id);
-          addedIds.push(id);
-        }
-      })();
-    } catch (err) {
+    let addedIds;
+    try { addedIds = addMembers(channel, ids); } catch (err) {
       console.error('[add-members] failed:', err.message);
       return cb({ error: 'Could not add members' });
     }
-
     if (addedIds.length) {
       broadcastChannelLists();
       emitOnlineUsers(channel.code);
-      const added = new Set(addedIds);
-      for (const [, s] of io.sockets.sockets) {
-        if (s.user && added.has(s.user.id)) s.emit('toast', { message: `${socket.user.displayName || socket.user.username} added you to #${channel.name}`, type: 'info' });
-      }
-      if (typeof logAudit === 'function') {
-        logAudit({ actor: socket.user, action: 'channel_add_members', target_type: 'channel',
-          target_id: channel.id, target_name: channel.name, details: { added: addedIds.length } });
-      }
+      announceAdded(channel, addedIds);
     }
     cb({ success: true, added: addedIds.length });
+  });
+
+  socket.on('update-channel-members', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    const add = data ? idList(data.add || []) : null;
+    const remove = data ? idList(data.remove || []) : null;
+    if (!add || !remove || (!add.length && !remove.length)) return cb({ error: 'Invalid request' });
+    let a;
+    try { a = access(data.code); } catch (err) {
+      console.warn('[manage-members] check failed, denying:', err.message);
+      return cb({ error: 'Could not update members' });
+    }
+    if (!a || (add.length && !a.canAdd) || (remove.length && !a.canRemove)) {
+      return cb({ error: "You don't have permission to manage members here" });
+    }
+    const channel = a.channel;
+
+    let addedIds = [];
+    const removedIds = [];
+    try {
+      if (add.length) addedIds = addMembers(channel, add);
+      if (remove.length) {
+        const myLevel = socket.user.isAdmin ? Infinity : getUserEffectiveLevel(socket.user.id, channel.id);
+        const member = db.prepare(`SELECT u.id, u.is_admin, u.is_guest FROM users u
+          JOIN channel_members cm ON cm.user_id = u.id AND cm.channel_id = ? WHERE u.id = ?`);
+        for (const id of remove) {
+          const target = member.get(channel.id, id);
+          if (!target || !removable(a, target, myLevel)) continue;
+          removeChannelMember(ctx, channel, id, { quiet: true });
+          removedIds.push(id);
+        }
+      }
+    } catch (err) {
+      console.error('[manage-members] failed:', err.message);
+      return cb({ error: 'Could not update members' });
+    }
+
+    if (addedIds.length) announceAdded(channel, addedIds);
+    if (removedIds.length) {
+      if (typeof rotatePrivateCodesAfterRemoval === 'function') rotatePrivateCodesAfterRemoval(channel.id);
+      audit({ actor: socket.user, action: 'channel_remove_members', target_type: 'channel',
+        target_id: channel.id, target_name: channel.name, details: { removed: removedIds.length } });
+    }
+    if (addedIds.length || removedIds.length) {
+      broadcastChannelLists();
+      // The code may have rotated with the removals.
+      const now = db.prepare('SELECT code FROM channels WHERE id = ?').get(channel.id);
+      emitOnlineUsers(now ? now.code : channel.code);
+    }
+    cb({ success: true, added: addedIds.length, removed: removedIds.length });
   });
 };

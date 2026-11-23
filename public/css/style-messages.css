@@ -393,6 +393,77 @@
 .shape-hex      { clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
 .shape-diamond  { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
 
+/* Banner color in Edit Profile: a strip painted like the profile card's
+   banner, then the picker and Match avatar. */
+.edit-profile-banner-preview {
+  height: 2.5rem; border-radius: 0.375rem; margin-bottom: 0.5rem;
+  background-color: var(--bg-secondary); /* what the card's banner sits on */
+  border: 1px solid var(--border);
+  background-origin: border-box; /* the tint must not repeat under the border */
+}
+.banner-color-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.banner-color-row input[type="color"] {
+  width: 2.375rem; height: 2rem; padding: 0.125rem;
+  border: 1px solid var(--border); border-radius: 0.375rem;
+  background: var(--bg-tertiary); cursor: pointer;
+}
+.banner-color-row .muted-text { opacity: 0.6; }
+
+/* Profile theme in Edit Profile: the fade, its two colors picked from
+   swatches at the top and bottom, and between them a sample of the card's
+   text on the card's glass. With no theme it shows what picking a color
+   would start from. */
+.profile-theme-preview {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  aspect-ratio: 2 / 1; max-width: 16rem;
+  padding: 0.75rem; margin-bottom: 0.5rem;
+  border-radius: 0.5rem; border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  /* Sized to the whole box, border included, or the gradient repeats under
+     the see-through border and its bottom color shows along the top. */
+  background-origin: border-box;
+}
+.profile-theme-preview.has-profile-theme { background: var(--profile-theme-fade); }
+.profile-theme-preview.theme-off { opacity: 0.55; border-style: dashed; }
+.profile-theme-swatch {
+  -webkit-appearance: none; appearance: none;
+  width: 1.75rem; height: 1.75rem; padding: 0;
+  border: 2px solid #fff; border-radius: 0.5rem;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  background: none; cursor: pointer;
+}
+.profile-theme-swatch::-webkit-color-swatch-wrapper { padding: 0; }
+.profile-theme-swatch::-webkit-color-swatch { border: none; border-radius: 0.375rem; }
+.profile-theme-swatch::-moz-color-swatch { border: none; border-radius: 0.375rem; }
+.profile-theme-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.profile-theme-sample {
+  padding: 0.125rem 0.75rem; border-radius: 0.375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: rgba(var(--profile-theme-tint, 0, 0, 0), var(--profile-theme-glass, 0.25));
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+/* With a picture the preview takes the card's 5:2 banner shape. */
+.edit-profile-banner-preview { position: relative; overflow: hidden; }
+.edit-profile-banner-preview.has-banner-image { height: auto; aspect-ratio: 5 / 2; }
+
+/* Banner crop: a 5:2 window the picture is dragged around in. */
+#banner-crop-modal .modal { width: min(92%, 34rem); }
+.banner-crop-frame {
+  position: relative; overflow: hidden;
+  width: 100%; aspect-ratio: 5 / 2;
+  border-radius: 0.375rem; border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  cursor: grab; touch-action: none; user-select: none;
+}
+.banner-crop-frame.dragging { cursor: grabbing; }
+.banner-crop-frame:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.banner-crop-frame img { position: absolute; max-width: none; pointer-events: none; }
+.banner-crop-zoom { margin-top: 0.75rem; gap: 0.75rem; }
+.banner-crop-zoom input[type="range"] { flex: 1; }
+
 /* Avatar Shape Classes: applied to .message-avatar and .message-avatar-img */
 .avatar-circle   { border-radius: 50% !important; }
 .avatar-rounded  { border-radius: 0.375rem !important; }
@@ -551,6 +622,9 @@
   font-size: 0.8125rem;
 }
 .soundboard-btn.hidden-sound { opacity: 0.4; }
+.soundboard-btn { user-select: none; }
+.soundboard-btn.sb-dragging { opacity: 0.5; cursor: grabbing; }
+.soundboard-btn.sb-drop-target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 /* Eye (hide/unhide) toggle on each tile. Always rendered with a reserved
    width and at low opacity so it never shifts the tile contents on hover. */
 .soundboard-btn .sb-hide-btn {
@@ -1081,10 +1155,127 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
 }
 
 .profile-popup-banner {
-  height: 3.75rem;
+  height: var(--profile-banner-height);
   position: relative;
-  background: var(--bg-tertiary);
 }
+/* The banner's height, on the card so a profile theme's tint can start
+   where the banner ends: short with only a color, and with a picture full
+   height, 5:2 on the 20rem card. */
+.profile-popup { --profile-banner-height: 3.75rem; }
+.profile-popup:has(.has-banner-image) { --profile-banner-height: 8rem; }
+/* --profile-banner is the member's banner color (#rrggbb), set by
+   _paintProfileBanner, as a faint diagonal tint over the card. Being faint,
+   the theme still shows through, so the close button keeps its colors.
+   Themes can restyle the banner and still read the variable. */
+.profile-popup-banner,
+.edit-profile-banner-preview {
+  background-image: linear-gradient(135deg,
+    color-mix(in srgb, var(--profile-banner, transparent) 60%, transparent),
+    color-mix(in srgb, var(--profile-banner, transparent) 30%, transparent));
+}
+/* With a picture, the color shows while it loads and through transparent
+   parts. The close button gets a backing so it reads on any picture. */
+.profile-popup-banner.has-banner-image { overflow: hidden; }
+.profile-banner-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+.has-banner-image .profile-popup-close { z-index: 1; background: rgba(0, 0, 0, 0.45); color: #fff; }
+.has-banner-image .profile-popup-close:hover { background: rgba(0, 0, 0, 0.65); color: #fff; }
+
+/* Profile theme: the card fades between the member's two colors, from the
+   bottom of the banner (which would hide the top of the fade) to the
+   bottom of the card. The Edit Profile preview draws the same fade from
+   its top (--pt-top 0). */
+.has-profile-theme {
+  --profile-theme-fade: linear-gradient(to bottom,
+    var(--profile-theme-top) var(--pt-top, 0%), var(--profile-theme-bottom));
+}
+/* Blended in OKLCH where the browser can: around the color wheel rather
+   than across it, so opposite colors (green to purple) stay vivid instead
+   of passing through gray, or brown in a plain blend. _applyProfileTheme
+   asks the browser and marks the card (data-fade), so the fade drawn is
+   always the one its glass was worked out for. */
+.has-profile-theme[data-fade="oklch"] {
+  --profile-theme-fade: linear-gradient(to bottom in oklch,
+    var(--profile-theme-top) var(--pt-top, 0%), var(--profile-theme-bottom));
+}
+.profile-popup.has-profile-theme {
+  --pt-top: var(--profile-banner-height);
+  background: var(--profile-theme-fade);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+/* Below the banner, a frosted glass panel carries the card's text: black
+   glass under white text or white glass under black text (data-ink), as
+   strong as --profile-theme-glass, which _profileThemeGlass works out from
+   the two colors so every point of the fade reads at 4.5:1. The text is
+   one color for the whole card, and solid (size, weight and italics still
+   set names, labels and bio apart). */
+.has-profile-theme[data-ink="light"] {
+  --profile-theme-ink: 255, 255, 255;
+  --profile-theme-tint: 0, 0, 0;
+}
+.has-profile-theme[data-ink="dark"] {
+  --profile-theme-ink: 0, 0, 0;
+  --profile-theme-tint: 255, 255, 255;
+}
+.has-profile-theme[data-ink] {
+  --text-primary: rgb(var(--profile-theme-ink));
+  --text-secondary: rgb(var(--profile-theme-ink));
+  --text-muted: rgb(var(--profile-theme-ink));
+  --border: rgba(var(--profile-theme-ink), 0.2);
+  --bg-secondary: rgba(var(--profile-theme-tint), 0.3);
+  --bg-tertiary: rgba(var(--profile-theme-tint), 0.3);
+  --bg-hover: rgba(var(--profile-theme-tint), 0.45);
+}
+.profile-popup.has-profile-theme::before {
+  content: '';
+  position: absolute;
+  inset: var(--profile-banner-height) 0 0 0;
+  background: rgba(var(--profile-theme-tint), var(--profile-theme-glass, 0.25));
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  pointer-events: none;
+}
+.has-profile-theme > :is(.profile-popup-banner, .profile-popup-avatar-wrapper, .profile-popup-body) {
+  position: relative;
+  z-index: 1;
+}
+/* No outlines on a themed card: the colors mark its edges and sections.
+   !important because some themes force a card border with it, and a role
+   pill's border color is set inline. Focus outlines are untouched. */
+.profile-popup.has-profile-theme { border: none !important; }
+.has-profile-theme .profile-popup-divider { display: none; }
+.has-profile-theme .profile-popup-role { border-color: transparent !important; }
+/* A role's own color can't be read on every theme, so on a themed card the
+   role keeps it in its dot (or icon) and the name takes the card's text
+   color, as Discord does. !important because the pill's color is inline;
+   a gradient name drops its gradient fill for the same reason. */
+.has-profile-theme .profile-popup-role { color: var(--text-primary) !important; }
+/* Accent colored text (the nickname, View Full Bio) is the viewer's theme
+   color and could vanish on the card's colors, so it takes the card's text
+   color too; the link stays a link by its underline. */
+.has-profile-theme :is(.profile-popup-nickname, .profile-bio-toggle) { color: var(--text-primary); }
+.has-profile-theme .profile-bio-toggle { text-decoration: underline; }
+.has-profile-theme .profile-popup-role .role-gradient {
+  background-image: none;
+  -webkit-text-fill-color: currentColor;
+  color: inherit;
+}
+.has-profile-theme .profile-popup-action-btn { border: none !important; box-shadow: none !important; }
+/* The main button (Message, or Notes to self on your own card) would be the
+   viewer's accent color, which can clash with the card or vanish on it. On
+   a themed card it looks like Edit Profile instead. */
+.has-profile-theme .profile-dm-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  text-shadow: none;
+}
+.has-profile-theme .profile-dm-btn:hover { background: var(--bg-hover); }
 
 .profile-popup-close {
   position: absolute;
@@ -1103,6 +1294,11 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
   position: relative;
   width: 4.5rem; height: 4.5rem;
   margin: -2.25rem 0 0 1rem;
+  /* The status dot, from its bottom right corner; a profile theme cuts the
+     avatar out around it by the same numbers. */
+  --status-dot-size: 1rem;
+  --status-dot-inset: 2px;
+  --status-dot-ring: 3px;
 }
 
 .profile-popup-avatar {
@@ -1127,11 +1323,23 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
 
 .profile-popup-status-dot {
   position: absolute;
-  bottom: 2px; right: 2px;
-  width: 1rem; height: 1rem;
+  bottom: var(--status-dot-inset); right: var(--status-dot-inset);
+  width: var(--status-dot-size); height: var(--status-dot-size);
   border-radius: 50%;
   background: var(--success);
-  border: 3px solid var(--bg-primary);
+  border: var(--status-dot-ring) solid var(--bg-primary);
+}
+/* On a profile theme no one color can ring the dot, since the gradient
+   changes under it. So the ring is a real gap, as on Discord: the avatar
+   (and any picture border over it) is masked out around the dot, and the
+   ring itself is clear, so the card shows through. */
+.has-profile-theme .profile-popup-status-dot { border-color: transparent; background-clip: padding-box; }
+.has-profile-theme .profile-popup-avatar-wrapper :is(.profile-popup-avatar, .pfp-border) {
+  --dot-center: calc(100% - var(--status-dot-inset) - var(--status-dot-size) / 2);
+  --dot-cutout: radial-gradient(circle at var(--dot-center) var(--dot-center),
+    transparent calc(var(--status-dot-size) / 2), #000 calc(var(--status-dot-size) / 2 + 0.5px));
+  -webkit-mask-image: var(--dot-cutout);
+  mask-image: var(--dot-cutout);
 }
 .profile-popup-status-dot.away { background: var(--warning); }
 .profile-popup-status-dot.dnd { background: var(--danger); }
@@ -1301,6 +1509,9 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
   color: var(--accent-text);
 }
 .profile-dm-btn:hover { background: var(--accent-hover); }
+/* Notes to self under Edit Profile on your own card, spaced like More
+   Actions under Message on anyone else's. */
+.profile-edit-btn + .profile-dm-btn { margin-top: 0.375rem; }
 
 .profile-edit-btn {
   background: var(--bg-tertiary);

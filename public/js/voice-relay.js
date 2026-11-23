@@ -17,6 +17,8 @@
   'use strict';
 
   const REQUEST_TIMEOUT_MS = 12000;
+  const CONSUME_RETRIES = 3;        // after the first try: waits of 1, 2 and 4 seconds
+  const RESYNC_EVERY_MS = 30000;
   let loading = null;
 
   function loadClientLibrary() {
@@ -54,6 +56,8 @@
       this.consumers = new Map();   // producerId -> { consumer, userId, source }
       this.closed = false;
       this._listeners = [];
+      this._inflight = new Map();   // producerId -> promise of a consume in progress
+      this._watchdog = null;
     }
 
     _request(event, data) {
@@ -102,12 +106,43 @@
           .then(res => done({ id: res.producerId }), fail);
       });
 
-      this._on('relay:new-producer', (p) => { this._consume(p).catch(err => console.warn('[Relay] Could not receive a track:', err.message)); });
+      this._on('relay:new-producer', (p) => { this._consumeWithRetry(p); });
       this._on('relay:producer-closed', (p) => this._dropConsumer(p.producerId));
       this._on('relay:lost', () => this.opts.onLost?.('relay restarted'));
 
       const { producers } = await this._request('relay:producers', {});
-      await Promise.all(producers.map(p => this._consume(p).catch(err => console.warn('[Relay] Could not receive a track:', err.message))));
+      await Promise.all(producers.map(p => this._consumeWithRetry(p)));
+
+      // A track that still failed after its retries would stay silent for
+      // the rest of the call (#5908), so compare against the relay's list now
+      // and then and pick up anything missing.
+      this._watchdog = setInterval(() => {
+        if (this.closed || !this.isLive()) return;
+        this.resync().catch(err => console.warn('[Relay] Track check failed:', err.message));
+      }, RESYNC_EVERY_MS);
+    }
+
+    /**
+     * Receives a track, trying again a few times when it fails (the receiving
+     * connection may still be coming up right after a reconnect). Calls for
+     * a track that is already on its way are not doubled.
+     */
+    _consumeWithRetry(p) {
+      const id = p.producerId;
+      if (this._inflight.has(id)) return this._inflight.get(id);
+      const run = (async () => {
+        for (let attempt = 0; ; attempt++) {
+          try { return await this._consume(p); } catch (err) {
+            if (this.closed || attempt >= CONSUME_RETRIES) {
+              if (!this.closed) console.warn('[Relay] Could not receive a track:', err.message);
+              return;
+            }
+            await new Promise(r => setTimeout(r, 1000 * 2 ** attempt));
+          }
+        }
+      })().finally(() => this._inflight.delete(id));
+      this._inflight.set(id, run);
+      return run;
     }
 
     async _consume({ producerId }) {
@@ -120,7 +155,14 @@
       consumer.on('trackended', () => this._dropConsumer(producerId));
       consumer.on('transportclose', () => this._dropConsumer(producerId));
       this.opts.onTrack?.({ userId: c.userId, source: c.source, track: consumer.track, producerId });
-      await this._request('relay:resume', { consumerId: c.id });
+      try {
+        await this._request('relay:resume', { consumerId: c.id });
+      } catch (err) {
+        // A consumer left paused is silent, and being in the list would stop
+        // the retry from making a new one, so let go of it.
+        this._dropConsumer(producerId);
+        throw err;
+      }
     }
 
     _dropConsumer(producerId) {
@@ -141,7 +183,7 @@
       for (const producerId of [...this.consumers.keys()]) {
         if (!live.has(producerId)) this._dropConsumer(producerId);
       }
-      await Promise.all(producers.map(p => this._consume(p).catch(err => console.warn('[Relay] Could not receive a track:', err.message))));
+      await Promise.all(producers.map(p => this._consumeWithRetry(p)));
     }
 
     /**
@@ -222,6 +264,7 @@
     close() {
       if (this.closed) return;
       this.closed = true;
+      clearInterval(this._watchdog);
       for (const [event, h] of this._listeners) this.socket.off(event, h);
       this._listeners = [];
       for (const [producerId] of this.consumers) this._dropConsumer(producerId);

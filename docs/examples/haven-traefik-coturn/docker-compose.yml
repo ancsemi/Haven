@@ -70,6 +70,22 @@ services:
       - --static-auth-secret=${TURN_SECRET}
       - --min-port=49152
       - --max-port=65535
+      # Every signed-in Haven member is given a login for this relay, and it
+      # runs on the host's own network. Without these lines a member could use
+      # it to reach this machine, the rest of your home or office network, or
+      # a cloud provider's internal addresses. A relay only ever needs to
+      # reach people out on the internet.
+      - --no-multicast-peers
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=100.64.0.0-100.127.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      - --denied-peer-ip=::1
+      - --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      - --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
 
 volumes:
   haven_data:

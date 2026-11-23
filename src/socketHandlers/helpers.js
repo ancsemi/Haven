@@ -182,6 +182,20 @@ function parseBorderTransform(str) {
   }
 }
 
+// Profile colors (the banner color a member picks, the one their avatar
+// gives) are drawn into style attributes on everyone's screen, so only an
+// exact #rrggbb is ever kept: no names, no rgb(), nothing a ; or ) can ride
+// in on. Anything else comes back null.
+function cleanHexColor(value) {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
+}
+
+// A profile theme from its two stored colors: both exact, or no theme at all.
+function cleanProfileTheme(top, bottom) {
+  const t = cleanHexColor(top), b = cleanHexColor(bottom);
+  return t && b ? { top: t, bottom: b } : null;
+}
+
 // All recognized role permissions. Any permission sent by a client that is not here is silently rejected.
 const VALID_ROLE_PERMS = [
   'edit_own_messages', 'delete_own_messages', 'delete_message', 'delete_lower_messages',
@@ -189,7 +203,7 @@ const VALID_ROLE_PERMS = [
   'rename_channel', 'rename_sub_channel', 'set_channel_topic', 'manage_sub_channels',
   'manage_channel_settings',
   'create_channel', 'create_temp_channel', 'invite_users',
-  'upload_files', 'use_voice', 'use_tts', 'send_self_destruct', 'manage_webhooks', 'mention_everyone', 'view_history',
+  'upload_files', 'use_voice', 'use_tts', 'send_self_destruct', 'manage_webhooks', 'manage_bots', 'mention_everyone', 'view_history',
   'use_ferry',
   'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue',
   'manage_tags', 'manage_badges',
@@ -280,16 +294,25 @@ function stripRoleMentions(content, roleNames) {
 // With `ignoreMessagesAfter` (a message id), only messages older than that
 // one keep a file: a link pasted after a self destructing message cannot keep
 // its file alive, but a file the sender had already shared in the open stays.
-function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null } = {}) {
+// With `anyOwner`, for the server's own cleanup of messages it has already
+// deleted, whose authors may be several people: the file must still be a
+// recorded attachment that nothing else points at, or a file from before
+// uploads were recorded that nothing points at; it need not be the caller's.
+function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null, anyOwner = false } = {}) {
   const owners = new Set((ownerIds || []).filter(id => Number.isInteger(id)));
-  if (!owners.size) return [];
+  // A message with no author (one Ferry carried from Discord) may take the
+  // files recorded with no owner: the copies Ferry made of that message's
+  // Discord files.
+  const authorless = (ownerIds || []).some(id => id === null);
+  if (!owners.size && !authorless && !anyOwner) return [];
   const ownership = db.prepare('SELECT user_id, scope FROM upload_ownership WHERE rel_path = ?');
   const before = Number.isInteger(ignoreMessagesAfter) ? ignoreMessagesAfter : Number.MAX_SAFE_INTEGER;
   // A protected message keeps its files whenever it was posted.
   const inMessages = db.prepare('SELECT 1 FROM messages WHERE instr(content, ?) > 0 AND (id < ? OR is_archived = 1) LIMIT 1');
   const inProfiles = db.prepare(`
     SELECT 1 WHERE
-         EXISTS(SELECT 1 FROM users WHERE instr(COALESCE(avatar, ''), @p) > 0 OR instr(COALESCE(border, ''), @p) > 0)
+         EXISTS(SELECT 1 FROM users WHERE instr(COALESCE(avatar, ''), @p) > 0 OR instr(COALESCE(border, ''), @p) > 0
+                                       OR instr(COALESCE(banner, ''), @p) > 0)
       OR EXISTS(SELECT 1 FROM user_personas WHERE instr(COALESCE(avatar, ''), @p) > 0)
       OR EXISTS(SELECT 1 FROM webhooks WHERE instr(COALESCE(avatar_url, ''), @p) > 0)
       OR EXISTS(SELECT 1 FROM roles WHERE instr(COALESCE(icon, ''), @p) > 0)
@@ -303,7 +326,8 @@ function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null 
   for (const relPath of new Set(relPaths || [])) {
     if (typeof relPath !== 'string' || !relPath || out.length >= 200) continue;
     const own = ownership.get(relPath);
-    if (!own || !owners.has(own.user_id) || (own.scope !== 'channel' && own.scope !== 'dm')) continue;
+    if (own ? (own.scope !== 'channel' && own.scope !== 'dm') : !anyOwner) continue;
+    if (!anyOwner && (own.user_id === null ? !authorless : !owners.has(own.user_id))) continue;
     const ref = '/uploads/' + relPath;
     try {
       if (inMessages.get(ref, before)) continue;
@@ -350,7 +374,7 @@ function roleMenuContent(title, entries) {
 module.exports = {
   editChannelCode,
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
-  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, roleMenuContent,
+  sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, roleMenuContent,
   normalizeWordGroups, validEscalation, filterIdleOnline,
   replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads, maskSpoilers,
   NEW_DMS_PER_HOUR,

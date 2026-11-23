@@ -27,4 +27,16 @@ function creatorCanReachChannel(db, createdBy, channel) {
   return roleGateAllows(db, creator.id, channel);
 }
 
-module.exports = { CREATOR_NOT_BANNED_SQL, isCreatorBanned, creatorCanReachChannel };
+// A bot's token is good only while the person who made the bot could still
+// open its channel. Someone who was kicked, or lost the role the channel
+// requires, does not keep a working way to post there. A bot with no creator
+// on record (made before creators were recorded, or by an account since
+// deleted) is left as it is: nobody's lost access is behind it.
+// row: { created_by, channel_id, role_gate }.
+function tokenStillReaches(db, row) {
+  if (!row) return false;
+  if (!row.created_by || !row.channel_id) return true;
+  return creatorCanReachChannel(db, row.created_by, { id: row.channel_id, is_dm: 0, role_gate: row.role_gate });
+}
+
+module.exports = { CREATOR_NOT_BANNED_SQL, isCreatorBanned, creatorCanReachChannel, tokenStillReaches };

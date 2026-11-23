@@ -40,7 +40,7 @@ _handleMarkdownShortcuts(inputEl, event) {
   const modifier = event.ctrlKey || event.metaKey;
   // AltGr reports as Ctrl+Alt on Windows, and those combos type characters.
   if (!modifier || event.altKey) return false;
-  const key = (event.key || '').toLowerCase();
+  const key = this._shortcutKey(event);
 
   // Italic (Ctrl/Cmd + I). Shift+I is left to the browser (DevTools).
   if (key === 'i' && !event.shiftKey) {
@@ -141,7 +141,8 @@ _showMentionDropdown() {
 
   // Any part of a name matches, so "dan" finds TheDannister and "tanee"
   // finds LADY TANEE. Names that start with the letters come first, then
-  // names where a word starts with them, then the rest. (#5674)
+  // names where a word starts with them, then the rest. A name typed in full
+  // comes before all of those, so Enter never swaps it for a longer name.
   const mentionRank = (m) => {
     const names = [
       (m.username || '').toLowerCase(),
@@ -152,7 +153,7 @@ _showMentionDropdown() {
     for (const n of names) {
       const at = n.indexOf(query);
       if (at < 0) continue;
-      const rank = at === 0 ? 0 : (/[\s._-]/.test(n[at - 1]) ? 1 : 2);
+      const rank = at === 0 ? (n.length === query.length ? 0 : 1) : (/[\s._-]/.test(n[at - 1]) ? 2 : 3);
       if (best < 0 || rank < best) best = rank;
     }
     return best;

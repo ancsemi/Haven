@@ -1233,6 +1233,7 @@ video:-webkit-full-screen {
 .chat-h1 { font-size: 1.5em; }
 .chat-h2 { font-size: 1.25em; }
 .chat-h3 { font-size: 1.1em; }
+.chat-subtext { font-size: 0.75em; color: var(--text-muted); line-height: 1.3; }
 
 /* ── Chat Markdown: Horizontal Rules ───────────────────── */
 .chat-hr {
@@ -1651,15 +1652,17 @@ ul.chat-list { list-style-type: disc; }
   font-size: 1.125rem;
   cursor: pointer;
 }
+.fullscreen-call-control[hidden] { display: none; }
 .fullscreen-call-control:hover,
 .fullscreen-call-control:focus-visible { background: rgba(255,255,255,0.24); }
 .fullscreen-call-control:focus-visible,
-.fullscreen-stream-select:focus-visible,
-.fullscreen-device-select:focus-visible,
-.fullscreen-call-volume:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fullscreen-stream-choice input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .fullscreen-call-control:disabled { opacity: 0.45; cursor: not-allowed; }
 .fullscreen-call-control.muted,
-.fullscreen-call-control.deafened { background: #a8323e; }
+.fullscreen-call-control.deafened {
+  background: var(--danger);
+  color: var(--danger-text);
+}
 .fullscreen-call-control.sharing {
   background: var(--success);
   color: var(--success-text);
@@ -1680,47 +1683,232 @@ ul.chat-list { list-style-type: disc; }
   background: #d93636;
   color: var(--danger-text);
 }
-.fullscreen-stream-select {
+.fullscreen-call-control.fullscreen-call-streams {
+  display: inline-block;
   max-width: min(18rem, 32vw);
-  min-height: 2.75rem;
-  padding: 0.375rem 0.625rem;
-  border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 0.625rem;
-  color: #fff;
-  background: #242832;
+  padding: 0 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  background: var(--bg-secondary);
   font-size: 0.875rem;
+  line-height: 2.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.fullscreen-call-control.fullscreen-call-streams::after { content: ' \25BE'; }
+.fullscreen-stream-popover:not([hidden]) {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.625rem);
+  display: grid;
+  gap: 0.25rem;
+  width: min(19rem, calc(100vw - 2rem));
+  max-height: min(60vh, 28rem);
+  overflow: auto;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  box-shadow: 0 0.5rem 1.75rem rgba(0,0,0,0.5);
+  text-align: left;
+}
+.fullscreen-stream-choices { display: grid; gap: 0.25rem; }
+.fullscreen-stream-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.fullscreen-stream-choice:hover { background: var(--bg-hover, rgba(127,127,127,0.15)); }
+.fullscreen-stream-choice-all {
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+.fullscreen-stream-choice input { flex: 0 0 auto; width: 1rem; height: 1rem; margin: 0; accent-color: var(--accent); }
+.fullscreen-stream-choice input:disabled { cursor: not-allowed; }
+.fullscreen-stream-choice-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Several streams in fullscreen (#5899): JS places each cell to fit its
+   stream's shape. The grid covers the tile's own video rather than hiding it:
+   the stall watchdog counts that video's frames, which a display:none video
+   may stop producing. */
+.fullscreen-stream-grid:not([hidden]) {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: #000;
+}
+.fullscreen-stream-cell {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  background: #000;
+  transition: left 0.2s ease, top 0.2s ease, width 0.2s ease, height 0.2s ease;
+}
+.fullscreen-stream-cell video {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+.fullscreen-stream-cell-label {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  max-width: calc(100% - 1rem);
+  padding: 0.125rem 0.5rem;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  color: #fff;
+  background: rgba(0,0,0,0.6);
+  z-index: 2;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.fullscreen-stream-cell-focus {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: zoom-in;
+}
+/* An accent ring on hover and keyboard focus, drawn inside the cell so it
+   does not change the size the layout gave it. */
+.fullscreen-stream-cell:hover .fullscreen-stream-cell-focus,
+.fullscreen-stream-cell-focus:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  outline: none;
+}
+.fullscreen-stream-cell-remove {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(0,0,0,0.6);
+  font-size: 0.875rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+/* Haven draws every slider's track and thumb itself, so the browser's own
+   look is switched off (as on .stream-vol-slider) or its box clips the
+   rounded ends. The box is tall enough for the thumb, and a pill like the
+   name label keeps it clear of the edges and readable over the video. */
+.fullscreen-stream-cell-volume {
+  --track-bg: rgba(255,255,255,0.3);
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 3;
+  box-sizing: content-box;
+  width: min(7rem, 40%);
+  height: 1.25rem;
+  margin: 0;
+  padding: 0 0.5rem;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.6);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.fullscreen-stream-cell-volume:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fullscreen-stream-cell:hover .fullscreen-stream-cell-remove,
+.fullscreen-stream-cell:focus-within .fullscreen-stream-cell-remove { opacity: 1; }
+.fullscreen-stream-cell:hover .fullscreen-stream-cell-volume,
+.fullscreen-stream-cell:focus-within .fullscreen-stream-cell-volume { opacity: 1; }
+/* The name makes room for the slider only while the slider shows. */
+.fullscreen-stream-cell:hover:has(.fullscreen-stream-cell-volume:not([hidden])) .fullscreen-stream-cell-label,
+.fullscreen-stream-cell:focus-within:has(.fullscreen-stream-cell-volume:not([hidden])) .fullscreen-stream-cell-label {
+  max-width: calc(100% - min(7rem, 40%) - 2.5rem);
+}
+.fullscreen-stream-cell-remove:hover { background: var(--danger); color: var(--danger-text); }
+.fullscreen-stream-cell-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Touch screens have no hover to reveal it. */
+@media (hover: none) {
+  .fullscreen-stream-cell-remove,
+  .fullscreen-stream-cell-volume { opacity: 1; }
+  .fullscreen-stream-cell:has(.fullscreen-stream-cell-volume:not([hidden])) .fullscreen-stream-cell-label { max-width: calc(100% - min(7rem, 40%) - 2.5rem); }
+}
+.webcam-tile.is-fullscreen.fullscreen-stream-focused > video,
+.screen-share-tile.is-fullscreen.fullscreen-stream-focused > video,
+.webcam-tile.haven-manual-fullscreen.fullscreen-stream-focused > video,
+.screen-share-tile.haven-manual-fullscreen.fullscreen-stream-focused > video {
+  cursor: zoom-out;
+}
+.webcam-tile.is-fullscreen.fullscreen-grid-active > .webcam-tile-label,
+.screen-share-tile.is-fullscreen.fullscreen-grid-active > .screen-share-tile-label,
+.webcam-tile.haven-manual-fullscreen.fullscreen-grid-active > .webcam-tile-label,
+.screen-share-tile.haven-manual-fullscreen.fullscreen-grid-active > .screen-share-tile-label {
+  display: none !important;
+}
+/* The call settings popup holds a copy of the voice sidebar's settings
+   (call-settings-panel.js), so it takes the sidebar's row classes and the
+   theme's colors, with room to breathe and a scroll for small screens. */
 .fullscreen-audio-popover:not([hidden]) {
   position: absolute;
   right: 0;
   bottom: calc(100% + 0.625rem);
-  display: grid;
-  grid-template-columns: minmax(9rem, 1fr);
-  gap: 0.625rem;
-  width: min(19rem, calc(100vw - 2rem));
-  max-height: min(60vh, 28rem);
-  overflow: auto;
-  padding: 0.875rem;
-  border: 1px solid rgba(255,255,255,0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  width: min(21rem, calc(100vw - 2rem));
+  max-height: min(70vh, 34rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
   border-radius: 0.75rem;
-  color: #fff;
-  background: rgba(24, 27, 34, 0.97);
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
   box-shadow: 0 0.5rem 1.75rem rgba(0,0,0,0.5);
   text-align: left;
 }
-.fullscreen-audio-popover label {
-  display: grid;
-  gap: 0.25rem;
-  color: rgba(255,255,255,0.85);
-  font-size: 0.75rem;
-}
-.fullscreen-device-select {
-  width: 100%;
+.fullscreen-audio-popover .voice-settings-row { min-height: 2rem; flex-wrap: wrap; }
+.fullscreen-audio-popover .voice-settings-label { font-size: 0.75rem; }
+.fullscreen-audio-popover .voice-settings-select {
+  max-width: none;
   min-height: 2rem;
-  color: #fff;
-  background: #30343d;
+  margin-bottom: 0;
+  font-size: 0.8125rem;
 }
-.fullscreen-call-volume { width: 100%; }
+.fullscreen-audio-popover .ns-slider {
+  flex: 1;
+  width: auto;
+  min-width: 60px;
+}
+.fullscreen-audio-popover .bitrate-step-btn {
+  width: 2rem;
+  height: 2rem;
+}
+.fullscreen-audio-popover .bitrate-value { min-height: 2rem; }
+.fullscreen-audio-popover .voice-settings-divider { margin: 0.25rem 0; }
+.fullscreen-audio-popover .voice-settings-section-label { margin: 0.25rem 0 0; }
+.fullscreen-audio-popover .settings-hint { flex-basis: 100%; }
 .fullscreen-controls-idle .fullscreen-call-toolbar:not(:focus-within) {
   opacity: 0;
   pointer-events: none;
@@ -1736,6 +1924,6 @@ ul.chat-list { list-style-type: disc; }
 @media (max-width: 40rem) {
   .fullscreen-call-toolbar:not([hidden]) { gap: 0.25rem; padding: 0.375rem; }
   .fullscreen-call-control { min-width: 2.375rem; min-height: 2.375rem; font-size: 1rem; }
-  .fullscreen-stream-select { max-width: 34vw; min-height: 2.375rem; font-size: 0.75rem; }
+  .fullscreen-call-control.fullscreen-call-streams { max-width: 34vw; font-size: 0.75rem; line-height: 2.375rem; }
 }
 
