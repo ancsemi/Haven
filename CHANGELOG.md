@@ -38,6 +38,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Choose which message box buttons stay in the bar and which wait in the + menu, and put them in your own order (asked for by gitty, #32401). Settings > Layout > Message Box has a list of every button with a tick to show it in the bar and arrows to move it; untick all but Emoji and GIF to keep those two in the bar with the rest behind a + at the start. Fold the buttons into one + button still moves every button there, in your order. Reset puts the usual bar back. Saved on this device.
 
 ### Changed
+- A DM open in the main window has a light tint of the theme's accent color behind its messages, on top of the "Private conversation" tag, so it is harder to mistake for a channel (#5920, asked for by QUAKEMAN).
 - The one-click installers and Update Now install releases, never unreleased work. The website installers for Windows and Linux download the latest stable release; before, they took whatever was on the main branch that day. On a server that was cloned with git, Update Now moves to the latest release (or the newest early access one, if that is switched on) and does nothing when the server is already there or ahead.
 - Batch files are stored with Windows line endings. With Unix ones, Windows could misread them and stop partway through.
 - Translation pull requests are no longer merged automatically, and the translation checker refuses markup the English text does not have. A translated command hint such as `<recherche>` is still fine.
