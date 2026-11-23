@@ -52,6 +52,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 
 ### Fixed
+- The Manage Members window listed every account on the server to someone who could only remove people from the channel (Kick without Invite). It now lists the channel's own members for them.
 - Servers you removed from your server list came back on a new device, or when a server you use moved to a new address, because the list synced with your account never carried removals. A server you remove now stays removed everywhere you sign in; adding it again by hand brings it back everywhere.
 - Typing a whole name after @ and pressing Enter could pick a different member whose name only starts with it (@Dispencer2 turned into @Dispencer23). A name typed in full now comes first in the list (reported in #server-suggestions on the community server).
 - Role menus show how many people picked each role again, as a number on its button (reported by QUAKEMAN). The count went missing when the row of reaction chips under a role menu was removed in 4.29; hovering a button still lists who.

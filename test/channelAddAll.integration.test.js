@@ -200,6 +200,15 @@ test('manage members: add and remove together, remove all, and who may remove wh
   assert.ok(!list.roles.some(r => r.name === 'MSecret') && !row(one.id).roles.includes(secret), 'a hidden role stays hidden');
   assert.ok((await h.ask(A, 'get-channel-add-members', { code: 'def00001' })).roles.some(r => r.name === 'MSecret'), 'the admin sees it');
 
+  // Someone who may only remove (Kick, no Invite) sees the people in the
+  // channel, not every account on the server.
+  give.run(senior.id, role('MKicker', 20, 'kick_user'));
+  const S = await h.connect(senior.token);
+  const kickList = await h.ask(S, 'get-channel-add-members', { code: 'def00001' });
+  assert.strictEqual(kickList.canAdd, false, JSON.stringify(kickList.error));
+  assert.deepStrictEqual(kickList.users.map(u => u.id).sort((a, b) => a - b), [admin.id, mod.id, senior.id, one.id].sort((a, b) => a - b));
+  assert.ok(!kickList.users.some(u => u.id === two.id || u.id === creator.id), 'nobody from outside the channel');
+
   // Add one and remove one in a single save; the ones out of reach stay.
   const res = await h.ask(M, 'update-channel-members', { code: 'def00001', add: [two.id], remove: [one.id, senior.id, admin.id, mod.id, guest.id] });
   assert.deepStrictEqual([res.added, res.removed], [1, 1], JSON.stringify(res));
