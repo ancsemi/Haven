@@ -350,6 +350,9 @@ module.exports = function register(socket, ctx) {
     if (key === 'admin_password_reset_enabled' && !['true', 'false'].includes(value)) return;
     // (#12) OIDC. The issuer must be an absolute https URL; anything else is
     // either a typo or an attempt to point discovery somewhere it shouldn't go.
+    // Whoever sets the identity provider decides who can sign in as whom,
+    // so these are the admin's alone, like the voice relay.
+    if (key.startsWith('oidc_') && !socket.user.isAdmin) return socket.emit('error-msg', 'Only the server admin can change single sign-on.');
     if (key === 'oidc_enabled' && !['0', '1'].includes(value)) return;
     if (key === 'oidc_create_users' && !['0', '1'].includes(value)) return;
     if (key === 'oidc_issuer_url' && value) {

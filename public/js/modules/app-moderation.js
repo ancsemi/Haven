@@ -422,7 +422,7 @@ _applyAutomodSettings() {
   bool('voice-force-relay', 'voice_force_relay', 'false');
   bool('media-proxy-enabled', 'media_proxy_enabled', 'true');
   bool('fcm-enabled', 'fcm_enabled', 'true');
-  bool('fcm-hide-content', 'fcm_hide_content', 'false');
+  bool('fcm-hide-content', 'fcm_hide_content', 'true');
 
   num('automod-min-account-hours', 'automod_link_min_account_hours', '0');
   num('automod-new-account-post-minutes', 'automod_new_account_post_minutes', '0');
