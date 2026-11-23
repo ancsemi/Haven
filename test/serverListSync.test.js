@@ -361,6 +361,37 @@ test('the first page keeps its own order when the app has none yet', async () =>
   assert.deepEqual(store.view().order, [Z, Y, X]);
 });
 
+test('this server keeps its place in the rail, so switching servers does not move the icons', async () => {
+  // The same list on every server, as the Desktop app shares it.
+  const place = (origin, list) => {
+    const page = openPage(origin, { storage: storageWith(list) });
+    const { servers, selfIndex, selfUrl } = page.manager.railPlacement(origin);
+    const rail = urls(servers);
+    if (selfIndex >= 0) rail.splice(selfIndex, 0, selfUrl);
+    return { rail, selfIndex, selfUrl, page };
+  };
+  const all = [X, A, Y, B];
+  for (const origin of all) assert.deepEqual(place(origin, all).rail, all, 'on ' + origin);
+  assert.equal(place(X, all).selfIndex, 0);
+  assert.equal(place(B, all).selfIndex, 3);
+
+  // A server that is not in the list has no place: it stays on top.
+  const outside = place(Z, all);
+  assert.equal(outside.selfIndex, -1);
+  assert.equal(outside.selfUrl, null);
+  assert.deepEqual(outside.rail, all);
+
+  // Dragging this server's own icon moves it like any other.
+  const { page } = place(A, all);
+  page.manager.reorder([A, X, Y, B]);
+  assert.deepEqual(urls(page.manager.servers), [A, X, Y, B]);
+  assert.equal(page.manager.railPlacement(A).selfIndex, 0);
+
+  const bar = fs.readFileSync(path.join(__dirname, '..', 'public/js/modules/app-server-bar.js'), 'utf8');
+  assert.match(bar, /this\._placeHomeServer\(list, home, selfIndex, selfUrl\);/);
+  assert.match(bar, /if \(home && home\.parentNode === list\) list\.removeChild\(home\);\s+list\.innerHTML = /, 'taken out before the list is redrawn');
+});
+
 test('one server under two addresses shows once in the rail and twice, with a note, in Manage Servers', async () => {
   const store = seeded([]);
   const L = 'https://localhost:3000';
@@ -546,7 +577,7 @@ test('the server bar skips its own question only where the Desktop app asks', ()
 
 test('the server bar uses the shared list and reports what Sync did', () => {
   const bar = fs.readFileSync(path.join(__dirname, '..', 'public/js/modules/app-server-bar.js'), 'utf8');
-  assert.match(bar, /railServers\(window\.location\.origin\)/);
+  assert.match(bar, /railPlacement\(window\.location\.origin\)/);
   assert.match(bar, /otherServers\(window\.location\.origin\)/);
   assert.match(bar, /t\('servers\.sync_updated', \{ added, removed, renamed \}\)/);
   assert.match(bar, /t\('servers\.sync_up_to_date'\)/);

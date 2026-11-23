@@ -584,6 +584,25 @@ class ServerManager {
     return this.otherServers(currentOrigin).filter(s => !s.duplicateOf);
   }
 
+  /** The rail with this server's own place in it: { servers, selfIndex,
+   *  selfUrl }. servers is railServers(); selfIndex is how many of them come
+   *  before this server in the user's order, or -1 when this server is not
+   *  in the list. The rail draws this server at that place, so the icons
+   *  stay where they are whichever server is on screen (#5933). */
+  railPlacement(currentOrigin) {
+    const servers = [];
+    let selfIndex = -1;
+    let selfUrl = null;
+    for (const s of this.getAll()) {
+      if (this.isSelf(s, currentOrigin)) {
+        if (selfIndex < 0) { selfIndex = servers.length; selfUrl = s.url; }
+        continue;
+      }
+      if (!s.duplicateOf) servers.push(s);
+    }
+    return { servers, selfIndex, selfUrl };
+  }
+
   /** Follow the name a server reports, unless the user chose one. "Haven"
    *  is the default of a server that never set a name and is skipped.
    *  Returns true when the stored name changed. */
