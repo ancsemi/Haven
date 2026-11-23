@@ -491,7 +491,16 @@ function initDatabase() {
   // ntfy) can turn it off under Settings → Security → FCM Privacy. Off skips FCM
   // sends only, so web-push to browsers is unaffected.
   insertSetting.run('fcm_enabled', 'true');
-  insertSetting.run('fcm_hide_content', 'false');
+  // Message text stays out of pushes to apps that cannot take the encrypted
+  // kind, unless the admin allows it: that text passes through the push
+  // relay and Google or Apple. Servers set up before 4.30 were seeded with it
+  // shown, which nobody chose, so that is switched once; what the admin sets
+  // afterwards is kept.
+  insertSetting.run('fcm_hide_content', 'true');
+  if (!db.prepare("SELECT 1 FROM server_settings WHERE key = 'fcm_hide_default_applied'").get()) {
+    db.prepare("UPDATE server_settings SET value = 'true' WHERE key = 'fcm_hide_content'").run();
+    insertSetting.run('fcm_hide_default_applied', 'true');
+  }
 
   // Unique server fingerprint: used by the multi-server sidebar to detect "self"
   const crypto = require('crypto');
