@@ -277,6 +277,13 @@ _applyOidcSettings() {
   set('oidc-button-label', s.oidc_button_label);
   check('oidc-enabled', s.oidc_enabled === '1');
   check('oidc-create-users', s.oidc_create_users !== '0');
+  // Only the admin changes these (the server refuses anyone else), so a
+  // server manager sees them greyed out instead of getting an error on save.
+  const adminOnly = !this.user?.isAdmin;
+  for (const id of ['oidc-issuer-url', 'oidc-client-id', 'oidc-scopes', 'oidc-button-label', 'oidc-enabled', 'oidc-create-users']) {
+    const el = document.getElementById(id);
+    if (el) el.disabled = adminOnly;
+  }
 
   const warn = document.getElementById('oidc-secret-warning');
   if (!warn) return;
