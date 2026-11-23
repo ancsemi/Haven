@@ -92,6 +92,7 @@ const registerChannelMerge = require('./channelMerge');
 const registerMessageNsfw = require('./messageNsfw');
 const registerBlockedNames = require('./blockedNames');
 const createLiveAccess = require('./liveAccess');
+const { createMemberView } = require('../memberView');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
 // Some failures would repeat on every timer tick, connection or message.
@@ -146,6 +147,8 @@ function setupSocketHandlers(io, db, opts = {}) {
   const { getEnrichedChannels, getEnrichedChannelsAsync } = createChannelLists({
     db, userHasPermission, roleGateAllows, getUserEffectiveLevel
   });
+  // Who may see the people in a channel (#5931).
+  const memberView = createMemberView({ db, userHasPermission, roleGateAllows });
 
   // Required roles are membership (#5649): settle every gated channel once
   // at start-up, so an update or a migration leaves nobody half in.
@@ -510,6 +513,30 @@ function setupSocketHandlers(io, db, opts = {}) {
     `).all(channelId);
   }
 
+  // That list as one person may see it: all of it, or only themselves when
+  // they may not see the channel's members (#5931). A DM always shows both.
+  function mentionableMembersFor(user, channel) {
+    const members = getMentionableChannelMembers(channel.id);
+    if (channel.is_dm || memberView.canViewChannelMembers(user, channel.id)) return members;
+    return members.filter(m => m.id === user.id);
+  }
+
+  // The list sent to everyone in the channel after it changed, each
+  // connection getting the list it may see.
+  function sendChannelMembers(channel) {
+    const room = io.of('/').adapter.rooms.get(`channel:${channel.code}`);
+    if (!room || !room.size) return;
+    const members = getMentionableChannelMembers(channel.id);
+    const full = [];
+    for (const sid of room) {
+      const s = io.of('/').sockets.get(sid);
+      if (!s || !s.user) continue;
+      if (channel.is_dm || memberView.canViewChannelMembers(s.user, channel.id)) full.push(sid);
+      else s.emit('channel-members', { channelCode: channel.code, members: members.filter(m => m.id === s.user.id) });
+    }
+    if (full.length) io.to(full).emit('channel-members', { channelCode: channel.code, members });
+  }
+
   // ── broadcastChannelLists (debounced, shared timer) ─────
   // Every connected person gets their own channel list rebuilt. That used to
   // happen in one go, so on a big server one new channel froze everything
@@ -816,6 +843,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   // The next update sends this socket the whole list for the channel.
   function resetPresenceSync(socket, code) {
     socket.presenceSynced?.delete(code);
+    socket.memberView?.delete(code);
   }
   // Deltas only make sense while the socket stays in the room: once it
   // leaves (or joins afresh) it has missed changes, so it starts over with
@@ -943,13 +971,16 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     users.sort(byPresence);
 
-    return { users, mode };
+    return { users, mode, channel };
   }
 
   function flushOnlineUsers(code) {
     const room = io.of('/').adapter.rooms.get(`channel:${code}`);
     if (!room || !room.size) { memberListLast.delete(code); return; }
-    const { users, mode } = buildOnlineUsers(code);
+    const { users, mode, channel } = buildOnlineUsers(code);
+    // Someone who may not see the channel's members gets a list of just
+    // themselves (#5931). A DM's two people always see each other.
+    const viewGated = !!channel && !channel.is_dm;
 
     // Everyone else sees an invisible member as offline, or not at all when
     // the list shows online members only. The member themselves sees the
@@ -1002,6 +1033,23 @@ function setupSocketHandlers(io, db, opts = {}) {
       const s = io.of('/').sockets.get(sid);
       if (!s || !s.user) continue;
       const viewer = s.user.id;
+      if (viewGated) {
+        const view = memberView.forSocket(s, code, channel.id);
+        if (!view.allowed) {
+          const me = byId.get(viewer);
+          const list = me ? [me] : [];
+          const json = mode + JSON.stringify(list);
+          if (view.sentOwn !== json) {
+            view.sentOwn = json;
+            if (s.presenceDeltas) s.emit('online-users', { channelCode: code, users: list.map(slim), visibilityMode: mode, slim: 1 });
+            else s.emit('online-users', { channelCode: code, users: list, visibilityMode: mode });
+          }
+          s.presenceSynced?.delete(code);
+          continue;
+        }
+        // Just let in: the whole list, not changes to one they never had.
+        if (view.flipped) s.presenceSynced?.delete(code);
+      }
       const selfHidden = own.has(viewer);
 
       if (!s.presenceDeltas || fresh || !s.presenceSynced?.has(code)) {
@@ -2815,7 +2863,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Per-member upload storage totals (#5521)
       getUploadUsage, botAudioManager,
       // Ban-filtered channel roster used by @mention autocomplete
-      getMentionableChannelMembers,
+      getMentionableChannelMembers, mentionableMembersFor, sendChannelMembers, memberView,
       // IP-ban cache invalidator (server.js HTTP-side cache)
       invalidateIpBanCache,
       // Constants

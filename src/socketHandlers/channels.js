@@ -1920,6 +1920,12 @@ module.exports = function register(socket, ctx) {
     }
     if (!isSelfDm) {
       if (refuseYoungAccount(null)) return;
+      // Someone who may not see the server's members cannot open a new
+      // conversation with one of them (#5931). A conversation that already
+      // exists was answered above.
+      if (!ctx.memberView.canSeeMember(socket.user, targetId)) {
+        return socket.emit('error-msg', 'You cannot message this person yet.');
+      }
       if (!socket.user.isAdmin) {
         let started;
         try {
