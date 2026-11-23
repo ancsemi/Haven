@@ -6,9 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 
 ---
 
-## [4.30.0] - Unreleased
+## [4.30.0] - 2026-11-23
 
 ### Added
+- More profile customization (thanks Bo0sted, #5900): pick a banner color in Edit Profile or let it follow your avatar, upload and crop a banner picture (with its own size limit in Uploads & Limits), and give your profile card a two-color theme it fades between.
+- Call settings everywhere (thanks Roolk, #5903): Settings has a new Voice & video page with every call setting, usable without joining a call, plus Test microphone (with Hear myself) and Test camera. The fullscreen call popup shows the same full set of settings instead of three dropdowns.
+- The quick reaction row leads with your favorites, then the reactions you use most, then the usual defaults (thanks Amnibro, #5902). A row you customized still wins, and its editor has a Reset to automatic button.
 - Pick your name color: someone who holds several colored roles can choose which one colors their name, in Settings > Role Display. Automatic (the default) uses the highest role as before. Only the name color changes; the role badge still shows the highest role in its own color.
 - Do Not Disturb now keeps your notifications quiet (asked for by TGS). While your status is Do Not Disturb the chat plays no message, mention, reply, join or leave sounds, shows no desktop pop-up, and the server sends your phone and browser no push; your own send sound and the sound you pick in Settings still play, and unread counts still show in the sidebar. Away and Invisible are unchanged, and Invisible already stays on across logins.
 - Custom theme: a switch under the color picker lets you pick the highlight color (buttons, selections, links) on its own, so it no longer has to share a hue with the background. Off by default; with it off Custom looks as before (reported by qNemo).
@@ -29,11 +32,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Ferry can keep the pictures and files of Discord messages (asked for by Raidenphantom, by Amnibro in #5906). Discord's own links stop working after about a day, which broke forwarded pictures. With Keep Discord pictures and files switched on in the Ferry options, each one is copied into Haven's uploads as the message arrives: only from paired channels, held to the upload size limit, your blocked file types, the disk space reserve and the privacy check, and removed again when the message is deleted. It is off until an admin turns it on, and a file that cannot be copied stays a Discord link.
 
 ### Changed
+- Single sign-on (OIDC) settings can only be changed by the server admin. A role with Manage Server could change where sign-ins are sent, which decides who can sign in as whom; those members now see the settings greyed out.
+- The one-click installers and Update Now install releases, never unreleased work. The website installers for Windows and Linux download the latest stable release; before, they took whatever was on the main branch that day. On a server that was cloned with git, Update Now moves to the latest release (or the newest early access one, if that is switched on) and does nothing when the server is already there or ahead.
+- Batch files are stored with Windows line endings. With Unix ones, Windows could misread them and stop partway through.
+- The AutoMod link checks plugin is the one plugin file the server itself runs, so it is now treated as part of the server: it loads only when it is the exact file shipped with this version, and the in-app extension updater never offers or replaces it. If you have edited that file, AI link checks stay off (the log says why) until the original is restored.
 - Haven uses less processor while it is in the background (#5911): shimmering role names and theme effects stop moving while the window is hidden or another program has the keyboard, and in Desktop servers that are not the one on screen. Three shimmering names measured about 10% of a processor core on an otherwise idle page; paused, the same page uses about 0.2%.
 - A DM opened in the main window is easier to tell from a channel (#5920): the header shows a "Private conversation" tag with a colored line under it, and the message box says who the message goes to.
 - Closing a forum topic is a labeled button now: Close topic (or Reopen topic) sits on each card you can edit and in the open topic's header. It used to be a checkbox inside the edit window. The edit window shows Open and Closed side by side, and the right-click menu uses a lock instead of a tick.
 
 ### Fixed
+- The Manage Members window listed every account on the server to someone who could only remove people from the channel (Kick without Invite). It now lists the channel's own members for them.
+- Typing a whole name after @ and pressing Enter could pick a different member whose name only starts with it (@Dispencer2 turned into @Dispencer23). A name typed in full now comes first in the list (reported in #server-suggestions on the community server).
+- Role menus show how many people picked each role again, as a number on its button (reported by QUAKEMAN). The count went missing when the row of reaction chips under a role menu was removed in 4.29; hovering a button still lists who.
+- With AI link checks on, one very long crafted message could hold the server up for a second or two. The link check now reads long text in pieces.
+- Auto-cleanup follows the files of the messages it deletes. It trusted any file path written in a message, so a message naming someone's avatar, an emoji or a sound could take that file with it when it was cleaned up. It now only removes real message attachments that nothing else uses.
+- The admin recovery page now has the same limit on wrong passwords per account as the login page.
+- A webhook's token kept working after the person who made it was kicked from its channel or lost the role the channel requires. It now stops, the same way it already did for a banned maker.
+- The setup installer page now answers only its own page. While setup was open, another website open in the same browser could have sent it requests, including the one that creates the admin account.
+- An account with no channels is put into the open ones when it connects. That included ordinary sub-channels sitting under a private channel. Those are no longer joined.
+- Phone and browser notifications went to everyone with a membership in the channel, which included banned accounts and people the channel's required roles keep out. They now go only to people who can open the channel, and a banned account can no longer sign a device up for them.
+- Guests can no longer join groups, which could open channels outside the ones the admin chose for guests. Joining a group no longer protects an account from the bulk remove tool. Only the admin sets a role's upload limit.
+- The Admin role no longer carries the admin-only permissions (transfer admin, manage roles, manage server, delete channel, view all channels). The admin has those without the role, and on the role they passed to anyone else it was given to. Existing servers have them taken off once at startup; a permission the admin puts back on purpose stays.
+- A welcome message for a new member did not mark its channel unread until the app was reloaded (reported by quakeman00, #5930). It now counts as unread right away in a channel you do not have open.
+- Settings > Internet Access said the port was not reachable on every server, because the outside check it relies on changed how it is asked (reported by s007m77, fixed by Amnibro, #5923). It asks the new way, checks the public port when Haven sits behind a reverse proxy, and falls back to testing the address itself when the service gives no answer.
+- Searching the reaction picker finds flags and Haven's other built-in image emoji by country or name ("usa", "america", "canada"). It only looked at standard emoji before, so those searches came back empty, and an empty search now says so.
 - A name with a gradient role color now shows its gradient in the reply line above a message, instead of a single flat color.
 - A message or thread reply refused by slow mode was thrown away with the notice. It now comes back in the box to send once the wait is over (reported by TestUser).
 - When an admin switched text or media on or off for the channel you had open, the message box and its buttons stayed as they were until you changed channels. They now update right away (thanks rajuriprathik-a11y, #5909).
