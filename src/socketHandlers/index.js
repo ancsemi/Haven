@@ -1488,6 +1488,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // A click or pick on one bot's own buttons goes to that bot alone, and the
   // person waits on the answer, so there is one try and the result comes back.
+  // So does the bot's reply, which may open a form (socketHandlers/botInteractions.js).
   async function deliverBotInteraction(bot, body) {
     if (!bot.callback_url || !isSafeCallbackUrl(bot.callback_url)) return { ok: false };
     const payload = JSON.stringify({ event: 'interaction', timestamp: new Date().toISOString(), ...body });
@@ -1503,10 +1504,11 @@ function setupSocketHandlers(io, db, opts = {}) {
     try {
       const resp = await postWebhookCallback(bot.callback_url, payload, headers, {
         allowPrivateCallbacks: ALLOW_PRIVATE_CALLBACKS,
-        timeoutMs: 5000
+        timeoutMs: 5000,
+        maxBody: 128 * 1024
       });
       _recordWebhookDelivery(bot.id, resp.status, resp.ok ? null : `HTTP ${resp.status}`);
-      return { ok: resp.ok };
+      return { ok: resp.ok, body: resp.body };
     } catch (err) {
       _recordWebhookDelivery(bot.id, 0, ((err && err.message) || String(err)).slice(0, 200));
       return { ok: false };

@@ -1316,6 +1316,11 @@ html.reduce-motion .forum-unread-dot { animation: none; }
 .bot-select-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 2px; border-top: 1px solid var(--border); margin-top: 4px; }
 .bot-select-done { padding: 4px 12px; border: none; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-text, #fff); font: inherit; font-size: 0.8rem; cursor: pointer; }
 .bot-select-done:disabled { opacity: 0.5; cursor: not-allowed; }
+.bot-modal-label { display: block; margin: 0.75rem 0 0.25rem; font-size: 0.75rem; font-weight: 600; color: var(--text-primary); }
+.bot-modal-required { color: var(--danger); }
+.bot-modal .settings-text-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.875rem; }
+.bot-modal textarea.settings-text-input { resize: vertical; min-height: 5rem; }
+.bot-modal-error { margin: 0.5rem 0 0; font-size: 0.75rem; color: var(--danger); }
 
 /* ── Permissions matrix ─────────────────────────────────── */
 .perm-matrix-modal {
