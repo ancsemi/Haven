@@ -24,6 +24,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Translation pull requests are no longer merged automatically, and the translation checker refuses markup the English text does not have. A translated command hint such as `<recherche>` is still fine.
 
 ### Fixed
+- A muted channel no longer lights the @ button, a category's dot or collapsed count, a parent channel's dot or a tag row's count. Its own row can still show its count. Mentions in a muted channel were already left out live; the @ button now leaves them out when the channel list loads too.
 - People who are offline no longer show as idle. The status someone last chose (Away or Do Not Disturb) is kept while they are gone, and the pop-out DM and the profile card showed that instead of offline. Every status dot now checks offline first, and offline looks the same everywhere: a hollow dot.
 - Servers you removed from your server list came back on a new device, or when a server you use moved to a new address, because the list synced with your account never carried removals. A server you remove now stays removed everywhere you sign in; adding it again by hand brings it back everywhere.
 - A forum post you were writing was lost when you closed the New Post window, switched forums or reloaded, and a refused post that came back after you had left the forum was lost too (reported by gitty). Each forum now keeps its own unfinished post, title, text, tags and the 18+ mark, and brings it back the next time you press New Post. Posting it or pressing Cancel clears it.
