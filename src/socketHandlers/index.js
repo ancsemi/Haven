@@ -609,19 +609,25 @@ function setupSocketHandlers(io, db, opts = {}) {
       const targetType = entry.target_type ? String(entry.target_type).slice(0, 32) : null;
       const targetId = Number.isInteger(entry.target_id) ? entry.target_id : null;
       const targetName = entry.target_name ? String(entry.target_name).slice(0, 200) : null;
-      let details = null;
-      if (entry.details !== undefined && entry.details !== null) {
-        try { details = JSON.stringify(entry.details).slice(0, 4000); } catch { details = null; }
-      }
-      _auditInsert.run(actorId, actorUsername, action, targetType, targetId, targetName, details);
       // Kicks, mutes and bans also go on the member's moderation history.
+      // The record is made first so this row can carry its id: a bot keeping
+      // its own copy of the history matches a later revoke by it.
+      let caseId = null;
       if (targetType === 'user') {
         try {
-          modCases.fromAudit(db, { action, actorId, actorName: actorUsername, targetId, details: entry.details });
+          caseId = modCases.fromAudit(db, { action, actorId, actorName: actorUsername, targetId, details: entry.details });
         } catch (err) {
           console.warn('[mod-cases] history record failed:', err.message);
         }
       }
+      const d = entry.details;
+      const withCase = caseId != null && (d == null || (typeof d === 'object' && !Array.isArray(d)))
+        ? { ...d, caseId } : d;
+      let details = null;
+      if (withCase !== undefined && withCase !== null) {
+        try { details = JSON.stringify(withCase).slice(0, 4000); } catch { details = null; }
+      }
+      _auditInsert.run(actorId, actorUsername, action, targetType, targetId, targetName, details);
     } catch (err) {
       console.warn('[audit] log failed:', err.message);
     }

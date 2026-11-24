@@ -30,7 +30,8 @@ _setupAuditLog() {
   // yet shows its own name with spaces. The icon goes by what was acted on.
   const ICONS = {
     user_kick: '👢', user_ban: '🚫', user_unban: '✅', user_mute: '🔇', user_unmute: '🔊',
-    user_warn: '⚠️', user_delete: '🗑️', user_scrub: '🧹', voice_kick: '🎙️', admin_transfer: '👑',
+    user_warn: '⚠️', user_note: '📝', user_delete: '🗑️', user_self_delete: '🗑️', user_scrub: '🧹',
+    voice_kick: '🎙️', admin_transfer: '👑',
     admin_recover: '👑', roles_reset: '🎭', message_delete: '🗑️', messages_bulk_delete: '🗑️',
     message_pin: '📌', message_unpin: '📌', message_protect: '🛡️', message_unprotect: '🛡️',
     channel_create: '➕', channel_delete: '🗑️', channel_rename: '✏️', user_rename: '✏️',
@@ -86,9 +87,11 @@ _setupAuditLog() {
       if (v === false && !['value', 'autoAssign', 'active', 'linked', 'enabled', 'canModerate', 'canUseVoice'].includes(k) && r.action !== 'channel_setting_update') continue;
       // Permission lists read as the names the role editor shows.
       const permLabel = (p) => { const k = `permissions.${p}`; const l = t(k); return l && l !== k ? l : p; };
+      // A bulk cleanup lists the accounts it removed as { id, username }.
+      const accountText = (a) => (a && typeof a === 'object' ? `${a.username} (id ${a.id})` : valueText(a));
       const text = Array.isArray(v) && ['added', 'removed', 'permissions', 'granted', 'denied'].includes(k)
         ? v.map(permLabel).join(', ')
-        : valueText(v);
+        : k === 'accounts' && Array.isArray(v) ? v.map(accountText).join(', ') : valueText(v);
       parts.push(`<span class="audit-detail-pair"><b>${_esc(keyLabel(k))}:</b> ${_esc(text.length > 600 ? text.slice(0, 597) + '...' : text)}</span>`);
     }
     return parts.length ? `<div class="audit-details">${parts.join('')}</div>` : '';

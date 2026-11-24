@@ -11,6 +11,32 @@ const { scrubUserMessages } = require('../scrubMessages');
 // as they are (src/protectedMessages.js).
 const SCRUBBABLE = deletableSql('m');
 
+// A bulk cleanup's audit rows: the summary, then every removed account by id
+// and username. A row keeps 4000 characters of details and a cleanup can
+// remove 10,000 accounts, so the list runs over as many rows as it needs,
+// each marked part 1 of N; the first also carries the summary. Room is left
+// for the part keys. A piece is counted with its comma, which overcounts by
+// one per row.
+const BULK_ROW_ROOM = 3900;
+function bulkRemoveDetails(summary, accounts) {
+  const rows = [];
+  let row = { ...summary, accounts: [] };
+  let size = JSON.stringify(row).length;
+  for (const a of accounts) {
+    const piece = JSON.stringify(a).length + 1;
+    if (row.accounts.length && size + piece > BULK_ROW_ROOM) {
+      rows.push(row);
+      row = { accounts: [] };
+      size = JSON.stringify(row).length;
+    }
+    row.accounts.push(a);
+    size += piece;
+  }
+  rows.push(row);
+  if (rows.length > 1) rows.forEach((r, i) => { r.part = i + 1; r.parts = rows.length; });
+  return rows;
+}
+
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel,
           emitOnlineUsers, broadcastVoiceUsers, getEnrichedChannels, logAudit,
@@ -543,7 +569,7 @@ module.exports = function register(socket, ctx) {
 
     _audit({ actor: socket.user, action: 'user_delete',
       target_type: 'user', target_id: targetUser.id, target_name: targetUser.displayName,
-      details: { reason: reason || null, scrubMessages: !!data.scrubMessages } });
+      details: { userId: targetUser.id, username: targetUser.username, reason: reason || null, scrubMessages: !!data.scrubMessages } });
     socket.emit('error-msg', `Deleted user "${targetUser.displayName}". Username is now available`);
 
     for (const [, s] of io.sockets.sockets) {
@@ -660,8 +686,11 @@ module.exports = function register(socket, ctx) {
         return cb({ error: `Failed partway: removed ${removed} of ${targets.length}` });
       }
 
-      _audit({ actor: socket.user, action: 'user_bulk_remove', target_type: 'user', target_id: null, target_name: null,
-        details: { removed, requested: requested.length, ipBanned, scrubMessages: !!data.scrubMessages, reason } });
+      const summary = { removed, requested: requested.length, ipBanned, scrubMessages: !!data.scrubMessages, reason };
+      const accounts = targets.map(t => ({ id: t.id, username: t.username }));
+      for (const details of bulkRemoveDetails(summary, accounts)) {
+        _audit({ actor: socket.user, action: 'user_bulk_remove', target_type: 'user', target_id: null, target_name: null, details });
+      }
       for (const [, s] of io.sockets.sockets) { if (s.user && s.user.isAdmin) s.emit('users-bulk-removed', { removed, ids }); }
       console.log(`🧹 Admin ${socket.user.username} bulk-removed ${removed} user(s)${ipBanned ? ` and ${ipBanned} IP(s)` : ''}`);
       return cb({ ok: true, removed, total: requested.length, ipBanned });
@@ -829,6 +858,12 @@ module.exports = function register(socket, ctx) {
     }
 
     console.log(`🗑️  User self-deleted: "${userRow.username}" (id: ${uid}, scrub: ${scrubMessages})`);
+    // The account row is gone, so the actor is named without an id (actor_id
+    // must point at a user); target_id still says who it was. No target name,
+    // so the log reads "bob deleted their own account", with the id and
+    // username in the details where the log shows them.
+    _audit({ actor: { displayName: userRow.username }, action: 'user_self_delete',
+      target_type: 'user', target_id: uid, details: { userId: uid, username: socket.user.username, scrubMessages } });
     cb({ success: true });
     socket.disconnect(true);
   });
@@ -1092,3 +1127,5 @@ module.exports = function register(socket, ctx) {
     socket.emit('ip-ban-list', rows);
   });
 };
+
+module.exports.bulkRemoveDetails = bulkRemoveDetails;

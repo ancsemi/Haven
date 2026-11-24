@@ -1510,6 +1510,13 @@ module.exports = function register(socket, ctx) {
       if (beforeId > 0) { where.push('id < ?'); params.push(beforeId); }
       if (action) { where.push('action = ?'); params.push(action); }
       if (actorUsername) { where.push('LOWER(actor_username) LIKE ?'); params.push('%' + actorUsername + '%'); }
+      // Notes are for staff, never for the member they are about, even one
+      // who can read this log: their own history leaves notes out too. That
+      // covers the note and the row for taking one back. Filtered here, not
+      // after, so a page still holds `limit` rows.
+      where.push(`NOT (target_id IS ? AND (action = 'user_note' OR (action = 'mod_case_revoke'
+        AND COALESCE(CASE WHEN json_valid(details) THEN json_extract(details, '$.type') END, '') = 'note')))`);
+      params.push(socket.user.id);
       const whereSql = where.length ? ('WHERE ' + where.join(' AND ')) : '';
       params.push(limit);
 

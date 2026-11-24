@@ -1478,8 +1478,9 @@ be handed to others through the role system, one permission at a time.
   against a domain policy you control, and rejects them before they are saved. This
   matters more than it sounds: Haven renders linked images and previews from the
   other site, so a hostile link exposes the IP of everyone who scrolls past it
-- **Audit log**: a record of channel changes, role updates, bans, kicks and server
-  setting changes, with who did what
+- **Audit log**: a record of channel changes, role updates, bans, kicks, warnings,
+  notes, deleted accounts and server setting changes, with who did what. A note on
+  someone never shows to them, even if they can read the log
 - **Guests**: an optional "Join as Guest" button on the login page. Guests pick a
   username, get a temporary account with no password, see only the channels you
   whitelist, cannot DM, and are deleted when they disconnect
