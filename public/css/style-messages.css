@@ -1411,6 +1411,11 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
   padding: 0.125rem 0;
 }
 .profile-bio-toggle:hover { text-decoration: underline; }
+.profile-popup-links { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.25rem 0 0.5rem; }
+.profile-link-btn { display: inline-flex; align-items: baseline; gap: 0.375rem; max-width: 100%; padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-sm); text-decoration: none; }
+.profile-link-btn:hover, .profile-link-btn:focus-visible { background: var(--bg-hover); border-color: var(--accent); }
+.profile-link-label { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.profile-link-host { min-width: 0; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .profile-popup-divider {
   height: 0.0625rem;
