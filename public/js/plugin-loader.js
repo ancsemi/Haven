@@ -759,6 +759,16 @@ window.HavenPluginLoader = (function () {
     }
   }
 
+  function dropRetiredLayoutPicks(plugins) {
+    if (!plugins?.length) return;
+    try {
+      const files = new Set(plugins.map(p => p.file)), store = JSON.parse(localStorage.getItem('haven_plugin_data') || '{}'), layouts = Object.keys(store).filter(k => /Layout$/.test(k));
+      if (!layouts.some(k => store[k]?.layoutOn === '1' && !files.has(`${k}.plugin.js`))) return;
+      layouts.forEach(k => { delete store[k]?.layoutOn; });
+      localStorage.setItem('haven_plugin_data', JSON.stringify(store));
+      setEnabledPlugins(getEnabledPlugins().filter(f => !/Layout\.plugin\.js$/.test(f)));
+    } catch (err) { console.warn('[Haven Plugins] could not clear a layout choice the server no longer offers', err); }
+  }
   async function init(forceThemeRefresh = false) {
     try {
       const [pluginRes, themeRes] = await Promise.all([
@@ -784,6 +794,7 @@ window.HavenPluginLoader = (function () {
 
       // Load themes first. Safe mode records them without injecting CSS.
       for (const t of themeRes || []) loadTheme(t);
+      dropRetiredLayoutPicks(pluginRes);
 
       // loadPlugin() only records metadata while extensions are suppressed, so
       // no plugin file is fetched or evaluated in safe/recovery mode.

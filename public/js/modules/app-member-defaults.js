@@ -357,7 +357,8 @@ _maybeApplyMemberDefaults() {
   if (rec && rec.v >= snap.v) return;
   const applied = {};
   const keep = {};
-  const unchanged = (def, cur) => cur === def.dflt || (rec && rec.a[def.key] === cur);
+  const layoutPicked = () => { try { return Object.entries(JSON.parse(lsGet('haven_plugin_data') || '{}')).some(([k, v]) => /Layout$/.test(k) && v?.layoutOn != null); } catch { return true; } };
+  const unchanged = (def, cur) => def.key === 'layout' ? (rec?.a.layout === cur || !layoutPicked()) : (cur === def.dflt || (rec && rec.a[def.key] === cur));
   const tryApply = (def) => {
     const cur = def.read(this);
     if (!unchanged(def, cur)) return;
