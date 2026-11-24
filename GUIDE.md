@@ -1971,6 +1971,26 @@ socket.on('audit-log-unsubscribed', ({ reason }) => { /* it lost the permission 
 - The permission is checked at every entry. A bot that loses it gets `audit-log-unsubscribed` and nothing more until it subscribes again.
 - Entries that add to a member's moderation history (warn, note, kick, mute, unmute, ban, unban) carry a `caseId` in `details`, the same id `get-mod-history` gives, and a `mod_case_revoke` entry names the `caseId` it takes back.
 
+**Deleted and edited messages.** A bot with **View Audit Log** can also hear when a message in a channel it can read is deleted or edited.
+
+```js
+socket.emit('subscribe-message-changes', (res) => { /* { ok, textIncluded } or { error } */ });
+socket.on('mod-message-deleted', (e) => {
+  // { channel: { id, code, name }, by, at, textIncluded,
+  //   messages: [{ id, threadId, createdAt, author, content? }] }
+});
+socket.on('mod-message-edited', (e) => {
+  // { channel, by, at, textIncluded,
+  //   message: { id, threadId, createdAt, author, before?, after? } }
+});
+```
+
+- `author` and `by` are `{ id, username, displayName }` for a person and `{ webhook }` for a webhook. A delete lists every message that went, the thread replies under a deleted message included. Times are UTC.
+- The text (`content`, or `before` and `after`) is only there while the admin turns on **Settings → Bots & data → Let bots see the text of deleted and edited messages**, which starts off. `textIncluded` says which it is.
+- DMs and groups never reach a bot, nor self-destructing messages, which are meant to vanish. Auto-cleanup, a channel clearing itself, a member clearing all their own messages at once and removing a banned member's messages are not sent either; the audit log records those.
+- Haven keeps none of it, so there is nothing to catch up on: what happens while the bot is offline is missed.
+- `unsubscribe-message-changes` stops it, and a bot that loses View Audit Log gets `message-changes-unsubscribed`.
+
 ---
 
 ## Troubleshooting

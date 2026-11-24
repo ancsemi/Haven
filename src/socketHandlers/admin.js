@@ -178,6 +178,7 @@ module.exports = function register(socket, ctx) {
       'media_proxy_enabled', // (v3.43.0) server-side fetch + cache for remote images
       'fcm_enabled', // admin gate for Google FCM mobile push; off = FCM sends skipped (web-push unaffected)
       'fcm_hide_content',
+      'bots_see_message_text', // the admin's call: bots get the text of deleted and edited messages (src/messageLog.js)
       'unicode_emoji_auto_update' // monthly refresh of the built-in emoji set from unicode.org, opt-in
     ];
     if (!allowedKeys.includes(key)) return;
@@ -203,6 +204,7 @@ module.exports = function register(socket, ctx) {
     if (key === 'media_proxy_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'fcm_enabled' && !['true', 'false'].includes(value)) return;
     if (key === 'fcm_hide_content' && !['true', 'false'].includes(value)) return;
+    if (key === 'bots_see_message_text' && !['true', 'false'].includes(value)) return;
     if (key === 'unicode_emoji_auto_update' && !['true', 'false'].includes(value)) return;
     if (key === 'automod_link_mode' && !['off', 'allowlist', 'blocklist'].includes(value)) return;
     if (key === 'automod_link_exempt_level') {
@@ -236,6 +238,7 @@ module.exports = function register(socket, ctx) {
     // and say why rather than silently breaking voice for the whole server.
     // The relay opens network ports on the host, so it is the admin's alone.
     if (key.startsWith('voice_relay_') && !socket.user.isAdmin) return socket.emit('error-msg', 'Only the server admin can change the voice relay.');
+    if (key === 'bots_see_message_text' && !socket.user.isAdmin) return socket.emit('error-msg', 'Only the server admin can let bots see message text.');
     if (key === 'voice_relay_mode' && !state.voiceRelay?.MODES.includes(value)) return;
     if (key === 'voice_relay_port') {
       const n = parseInt(value, 10);

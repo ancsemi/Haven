@@ -3887,6 +3887,16 @@
           </div>
         </div>
 
+        <!-- What bots hear of deleted and edited messages (Admin only) -->
+        <div class="admin-settings" id="section-bot-message-text" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+          <h5 class="settings-section-subtitle">🗑️ <span data-i18n="settings.admin.bot_message_text_title">Deleted and edited messages</span></h5>
+          <small class="settings-hint" data-i18n="settings.admin.bot_message_text_hint">Bots with View Audit Log hear when a message in a channel they can read is deleted or edited, whose it was, and who deleted it. Turn this on to send them the text too: what was deleted, and the text before and after an edit. Haven itself keeps none of it, and DMs never reach a bot.</small>
+          <label class="toggle-row" style="margin-top:8px">
+            <span data-i18n="settings.admin.bot_message_text_label">Let bots see the text of deleted and edited messages</span>
+            <input type="checkbox" id="bots-see-message-text">
+          </label>
+        </div>
+
         <!-- Ferry: Haven <-> Discord bridge (Admin only) -->
         <div class="admin-settings" id="section-ferry" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
           <h5 class="settings-section-subtitle">🛶 <span data-i18n="settings.admin.ferry_title">Ferry (Discord bridge)</span></h5>
@@ -5664,7 +5674,7 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.31.2"></script>
+  <script type="module" src="/js/app.js?v=4.31.3"></script>
   <script src="/js/plugin-loader.js?v=4.29.63"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

@@ -496,6 +496,9 @@ function initDatabase() {
   // relay and Google or Apple. Servers set up before 4.30 were seeded with it
   // shown, which nobody chose, so that is switched once; what the admin sets
   // afterwards is kept.
+  // Bots with View Audit Log hear of deleted and edited messages; the text
+  // goes with it only once the admin allows it (src/messageLog.js).
+  insertSetting.run('bots_see_message_text', 'false');
   insertSetting.run('fcm_hide_content', 'true');
   if (!db.prepare("SELECT 1 FROM server_settings WHERE key = 'fcm_hide_default_applied'").get()) {
     db.prepare("UPDATE server_settings SET value = 'true' WHERE key = 'fcm_hide_content'").run();

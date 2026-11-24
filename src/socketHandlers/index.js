@@ -93,6 +93,8 @@ const registerMessageNsfw = require('./messageNsfw');
 const registerBlockedNames = require('./blockedNames');
 const registerAuditStream = require('./auditStream');
 const { createAuditStream } = require('../auditStream');
+const registerMessageLog = require('./messageLog');
+const { createMessageLog } = require('../messageLog');
 const createLiveAccess = require('./liveAccess');
 const { createMemberView } = require('../memberView');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
@@ -148,6 +150,8 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Bot accounts that follow the audit log live (src/auditStream.js).
   const auditStream = createAuditStream({ db, userHasPermission });
+  // And that hear of deleted and edited messages (src/messageLog.js).
+  const messageLog = createMessageLog({ db, userHasPermission, roleGateAllows });
 
   const { getEnrichedChannels, getEnrichedChannelsAsync } = createChannelLists({
     db, userHasPermission, roleGateAllows, getUserEffectiveLevel
@@ -2864,7 +2868,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Transfer admin mutex
       transferAdminRef,
       // Audit log
-      logAudit, revokeBotVoiceAccess, auditStream,
+      logAudit, revokeBotVoiceAccess, auditStream, messageLog,
       // Auto-moderation (v3.42.0)
       automod,
       enforceAutomod,
@@ -2918,6 +2922,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerMessageNsfw(socket, ctx);
     registerBlockedNames(socket, ctx);
     registerAuditStream(socket, ctx);
+    registerMessageLog(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made
@@ -3052,7 +3057,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Handed back so server.js can mount the account-linking HTTP routes against
   // the same engine instance the socket layer is using.
-  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval, broadcastChannelLists, syncRoleGateMemberships, settingEffects, logAudit, roleGateAllows, refreshRoleHolders: roleRefresh.refreshRoleHolders, sendPushNotifications };
+  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval, broadcastChannelLists, syncRoleGateMemberships, settingEffects, logAudit, roleGateAllows, refreshRoleHolders: roleRefresh.refreshRoleHolders, sendPushNotifications, messageLog };
 }
 
 module.exports = { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext };
