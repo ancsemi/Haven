@@ -39,7 +39,8 @@ import SoundMethods from './modules/app-sounds.js?v=4.25.23';
 import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.29.12';
 import EmojiSearchMethods from './modules/app-emoji-search.js?v=4.29.94';
 import BotMethods from './modules/app-bots.js?v=4.27.52';
-import ContextMethods  from './modules/app-context.js?v=4.29.95';
+import ContextMethods  from './modules/app-context.js?v=4.31.2';
+import BirchMethods from './modules/app-birch.js?v=4.31.2';
 import ChannelMethods  from './modules/app-channels.js?v=4.29.95';
 import ChannelContextMethods from './modules/app-channel-context.js?v=4.29.69';
 import ChannelTypeMethods from './modules/app-channel-types.js?v=4.27.42';
@@ -647,6 +648,7 @@ Object.assign(HavenApp.prototype,
   EmojiSearchMethods,
   BotMethods,
   ContextMethods,
+  BirchMethods,
   ChannelMethods,
   ChannelContextMethods,
   ChannelOrganizeMethods,

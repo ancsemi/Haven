@@ -143,6 +143,8 @@ bot API, and troubleshooting.
 Short how-to videos are on the [tutorials page](https://haven-app.com/tutorials.html), [YouTube](https://www.youtube.com/@Haven-App_Tutorials) and
 [Rumble](https://rumble.com/user/HavenApp).
 
+Birch, the town game, is an optional add-on you host yourself: [Birch on your server](docs/birch.md).
+
 Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ---

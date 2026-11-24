@@ -1122,6 +1122,7 @@ to create or rename anything. It lives in your **data directory**:
 | `OIDC_CLIENT_SECRET` | *(empty)* | Client secret for single sign-on. Kept out of the database on purpose, so backups never carry it |
 | `PUBLIC_URL` | *(auto-detected)* | Your server's public address, including `https://`. Only needed if Haven cannot work it out itself, see below |
 | `HAVEN_ALLOW_PRIVATE_CALLBACKS` | `false` | Let bot callback URLs point at private addresses (`10.x`, `192.168.x`, `localhost`, `.local`). Off by default so a webhook cannot be pointed at your internal network. Turn it on only if your bot really does run on the same LAN or in a sibling Docker container. Cloud metadata addresses (`169.254.x.x`) stay blocked regardless |
+| `BIRCH_PROXY_URL` | *(empty)* | Address of a Birch bot you run, for example `http://127.0.0.1:3002`. Haven forwards `/birch` to it and shows the Birch card in Activities only while the bot answers. Empty means no Birch. Point it only at a bot you installed yourself, see [Birch on your server](docs/birch.md) |
 
 After editing `.env`, restart the server.
 

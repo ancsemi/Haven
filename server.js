@@ -649,6 +649,8 @@ app.use((req, res, next) => {
 
 // Disable Express version disclosure
 app.disable('x-powered-by');
+const birch = require('./src/birch').createBirch({ url: process.env.BIRCH_PROXY_URL, secret: process.env.JWT_SECRET });
+app.use('/birch', birch.proxy);
 
 // ── Body Parsing with size limits ────────────────────────
 // Global limit bumped to 128kb so legit large-but-bounded payloads like the
@@ -1606,6 +1608,7 @@ require('./src/routes/link-preview')({ app });
 
 // ── Release notes for the "What's new" popup: src/routes/changelog.js ──
 require('./src/routes/changelog')({ app, verifyToken });
+require('./src/routes/birch')({ app, verifyToken, birch });
 
 // ── Games list endpoint: discover available games ──
 app.get('/api/games', (req, res) => {

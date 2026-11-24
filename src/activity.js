@@ -167,6 +167,7 @@ const HAVEN_GAMES = {
   tanks: 'Tanks',
   'super-smash-flash-2': 'Super Smash Flash 2',
   'io-games': '.io Games',
+  willowmere: 'Birch',
 };
 
 function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }) {
