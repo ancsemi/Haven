@@ -1665,6 +1665,9 @@ function initDatabase() {
   // it a GROUP BY over a few large channels scans every row: 15.7 s -> 0.5 s on
   // ~1M messages.
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_channel_top ON messages(channel_id, id) WHERE thread_id IS NULL");
+  // One member's messages: counting them (src/messageStats.js) and removing
+  // or unlinking them when an account goes read this instead of every row.
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id) WHERE user_id IS NOT NULL");
   // ── Migration: forum topics carry a title and tags ──────
   for (const col of [
     { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },

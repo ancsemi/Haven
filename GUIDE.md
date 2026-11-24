@@ -1991,6 +1991,23 @@ socket.on('mod-message-edited', (e) => {
 - Haven keeps none of it, so there is nothing to catch up on: what happens while the bot is offline is missed.
 - `unsubscribe-message-changes` stops it, and a bot that loses View Audit Log gets `message-changes-unsubscribed`.
 
+**Counting messages.** Two calls give counts, never the messages themselves.
+
+```js
+socket.emit('get-member-message-stats', { userId: 42 }, (res) => {
+  // { ok, userId, channel, thread, forumTopic, forumReply, dm, groupDm,
+  //   total, firstAt, lastAt } or { error }
+});
+socket.emit('get-message-activity', { days: 30, utcOffsetMinutes: -300 }, (res) => {
+  // { ok, days, utcOffsetMinutes, total,
+  //   byDay: [{ date: '2026-11-24', count }], byHour: [24 counts] } or { error }
+});
+```
+
+- `get-member-message-stats` counts one member's own posts everywhere: top-level channel messages, thread replies, forum topics and forum replies, DMs and group DMs. It never says who someone writes to. Notes to self, webhook posts and system notices are left out, and a deleted message no longer counts. `firstAt` and `lastAt` are UTC.
+- `get-message-activity` counts the messages in the server channels you can read (or one of them, with `channelCode`) over the last `days` days (1 to 365, 30 if left out), by day and by hour of the day. Days and hours are in the time zone you give as minutes from UTC (`-300` is UTC-5). It is a fixed offset, so a change to summer time is not followed.
+- Anyone may count their own messages. Someone else's, and the activity, take kick, mute or ban permission, or View Audit Log, as a member's moderation history does. People and bots use them alike.
+
 ---
 
 ## Troubleshooting

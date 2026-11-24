@@ -94,6 +94,7 @@ const registerBlockedNames = require('./blockedNames');
 const registerAuditStream = require('./auditStream');
 const { createAuditStream } = require('../auditStream');
 const registerMessageLog = require('./messageLog');
+const registerMessageStats = require('./messageStats');
 const { createMessageLog } = require('../messageLog');
 const createLiveAccess = require('./liveAccess');
 const { createMemberView } = require('../memberView');
@@ -2923,6 +2924,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerBlockedNames(socket, ctx);
     registerAuditStream(socket, ctx);
     registerMessageLog(socket, ctx);
+    registerMessageStats(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made
