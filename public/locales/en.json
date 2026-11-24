@@ -4263,6 +4263,7 @@
         "user_delete": "deleted the account of",
         "user_note": "added a note on",
         "user_perms_reset": "reset the permissions of",
+        "user_register": "created an account",
         "user_scrub": "removed the messages of",
         "user_self_delete": "deleted their own account",
         "user_warn": "warned",

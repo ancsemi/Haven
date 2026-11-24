@@ -553,17 +553,22 @@ module.exports = function register(socket, ctx) {
     else socket.emit('roles-list', roles);
   });
 
-  socket.on('get-user-roles', (data) => {
-    if (!data || typeof data !== 'object') return;
+  // The app reads the user-roles event; a bot may pass a callback too and
+  // gets the same answer back, or { error }.
+  socket.on('get-user-roles', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
     const userId = isInt(data.userId) ? data.userId : null;
-    if (!userId) return;
+    if (!userId) return cb({ error: 'Invalid request' });
     // Channel-scoped roles only for channels the asker can reach: a row names
     // the channel, and someone's role in a channel you cannot see is not yours
     // to learn.
     const roles = getUserRoles(userId).filter(r => r.channel_id == null || userId === socket.user.id
       || reachableNonDm(r.channel_id));
     const highestRole = getUserHighestRole(userId);
-    socket.emit('user-roles', { userId, roles, highestRole });
+    const payload = { userId, roles, highestRole };
+    socket.emit('user-roles', payload);
+    cb(payload);
   });
 
   // ── Get channel member roles ────────────────────────────

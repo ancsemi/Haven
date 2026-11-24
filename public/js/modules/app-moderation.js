@@ -31,7 +31,7 @@ _setupAuditLog() {
   const ICONS = {
     user_kick: '👢', user_ban: '🚫', user_unban: '✅', user_mute: '🔇', user_unmute: '🔊',
     user_warn: '⚠️', user_note: '📝', user_delete: '🗑️', user_self_delete: '🗑️', user_scrub: '🧹',
-    voice_kick: '🎙️', admin_transfer: '👑',
+    user_register: '👋', voice_kick: '🎙️', admin_transfer: '👑',
     admin_recover: '👑', roles_reset: '🎭', message_delete: '🗑️', messages_bulk_delete: '🗑️',
     message_pin: '📌', message_unpin: '📌', message_protect: '🛡️', message_unprotect: '🛡️',
     channel_create: '➕', channel_delete: '🗑️', channel_rename: '✏️', user_rename: '✏️',

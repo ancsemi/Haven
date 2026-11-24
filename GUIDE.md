@@ -1479,8 +1479,8 @@ be handed to others through the role system, one permission at a time.
   matters more than it sounds: Haven renders linked images and previews from the
   other site, so a hostile link exposes the IP of everyone who scrolls past it
 - **Audit log**: a record of channel changes, role updates, bans, kicks, warnings,
-  notes, deleted accounts and server setting changes, with who did what. A note on
-  someone never shows to them, even if they can read the log
+  notes, sign-ups, deleted accounts and server setting changes, with who did
+  what. A note on someone never shows to them, even if they can read the log
 - **Guests**: an optional "Join as Guest" button on the login page. Guests pick a
   username, get a temporary account with no password, see only the channels you
   whitelist, cannot DM, and are deleted when they disconnect
@@ -1932,7 +1932,7 @@ socket.emit('get-channels');
 socket.on('new-message', ({ channelCode, message }) => { /* answer commands */ });
 ```
 
-From there it uses the app's own events, as a member does: `join-channel`, `send-message`, `send-thread-message`, `edit-message`, `delete-message`, `set-status`, and so on. Its picture is set with `POST /api/upload-avatar` (the token as a Bearer token) and then `set-avatar`. It renames itself with `rename-bot { botId, name }`, using its own id.
+From there it uses the app's own events, as a member does: `join-channel`, `send-message`, `send-thread-message`, `edit-message`, `delete-message`, `set-status`, and so on. Its picture is set with `POST /api/upload-avatar` (the token as a Bearer token) and then `set-avatar`. It renames itself with `rename-bot { botId, name }`, using its own id. `ban-user`, `get-user-profile` and `get-user-roles` also take a callback that gets the answer (or `{ error }`), so a bot does not have to wait for the matching event or read the toast.
 
 **Embeds, buttons and dropdowns.** `send-message` and `send-thread-message` take the same `embeds` and `components` as a webhook (see Embeds, Buttons and Dropdowns above), and the text may be empty when there is an embed. Only bot accounts may send them. A click or a pick comes straight back over the bot's connection, with no callback URL:
 

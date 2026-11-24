@@ -304,33 +304,37 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Ban user ────────────────────────────────────────────
-  socket.on('ban-user', (data) => {
-    if (!data || typeof data !== 'object') return;
+  // The callback is optional: the app reads the error-msg toasts, and a bot
+  // gets { success, ipBanned, warning? } or { error } back.
+  socket.on('ban-user', (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    const refuse = (msg) => { socket.emit('error-msg', msg); cb({ error: msg }); };
+    if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'ban_user')) {
-      return socket.emit('error-msg', 'You don\'t have permission to ban users');
+      return refuse('You don\'t have permission to ban users');
     }
-    if (!isInt(data.userId)) return;
+    if (!isInt(data.userId)) return cb({ error: 'Invalid request' });
     if (data.userId === socket.user.id) {
-      return socket.emit('error-msg', 'You can\'t ban yourself');
+      return refuse('You can\'t ban yourself');
     }
 
     const targetRow = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(data.userId);
     if (targetRow && targetRow.is_admin && !socket.user.isAdmin) {
-      return socket.emit('error-msg', 'You cannot ban an admin');
+      return refuse('You cannot ban an admin');
     }
 
     if (!socket.user.isAdmin) {
       const myLevel = getUserEffectiveLevel(socket.user.id);
       const targetLevel = getUserEffectiveLevel(data.userId);
       if (targetLevel >= myLevel) {
-        return socket.emit('error-msg', 'You can\'t ban a user with equal or higher rank');
+        return refuse('You can\'t ban a user with equal or higher rank');
       }
     }
 
     const reason = typeof data.reason === 'string' ? data.reason.trim().slice(0, 200) : '';
 
     const targetUser = db.prepare('SELECT id, COALESCE(display_name, username) as username FROM users WHERE id = ?').get(data.userId);
-    if (!targetUser) return socket.emit('error-msg', 'User not found');
+    if (!targetUser) return refuse('User not found');
 
     try {
       db.prepare(
@@ -338,7 +342,7 @@ module.exports = function register(socket, ctx) {
       ).run(data.userId, socket.user.id, reason);
     } catch (err) {
       console.error('Ban error:', err);
-      return socket.emit('error-msg', 'Failed to ban user');
+      return refuse('Failed to ban user');
     }
 
     for (const [, s] of io.sockets.sockets) {
@@ -415,13 +419,16 @@ module.exports = function register(socket, ctx) {
       target_type: 'user', target_id: data.userId, target_name: targetUser.username,
       details: { reason, scrubMessages: !!data.scrubMessages, purgeMessages: !!data.purgeMessages, banIp: !!data.banIp } });
 
+    let ipBanned = 0;
+    let warning = null;
     // Optional: also ban the user's recently-observed IP addresses. Requires
     // the separate `ban_ip` permission (so a moderator can ban accounts but
     // not addresses unless explicitly granted). Admins always have it.
     if (data.banIp) {
       const canBanIp = socket.user.isAdmin || userHasPermission(socket.user.id, 'ban_ip');
       if (!canBanIp) {
-        socket.emit('error-msg', 'IP ban skipped: you don\'t have ban_ip permission');
+        warning = 'IP ban skipped: you don\'t have ban_ip permission';
+        socket.emit('error-msg', warning);
       } else {
         try {
           const ipRows = db.prepare('SELECT ip FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC LIMIT 5').all(data.userId);
@@ -443,6 +450,7 @@ module.exports = function register(socket, ctx) {
             stmt.run(norm, socket.user.id, ipReason.slice(0, 200));
             count++;
           }
+          ipBanned = count;
           if (count > 0) {
             _invalidateIpCache();
             socket.emit('error-msg', `Also banned ${count} IP${count === 1 ? '' : 's'} linked to ${targetUser.username}`);
@@ -450,14 +458,17 @@ module.exports = function register(socket, ctx) {
               target_type: 'user', target_id: data.userId, target_name: targetUser.username,
               details: { count, reason: ipReason } });
           } else {
-            socket.emit('error-msg', `No recorded IPs to ban for ${targetUser.username}`);
+            warning = `No recorded IPs to ban for ${targetUser.username}`;
+            socket.emit('error-msg', warning);
           }
         } catch (err) {
           console.error('Bulk IP ban error:', err);
-          socket.emit('error-msg', 'Failed to ban linked IPs');
+          warning = 'Failed to ban linked IPs';
+          socket.emit('error-msg', warning);
         }
       }
     }
+    cb({ success: true, ipBanned, ...(warning && { warning }) });
   });
 
   // ── Unban user ──────────────────────────────────────────

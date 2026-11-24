@@ -62,10 +62,12 @@ function createPostgresProfiles({ io, db, permissions, presence, channelMembers,
       }
     }
 
-    on('get-user-profile', async data => {
-      if (!Number.isSafeInteger(data?.userId) || data.userId <= 0) return;
+    // A callback, when given, gets the same card back (users.js).
+    on('get-user-profile', async (data, callback) => {
+      const cb = typeof callback === 'function' ? callback : () => {};
+      if (!Number.isSafeInteger(data?.userId) || data.userId <= 0) return cb({ error: 'Invalid request' });
       const row = await profile.readProfile(db, data.userId);
-      if (!row) return;
+      if (!row) return cb({ error: 'Member not found' });
 
       const roles = await profile.profileServerRoles(db, row.id);
       const channel = await currentChannel();
@@ -81,10 +83,12 @@ function createPostgresProfiles({ io, db, permissions, presence, channelMembers,
         console.warn('[badges] profile badges failed:', err.message);
       }
       const online = [...io.sockets.sockets.values()].some(peer => peer.user.id === row.id);
-      socket.emit('user-profile', {
+      const payload = {
         ...profile.profileCard(row, user.id, online),
         roles: profile.visibleProfileRoles(roles, seesHidden), badges, activity: null,
-      });
+      };
+      socket.emit('user-profile', payload);
+      cb(payload);
     });
 
     on('set-bio', profileChange(async data => {
