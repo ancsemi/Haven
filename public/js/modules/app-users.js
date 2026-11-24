@@ -132,8 +132,7 @@ _renderUserItem(u, scoreLookup) {
     : '';
 
   // Status dot color
-  const statusClass = u.status === 'dnd' ? 'dnd' : u.status === 'away' ? 'away'
-    : u.status === 'invisible' ? 'invisible' : (u.online === false ? 'away' : '');
+  const statusClass = this._statusDotClass(u);
 
   const statusTextHtml = u.statusText
     ? `<span class="user-status-text" title="${this._escapeHtml(u.statusText)}">${this._escapeHtml(u.statusText)}</span>`
@@ -624,14 +623,18 @@ _activityProgressHtml(act) {
     </span>`;
 },
 
-/** Presence dot class (shared by the sidebar and the profile card). */
+/** Presence dot class (shared by the sidebar, the profile card and the
+ *  pop-out DM). Offline comes first: the status someone last chose (Away,
+ *  Do Not Disturb) is kept while they are gone, and showed them as idle. */
 _statusDotClass(u) {
+  if (u.online === false) return 'offline';
   return u.status === 'dnd' ? 'dnd' : u.status === 'away' ? 'away'
-    : u.status === 'invisible' ? 'invisible' : (u.online === false ? 'away' : '');
+    : u.status === 'invisible' ? 'invisible' : '';
 },
 
 /** Human label for the presence dot's tooltip. */
 _statusLabel(u) {
+  if (u.online === false) return t('app.profile.offline');
   return u.status === 'dnd' ? t('app.profile.dnd') : u.status === 'away' ? t('app.profile.away')
     : u.status === 'invisible' ? t('app.profile.invisible')
     : (u.online === false ? t('app.profile.offline') : t('app.profile.online'));

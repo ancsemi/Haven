@@ -576,27 +576,12 @@ _refreshDMPipHeader(ch, partnerName) {
     // are cut with clip-path, which would cut the status dot off too.
     avatarWrap.className = 'dm-pip-avatar-wrap';
     avatarWrap.style.backgroundColor = '';
-    // Determine status: 'online' / 'away' / 'dnd' / 'invisible' / 'offline'
-    // (matches the sidebar `.user-status-dot` modifier classes: empty
-    // class = online green; 'away'/'dnd'/'invisible' for explicit states;
-    // offline users are treated as 'away' visually like the sidebar does
-    // so a self-DM (always us) doesn't render a meaningless gray dot.)
-    let statusClass = '';
-    if (ch.is_self_dm) {
-      statusClass = '';
-    } else if (onlinePartner) {
-      const s = onlinePartner.status;
-      statusClass = s === 'dnd' ? 'dnd'
-        : s === 'away' ? 'away'
-        : s === 'invisible' ? 'invisible'
-        : (onlinePartner.online === false ? 'offline' : '');
-    } else {
-      statusClass = 'offline'; // partner not in online list
-    }
-    const statusLabel = statusClass === 'dnd' ? t('app.profile.dnd')
-      : (statusClass === 'away' || statusClass === 'offline') ? t('dm_runtime.offline_away')
-      : statusClass === 'invisible' ? t('app.profile.invisible')
-      : t('app.profile.online');
+    // The same dot as the sidebar and the profile card (_statusDotClass):
+    // offline first, then Do Not Disturb, Away or Invisible, else online.
+    // A partner missing from the list is offline; a self-DM is always us.
+    const shown = ch.is_self_dm ? { online: true } : (onlinePartner || { online: false });
+    const statusClass = this._statusDotClass(shown);
+    const statusLabel = this._statusLabel(shown);
     // A group has no single partner whose status the dot could show.
     const statusDot = ch.is_group ? '' : `<span class="dm-pip-status-dot${statusClass ? ' ' + statusClass : ''}" title="${this._escapeHtml(statusLabel)}"></span>`;
     if (avatarUrl) {
