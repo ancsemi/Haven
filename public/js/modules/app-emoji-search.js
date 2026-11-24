@@ -44,7 +44,7 @@ _emojiSearchScore(emoji, rawQuery) {
   if (!q) return 0;
   // Haven's own image emoji (:flag_us:) are found by their name and the
   // words listed with them in app.js ("united states america usa").
-  const named = typeof emoji === 'string' && /^:[a-zA-Z0-9_-]+:$/.test(emoji) ? emoji.slice(1, -1) : '';
+  const named = typeof emoji === 'string' && /^:[\p{L}\p{Nd}\p{M}_-]+:$/u.test(emoji) ? emoji.slice(1, -1) : '';
   const name = named
     ? named.replace(/[_-]/g, ' ').toLowerCase()
     : String(this.emojiNames?.[emoji] || '').toLowerCase();

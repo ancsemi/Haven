@@ -6,6 +6,7 @@ const { clearChannelRuntimeState } = require('../channelRotation');
 const { ipBanRefusal } = require('../ipBanGuard');
 const { deletableSql } = require('../protectedMessages');
 const { scrubUserMessages } = require('../scrubMessages');
+const { revokeSessions } = require('../auth');
 
 // A scrub or purge leaves protected messages, and thread heads holding one,
 // as they are (src/protectedMessages.js).
@@ -277,6 +278,31 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  const sessionsTarget = (data) => {
+    if (!data || typeof data !== 'object' || !isInt(data.userId)) return { error: 'Invalid request' };
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'ban_user')) return { error: 'You don\'t have permission to manage sessions' };
+    if (data.userId === socket.user.id) return { error: 'Use Settings > Sessions for your own sessions' };
+    const target = db.prepare('SELECT id, COALESCE(display_name, username) AS name, is_admin, is_bot FROM users WHERE id = ?').get(data.userId);
+    return !target ? { error: 'User not found' }
+      : target.is_bot ? { error: 'Bots have no sessions' }
+      : !socket.user.isAdmin && (target.is_admin || getUserEffectiveLevel(target.id) >= getUserEffectiveLevel(socket.user.id)) ? { error: 'You can\'t do that to someone of equal or higher rank' }
+      : { target };
+  };
+  socket.on('get-member-sessions', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    const r = sessionsTarget(data);
+    cb(r.error ? { error: r.error } : { sessions: ctx.listUserSessions(r.target.id, null).map(({ ip, ...rest }) => rest) });
+  });
+  socket.on('revoke-member-sessions', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    const r = sessionsTarget(data);
+    if (r.error) return cb({ error: r.error });
+    const open = ctx.listUserSessions(r.target.id, null).length;
+    revokeSessions(r.target.id);
+    for (const [, s] of io.sockets.sockets) if (s.user && s.user.id === r.target.id) { s.emit('force-logout', { reason: 'sessions_revoked' }); s.disconnect(true); }
+    _audit({ actor: socket.user, action: 'user_sessions_revoke', target_type: 'user', target_id: r.target.id, target_name: r.target.name, details: { sessions: open } });
+    cb({ ok: true, closed: open });
+  });
   // ── Ban user ────────────────────────────────────────────
   socket.on('ban-user', (data) => {
     if (!data || typeof data !== 'object') return;

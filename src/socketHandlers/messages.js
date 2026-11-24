@@ -2545,7 +2545,7 @@ module.exports = function register(socket, ctx) {
   socket.on('add-reaction', (data) => {
     try {
       if (!data || typeof data !== 'object') return;
-      if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
+      if (!isInt(data.messageId) || !isString(data.emoji, 1, 70)) return;
       const reactMute = activeMuteNotice(socket.user.id);
       if (reactMute) return socket.emit('error-msg', reactMute);
 
@@ -2605,7 +2605,7 @@ module.exports = function register(socket, ctx) {
   socket.on('remove-reaction', (data) => {
     try {
       if (!data || typeof data !== 'object') return;
-      if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
+      if (!isInt(data.messageId) || !isString(data.emoji, 1, 70)) return;
 
       // Look up the channel from the message (see add-reaction comment).
       const msgRow = db.prepare(

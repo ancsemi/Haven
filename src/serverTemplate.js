@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { sanitizeText, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, roleMenuContent, normalizeWordGroups, validEscalation } = require('./socketHandlers/helpers');
 const { sniffImageType, stripImageBuffer } = require('./imageMetadata');
-const { isPortableEmoji } = require('./builtinEmojis');
+const { isPortableEmoji, cleanEmojiName } = require('./builtinEmojis');
 const { generateUniqueChannelCode } = require('./channelRotation');
 const diskGuard = require('./diskGuard');
 const { STAGING_DIR } = require('./paths');
@@ -264,8 +264,8 @@ async function exportTemplate(db, opts = {}) {
     .map((d) => ({ domain: typeof d.domain === 'string' && d.domain.length <= 253 ? normalizeHost(d.domain.trim()) : '', mode: d.mode === 'deny' ? 'deny' : 'allow', includeSubdomains: d.include_subdomains !== 0, note: fit(d.note, 200) }))
     .filter((d) => (d.domain.includes('.') && /^[a-z0-9.-]+$/.test(d.domain)) || (warnings.push(`Left out the link rule for ${d.domain || 'an empty domain'}: it is not a plain domain name`), false));
   const libraryName = (v, max) => String(v || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '').slice(0, max);
-  const emojis = (await mapInOrder(cap(db.prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all().filter((e) => libraryName(e.name, 30)), LIMITS.emojis, 'custom emojis'),
-    async (e) => ({ name: libraryName(e.name, 30), asset: await addAsset(`/uploads/${e.filename}`) }))).filter((e) => e.asset);
+  const emojis = (await mapInOrder(cap(db.prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all().filter((e) => cleanEmojiName(e.name)), LIMITS.emojis, 'custom emojis'),
+    async (e) => ({ name: cleanEmojiName(e.name).toLowerCase(), asset: await addAsset(`/uploads/${e.filename}`) }))).filter((e) => e.asset);
   const stickers = (await mapInOrder(cap(db.prepare("SELECT name, pack_name, filename FROM stickers WHERE NOT (uploaded_by IS NULL AND filename LIKE 'starter-%') ORDER BY pack_name, name").all().filter((s) => libraryName(s.name, 40)), LIMITS.stickers, 'stickers'),
     async (s) => ({ name: libraryName(s.name, 40), pack: tidy(s.pack_name, 40, 'General'), asset: await addAsset(`/uploads/stickers/${s.filename}`, 'sticker') }))).filter((s) => s.asset);
   const ids = (list) => (Array.isArray(list) ? list.map((id) => chRef.get(Number(id))).filter(Boolean) : null);
@@ -433,7 +433,7 @@ function validateTemplate(input) {
     if (!host || !host.includes('.') || !/^[a-z0-9.-]+$/.test(host)) return c.fail(`${at}.domain`, 'expected a domain like example.com');
     return { domain: host, mode: c.pick(d.mode, ['allow', 'deny'], `${at}.mode`, 'allow'), includeSubdomains: c.flag(d.includeSubdomains, `${at}.includeSubdomains`, true), note: c.text(d.note, 200, `${at}.note`) };
   }).filter(Boolean);
-  out.emojis = c.list(input.emojis, LIMITS.emojis, 'emojis').map((e, i) => (isObj(e) && typeof e.name === 'string' && /^[a-z0-9_-]{1,30}$/.test(e.name) ? { name: e.name, asset: asset(e.asset, `emojis[${i}].asset`) } : c.fail(`emojis[${i}]`, 'expected a name of a-z, 0-9, _ and - and a file'))).filter(Boolean);
+  out.emojis = c.list(input.emojis, LIMITS.emojis, 'emojis').map((e, i) => (isObj(e) && typeof e.name === 'string' && e.name && e.name === cleanEmojiName(e.name).toLowerCase() ? { name: e.name, asset: asset(e.asset, `emojis[${i}].asset`) } : c.fail(`emojis[${i}]`, 'expected a name of letters, digits, _ and - (up to 32) and a file'))).filter(Boolean);
   out.stickers = c.list(input.stickers, LIMITS.stickers, 'stickers').map((s, i) => (isObj(s) && typeof s.name === 'string' && /^[a-z0-9_-]{1,40}$/.test(s.name) ? { name: s.name, pack: s.pack === undefined ? 'General' : c.name(s.pack, 40, `stickers[${i}].pack`), asset: asset(s.asset, `stickers[${i}].asset`, 'sticker') } : c.fail(`stickers[${i}]`, 'expected a name of a-z, 0-9, _ and - and a file'))).filter(Boolean);
   const srv = isObj(input.server) ? input.server : {};
   const settings = {};
