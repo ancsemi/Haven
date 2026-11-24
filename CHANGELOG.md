@@ -25,6 +25,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Translation pull requests are no longer merged automatically, and the translation checker refuses markup the English text does not have. A translated command hint such as `<recherche>` is still fine.
 
 ### Fixed
+- People who are offline no longer show as idle. The status someone last chose (Away or Do Not Disturb) is kept while they are gone, and the pop-out DM and the profile card showed that instead of offline. Every status dot now checks offline first, and offline looks the same everywhere: a hollow dot.
 - Invisible direction-override characters could make a message show its text in a different order than it was written, so a file whose name really ends in .exe could read as .pdf. Messages now ignore those characters.
 - Servers you removed from your server list came back on a new device, or when a server you use moved to a new address, because the list synced with your account never carried removals. A server you remove now stays removed everywhere you sign in; adding it again by hand brings it back everywhere.
 - A forum post you were writing was lost when you closed the New Post window, switched forums or reloaded, and a refused post that came back after you had left the forum was lost too (reported by gitty). Each forum now keeps its own unfinished post, title, text, tags and the 18+ mark, and brings it back the next time you press New Post. Posting it or pressing Cancel clears it.

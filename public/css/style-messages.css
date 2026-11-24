@@ -209,6 +209,7 @@
 }
 
 /* Invisible / Offline: hollow circle outline */
+.user-status-dot.offline,
 .user-status-dot.invisible {
   background: transparent;
   border: 2px solid var(--text-muted);
@@ -1344,6 +1345,7 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
 .profile-popup-status-dot.away { background: var(--warning); }
 .profile-popup-status-dot.dnd { background: var(--danger); }
 .profile-popup-status-dot.invisible { background: var(--text-muted); }
+.profile-popup-status-dot.offline { background: var(--text-muted); }
 
 .profile-popup-body {
   padding: 0.625rem 1rem 1rem;
