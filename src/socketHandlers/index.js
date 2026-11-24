@@ -91,6 +91,8 @@ const registerChannelAddAll = require('./channelAddAll');
 const registerChannelMerge = require('./channelMerge');
 const registerMessageNsfw = require('./messageNsfw');
 const registerBlockedNames = require('./blockedNames');
+const registerAuditStream = require('./auditStream');
+const { createAuditStream } = require('../auditStream');
 const createLiveAccess = require('./liveAccess');
 const { createMemberView } = require('../memberView');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
@@ -143,6 +145,9 @@ function setupSocketHandlers(io, db, opts = {}) {
     userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles,
     parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships
   } = createPermissions(db);
+
+  // Bot accounts that follow the audit log live (src/auditStream.js).
+  const auditStream = createAuditStream({ db, userHasPermission });
 
   const { getEnrichedChannels, getEnrichedChannelsAsync } = createChannelLists({
     db, userHasPermission, roleGateAllows, getUserEffectiveLevel
@@ -627,7 +632,8 @@ function setupSocketHandlers(io, db, opts = {}) {
       if (withCase !== undefined && withCase !== null) {
         try { details = JSON.stringify(withCase).slice(0, 4000); } catch { details = null; }
       }
-      _auditInsert.run(actorId, actorUsername, action, targetType, targetId, targetName, details);
+      const info = _auditInsert.run(actorId, actorUsername, action, targetType, targetId, targetName, details);
+      auditStream.publish(Number(info.lastInsertRowid));
     } catch (err) {
       console.warn('[audit] log failed:', err.message);
     }
@@ -2858,7 +2864,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Transfer admin mutex
       transferAdminRef,
       // Audit log
-      logAudit, revokeBotVoiceAccess,
+      logAudit, revokeBotVoiceAccess, auditStream,
       // Auto-moderation (v3.42.0)
       automod,
       enforceAutomod,
@@ -2911,6 +2917,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerChannelMerge(socket, ctx);
     registerMessageNsfw(socket, ctx);
     registerBlockedNames(socket, ctx);
+    registerAuditStream(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made

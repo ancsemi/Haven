@@ -1951,6 +1951,26 @@ socket.emit('edit-bot-parts', { messageId, components: [] }, (res) => { /* { suc
 
 As with a webhook's edit, a list given replaces the message's own, an empty list removes them, and a list left out stays as it is.
 
+**Following the audit log.** A bot that can read the audit log (give it a role with **View Audit Log**) can get each new entry the moment it is written, for a mod log or a member's history. People read the log in Settings; only bot accounts can follow it.
+
+```js
+socket.emit('subscribe-audit-log', { actions: ['user_ban', 'user_warn', 'user_note'] }, (res) => {
+  // { ok: true, lastId } or { error }
+});
+socket.on('audit-entry', (row) => {
+  // { id, created_at, actor_id, actor_username, action, target_type,
+  //   target_id, target_name, details }
+});
+socket.on('audit-log-unsubscribed', ({ reason }) => { /* it lost the permission */ });
+```
+
+- Leave `actions` out to get every action. Subscribing again replaces the list, and `unsubscribe-audit-log` stops it.
+- An entry looks the same as a row from `get-audit-log`: `created_at` is UTC (`2026-11-24T10:00:00Z`) and `details` is JSON text. Entries arrive in `id` order, each `id` larger than the last.
+- The bot sees what the log would show it: channel codes are hidden unless it is the admin, and a note about the bot itself is left out.
+- Entries are only sent while the bot is connected, so save the `id` of the last one handled. After a restart, subscribe first, then call `get-audit-log { afterId: <saved id> }`, which pages forward oldest first (up to 200 a page with `limit`), until you reach `lastId`. An entry can arrive both ways, so skip ids you already have.
+- The permission is checked at every entry. A bot that loses it gets `audit-log-unsubscribed` and nothing more until it subscribes again.
+- Entries that add to a member's moderation history (warn, note, kick, mute, unmute, ban, unban) carry a `caseId` in `details`, the same id `get-mod-history` gives, and a `mod_case_revoke` entry names the `caseId` it takes back.
+
 ---
 
 ## Troubleshooting
