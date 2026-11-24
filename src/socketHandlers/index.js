@@ -80,7 +80,7 @@ const registerNameColor = require('./nameColor');
 const registerModCases = require('./modCases');
 const registerPermExceptions = require('./permExceptions');
 const modCases = require('../modCases');
-const { quietRecipients, pingedRecipients } = require('../pushMutes');
+const { quietRecipients, pingedRecipients, defaultQuietRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
 const registerThreadReadState = require('./threadReadState');
 const registerForumVotes = require('./forumVotes');
@@ -1368,6 +1368,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       let quietFor = new Set();
       try {
         quietFor = quietRecipients(db, { channelId, senderUserId, messageContent, replyToUserId: pushOpts.replyToUserId });
+        for (const id of defaultQuietRecipients(db, { channelId, replyToUserId: pushOpts.replyToUserId, messageContent: pushOpts.pingText != null ? pushOpts.pingText : messageContent })) quietFor.add(id);
       } catch (err) {
         // Pushes still go out, but muted people get them too, so say so.
         throttledWarn('push personal mute lookup failed', err);

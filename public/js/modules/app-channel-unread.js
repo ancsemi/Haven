@@ -480,7 +480,7 @@ _updateNestedIndicators() {
 _updateTabTitle() {
   let mutedSet = null;
   try {
-    mutedSet = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+    mutedSet = new Set(this._mutedChannelList());
   } catch { mutedSet = new Set(); }
   const validCodes = new Set((this.channels || []).map(c => c.code));
   const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => {
@@ -507,7 +507,7 @@ _updateDesktopBadge() {
   // looked like a phantom badge to the user. (#desktop-phantom-badge)
   let mutedSet = null;
   try {
-    mutedSet = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+    mutedSet = new Set(this._mutedChannelList());
   } catch { mutedSet = new Set(); }
   const validCodes = new Set((this.channels || []).map(c => c.code));
   const dmCodes = _serverMute === 'off' ? null : new Set((this.channels || []).filter(c => c.is_dm).map(c => c.code));
@@ -585,7 +585,7 @@ _fireNativeNotification(message, channelCode, opts) {
   // Per-channel mute: client-side muted channels list (defense-in-depth; callers
   // should also check, but bots / webhooks have user_id=null which can slip through
   // edge cases such as channels-list re-seeding or future notification paths).
-  const _mutedChsNotif = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+  const _mutedChsNotif = this._mutedChannelList();
   if (_mutedChsNotif.includes(channelCode)) return;
   // Check per-type notification toggles
   const n = this.notifications;

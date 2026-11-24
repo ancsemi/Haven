@@ -183,6 +183,7 @@ CREATE TABLE "channels" (
   "afk_timeout_minutes" BIGINT DEFAULT 0,
   "read_only" BIGINT DEFAULT 0,
   "former_names" TEXT DEFAULT NULL,
+  "default_notify" TEXT DEFAULT 'all',
   "type_id" BIGINT DEFAULT NULL,
   PRIMARY KEY ("id")
 );

@@ -42,7 +42,7 @@ _migrateChannelCodeState(oldCode, newCode) {
       localStorage.setItem('haven_voice_channel', newCode);
     }
   } catch { /* storage blocked: the saved voice channel keeps the old code and simply will not auto-rejoin */ }
-  for (const key of ['haven_muted_channels', 'haven_hidden_channels']) {
+  for (const key of ['haven_muted_channels', 'haven_unmuted_channels', 'haven_hidden_channels']) {
     try {
       const values = JSON.parse(localStorage.getItem(key) || '[]');
       if (!Array.isArray(values) || !values.includes(oldCode)) continue;
