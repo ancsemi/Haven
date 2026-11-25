@@ -68,6 +68,41 @@ test('inbox keeps the newest 150 items', () => {
   assert.equal(items.length, 150);
   assert.equal(items[0].id, 169);
 });
+test('the rail keeps a saved order, drops unknown or repeated icons and always keeps Server', () => {
+  const f = setup();
+  assert.deepEqual(f._order(), ['server', 'dms', 'activity', 'you']);
+  f.data.FocusLayout = { rail: 'games,dms,nope,games,settings' };
+  assert.deepEqual(f._order(), ['server', 'games', 'dms', 'settings']);
+  f.data.FocusLayout.rail = 'nope';
+  assert.deepEqual(f._order(), ['server', 'dms', 'activity', 'you']);
+});
+test('adding, moving and removing rail icons saves the new order', () => {
+  const f = setup();
+  f._setRail([...f._order(), 'games']);
+  assert.equal(f.data.FocusLayout.rail, 'server,dms,activity,you,games');
+  f._moveTo('games', 'dms');
+  assert.equal(f.data.FocusLayout.rail, 'server,games,dms,activity,you');
+  f._moveTo('server', 'you');
+  assert.equal(f.data.FocusLayout.rail, 'games,dms,activity,you,server');
+  f._moveTo('dms', undefined);
+  f._moveTo('dms', 'dms');
+  assert.equal(f.data.FocusLayout.rail, 'games,dms,activity,you,server');
+  f._setRail(f._order().filter(x => x !== 'activity'));
+  assert.deepEqual(f._order(), ['games', 'dms', 'you', 'server']);
+});
+test('Alt+number opens the rail icons in order and skips shortcuts this member cannot use', () => {
+  const f = setup(), clicked = [], btn = (tab, go, hidden = false) => ({ dataset: go ? { tab, go } : { tab }, hidden });
+  global.document = { ...global.document, querySelector: (sel) => ({ '#a': { style: { display: '' } }, '#b': { style: { display: 'none' } } })[sel] || (sel.startsWith('#activities') ? { click: () => clicked.push(sel) } : null) };
+  assert.deepEqual(['#a', '#b', '#c'].map(s => f._avail(s)), [true, false, false]);
+  f._tabs = { querySelectorAll: () => [btn('server'), btn('members', '#sidebar-members-btn', true), btn('games', '#activities-btn'), btn('dms')] };
+  f._select = (id, fromClick) => clicked.push([id, fromClick]);
+  const key = (n, mods = {}) => { let used = false; f._key({ code: 'Digit' + n, altKey: true, preventDefault: () => { used = true; }, ...mods }); return used; };
+  assert.ok(key(2));
+  assert.ok(key(3));
+  assert.ok(!key(4));
+  assert.ok(!key(1, { ctrlKey: true }));
+  assert.deepEqual(clicked, ['#activities-btn', ['dms', false]]);
+});
 test('the inbox and the chosen tab stay where Focus Classic saved them before the carousel was removed', () => {
   const f = setup();
   f._keep([{ k: 'mention:aaaa0002:1', kind: 'mention', code: 'aaaa0002', id: 1, at: 1, read: false }]);

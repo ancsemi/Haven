@@ -1,8 +1,8 @@
 /**
  * @name Focus Classic Layout
- * @description The original desktop Focus view, picked in Settings, Layout: a rail with Server, DMs, Activity and You shows one list at a time beside the chat. Click the open tab again to hide the list. Alt+1 to Alt+4 switch tabs.
+ * @description The original desktop Focus view, picked in Settings, Layout: a rail with Server, DMs, Activity and You shows one list at a time beside the chat. Click the open tab again to hide the list. The pencil under the rail adds shortcuts such as Games, Search or Settings, and removes or reorders icons; dragging an icon also moves it. Alt+1 to Alt+9 open the icons in order.
  * @author Amni-Scient
- * @version 3.0.0
+ * @version 3.1.0
  */
 class FocusClassicLayout {
   start() {
@@ -62,10 +62,11 @@ class FocusClassicLayout {
   _el(tag, cls, text) { return Object.assign(document.createElement(tag), cls ? { className: cls } : {}, text != null ? { textContent: text } : {}); }
   _move(node, parent, before) { this._placed.push([node, node.parentNode, node.nextSibling]); parent.insertBefore(node, before); }
   _restore() {
+    this._edit && this._closeEditor(false);
     ['data-focus-desktop', 'data-focus-tab', 'data-focus-pane-hidden', 'data-focus-add', 'data-focus-people'].forEach(a => document.documentElement.removeAttribute(a));
     this._placed.reverse().forEach(([node, parent, next]) => parent.insertBefore(node, next?.parentNode === parent ? next : null));
     this._built.forEach(n => n.remove());
-    Object.assign(this, { _placed: [], _built: [], _rail: null, _head: null, _act: null, _you: null });
+    Object.assign(this, { _placed: [], _built: [], _rail: null, _tabs: null, _head: null, _act: null, _you: null });
     HavenApi.Layout?.release('FocusClassicLayout');
   }
   _callSync() { document.documentElement.toggleAttribute('data-fc-voice', !!window.app?.voice?.inVoice); }
@@ -146,22 +147,16 @@ class FocusClassicLayout {
     if (!side || !bar || !content || !account) return console.warn('[FocusClassicLayout] Required layout regions are unavailable');
     if (HavenApi.Layout && !HavenApi.Layout.acquire('FocusClassicLayout')) return;
     const el = this._el;
-    const rail = this._rail = el('nav', 'focus-rail'), servers = el('div', 'fr-servers'), tabs = el('div', 'fr-tabs');
+    const rail = this._rail = el('nav', 'focus-rail'), servers = el('div', 'fr-servers'), tabs = this._tabs = el('div', 'fr-tabs'), edit = Object.assign(el('button', 'fr-edit'), { type: 'button', title: this._t('focus.edit_rail', 'Edit rail'), innerHTML: this._svg(FocusClassicLayout.PENCIL, 16) });
     rail.id = 'focus-rail';
     rail.setAttribute('aria-label', 'Focus');
     tabs.setAttribute('role', 'tablist');
-    FocusClassicLayout.TABS.forEach(([id, key, label, path]) => {
-      const b = el('button', 'fr-tab'), name = this._t(key, label);
-      b.type = 'button';
-      b.dataset.tab = id;
-      b.setAttribute('role', 'tab');
-      b.title = `${name} (Alt+${FocusClassicLayout.TABS.findIndex(x => x[0] === id) + 1}). ${this._t('focus.hide_hint', 'Click again to hide the list')}`;
-      b.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
-      b.append(el('span', 'fr-label', name), el('b', 'fr-badge'));
-      b.addEventListener('click', () => this._select(id, true));
-      tabs.append(b);
-    });
-    rail.append(servers, tabs);
+    tabs.addEventListener('contextmenu', (e) => { e.preventDefault(); this._openEditor(); });
+    edit.setAttribute('aria-label', edit.title);
+    edit.setAttribute('aria-expanded', 'false');
+    edit.addEventListener('click', () => this._edit ? this._closeEditor() : this._openEditor());
+    this._buildTabs();
+    rail.append(servers, tabs, edit);
     side.parentNode.insertBefore(rail, side);
     this._move(bar, servers, null);
     const head = this._head = el('div', 'focus-head'), title = el('h2', 'fh-title'), actions = el('div', 'fh-actions');
@@ -199,21 +194,92 @@ class FocusClassicLayout {
     this._render();
   }
   _key(e) {
-    const i = /^Digit([1-4])$/.exec(e.code || '');
-    if (!i || !this._rail || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.key === 'Escape' && this._edit) return this._closeEditor();
+    const i = /^Digit([1-9])$/.exec(e.code || '');
+    if (!i || !this._tabs || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const b = [...this._tabs.querySelectorAll('.fr-tab')].filter(x => !x.hidden)[i[1] - 1];
+    if (!b) return;
     e.preventDefault();
-    this._select(FocusClassicLayout.TABS[i[1] - 1][0], false);
+    b.dataset.go ? this._go(b.dataset.go) : this._select(b.dataset.tab, false);
+  }
+  _svg(path, s = 22) { return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`; }
+  _def(id) { return FocusClassicLayout.ITEMS.find(x => x[0] === id); }
+  _avail(sel) { const t = document.querySelector(sel); return !!t && t.style.display !== 'none'; }
+  _go(sel) { document.querySelector(sel)?.click(); }
+  _order() {
+    const saved = String(HavenApi.Data.load(FocusClassicLayout.STORE, 'rail', '') || '').split(',').filter(id => this._def(id)), ids = [...new Set(saved.length ? saved : FocusClassicLayout.TABS.map(x => x[0]))];
+    return ids.includes('server') ? ids : ['server', ...ids];
+  }
+  _setRail(ids) {
+    HavenApi.Data.save(FocusClassicLayout.STORE, 'rail', ids.join(','));
+    this._tabs && (this._buildTabs(), this._render());
+    this._edit && this._renderEditor();
+  }
+  _moveTo(id, to) {
+    const o = this._order(), down = o.indexOf(id) < o.indexOf(to), ids = o.filter(x => x !== id);
+    to && id !== to && o.includes(id) && o.includes(to) && (ids.splice(ids.indexOf(to) + (down ? 1 : 0), 0, id), this._setRail(ids));
+  }
+  _buildTabs() {
+    const el = this._el;
+    this._tabs.replaceChildren(...this._order().map(id => {
+      const [, key, label, path, go] = this._def(id), name = this._t(key, label), b = Object.assign(el('button', 'fr-tab'), { type: 'button', draggable: true, innerHTML: this._svg(path) });
+      Object.assign(b.dataset, { tab: id, name }, go ? { go } : {});
+      go || b.setAttribute('role', 'tab');
+      b.append(el('span', 'fr-label', name), el('b', 'fr-badge'));
+      b.addEventListener('click', () => go ? this._go(go) : this._select(id, true));
+      b.addEventListener('dragstart', (e) => { this._drag = id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('application/x-haven-rail', id); b.classList.add('dragging'); });
+      b.addEventListener('dragend', () => { this._drag = null; b.classList.remove('dragging'); });
+      b.addEventListener('dragover', (e) => { this._drag && e.preventDefault(); });
+      b.addEventListener('drop', (e) => { const from = this._drag; this._drag = null; from && (e.preventDefault(), this._moveTo(from, id)); });
+      return b;
+    }));
+  }
+  _openEditor() {
+    if (this._edit || !this._rail) return;
+    const box = this._edit = this._el('div', 'fr-editor'), r = this._rail.getBoundingClientRect();
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', this._t('focus.edit_rail', 'Edit rail'));
+    Object.assign(box.style, { left: `${Math.round(r.right) + 7}px`, bottom: `${Math.max(7, Math.round(window.innerHeight - r.bottom) + 7)}px` });
+    this._outside = (e) => box.contains(e.target) || e.target.closest?.('.fr-edit, .fr-tabs') || this._closeEditor(false);
+    document.addEventListener('pointerdown', this._outside, true);
+    document.body.append(box);
+    this._rail.querySelector('.fr-edit')?.setAttribute('aria-expanded', 'true');
+    this._renderEditor();
+    box.querySelector('button:not(:disabled)')?.focus();
+  }
+  _closeEditor(refocus = true) {
+    document.removeEventListener('pointerdown', this._outside, true);
+    this._edit?.remove();
+    this._edit = null;
+    const b = this._rail?.querySelector('.fr-edit');
+    b?.setAttribute('aria-expanded', 'false');
+    refocus && b?.focus();
+  }
+  _renderEditor() {
+    const el = this._el, box = this._edit, o = this._order(), t = (key, f) => this._t(key, f), k = box.contains(document.activeElement) ? document.activeElement.dataset.k : null;
+    const btn = (cls, text, label, fn, key, off) => { const b = Object.assign(el('button', cls, text), { type: 'button', title: label, disabled: !!off }); b.setAttribute('aria-label', label); b.dataset.k = key; b.addEventListener('click', fn); return b; };
+    const name = (id) => t(this._def(id)[1], this._def(id)[2]), row = (id, ...btns) => { const r = el('div', 'fe-row'); r.append(Object.assign(el('span', 'fe-icon'), { innerHTML: this._svg(this._def(id)[3], 18) }), el('span', 'fe-name', name(id)), ...btns); return r; };
+    const add = FocusClassicLayout.ITEMS.filter(([id, , , , go]) => !o.includes(id) && (!go || this._avail(go))), foot = el('div', 'fe-foot');
+    foot.append(btn('fe-reset', t('focus.reset', 'Reset'), t('focus.reset_hint', 'Back to Server, DMs, Activity and You'), () => this._setRail(FocusClassicLayout.TABS.map(x => x[0])), 'reset'), btn('fe-done', t('focus.done', 'Done'), t('focus.done', 'Done'), () => this._closeEditor(), 'done'));
+    box.replaceChildren(el('div', 'fe-title', t('focus.edit_rail', 'Edit rail')), el('div', 'fe-hint', t('focus.edit_hint', 'You can also drag icons on the rail to move them.')),
+      ...o.map((id, i) => row(id, btn('fe-btn', '↑', `${t('focus.move_up', 'Move up')}: ${name(id)}`, () => this._moveTo(id, o[i - 1]), id + ':up', !i), btn('fe-btn', '↓', `${t('focus.move_down', 'Move down')}: ${name(id)}`, () => this._moveTo(id, o[i + 1]), id + ':down', i === o.length - 1), btn('fe-btn', '✕', id === 'server' ? t('focus.server_stays', 'Server always stays on the rail') : `${t('focus.remove', 'Remove')}: ${name(id)}`, () => this._setRail(o.filter(x => x !== id)), id + ':x', id === 'server'))),
+      ...(add.length ? [el('div', 'fe-section', t('focus.add', 'Add to the rail')), ...add.map(([id]) => row(id, btn('fe-btn', '+', `${t('focus.add', 'Add to the rail')}: ${name(id)}`, () => this._setRail([...o, id]), id + ':add')))] : []), foot);
+    const id = k?.split(':')[0];
+    k && (box.querySelector(`[data-k="${k}"]:not(:disabled)`) || box.querySelector(`[data-k^="${id}:"]:not(:disabled)`) || box.querySelector('.fe-done'))?.focus();
   }
   _render() {
-    const root = document.documentElement, tab = FocusClassicLayout.TABS.some(x => x[0] === this._tab) ? this._tab : 'server';
+    const root = document.documentElement, tab = this._order().includes(this._tab) && FocusClassicLayout.TABS.some(x => x[0] === this._tab) ? this._tab : 'server', hint = this._t('focus.hide_hint', 'Click again to hide the list');
     root.setAttribute('data-focus-tab', tab);
     const counts = this._counts();
-    this._rail.querySelectorAll('.fr-tab').forEach(b => {
-      const on = b.dataset.tab === tab, n = counts[b.dataset.tab], badge = b.querySelector('.fr-badge');
+    let n = 0;
+    this._tabs.querySelectorAll('.fr-tab').forEach(b => {
+      const go = b.dataset.go, on = b.dataset.tab === tab, c = counts[b.dataset.tab], badge = b.querySelector('.fr-badge');
+      b.hidden = !!go && !this._avail(go);
+      b.title = b.dataset.name + (!b.hidden && ++n <= 9 ? ` (Alt+${n})` : '') + (go ? '' : `. ${hint}`);
       b.classList.toggle('active', on);
-      b.setAttribute('aria-selected', String(on));
-      badge.textContent = n > 0 ? (n > 99 ? '99+' : String(n)) : '';
-      badge.classList.toggle('dot', n === -1);
+      go || b.setAttribute('aria-selected', String(on));
+      badge.textContent = c > 0 ? (c > 99 ? '99+' : String(c)) : '';
+      badge.classList.toggle('dot', c === -1);
     });
     const title = this._head.querySelector('.fh-title'), actions = this._head.querySelector('.fh-actions');
     title.textContent = tab === 'server' ? this._serverName() : tab === 'dms' ? this._t('app.sidebar.direct_messages', 'Direct Messages') : this._t(FocusClassicLayout.TABS.find(x => x[0] === tab)[1], FocusClassicLayout.TABS.find(x => x[0] === tab)[2]);
@@ -243,6 +309,19 @@ FocusClassicLayout.TABS = Object.freeze([
   ['activity', 'users.activity', 'Activity', '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>'],
   ['you', 'voice_runtime.you', 'You', '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>']
 ]);
+FocusClassicLayout.LINKS = Object.freeze([
+  ['games', 'focus.games', 'Games', '<path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-4 3.6C2.6 9.4 2 14.5 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.4-1.4A2 2 0 0 1 9.8 16h4.4a2 2 0 0 1 1.4.6L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.5-.6-6.6-.7-7.3a4 4 0 0 0-4-3.7Z"/>', '#activities-btn'],
+  ['search', 'focus.search', 'Search', '<circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.3-4.3"/>', '#search-toggle-btn'],
+  ['pinned', 'focus.pinned', 'Pinned', '<path d="M12 17v5"/><path d="M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1Z"/>', '#pinned-toggle-btn'],
+  ['threads', 'focus.threads', 'Threads', '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/><path d="M7 8h10M7 12h7"/>', '#threads-toggle-btn'],
+  ['media', 'focus.media', 'Media', '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>', '#gallery-toggle-btn'],
+  ['members', 'settings.nav.members', 'Members', '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>', '#sidebar-members-btn'],
+  ['themes', 'settings.plugins_section.themes_label', 'Themes', '<path d="M12 2a10 10 0 0 0 0 20c.9 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.5-1.1-.3-.3-.4-.7-.4-1.1a1.6 1.6 0 0 1 1.7-1.7h2c3 0 5.5-2.5 5.5-5.6C22 6 17.5 2 12 2Z"/><path d="M7.5 11.5h.01M10 7.5h.01M15 7.5h.01M17.5 11h.01"/>', '#theme-popup-toggle'],
+  ['settings', 'settings.title', 'Settings', '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4"/>', '#open-settings-btn'],
+  ['support', 'focus.support_short', 'Support', '<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z"/>', '#donors-btn']
+]);
+FocusClassicLayout.ITEMS = Object.freeze([...FocusClassicLayout.TABS, ...FocusClassicLayout.LINKS]);
+FocusClassicLayout.PENCIL = '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>';
 FocusClassicLayout.YOU = Object.freeze([['#open-settings-btn', 'settings.title', 'Settings'], ['#theme-popup-toggle', 'settings.plugins_section.themes_label', 'Themes'], ['#activities-btn', 'modals.activities.title', 'Activities'], ['#sidebar-members-btn', 'settings.nav.members', 'Members'], ['#donors-btn', 'focus.support', 'Support Haven']]);
 FocusClassicLayout.CSS = `@font-face { font-family: 'Focus Archivo'; src: url('/fonts/archivo-var.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
 html[data-focus-desktop="classic"] .focus-rail, html[data-focus-desktop="classic"] [data-haven-region="navigation-sidebar"], html[data-focus-desktop="classic"] [data-haven-region="channel-header"] { font-family: 'Focus Archivo', var(--font-main, system-ui), system-ui, sans-serif; }
@@ -251,7 +330,26 @@ html[data-focus-desktop="classic"] .fr-servers { flex: 1 1 auto; min-height: 0; 
 html[data-focus-desktop="classic"] .fr-servers [data-haven-region="server-rail"] { display: flex !important; flex-direction: column !important; align-items: center !important; gap: 7px !important; width: 100% !important; height: auto !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; background: none !important; position: static !important; overflow: visible !important; }
 html[data-focus-desktop="classic"] .fr-servers [data-haven-region="server-list"] { display: flex !important; flex-direction: column !important; align-items: center; gap: 7px; width: 100%; height: auto !important; position: static !important; }
 html[data-focus-desktop="classic"] .fr-servers .server-separator { width: 32px !important; height: 2px !important; margin: 2px auto !important; }
-html[data-focus-desktop="classic"] .fr-tabs { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 10px; margin: 7px 10px 0; border-top: 1px solid var(--border); }
+html[data-focus-desktop="classic"] .fr-tabs { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; padding-top: 10px; margin: 7px 10px 0; border-top: 1px solid var(--border); }
+html[data-focus-desktop="classic"] .fr-tab[hidden] { display: none; }
+html[data-focus-desktop="classic"] .fr-tab.dragging { opacity: .4; }
+html[data-focus-desktop="classic"] .fr-edit { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin: 7px auto 0; padding: 0; border: 1px dashed var(--border); border-radius: 10px; background: none; color: var(--text-muted); cursor: pointer; opacity: .7; transition: opacity .15s, color .15s, border-color .15s; }
+html[data-focus-desktop="classic"] .fr-edit:hover, html[data-focus-desktop="classic"] .fr-edit[aria-expanded="true"] { opacity: 1; color: var(--accent); border-color: var(--accent); }
+html[data-focus-desktop="classic"] .fr-editor { position: fixed; z-index: 1000; width: 270px; max-height: calc(100vh - 28px); overflow-y: auto; box-sizing: border-box; padding: 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-secondary); color: var(--text-primary); box-shadow: 0 12px 40px rgba(0, 0, 0, .35); font-family: 'Focus Archivo', var(--font-main, system-ui), system-ui, sans-serif; }
+html[data-focus-desktop="classic"] .fe-title { font-size: 16px; font-weight: 800; }
+html[data-focus-desktop="classic"] .fe-hint { margin: 2px 0 10px; font-size: 12px; color: var(--text-muted); }
+html[data-focus-desktop="classic"] .fe-section { padding: 12px 2px 4px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+html[data-focus-desktop="classic"] .fe-row { display: flex; align-items: center; gap: 7px; padding: 4px 4px 4px 7px; border-radius: 10px; }
+html[data-focus-desktop="classic"] .fe-row:hover { background: var(--bg-hover, color-mix(in srgb, var(--accent) 8%, transparent)); }
+html[data-focus-desktop="classic"] .fe-icon { display: flex; color: var(--text-muted); }
+html[data-focus-desktop="classic"] .fe-name { flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-focus-desktop="classic"] .fe-btn { flex: 0 0 28px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-tertiary); color: var(--text-primary); font: inherit; font-size: 13px; cursor: pointer; }
+html[data-focus-desktop="classic"] .fe-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+html[data-focus-desktop="classic"] .fe-btn:disabled { opacity: .3; cursor: default; }
+html[data-focus-desktop="classic"] .fe-foot { display: flex; justify-content: space-between; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+html[data-focus-desktop="classic"] :is(.fe-reset, .fe-done) { height: 30px; padding: 0 14px; border: 1px solid var(--border); border-radius: 15px; background: none; color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+html[data-focus-desktop="classic"] .fe-done { background: var(--accent); border-color: var(--accent); color: var(--accent-text, #fff); }
+html[data-focus-desktop="classic"] :is(.fr-edit, .fe-btn, .fe-reset, .fe-done):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 html[data-focus-desktop="classic"] .fr-tab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 61px; padding: 8px 0 7px; border: 0; border-radius: 14px; background: none; color: var(--text-muted); cursor: pointer; font: inherit; font-size: 11px; font-weight: 600; transition: background .15s, color .15s; }
 html[data-focus-desktop="classic"] .fr-tab:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--text-primary); }
 html[data-focus-desktop="classic"] .fr-tab.active { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }

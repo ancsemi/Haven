@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.31.0] - Unreleased
 
 ### Added
+- Focus Classic's rail can be arranged. The pencil under it (or a right-click on the rail) adds shortcuts for Games, Search, Pinned, Threads, Media, Members, Themes, Settings and Support, and removes or reorders icons; dragging an icon on the rail moves it too. Server always stays. Alt+1 to Alt+9 follow the new order, and the choice is saved in this browser.
 - Calendar channels (asked for by Raidenphantom). Tick Calendar when creating a channel, or turn it on in Channel Functions, and the channel shows a month of events instead of messages. Members who can post add events with a title, time or all-day dates, place, details and color; everyone can answer Going, Maybe or Can't go and see who else is coming. Events update live, show in each member's own time zone, and only their creator or someone with Delete Messages can change them. A read-only calendar keeps adding events to the people with the read-only override.
 - Default notifications for a channel (asked for by moviethingy). The server admin can set what members get for it until they choose their own: all messages, only mentions, or muted. Open Channel Functions in the channel menu and click Default Notifications. Muting or unmuting a channel yourself always wins, and DMs ignore the default. It applies to sounds, pop-ups, badges and push.
 - Two new light themes, Lemonade and Strawberry (thanks Amnibro, #5936).
