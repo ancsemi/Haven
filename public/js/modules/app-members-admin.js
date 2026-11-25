@@ -425,7 +425,7 @@ _renderAllMembers(members) {
         btns += `<button class="aml-action-btn aml-btn-role" data-uid="${m.id}" data-uname="${this._escapeHtml(m.username)}" title="${t('users.gear_menu.assign_role')}">👑</button>`;
       }
       if (perms.canBan) {
-        btns += `<button class="aml-action-btn aml-btn-sessions" data-uid="${m.id}" data-uname="${this._escapeHtml(m.displayName)}" title="${t('settings.admin.member_sessions_title', { name: m.displayName })}">🖥️</button>`;
+        btns += `<button class="aml-action-btn aml-btn-sessions" data-uid="${m.id}" data-uname="${this._escapeHtml(m.displayName)}" title="${this._escapeHtml(t('settings.admin.member_sessions_title', { name: m.displayName }))}">🖥️</button>`;
       }
       if (perms.canKick && !m.banned) {
         btns += `<button class="aml-action-btn aml-btn-addch" data-uid="${m.id}" data-uname="${this._escapeHtml(m.username)}" title="${t('settings.admin.add_to_channel_title')}">➕</button>`;
