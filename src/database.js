@@ -1429,6 +1429,7 @@ function initDatabase() {
 
   // ── Migration: former channel names, so a #old-name link keeps resolving (#5602) ──
   addColumn('channels', 'former_names', "TEXT DEFAULT NULL");
+  addColumn('channels', 'default_notify', "TEXT DEFAULT 'all'");
 
   // ── Migration: encrypted server list for cross-device sync ──────────
   addColumn('users', 'encrypted_servers', "TEXT DEFAULT NULL");

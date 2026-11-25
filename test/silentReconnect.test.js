@@ -133,6 +133,7 @@ function clientApp() {
     _updateDmSectionBadge() {},
     _renderOnlineUsers() {},
     _decryptMessages: async () => {},
+    _mutedChannelList: () => [],
     notifications: { play() {}, speak() {} },
   }, methods);
   app.window = sandbox.window = {

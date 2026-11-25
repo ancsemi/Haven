@@ -37,10 +37,11 @@ async _bootstrapChannelPrefs() {
       headers: { 'Authorization': `Bearer ${tok}` },
     });
     if (!resp.ok) { this._channelPrefsSynced = false; return; }
-    const { muted: serverMuted = [] } = await resp.json();
+    const { muted: serverMuted = [], all: serverAll = [] } = await resp.json();
     const local = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
     const union = Array.from(new Set([...serverMuted, ...local]));
     localStorage.setItem('haven_muted_channels', JSON.stringify(union));
+    localStorage.setItem('haven_unmuted_channels', JSON.stringify(Array.from(new Set([...serverAll, ...this._readChannelList('haven_unmuted_channels')])).filter(c => !union.includes(c))));
     // If local had entries the server didn't know about, push the union
     // back so the next message blast filters correctly.
     const localOnly = local.filter(c => !serverMuted.includes(c));

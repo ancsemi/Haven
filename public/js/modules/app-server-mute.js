@@ -40,12 +40,40 @@ _mutedUserIds() {
 // True when this message should stay quiet: its sender is muted for you, or
 // the server is muted and it is not a DM (or, with "except @mentions", not a
 // mention of you).
-_notifyBlockedByMutes({ senderId, isDm, isMention }) {
+_notifyBlockedByMutes({ senderId, isDm, isMention, isReply, channelCode }) {
   if (senderId != null && this._mutedUserIds().has(Number(senderId))) return true;
   const mode = this._serverMuteMode();
   if (mode === 'all') return !isDm;
-  if (mode === 'mentions') return !isDm && !isMention;
-  return false;
+  if (mode === 'mentions' && !isDm && !isMention) return true;
+  return !isDm && !isMention && !isReply && !!channelCode && this._channelNotifyLevel(channelCode) === 'mentions';
+},
+
+_readChannelList(key) {
+  try { const v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
+},
+
+_ownUnmutedChannels() {
+  return new Set(this._readChannelList('haven_unmuted_channels'));
+},
+
+_mutedChannelList(channels = this.channels) {
+  const own = this._readChannelList('haven_muted_channels');
+  const unmuted = this._ownUnmutedChannels();
+  const byDefault = (channels || []).filter(c => !c.is_dm && c.default_notify === 'muted' && !unmuted.has(c.code) && !own.includes(c.code)).map(c => c.code);
+  return byDefault.length ? own.concat(byDefault) : own;
+},
+
+_channelNotifyLevel(code) {
+  if (this._mutedChannelList().includes(code)) return 'muted';
+  const ch = (this.channels || []).find(c => c.code === code);
+  return ch && !ch.is_dm && ch.default_notify === 'mentions' && !this._ownUnmutedChannels().has(code) ? 'mentions' : 'all';
+},
+
+_setChannelMuted(code, muted) {
+  const put = (key, on) => localStorage.setItem(key, JSON.stringify(on ? Array.from(new Set([...this._readChannelList(key), code])) : this._readChannelList(key).filter(c => c !== code)));
+  put('haven_muted_channels', muted);
+  put('haven_unmuted_channels', !muted);
+  this._syncChannelMutePref(code, muted);
 },
 
 // Which messages this device is pushed: every one while its Notifications

@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 ## [4.31.0] - Unreleased
 
 ### Added
+- Default notifications for a channel (asked for by moviethingy). Whoever manages a channel's settings can set what members get for it until they choose their own: all messages, only mentions, or muted. Open Channel Functions in the channel menu and click Default Notifications. Muting or unmuting a channel yourself always wins, and DMs ignore the default. It applies to sounds, pop-ups, badges and push.
 - Two new light themes, Lemonade and Strawberry (thanks Amnibro, #5936).
 - Profile links: members can add up to 5 links to their other accounts or sites (label and https:// address) in Settings → Profile. The server validates and stores them, and they show as small buttons with the label and site name on the profile card, opening through the external link confirmation. The server's Auto-Mod link rules apply to them, the same as to a bio.
 - Lite mode, for slow or older devices: Settings > Appearance > Lite Mode. One switch (off by default, saved on the device) that turns on Reduce Motion, keeps GIFs, animated emoji, avatars, banners and stickers on their first frame until you point at them, drops blur effects for solid backgrounds, shows link previews as text only, and loads videos and audio only when you press play.

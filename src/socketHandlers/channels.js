@@ -1497,6 +1497,25 @@ module.exports = function register(socket, ctx) {
       details: { roleGate: stored ? JSON.parse(stored) : null } });
   });
 
+  socket.on('set-channel-default-notify', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    const mode = typeof data.mode === 'string' ? data.mode : '';
+    if (!['all', 'mentions', 'muted'].includes(mode)) return socket.emit('error-msg', 'Invalid notification level');
+    const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    if (!channel) return socket.emit('error-msg', 'Channel not found');
+    if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to change the default notification level');
+    try {
+      db.prepare('UPDATE channels SET default_notify = ? WHERE id = ?').run(mode, channel.id);
+      auditChannel(channel.id, 'default_notify', mode);
+      broadcastChannelLists();
+    } catch (err) {
+      console.error('Set default notify error:', err);
+      socket.emit('error-msg', 'Failed to set the default notification level');
+    }
+  });
+
   socket.on('set-notification-type', (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
