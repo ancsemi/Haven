@@ -9,6 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const { unescapeDiscord } = require('./discordText');
+const { NAMED_EMOJI_RE: CUSTOM_REACTION_RE } = require('./builtinEmojis');
 
 // ── Public entry point ──────────────────────────────────────
 function parseDiscordExport(filePath) {
@@ -289,10 +290,9 @@ function splitCSVLine(line) {
 // Same rule the live add-reaction handler applies: a Unicode emoji or a
 // :custom_name:, at most 32 characters. Anything else is dropped on import.
 const REACTION_EMOJI_RE = /^[\p{Emoji}\p{Emoji_Component}️‍]+$/u;
-const CUSTOM_REACTION_RE = /^:[a-zA-Z0-9_-]{1,30}:$/;
 function isReactionEmoji(emoji) {
-  return typeof emoji === 'string' && emoji.length >= 1 && emoji.length <= 32
-    && (REACTION_EMOJI_RE.test(emoji) || CUSTOM_REACTION_RE.test(emoji));
+  return typeof emoji === 'string' && emoji.length >= 1 && emoji.length <= 70
+    && ((emoji.length <= 32 && REACTION_EMOJI_RE.test(emoji)) || CUSTOM_REACTION_RE.test(emoji));
 }
 
 // Discord exports name a server's own emoji bare ("pepe"). Haven writes those

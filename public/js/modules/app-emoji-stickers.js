@@ -48,9 +48,9 @@ _setupEmojiManagement() {
 
   uploadBtn.addEventListener('click', async () => {
     const file = fileInput.files[0];
-    const name = nameInput ? nameInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() : '';
+    const name = nameInput ? nameInput.value.normalize('NFC').replace(/[^\p{L}\p{Nd}\p{M}_-]/gu, '').toLowerCase() : '';
     if (!file) return this._showToast(t('media_runtime.emoji.select_file'), 'error');
-    if (!name) return this._showToast(t('media_runtime.emoji.enter_name'), 'error');
+    if ([...name].length < 2 || [...name].length > 32) return this._showToast(t('media_runtime.emoji.enter_name'), 'error');
 
     // Use cropped blob for non-GIF uploads, otherwise raw file
     const uploadBlob = (this._croppedEmojiBlob && file.type !== 'image/gif')

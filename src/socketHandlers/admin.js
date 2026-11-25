@@ -1474,6 +1474,7 @@ module.exports = function register(socket, ctx) {
         storageSummary: usage ? {
           liveBytes: usage.liveBytes,
           attributedBytes: usage.attributedBytes,
+          dmBytes: usage.dmBytes,
           unattributedBytes: usage.unattributedBytes,
           fileCount: usage.fileCount
         } : undefined,

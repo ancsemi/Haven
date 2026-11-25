@@ -783,6 +783,10 @@ function setupSocketHandlers(io, db, opts = {}) {
       : '';
     return platform ? `${browser} on ${platform}` : browser;
   }
+  const listUserSessions = (userId, currentId) => [...io.of('/').sockets.values()]
+    .filter(s2 => s2.user && s2.user.id === userId)
+    .map(s2 => ({ id: s2.id, current: s2.id === currentId, device: _describeUserAgent(s2.handshake?.headers?.['user-agent'] || ''), ip: socketClientIp(s2), since: s2.handshake?.issued || null }))
+    .sort((a, b) => (b.current - a.current) || ((a.since || 0) - (b.since || 0)));
 
   // ── emitOnlineUsers ─────────────────────────────────────
   // A DM room only got a fresh online list while somebody was looking at it,
@@ -2299,24 +2303,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     // this is exactly what it says: sockets attached right now. A token with no
     // tab open does not appear here, which is why the list is paired with a
     // revoke that invalidates every token rather than individual rows.
-    socket.on('get-sessions', () => {
-      const mine = [];
-      for (const [, s2] of io.of('/').sockets) {
-        if (!s2.user || s2.user.id !== socket.user.id) continue;
-        const ua = (s2.handshake?.headers?.['user-agent']) || '';
-        mine.push({
-          id: s2.id,
-          current: s2.id === socket.id,
-          device: _describeUserAgent(ua),
-          ip: socketClientIp(s2),
-          since: s2.handshake?.issued || null
-        });
-      }
-      // Current session first, then oldest to newest so a new arrival appears
-      // at the bottom where it is easy to spot.
-      mine.sort((a, b) => (b.current - a.current) || ((a.since || 0) - (b.since || 0)));
-      socket.emit('sessions-list', { sessions: mine });
-    });
+    socket.on('get-sessions', () => socket.emit('sessions-list', { sessions: listUserSessions(socket.user.id, socket.id) }));
 
     // (#5505) Admins get their own room so server-health warnings can reach
     // them without walking every socket. An admin joining mid-problem is told
@@ -2390,7 +2377,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // official mode on, and what the server supports, for clients that talk
       // to servers of different versions.
       officialMode: highlights.officialMode(db, socket.user.id),
-      features: highlights.FEATURES
+      features: [...highlights.FEATURES, 'member_sessions', 'dm_storage', 'unicode_emoji_names']
     });
 
     // Send current voice counts for sidebar indicators.
@@ -2865,7 +2852,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       onReferrerPolicyChange,
       settingEffects, roleRefresh,
       // Per-member upload storage totals (#5521)
-      getUploadUsage, botAudioManager,
+      getUploadUsage, botAudioManager, listUserSessions,
       // Ban-filtered channel roster used by @mention autocomplete
       getMentionableChannelMembers, mentionableMembersFor, sendChannelMembers, memberView,
       // IP-ban cache invalidator (server.js HTTP-side cache)

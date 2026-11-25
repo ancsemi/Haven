@@ -547,7 +547,7 @@ _formatContent(str, opts) {
   html = html.replace(/\|\|(.+?)\|\|/g, '<span class="spoiler">$1</span>');
 
   // Render custom + bundled built-in image emojis :name:
-  html = html.replace(/:([a-zA-Z0-9_-]+):/g, (match, name) => {
+  html = html.replace(/:([\p{L}\p{Nd}\p{M}_-]+):/gu, (match, name) => {
     const emoji = this._findNamedEmoji(name);
     if (emoji) return `<img src="${this._escapeHtml(emoji.url)}" alt=":${this._escapeHtml(name)}:" title=":${this._escapeHtml(name)}:" class="custom-emoji">`;
     return match;
@@ -875,7 +875,7 @@ _renderReactions(msgId, reactions) {
     const names = g.users.map(u => u.username).join(', ');
     const usersJson = this._escapeHtml(JSON.stringify(g.users.map(u => u.username)));
     // Check if it's a custom emoji
-    const customMatch = g.emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+    const customMatch = g.emoji.match(/^:([\p{L}\p{Nd}\p{M}_-]+):$/u);
     let emojiDisplay = this._escapeHtml(g.emoji);
     if (customMatch && this.customEmojis) {
       const ce = this._findNamedEmoji(customMatch[1]);

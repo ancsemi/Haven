@@ -3,7 +3,7 @@
 // pictures (platforms, flags) first, and a search box. _chooseEmoji(anchor)
 // resolves the pick, ":name:" for a named one, or null.
 
-const NAMED = /^:([a-zA-Z0-9_-]{1,30}):$/;
+const NAMED = /^:([\p{L}\p{Nd}\p{M}_-]{1,32}):$/u;
 
 export default {
 

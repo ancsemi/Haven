@@ -8,6 +8,7 @@ const multer = require('multer');
 const privacyPass = require('../privacyPass');
 const storage = require('../storage');
 const { auditHttp } = require('../httpAudit');
+const { isEmojiName, cleanEmojiName } = require('../builtinEmojis');
 const { DATA_DIR, STAGING_DIR } = require('../paths');
 const { verifyToken } = require('../auth');
 const { sanitizeSoundName } = require('../socketHandlers');
@@ -265,9 +266,8 @@ module.exports = function registerMediaLibrary(deps) {
       if (err) return res.status(400).json({ error: err.message, code: err.code });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-      let name = (req.body.name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
-      if (!name) name = path.basename(req.file.filename, path.extname(req.file.filename));
-      if (name.length > 30) name = name.slice(0, 30);
+      const name = cleanEmojiName(req.body.name) || cleanEmojiName(path.basename(req.file.filename, path.extname(req.file.filename)));
+      if (!isEmojiName(name)) { fs.unlink(req.file.path, () => {}); return res.status(400).json({ error: 'Emoji names use letters, digits, _ and -, 2 to 32 characters' }); }
 
       try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       const { getDb } = require('../database');
@@ -300,10 +300,8 @@ module.exports = function registerMediaLibrary(deps) {
       const insert = db.prepare('INSERT OR REPLACE INTO custom_emojis (name, filename, uploaded_by) VALUES (?, ?, ?)');
 
       for (const file of req.files) {
-        let name = path.basename(file.originalname, path.extname(file.originalname))
-          .replace(/[^a-zA-Z0-9_-]/g, '');
-        if (!name) name = path.basename(file.filename, path.extname(file.filename));
-        if (name.length > 30) name = name.slice(0, 30);
+        const name = cleanEmojiName(path.basename(Buffer.from(file.originalname, 'latin1').toString('utf8'), path.extname(file.originalname))) || cleanEmojiName(path.basename(file.filename, path.extname(file.filename)));
+        if (!isEmojiName(name)) { fs.unlink(file.path, () => {}); errors.push({ name, error: 'Emoji names use letters, digits, _ and -, 2 to 32 characters' }); continue; }
         try { await storage.admitUpload(file); } catch (e) { errors.push({ name, error: 'Failed to store the upload' }); continue; }
         try {
           insert.run(name, file.filename, user.id);
@@ -444,7 +442,7 @@ module.exports = function registerMediaLibrary(deps) {
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     if (!verifyAdminFromDb(user) && !userHasPermission(user.id, 'manage_emojis')) return res.status(403).json({ error: 'Requires admin or Manage Emojis permission' });
-    const name = req.params.name;
+    const name = String(req.params.name).normalize('NFC');
     const { getDb } = require('../database');
     try {
       const row = getDb().prepare('SELECT filename FROM custom_emojis WHERE name = ?').get(name);
