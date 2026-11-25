@@ -372,6 +372,8 @@ _updateChannelFunctionsPanel(ch) {
   this._setCfnBadge('read-only', isReadOnly, t(isReadOnly ? 'channel_functions.on' : 'channel_functions.off'));
   const isForum = ch.is_forum === 1;
   this._setCfnBadge('forum', isForum, t(isForum ? 'channel_functions.on' : 'channel_functions.off'));
+  const isCalendar = ch.is_calendar === 1;
+  this._setCfnBadge('calendar', isCalendar, t(isCalendar ? 'channel_functions.on' : 'channel_functions.off'));
   const isPrivate = !!ch.is_private;
   {
     const _cfnPanel = document.getElementById('channel-functions-panel'); const nsfwRow = _cfnPanel?.querySelector('.cfn-row[data-fn="nsfw"] .cfn-badge');

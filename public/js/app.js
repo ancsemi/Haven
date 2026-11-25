@@ -13,7 +13,7 @@ import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
 import DraftMethods from './modules/app-drafts.js?v=4.29.94';
 import WhatsNewMethods from './modules/app-whats-new.js?v=4.27.25';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
-import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.29.67';
+import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.31.2';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.29.99';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.31.59';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.31.3';
@@ -84,6 +84,7 @@ import ForumMethods    from './modules/app-forum.js?v=4.31.790';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
+import CalendarMethods from './modules/app-calendar.js?v=4.31.2';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.29.102';
 import ChannelAddMemberMethods from './modules/app-channel-add-members.js?v=4.29.66';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.29.95';
@@ -693,6 +694,7 @@ Object.assign(HavenApp.prototype,
   ForumVoteMethods,
   ForumBlogMethods,
   ForumPictureVoteMethods,
+  CalendarMethods,
   RoleToolMethods,
   PermMatrixMethods,
   CallMethods,

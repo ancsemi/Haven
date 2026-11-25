@@ -36,8 +36,9 @@ _bindChannelMenu() {
       const duration = parseInt(document.getElementById('new-channel-duration')?.value, 10) || 24;
       const addAllMembers = document.getElementById('new-channel-add-all')?.checked || false;
       const isForum = document.getElementById('new-channel-forum')?.checked || false;
+      const isCalendar = document.getElementById('new-channel-calendar')?.checked || false;
       if (name) {
-        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum, ...this._channelTemplateExtras() });
+        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum, isCalendar, ...this._channelTemplateExtras() });
         this._resetChannelTemplate();
         nameInput.value = '';
         const pvt = document.getElementById('new-channel-private');
@@ -46,12 +47,20 @@ _bindChannelMenu() {
         if (tmp) tmp.checked = false;
         const all = document.getElementById('new-channel-add-all');
         if (all) all.checked = false;
+        const cal = document.getElementById('new-channel-calendar');
+        if (cal) cal.checked = false;
         const durRow = document.getElementById('temp-channel-duration-row');
         if (durRow) durRow.style.display = 'none';
       }
     });
     nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') createBtn.click(); });
   }
+
+  // A channel is a forum or a calendar, not both.
+  const forumBox = document.getElementById('new-channel-forum');
+  const calendarBox = document.getElementById('new-channel-calendar');
+  forumBox?.addEventListener('change', () => { if (forumBox.checked && calendarBox) calendarBox.checked = false; });
+  calendarBox?.addEventListener('change', () => { if (calendarBox.checked && forumBox) forumBox.checked = false; });
 
   // Toggle temporary channel duration row
   const tempCheckbox = document.getElementById('new-channel-temporary');
@@ -288,11 +297,21 @@ _bindChannelMenu() {
       this.socket.emit('toggle-channel-permission', { code, permission: 'read_only' });
     } else if (fn === 'forum') {
       const newVal = ch && ch.is_forum ? 0 : 1;
-      optimistic({ is_forum: newVal });
+      optimistic(newVal ? { is_forum: 1, is_calendar: 0 } : { is_forum: 0 });
       this.socket.emit('toggle-channel-permission', { code, permission: 'forum' });
       // The ordering rule just changed under the open channel; reload it so
       // the topics re-sort now instead of on the next visit.
       if (code === this.currentChannel) {
+        this._updateComposerVisibility?.(ch);
+        setTimeout(() => this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(code) : { code }), 400);
+      }
+    } else if (fn === 'calendar') {
+      // Turning the calendar on turns the forum off, as the server does.
+      const newVal = ch && ch.is_calendar ? 0 : 1;
+      optimistic(newVal ? { is_calendar: 1, is_forum: 0 } : { is_calendar: 0 });
+      this.socket.emit('toggle-channel-permission', { code, permission: 'calendar' });
+      if (code === this.currentChannel) {
+        this._updateComposerVisibility?.(ch);
         setTimeout(() => this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(code) : { code }), 400);
       }
     } else if (fn === 'private') {

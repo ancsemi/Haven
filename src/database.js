@@ -11,6 +11,7 @@ const botAccounts = require('./botAccounts');
 const modCases = require('./modCases');
 const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
+const calendarEvents = require('./calendarEvents');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
 const { migrateMessageNsfw } = require('./messageNsfw');
@@ -1126,6 +1127,9 @@ function initDatabase() {
     // topics pick from, and an NSFW flag users can hide behind a preference.
     { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
     { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
+    // Calendar mode: the channel shows a month of events (src/calendarEvents.js)
+    // instead of its messages. A channel is a forum or a calendar, not both.
+    { name: 'is_calendar',       sql: "ALTER TABLE channels ADD COLUMN is_calendar INTEGER DEFAULT 0" },
     // #5390: extend the self-destruct timer with a "clear messages only"
     // mode. `auto_delete_mode` is 'delete' (existing behaviour: drop the
     // whole channel) or 'clear' (wipe messages but keep channel, perms,
@@ -1740,6 +1744,7 @@ function initDatabase() {
   modCases.ensureTable(db);
   migrateImportedAuthors(db);
   forumUnread.ensureTable(db);
+  calendarEvents.ensureTables(db);
   // Profile badges (#5632); needs forum_votes, made above.
   migrateBadges(db);
 
