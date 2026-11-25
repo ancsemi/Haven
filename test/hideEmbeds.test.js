@@ -20,7 +20,7 @@ const previews = load('app-link-previews.js', {
 const view = (over = {}) => Object.assign(Object.create(previews), {
   _collapsedEmbeds: new Set(), _openedEmbeds: new Set(), _applyEmbedSize() {}, _embedSize: () => 'medium',
   _extractYouTubeVideoId: () => null, _embedHeaderHtml: () => '', _wireEmbedControls() {}, _applyEmbedSpoiler() {},
-  _escapeHtml: s => s, _imgSrcAttr: () => '', _proxyMediaUrl: s => s, _cnt: () => null,
+  _escapeHtml: s => s, _imgSrcAttr: () => '', _proxyMediaUrl: s => s, _cnt: () => null, _liteOn: () => false,
 }, over);
 const message = urls => {
   const cards = [], host = { querySelector: () => null, querySelectorAll: () => cards, appendChild: card => cards.push(card) };
