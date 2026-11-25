@@ -30,6 +30,9 @@ _viewerChatAnimPref() {
 _motionReduced() {
   return document.documentElement.classList.contains('reduce-motion');
 },
+_liteOn() {
+  return document.documentElement.classList.contains('lite-mode');
+},
 
 _setViewerChatAnimPref(pref) {
   const value = (pref === 'hover' || pref === 'never') ? pref : 'always';
@@ -47,7 +50,7 @@ _chatImgRealUrl(img) {
 
 _applyViewerChatAnimPref() {
   const pref = this._viewerChatAnimPref();
-  document.querySelectorAll('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]').forEach((img) => {
+  document.querySelectorAll('img:is(.chat-image, .custom-emoji, .sticker-img)[data-chat-animated-src]').forEach((img) => {
     if (pref === 'always') {
       img.dataset.chatAnimPlaying = '1';
       if (img.getAttribute('src') !== img.dataset.chatAnimatedSrc) img.src = img.dataset.chatAnimatedSrc;
@@ -62,7 +65,7 @@ _applyViewerChatAnimPref() {
   });
   // Nothing is frozen yet on a fresh switch away from 'always', so sweep too.
   if (pref !== 'always') {
-    document.querySelectorAll('img:is(.chat-image, .custom-emoji):not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
+    document.querySelectorAll('img:is(.chat-image, .custom-emoji, .sticker-img):not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
   }
 },
 
@@ -88,14 +91,14 @@ _setupChatAnimHover() {
   this._chatAnimHoverBound = true;
   const over = (e) => {
     const img = e.target;
-    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]')) return;
+    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji, .sticker-img)[data-chat-animated-src]')) return;
     if (this._viewerChatAnimPref() !== 'hover') return;
     img.dataset.chatAnimPlaying = '1';
     img.src = img.dataset.chatAnimatedSrc;   // reassigning restarts from frame 1
   };
   const out = (e) => {
     const img = e.target;
-    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]')) return;
+    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji, .sticker-img)[data-chat-animated-src]')) return;
     if (this._viewerChatAnimPref() !== 'hover') return;
     img.dataset.chatAnimPlaying = '';
     this._frozenFrame(img.dataset.chatAnimatedSrc).then((f) => {
@@ -108,7 +111,7 @@ _setupChatAnimHover() {
   // it on load as well as when it is inserted.
   document.addEventListener('load', (e) => {
     const img = e.target;
-    if (img && img.matches && img.matches('img:is(.chat-image, .custom-emoji):not([data-chat-anim-done])')) this._freezeChatImg(img);
+    if (img && img.matches && img.matches('img:is(.chat-image, .custom-emoji, .sticker-img):not([data-chat-anim-done])')) this._freezeChatImg(img);
   }, true);
 },
 
@@ -617,6 +620,9 @@ _setupEmbedSizePicker() {
     const btn = e.target.closest('[data-embed-size]');
     if (btn) this._applyEmbedSize(btn.dataset.embedSize);
   });
+  const hide = document.getElementById('hide-embeds-toggle');
+  document.body.classList.toggle('hide-embeds', this._hideEmbedsOn());
+  hide && (hide.checked = this._hideEmbedsOn(), hide.addEventListener('change', () => { this._setHideEmbeds(hide.checked); this._redrawOpenChannel(); }));
   const fold = document.getElementById('previews-folded-toggle');
   if (!fold) return;
   fold.checked = this._previewsStartFolded();
@@ -624,8 +630,12 @@ _setupEmbedSizePicker() {
     this._startFolded = fold.checked;
     try { localStorage.setItem('haven-previews-folded', String(fold.checked)); }
     catch { /* private mode: the choice lasts until the page closes */ }
-    this.currentChannel && this.socket?.connected && this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
+    this._redrawOpenChannel();
   });
+},
+
+_redrawOpenChannel() {
+  this.currentChannel && this.socket?.connected && this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
 },
 
 _previewsStartFolded() {
@@ -633,21 +643,36 @@ _previewsStartFolded() {
   return this._startFolded;
 },
 
+_hideEmbedsOn() {
+  const v = this._hideEmbeds === undefined ? localStorage.getItem('haven-hide-embeds') : null;
+  this._hideEmbeds === undefined && (this._hideEmbeds = v === null ? localStorage.getItem('haven-embed-size') === 'off' : v === 'true');
+  return this._hideEmbeds;
+},
+
+_setHideEmbeds(on) {
+  this._hideEmbeds = !!on;
+  try { localStorage.setItem('haven-hide-embeds', String(!!on)); }
+  catch { /* private mode: the choice lasts until the page closes */ }
+  document.body?.classList?.toggle('hide-embeds', !!on);
+},
+
 // Embed size is the single source of truth shared by the Settings picker and
 // the per-embed size menu (see app-media-playback.js). Legacy values are migrated.
 _normalizeEmbedSize(mode) {
   mode = ({ normal: 'medium', large: 'full' })[mode] || mode;
-  return ['full', 'medium', 'small', 'off'].includes(mode) ? mode : 'medium';
+  return ['full', 'medium', 'small'].includes(mode) ? mode : 'medium';
 },
 
 _embedSize() {
-  return this._normalizeEmbedSize(localStorage.getItem('haven-embed-size'));
+  const raw = localStorage.getItem('haven-embed-size');
+  raw === 'off' && localStorage.getItem('haven-hide-embeds') === null && this._setHideEmbeds(true);
+  return this._normalizeEmbedSize(raw);
 },
 
 _applyEmbedSize(mode) {
   mode = this._normalizeEmbedSize(mode);
   localStorage.setItem('haven-embed-size', mode);
-  document.body.classList.remove('embed-size-off', 'embed-size-small', 'embed-size-medium', 'embed-size-full');
+  document.body.classList.remove('embed-size-small', 'embed-size-medium', 'embed-size-full');
   document.body.classList.add(`embed-size-${mode}`);
   const label = t(`settings.embed_display.${mode}`);
   document.querySelectorAll('.lp-size-label').forEach(b => { b.textContent = label; });

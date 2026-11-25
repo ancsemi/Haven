@@ -44,6 +44,7 @@ test('the sidebar and the pop-out DM use the shared rule, and every dot has an o
   assert.match(pip, /const statusClass = this\._statusDotClass\(shown\);/);
   assert.doesNotMatch(pip, /offline_away/);
   assert.match(read('public/css/style-messages.css'), /\.user-status-dot\.offline,\s*\.user-status-dot\.invisible \{/);
-  assert.match(read('public/css/style-messages.css'), /\.profile-popup-status-dot\.offline\s*\{/);
+  assert.match(read('public/css/style-messages.css'), /\.profile-popup-status-dot\.offline \{ background: var\(--bg-primary\); box-shadow: inset/);
+  assert.match(read('public/css/style-roles-layout-polls.css'), /\.online-overlay-status-dot\.offline \{ background: transparent; box-shadow: inset/);
   assert.match(read('public/css/style-sidebar.css'), /\.dm-pip-status-dot\.offline\s*\{/);
 });

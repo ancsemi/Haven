@@ -17,6 +17,7 @@ const { spawn } = require('node:child_process');
 const { setTimeout: wait } = require('node:timers/promises');
 const jwt = require('jsonwebtoken');
 const { io } = require('socket.io-client');
+const { sizeCeiling } = require('../src/messageLimits');
 const JWT_SECRET = 'postgres-app-test-secret';
 
 function packet(socket, event, matches = () => true) {
@@ -304,6 +305,64 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     assert.equal(refusals.length, 1);
     assert.match(refusals[0], /Slow mode/);
     assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM messages WHERE content LIKE 'slow mode %'").get()).n, 1);
+  });
+  await t.test('oversized sends are refused before channel access and flood accounting', async st => {
+    const actor = await fixtureAccount('MessageLimitSender');
+    const { socket } = await connect(actor.token);
+    const maxChars = 64;
+    const previous = await db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get();
+    st.after(async () => {
+      socket.disconnect();
+      if (previous) await setting('max_message_chars', previous.value);
+      else await db.prepare("DELETE FROM server_settings WHERE key = 'max_message_chars'").run();
+      await db.prepare('DELETE FROM channels WHERE is_dm = 1 AND created_by = ?').run(actor.id);
+    });
+    await setting('max_message_chars', String(maxChars));
+    const refuse = (code, content) => emit(socket, 'send-message', 'error-msg', { code, content });
+    const tooLong = 'Message too long (max 64 characters)';
+    const oversized = 'x'.repeat(sizeCeiling(maxChars) + 1);
+    for (let i = 0; i < 11; i++) assert.equal(await refuse('e0000000', oversized), tooLong);
+
+    await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(room.id, actor.id);
+    assert.equal(await refuse(room.code, 'x'.repeat(maxChars + 1)), tooLong);
+    const dm = await emit(socket, 'start-dm', 'dm-opened', { targetUserId: actor.id });
+    const cipher = JSON.stringify({ v: 1, iv: 'opaque-iv', ct: 'x'.repeat(maxChars * 2) });
+    const sent = await emit(socket, 'send-message', 'new-message', { code: dm.code, content: cipher });
+    assert.equal(sent.message.content, cipher);
+  });
+  await t.test('slow mode counts only committed room messages and thread replies', async st => {
+    const actor = await fixtureAccount('SlowModeSender');
+    const channel = await db.prepare("INSERT INTO channels (name, code, slow_mode_interval) VALUES ('Posting rollback', 'e8888888', 30) RETURNING id, code").get();
+    const { socket } = await connect(actor.token);
+    const peer = (await connect(actor.token)).socket;
+    st.after(async () => {
+      socket.disconnect();
+      peer.disconnect();
+      await db.exec('DROP TRIGGER IF EXISTS fail_preview_send_commit ON messages; DROP FUNCTION IF EXISTS fail_preview_send_commit()');
+      await db.prepare('DELETE FROM channels WHERE id = ?').run(channel.id);
+    });
+    await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(channel.id, actor.id);
+    const parent = await db.prepare("INSERT INTO messages (channel_id, user_id, content) VALUES (?, ?, 'Thread parent') RETURNING id")
+      .get(channel.id, adminAccount.user.id);
+    // Fail at COMMIT, after the insert and the other transaction queries ran.
+    await db.exec(`
+      CREATE FUNCTION fail_preview_send_commit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'test send rollback';
+      END;
+      $$;
+      CREATE CONSTRAINT TRIGGER fail_preview_send_commit
+      AFTER INSERT ON messages DEFERRABLE INITIALLY DEFERRED
+      FOR EACH ROW WHEN (NEW.content = 'fail this commit')
+      EXECUTE FUNCTION fail_preview_send_commit();
+    `);
+    const sendReply = content => socket.timeout(10000).emitWithAck('send-thread-message', { parentId: parent.id, content });
+    assert.equal(await emit(socket, 'send-message', 'error-msg', { code: channel.code, content: 'fail this commit' }), 'Could not complete the request');
+    assert.deepEqual(await sendReply('fail this commit'), { error: 'Failed to send thread message' });
+    assert.deepEqual(await sendReply('reply after rollback'), { success: true });
+    assert.match(await emit(peer, 'send-message', 'error-msg', { code: channel.code, content: 'wait after reply' }), /Slow mode/);
+    assert.deepEqual(await db.prepare('SELECT content, thread_id FROM messages WHERE channel_id = ? AND user_id = ?').all(channel.id, actor.id),
+      [{ content: 'reply after rollback', thread_id: parent.id }]);
   });
   await t.test('room threads open, deliver replies and restore their previews and read counts', async st => {
     const channel = await db.prepare("INSERT INTO channels (name, code) VALUES ('Room threads', 'e6666666') RETURNING id, code").get();
@@ -997,14 +1056,14 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     await Promise.all([drain(own), drain(other)]);
     assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'user_rename' AND actor_id IN (?, ?)").get(actor.id, peer.id)).n, 2);
   });
-  await t.test('nicknames and DM pins are private preferences that can be imported or cleared', async st => {
+  await t.test('nicknames and DM sidebar preferences are private and can be cleared', async st => {
     const actor = await fixtureAccount('profile_nicknames');
     const recipient = await fixtureAccount('nickname_recipient');
     const own = (await connect(actor.token)).socket;
     const other = (await connect(recipient.token)).socket;
     st.after(async () => {
       own.disconnect(); other.disconnect();
-      await db.prepare('DELETE FROM channels WHERE is_dm = 1 AND created_by = ?').run(actor.id);
+      await db.prepare('DELETE FROM channels WHERE is_dm = 1 AND created_by IN (?, ?)').run(actor.id, recipient.id);
     });
     const dm = await emit(own, 'start-dm', 'dm-opened', { targetUserId: recipient.id });
     const pins = JSON.stringify([room.code, dm.code, dm.code]);
@@ -1013,6 +1072,17 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     assert.equal((await emit(other, 'get-preferences', 'preferences')).pinned_dms, undefined);
     assert.deepEqual(await emit(own, 'delete-preference', 'preference-deleted', { key: 'pinned_dms' }), { key: 'pinned_dms' });
     assert.equal((await emit(own, 'get-preferences', 'preferences')).pinned_dms, undefined);
+
+    const self = await emit(own, 'start-dm', 'dm-opened', { targetUserId: actor.id });
+    const unshared = await emit(other, 'start-dm', 'dm-opened', { targetUserId: recipient.id });
+    const order = JSON.stringify([self.code, unshared.code, room.code, dm.code, self.code]);
+    const validOrder = JSON.stringify([self.code, dm.code]);
+    assert.deepEqual(await emit(own, 'set-preference', 'preference-saved', { key: 'dm_sort', value: 'alpha' }),
+      { key: 'dm_sort', value: 'alpha' });
+    assert.deepEqual(await emit(own, 'set-preference', 'preference-saved', { key: 'dm_order', value: order }),
+      { key: 'dm_order', value: validOrder });
+    own.emit('set-preference', { key: 'dm_sort', value: 'unknown' });
+    own.emit('set-preference', { key: 'dm_order', value: JSON.stringify([unshared.code]) });
 
     own.emit('set-nicknames-bulk', { nicknames: { [recipient.id]: '  A nickname  ', [adminAccount.user.id]: 'Another nickname' } });
     await drain(own);
@@ -1025,6 +1095,12 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     const reopened = await connect(actor.token);
     st.after(() => reopened.socket.disconnect());
     assert.deepEqual(reopened.session.nicknames, { [recipient.id]: 'Renamed locally' });
+    assert.deepEqual(await emit(reopened.socket, 'get-preferences', 'preferences'), { dm_sort: 'alpha', dm_order: validOrder });
+    assert.deepEqual(await emit(other, 'get-preferences', 'preferences'), {});
+    for (const key of ['dm_sort', 'dm_order']) {
+      assert.deepEqual(await emit(reopened.socket, 'delete-preference', 'preference-deleted', { key }), { key });
+    }
+    assert.deepEqual(await emit(own, 'get-preferences', 'preferences'), {});
     const otherSession = await connect(recipient.token);
     st.after(() => otherSession.socket.disconnect());
     assert.equal(otherSession.session.nicknames[actor.id], undefined);
@@ -1072,6 +1148,134 @@ test('the real PostgreSQL app supports signup, login and public-room browsing', 
     await db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)').run(actor.id, role.id);
     assert.deepEqual(await privateRequest(custom, 'PUT', { volume: 0 }), { status: 200, body: { ok: true, name: 'Profile sound', volume: 0 } });
     assert.equal((await sounds()).find(sound => sound.name === 'Profile sound').volume, 0);
+  });
+  await t.test('room posting settings reach connected members and govern their next actions', async st => {
+    const room = await db.prepare("INSERT INTO channels (name, code, type_id) VALUES ('Posting settings', 'a5500001', 1) RETURNING id, code").get();
+    const member = await fixtureAccount('RoomSettingsMember');
+    await db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)').run(room.id, member.id);
+    const admin = (await connect(adminAccount.token)).socket;
+    const viewer = (await connect(member.token)).socket;
+    st.after(async () => {
+      admin.disconnect(); viewer.disconnect();
+      await db.prepare('DELETE FROM channels WHERE id = ?').run(room.id);
+    });
+    await Promise.all([admin, viewer].map(client => emit(client, 'get-channels', 'channels-list')));
+    const slow = interval => ({ code: room.code, interval });
+    const send = (content, event) => emit(viewer, 'send-message', event, { code: room.code, content });
+    assert.match(await emit(viewer, 'set-slow-mode', 'error-msg', slow(20)), /permission/);
+
+    const live = packet(viewer, 'slow-mode-updated', data => data.code === room.code);
+    const listed = packet(viewer, 'channels-list', rows => rows.some(ch => ch.id === room.id && ch.slow_mode_interval === 20));
+    admin.emit('set-slow-mode', slow(20));
+    assert.deepEqual(await live, slow(20));
+    await listed;
+    const first = await send('first under slow mode', 'new-message');
+    assert.match(await send('too soon', 'error-msg'), /Slow mode/);
+
+    async function toggle(permission, enabled) {
+      const event = packet(viewer, 'channel-permission-updated', data => data.code === room.code);
+      admin.emit('toggle-channel-permission', { code: room.code, permission });
+      assert.deepEqual(await event, { code: room.code, permission, enabled });
+    }
+    const readOnlyList = packet(viewer, 'channels-list', rows => rows.some(ch => ch.id === room.id && ch.read_only === 1));
+    await toggle('read_only', true);
+    const readOnlyRoom = (await readOnlyList).find(ch => ch.id === room.id);
+    assert.equal(readOnlyRoom.canOverrideReadOnly, false);
+    assert.equal(readOnlyRoom.type_id, null);
+    assert.match(await send('blocked in read-only', 'error-msg'), /read-only/);
+    await toggle('read_only', false);
+    await toggle('text', false);
+    assert.match(await send('blocked in text-off', 'error-msg'), /Text messages are disabled/);
+    await toggle('reactions', false);
+    assert.match(await emit(viewer, 'add-reaction', 'error-msg', { messageId: first.message.id, emoji: '👍' }), /Reactions are disabled/);
+  });
+  await t.test('room organization respects scoped access and audit pages hide codes from moderators', async st => {
+    const addRoom = db.prepare('INSERT INTO channels (name, code, parent_channel_id, role_gate) VALUES (?, ?, ?, ?) RETURNING id, code, name');
+    const parent = await addRoom.get('Organize parent', 'a5500002', null, null);
+    const first = await addRoom.get('First child', 'a5500003', parent.id, null);
+    const second = await addRoom.get('Second child', 'a5500004', parent.id, null);
+    const editorRole = await db.prepare("INSERT INTO roles (name, scope) VALUES ('Room organizer', 'channel') RETURNING id").get();
+    const auditRole = await db.prepare("INSERT INTO roles (name, scope) VALUES ('Audit reader', 'server') RETURNING id").get();
+    const hidden = await addRoom.get('Gated child', 'a5500005', parent.id, JSON.stringify({ mode: 'all', roles: [editorRole.id] }));
+    const editor = await fixtureAccount('RoomSettingsEditor');
+    const ordinary = await fixtureAccount('RoomAuditVisitor');
+    const grant = db.prepare('INSERT INTO role_permissions (role_id, permission, allowed) VALUES (?, ?, 1)');
+    for (const permission of ['manage_channel_settings', 'manage_sub_channels', 'rename_sub_channel', 'set_channel_topic']) {
+      await grant.run(editorRole.id, permission);
+    }
+    await grant.run(auditRole.id, 'view_audit_log');
+    const assign = db.prepare('INSERT INTO user_roles (user_id, role_id, channel_id) VALUES (?, ?, ?)');
+    await assign.run(editor.id, editorRole.id, parent.id);
+    await assign.run(editor.id, auditRole.id, null);
+    const membership = db.prepare('INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)');
+    for (const room of [parent, first, second, hidden]) await membership.run(room.id, editor.id);
+    await membership.run(first.id, ordinary.id);
+    const admin = (await connect(adminAccount.token)).socket;
+    const moderator = (await connect(editor.token)).socket;
+    const viewer = (await connect(ordinary.token)).socket;
+    st.after(async () => {
+      admin.disconnect(); moderator.disconnect(); viewer.disconnect();
+      await db.prepare('DELETE FROM channels WHERE id IN (?, ?, ?, ?)').run(hidden.id, second.id, first.id, parent.id);
+      await db.prepare('DELETE FROM roles WHERE id IN (?, ?)').run(editorRole.id, auditRole.id);
+    });
+    const [visible] = await Promise.all([moderator, viewer, admin].map(client => emit(client, 'get-channels', 'channels-list')));
+    assert.equal(visible.some(ch => ch.id === hidden.id), false);
+
+    const name = 'Renamed ' + first.code;
+    const renamed = packet(viewer, 'channel-renamed', data => data.code === first.code);
+    moderator.emit('rename-channel', { code: first.code, name });
+    assert.deepEqual(await renamed, { code: first.code, name });
+    const former = await db.prepare('SELECT former_names FROM channels WHERE id = ?').get(first.id);
+    assert.deepEqual(JSON.parse(former.former_names), [first.name]);
+
+    const topic = packet(viewer, 'channel-topic-changed', data => data.code === first.code);
+    moderator.emit('set-channel-topic', { code: first.code, topic: '  Read the room rules  ' });
+    assert.deepEqual(await topic, { code: first.code, topic: 'Read the room rules' });
+    await emit(moderator, 'set-notification-type', 'toast', { code: first.code, type: 'announcement' });
+    assert.match(await emit(moderator, 'toggle-welcome-channel', 'error-msg', { code: first.code }), /Only admins/);
+    await emit(admin, 'toggle-welcome-channel', 'toast', { code: first.code });
+
+    const sorted = packet(moderator, 'channels-list', rows => rows.some(ch => ch.id === parent.id && ch.sort_alphabetical === 4));
+    moderator.emit('set-sort-alphabetical', { code: parent.code, mode: 'dynamic' });
+    await sorted;
+    await Promise.all([
+      emit(moderator, 'set-channel-category', 'toast', { code: first.code, category: 'Organizer Notes' }),
+      emit(admin, 'set-channel-category', 'toast', { code: second.code, category: 'organizer notes' }),
+    ]);
+    const reordered = packet(moderator, 'channels-list', rows =>
+      rows.find(ch => ch.id === first.id)?.position === 2 && rows.find(ch => ch.id === second.id)?.position === 1);
+    moderator.emit('reorder-channels', { order: [{ code: first.code, position: 2 }, { code: second.code, position: 1 }] });
+    await reordered;
+    for (const other of [parent, hidden]) {
+      assert.match(await emit(moderator, 'reorder-channels', 'error-msg', {
+        order: [{ code: first.code, position: 20 }, { code: other.code, position: 21 }],
+      }), /permission/);
+    }
+    const [savedFirst, savedSecond] = await db.prepare(
+      'SELECT position, category, notification_type, show_welcome FROM channels WHERE id IN (?, ?) ORDER BY id'
+    ).all(first.id, second.id);
+    assert.equal(savedFirst.position, 2);
+    assert.equal(savedSecond.position, 1);
+    assert.equal(savedFirst.category.toLowerCase(), 'organizer notes');
+    assert.equal(savedSecond.category, savedFirst.category);
+    assert.equal(savedFirst.notification_type, 'announcement');
+    assert.equal(savedFirst.show_welcome, 1);
+
+    const audit = (client, opts) => client.timeout(10000).emitWithAck('get-audit-log', opts);
+    assert.deepEqual(await audit(viewer, {}), { error: 'Permission denied' });
+    const renameFilter = { action: 'channel_rename', actorUsername: 'ROOMSETTINGSEDITOR' };
+    const adminRows = await audit(admin, renameFilter);
+    assert.deepEqual(JSON.parse(adminRows.rows[0].details), { code: first.code, oldName: first.name, newName: name });
+    const modRows = await audit(moderator, renameFilter);
+    assert.equal(modRows.rows[0].target_name, 'Renamed (code hidden)');
+    assert.equal(JSON.parse(modRows.rows[0].details).code, '(code hidden)');
+    assert.ok(modRows.actions.includes('channel_setting_update'));
+    const filter = { action: 'channel_setting_update', actorUsername: editor.username, limit: 1 };
+    const page = await audit(moderator, filter);
+    assert.equal(page.hasMore, true);
+    assert.equal(JSON.parse(page.rows[0].details).setting, 'notification_type');
+    const older = await audit(moderator, { ...filter, beforeId: page.rows[0].id });
+    assert.equal(JSON.parse(older.rows[0].details).setting, 'topic');
   });
   await t.test('a restart preserves identities, settings and the default room', async () => {
     const before = await db.prepare('SELECT value FROM server_settings WHERE key = ?').get('server_fingerprint');

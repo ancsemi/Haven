@@ -16,7 +16,7 @@ const memberDefaults = require('../memberDefaults');
 const { MEDIA_GROUP_LAYOUTS } = require('../mediaGroup');
 const { reachableChannel } = require('./channelAccess');
 const { cleanWebhookName, cleanWebhookAvatarUrl } = require('../webhookFields');
-const { hideChannelCodes } = require('../auditStream');
+const readAuditLog = require('../db/auditLog');
 
 const THEMES_DIR = path.join(__dirname, '..', '..', 'themes');
 
@@ -1478,6 +1478,7 @@ module.exports = function register(socket, ctx) {
         storageSummary: usage ? {
           liveBytes: usage.liveBytes,
           attributedBytes: usage.attributedBytes,
+          dmBytes: usage.dmBytes,
           unattributedBytes: usage.unattributedBytes,
           fileCount: usage.fileCount
         } : undefined,
@@ -1496,50 +1497,14 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Audit log: paginated read for admins/mods ───────────
-  socket.on('get-audit-log', (opts, cb) => {
+  socket.on('get-audit-log', async (opts, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.user) return cb({ error: 'Not authenticated' });
     const isAdmin = socket.user.isAdmin;
     const canView = isAdmin || userHasPermission(socket.user.id, 'view_audit_log');
     if (!canView) return cb({ error: 'Permission denied' });
     try {
-      const limit = Math.max(1, Math.min(200, parseInt(opts && opts.limit, 10) || 50));
-      const beforeId = parseInt(opts && opts.beforeId, 10) || 0;
-      // afterId pages forward instead, oldest first: a bot following the log
-      // live catches up from the last row it saw (src/auditStream.js).
-      const afterId = parseInt(opts && opts.afterId, 10) || 0;
-      const action = opts && typeof opts.action === 'string' && opts.action ? opts.action : null;
-      const actorUsername = opts && typeof opts.actorUsername === 'string' && opts.actorUsername
-        ? opts.actorUsername.trim().toLowerCase().slice(0, 40) : null;
-
-      const where = [];
-      const params = [];
-      if (beforeId > 0) { where.push('id < ?'); params.push(beforeId); }
-      if (afterId > 0) { where.push('id > ?'); params.push(afterId); }
-      if (action) { where.push('action = ?'); params.push(action); }
-      if (actorUsername) { where.push('LOWER(actor_username) LIKE ?'); params.push('%' + actorUsername + '%'); }
-      // Notes are for staff, never for the member they are about, even one
-      // who can read this log: their own history leaves notes out too. That
-      // covers the note and the row for taking one back. Filtered here, not
-      // after, so a page still holds `limit` rows. The live stream does the
-      // same with isNoteAbout (src/auditStream.js).
-      where.push(`NOT (target_id IS ? AND (action = 'user_note' OR (action = 'mod_case_revoke'
-        AND COALESCE(CASE WHEN json_valid(details) THEN json_extract(details, '$.type') END, '') = 'note')))`);
-      params.push(socket.user.id);
-      const whereSql = where.length ? ('WHERE ' + where.join(' AND ')) : '';
-      params.push(limit);
-
-      const found = db.prepare(
-        'SELECT id, created_at, actor_id, actor_username, action, target_type, target_id, target_name, details ' +
-        'FROM audit_log ' + whereSql + ` ORDER BY id ${afterId > 0 ? 'ASC' : 'DESC'} LIMIT ?`
-      ).all(...params);
-      const actions = db.prepare('SELECT DISTINCT action FROM audit_log ORDER BY action ASC').all().map(r => r.action);
-      // Times go out as UTC with a Z, as audit-entry sends them. Channel
-      // codes are invites (a code is enough to join), so only the admin sees
-      // them in the log.
-      for (const r of found) r.created_at = utcStamp(r.created_at);
-      const rows = isAdmin ? found : found.map(hideChannelCodes);
-      cb({ rows, actions, hasMore: rows.length === limit });
+      cb(await readAuditLog(db.async || db, opts, socket.user));
     } catch (err) {
       console.error('get-audit-log error:', err);
       cb({ error: 'Failed to load audit log' });

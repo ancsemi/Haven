@@ -1480,9 +1480,7 @@ router.post('/revoke-sessions', authLimiter, async (req, res) => {
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Password is incorrect' });
 
-    const newPwv = (user.password_version || 1) + 1;
-    db.prepare('UPDATE users SET password_version = ? WHERE id = ?').run(newPwv, user.id);
-    _forgetPwv(user.id);
+    const newPwv = revokeSessions(user.id);
 
     const freshToken = jwt.sign(
       { id: user.id, username: user.username, isAdmin: !!user.is_admin, displayName: user.display_name || user.username, pwv: newPwv },
@@ -1620,6 +1618,13 @@ async function verifyTokenAsync(token, opts = {}) {
 // Called right after password_version is written so the change takes effect
 // immediately instead of waiting out the cache.
 function _forgetPwv(userId) { _pwvCache.delete(userId); }
+function revokeSessions(userId) {
+  const db = getDb();
+  const next = (db.prepare('SELECT password_version FROM users WHERE id = ?').get(userId)?.password_version || 1) + 1;
+  db.prepare('UPDATE users SET password_version = ? WHERE id = ?').run(next, userId);
+  _forgetPwv(userId);
+  return next;
+}
 
 // A bot account's token (src/botAccounts.js). Making one moves the account's
 // password version on, so any token handed out before stops working. It
@@ -2530,4 +2535,4 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
   }
 });
 
-module.exports = { router, verifyToken, verifyTokenAsync, issueBotToken, forgetSession: _forgetPwv, provisionNewUser, generateChannelCode, generateToken, generateTokenAsync, generateConnectToken, authLimiter, acceptTotpCode, totpLimited, noteTotpFail };
+module.exports = { router, verifyToken, verifyTokenAsync, issueBotToken, forgetSession: _forgetPwv, revokeSessions, provisionNewUser, generateChannelCode, generateToken, generateTokenAsync, generateConnectToken, authLimiter, acceptTotpCode, totpLimited, noteTotpFail };

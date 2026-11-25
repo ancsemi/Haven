@@ -7,7 +7,12 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
+// moderation.js loads src/auth.js, which needs a secret and keeps cleanup
+// timers running, so end the process once done.
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'j'.repeat(64);
 const { bulkRemoveDetails } = require('../src/socketHandlers/moderation');
+
+test.after(() => setImmediate(() => process.exit(0)));
 
 const summary = { removed: 0, requested: 0, ipBanned: 0, scrubMessages: false, reason: 'Bulk cleanup' };
 

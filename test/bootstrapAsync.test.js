@@ -99,15 +99,15 @@ for (const backend of ['sqlite', 'postgres']) {
     });
 
     await t.test('mute insert, update and unmute affect only the signed-in member', async () => {
-      assert.deepEqual(await prefs(), { status: 200, body: { muted: ['shared'] } });
-      assert.deepEqual(await prefs(bobToken), { status: 200, body: { muted: ['bob-only'] } });
+      assert.deepEqual(await prefs(), { status: 200, body: { muted: ['shared'], all: [] } });
+      assert.deepEqual(await prefs(bobToken), { status: 200, body: { muted: ['bob-only'], all: [] } });
       const code = "new'; SELECT 1; --";
       assert.deepEqual(await mute(code, true), { status: 200, body: { ok: true } });
       assert.deepEqual(await mute(code, true), { status: 200, body: { ok: true } });
       assert.deepEqual(new Set((await prefs()).body.muted), new Set(['shared', code]));
       assert.deepEqual(await mute(code, false), { status: 200, body: { ok: true } });
-      assert.deepEqual(await prefs(), { status: 200, body: { muted: ['shared'] } });
-      assert.deepEqual(await prefs(bobToken), { status: 200, body: { muted: ['bob-only'] } });
+      assert.deepEqual(await prefs(), { status: 200, body: { muted: ['shared'], all: [code] } });
+      assert.deepEqual(await prefs(bobToken), { status: 200, body: { muted: ['bob-only'], all: [] } });
     });
 
     await t.test('late query results preserve discovery and saved notification preferences', async (t) => {
@@ -176,7 +176,7 @@ for (const backend of ['sqlite', 'postgres']) {
       assert.deepEqual(await prefs(), failure);
       assert.deepEqual(await mute('shared', false), failure);
     });
-    assert.deepEqual(await prefs(), { status: 200, body: { muted: ['shared'] } });
+    assert.deepEqual(await prefs(), { status: 200, body: { muted: ['shared'], all: ["new'; SELECT 1; --", 'delayed'] } });
 
     await t.test('bad tokens and invalid channel codes are refused before querying', async (t) => {
       t.mock.method(driver, 'prepare', () => { throw new Error('must not query'); });

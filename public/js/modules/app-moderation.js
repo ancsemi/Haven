@@ -29,7 +29,7 @@ _setupAuditLog() {
   // Every action reads as a phrase from the locale file; one with no phrase
   // yet shows its own name with spaces. The icon goes by what was acted on.
   const ICONS = {
-    user_kick: '👢', user_ban: '🚫', user_unban: '✅', user_mute: '🔇', user_unmute: '🔊',
+    user_kick: '👢', user_ban: '🚫', user_sessions_revoke: '🖥️', user_unban: '✅', user_mute: '🔇', user_unmute: '🔊',
     user_warn: '⚠️', user_note: '📝', user_delete: '🗑️', user_self_delete: '🗑️', user_scrub: '🧹',
     user_register: '👋', voice_kick: '🎙️', admin_transfer: '👑',
     admin_recover: '👑', roles_reset: '🎭', message_delete: '🗑️', messages_bulk_delete: '🗑️',

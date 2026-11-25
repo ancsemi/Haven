@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayName, cleanHexColor, cleanProfileTheme } = require('./helpers');
+const { utcStamp, isString, sanitizeText, isValidUploadPath, normalizeDisplayName, cleanHexColor, cleanProfileTheme, cleanProfileLinks } = require('./helpers');
 const { generateConnectToken } = require('../auth');
 const { setEnvValue, clearEnvValue, isWritableKey } = require('../envStore');
 const { saveFcmToken } = require('../fcm');
@@ -376,6 +376,19 @@ module.exports = function register(socket, ctx) {
       socket.emit('profile-theme-updated', { theme });
     } catch (err) {
       console.error('Set profile theme error:', err);
+    }
+  });
+  socket.on('set-profile-links', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    const links = cleanProfileLinks(data.links);
+    if (!links) return socket.emit('error-msg', 'Invalid profile links');
+    if (links.length && enforceAutomod(links.map((l) => `${l.label} ${l.url}`).join('\n'), { surface: 'profile' })) return;
+    try {
+      await profile.setProfileLinks(asyncDb, socket.user.id, links);
+      socket.user.profileLinks = links;
+      socket.emit('profile-links-updated', { links });
+    } catch (err) {
+      console.error('Set profile links error:', err);
     }
   });
 

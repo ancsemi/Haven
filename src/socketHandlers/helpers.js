@@ -195,6 +195,31 @@ function cleanProfileTheme(top, bottom) {
   const t = cleanHexColor(top), b = cleanHexColor(bottom);
   return t && b ? { top: t, bottom: b } : null;
 }
+const PROFILE_LINKS_MAX = 5, PROFILE_LINK_LABEL_MAX = 32, PROFILE_LINK_URL_MAX = 300;
+function cleanProfileLink(link) {
+  if (!link || typeof link.label !== 'string' || typeof link.url !== 'string') return null;
+  const label = link.label.trim(), raw = link.url.trim();
+  if (!label || label.length > PROFILE_LINK_LABEL_MAX || /[\p{Cc}‪-‮⁦-⁩]/u.test(label)) return null;
+  if (!/^https:\/\//i.test(raw) || raw.length > PROFILE_LINK_URL_MAX || /[\s\p{Cc}]/u.test(raw)) return null;
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' && u.hostname && !u.username && !u.password && u.href.length <= PROFILE_LINK_URL_MAX ? { label, url: u.href } : null;
+  } catch {
+    return null;
+  }
+}
+function cleanProfileLinks(list) {
+  const links = Array.isArray(list) && list.length <= PROFILE_LINKS_MAX ? list.map(cleanProfileLink) : null;
+  return links && links.every(Boolean) ? links : null;
+}
+function profileLinksFromRow(json) {
+  try {
+    const list = JSON.parse(json || '[]');
+    return Array.isArray(list) ? list.slice(0, PROFILE_LINKS_MAX).map(cleanProfileLink).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
 
 // All recognized role permissions. Any permission sent by a client that is not here is silently rejected.
 const VALID_ROLE_PERMS = [
@@ -374,7 +399,7 @@ function roleMenuContent(title, entries) {
 module.exports = {
   editChannelCode,
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
-  sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, roleMenuContent,
+  sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme, cleanProfileLinks, profileLinksFromRow, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, roleMenuContent,
   normalizeWordGroups, validEscalation, filterIdleOnline,
   replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads, maskSpoilers,
   NEW_DMS_PER_HOUR,

@@ -5,7 +5,7 @@ const { nameRefusal } = require('../blockedNames');
 const { badgesForProfile, getBadge, setBadgeHidden } = require('../badges');
 const profile = require('../db/userProfiles');
 const { nicknameUpsert, deleteNickname, nicknameEntries, lockUserPreferences } = require('../db/userPreferences');
-const { normalizeDisplayName, parseBorderTransform, sanitizeText } = require('./helpers');
+const { normalizeDisplayName, parseBorderTransform, cleanProfileLinks, sanitizeText } = require('./helpers');
 const { postingSettings, checkText } = require('./postgresPosting');
 const createPermissions = require('./asyncPermissions');
 
@@ -98,6 +98,14 @@ function createPostgresProfiles({ io, db, permissions, presence, channelMembers,
       await profile.setBio(db, user.id, bio);
       updateConnectedProfiles({ bio });
       socket.emit('bio-updated', { bio });
+    }));
+    on('set-profile-links', profileChange(async data => {
+      const links = cleanProfileLinks(data?.links);
+      if (!links) throw new Error('Invalid profile links');
+      await checkProfileText(db, permissions, user, links.map(l => `${l.label} ${l.url}`).join('\n'));
+      await profile.setProfileLinks(db, user.id, links);
+      updateConnectedProfiles({ profileLinks: links });
+      socket.emit('profile-links-updated', { links });
     }));
 
     on('set-birthday', profileChange(async data => {

@@ -10,7 +10,8 @@
 // Only bots post these: a webhook through its API, a bot account over its
 // own connection. A click or a pick goes back to the bot
 // (socketHandlers/botInteractions.js), which answers with a private reply
-// to the person or by editing the message.
+// to the person, by editing the message, or by opening a form of text
+// boxes (type 4, Discord's modal) for the person to fill in.
 //
 // Everything is checked and trimmed here, so the client can trust the shape
 // it is handed. Text is cleaned like message text; links must be http(s) and
@@ -24,10 +25,15 @@ const LIMITS = {
   fieldName: 256, fieldValue: 1024, footer: 2048, author: 256,
   rows: 5, buttons: 5, label: 80, customId: 100, options: 25,
   optionText: 100, placeholder: 150, url: 2048,
+  modalTitle: 45, inputs: 5, inputLabel: 45, inputPlaceholder: 100, inputValue: 4000,
 };
 
 const BUTTON = 2;
 const SELECT = 3;
+const TEXT_INPUT = 4;
+// Discord's text box styles: one line, or a paragraph that takes line breaks.
+const SHORT = 1;
+const PARAGRAPH = 2;
 // Discord's button styles: primary, secondary, success, danger, link.
 const STYLES = new Set([1, 2, 3, 4, 5]);
 const LINK = 5;
@@ -301,6 +307,125 @@ function checkValues(component, raw) {
   return { values };
 }
 
+// What a person may type into a bot's text box: letters, marks, numbers,
+// punctuation, symbols and spaces in any language, and whole emoji. Kept
+// out is whatever could hide or reorder what the text says: control
+// characters, direction overrides, zero-width spaces, invisible tag
+// characters outside a flag, private use and unassigned code points, and
+// Zalgo. Persian, Arabic and Indic writing needs the joiners and direction
+// marks (U+200C to U+200F, U+061C), so those stay.
+const TYPED_EMOJI = /\p{RGI_Emoji}/gv;
+const TYPED_ALLOWED = /^[\p{L}\p{M}\p{N}\p{P}\p{S}\p{Zs}\u200C-\u200F\u061C]*$/u;
+// Some invisible characters count as letters or marks: Hangul fillers,
+// variation selectors past the two emoji use, the grapheme joiner.
+const TYPED_INVISIBLE = /[\p{Default_Ignorable_Code_Point}--[\u200C-\u200F\u061C\uFE0E\uFE0F]]/v;
+// As for display names: past three marks on one letter it is Zalgo.
+const TYPED_MARK_RUN = /\p{M}{4,}/u;
+
+// The text with its line breaks made \n, or { error } for the person.
+function typed(raw, multiline) {
+  const value = raw.replace(/\r\n?/g, '\n').normalize('NFC');
+  // An emoji becomes a space, so marks either side of one never add up.
+  let rest = value.replace(TYPED_EMOJI, ' ');
+  if (multiline) rest = rest.replace(/[\n\t]/g, ' ');
+  else if (/[\n\t]/.test(rest)) return { error: 'This box takes one line' };
+  if (!TYPED_ALLOWED.test(rest) || TYPED_INVISIBLE.test(rest)) {
+    return { error: 'This has an invisible or unsupported character. Try typing it instead of pasting it.' };
+  }
+  if (TYPED_MARK_RUN.test(rest)) return { error: 'Too many accent marks on one letter' };
+  return { value };
+}
+
+function cleanTextInput(raw, where, seen, ceiling) {
+  if (!raw || raw.type !== TEXT_INPUT) fail(`${where} must be a text input (type 4)`);
+  const style = raw.style === undefined ? SHORT : raw.style;
+  if (style !== SHORT && style !== PARAGRAPH) fail(`${where}.style must be 1 (one line) or 2 (paragraph)`);
+  const input = { type: TEXT_INPUT, custom_id: customId(raw.custom_id, where, seen), style };
+  input.label = text(raw.label, LIMITS.inputLabel, `${where}.label`);
+  if (!input.label) fail(`${where}.label is required`);
+  const placeholder = text(raw.placeholder, LIMITS.inputPlaceholder, `${where}.placeholder`);
+  if (placeholder) input.placeholder = placeholder;
+  const min = raw.min_length === undefined || raw.min_length === null ? 0 : raw.min_length;
+  const max = raw.max_length === undefined || raw.max_length === null ? LIMITS.inputValue : raw.max_length;
+  if (!Number.isInteger(min) || min < 0 || min > LIMITS.inputValue) fail(`${where}.min_length must be 0 to ${LIMITS.inputValue}`);
+  if (!Number.isInteger(max) || max < 1 || max > LIMITS.inputValue || max < min) {
+    fail(`${where}.max_length must be from min_length (and at least 1) to ${LIMITS.inputValue}`);
+  }
+  // A Discord bot may ask for more than this server's messages hold; it
+  // gets the server's limit rather than a refusal.
+  input.max_length = Math.min(max, ceiling);
+  input.min_length = Math.min(min, input.max_length);
+  input.required = raw.required !== false;
+  if (raw.value !== undefined && raw.value !== null && raw.value !== '') {
+    if (typeof raw.value !== 'string') fail(`${where}.value must be a string`);
+    const pre = typed(raw.value, style === PARAGRAPH);
+    if (pre.error) fail(`${where}.value: ${pre.error}`);
+    if (pre.value.length > input.max_length) fail(`${where}.value is longer than ${input.max_length} characters`);
+    input.value = pre.value;
+  }
+  return input;
+}
+
+// A form a bot opens in answer to a click: Discord's modal, a title and up
+// to 5 action rows of one text box each. maxChars is this server's message
+// limit, so a box never takes more than the bot could post back.
+// Returns { custom_id, title, components } or { error } for the bot.
+function cleanModal(raw, maxChars) {
+  try {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('The modal must be an object');
+    const id = customId(raw.custom_id, 'modal', new Set());
+    const title = text(raw.title, LIMITS.modalTitle, 'modal.title');
+    if (!title) fail('modal.title is required');
+    const rows = raw.components;
+    if (!Array.isArray(rows) || !rows.length || rows.length > LIMITS.inputs) fail(`modal.components needs 1 to ${LIMITS.inputs} action rows`);
+    const ceiling = Math.min(maxChars, LIMITS.inputValue);
+    const seen = new Set();
+    const components = rows.map((r, i) => {
+      const at = `modal.components[${i}]`;
+      if (!r || r.type !== 1 || !Array.isArray(r.components) || r.components.length !== 1) fail(`${at} must be an action row holding one text input`);
+      return { type: 1, components: [cleanTextInput(r.components[0], `${at}.components[0]`, seen, ceiling)] };
+    });
+    // What the form says is held to the rule for what is typed into it: no
+    // invisible or text-direction characters, so a title or label cannot be
+    // made to read as something other than what it is.
+    const shown = [title, ...components.flatMap(r => [r.components[0].label, r.components[0].placeholder])];
+    if (shown.some(s => s && typed(String(s), true).error)) fail('The form text has an invisible or unsupported character');
+    return { custom_id: id, title, components };
+  } catch (err) {
+    if (err instanceof PartsError) return { error: err.message };
+    throw err;
+  }
+}
+
+// What a person sent back from a form: one string for each of its boxes and
+// nothing else, each passing its box's rules. Returns { fields }, as
+// [{ custom_id, value }] in the form's order, or { error } for the person.
+function checkModalSubmit(modal, raw) {
+  const inputs = modal.components.map(r => r.components[0]);
+  if (!Array.isArray(raw) || raw.length > inputs.length) return { error: 'Invalid request' };
+  const given = new Map();
+  for (const f of raw) {
+    if (!f || typeof f.custom_id !== 'string' || typeof f.value !== 'string' || given.has(f.custom_id)) return { error: 'Invalid request' };
+    given.set(f.custom_id, f.value);
+  }
+  const fields = [];
+  for (const input of inputs) {
+    const got = typed(given.get(input.custom_id) || '', input.style === PARAGRAPH);
+    given.delete(input.custom_id);
+    if (got.error) return { error: `${input.label}: ${got.error}` };
+    const n = got.value.length;
+    if (!got.value.trim()) {
+      if (input.required) return { error: `${input.label} is required` };
+    } else if (n < input.min_length) {
+      return { error: `${input.label} needs at least ${input.min_length} characters` };
+    }
+    if (n > input.max_length) return { error: `${input.label} takes up to ${input.max_length} characters` };
+    fields.push({ custom_id: input.custom_id, value: got.value });
+  }
+  if (given.size) return { error: 'Invalid request' };
+  return { fields };
+}
+
 // A line to show in a push when a message is only an embed.
 function summary(embeds) {
   const e = (embeds || [])[0];
@@ -317,11 +442,11 @@ function plainText({ embeds, components } = {}) {
   }
   for (const row of components || []) {
     for (const c of row.components || []) {
-      out.push(c.label, c.url, c.placeholder);
+      out.push(c.label, c.url, c.placeholder, c.value);
       for (const o of c.options || []) out.push(o.label, o.description);
     }
   }
   return out.filter(Boolean).join('\n');
 }
 
-module.exports = { plainText, ensureTable, clean, record, lookup, get, findComponent, checkValues, summary, LIMITS, BUTTON, SELECT };
+module.exports = { plainText, ensureTable, clean, record, lookup, get, findComponent, checkValues, cleanModal, checkModalSubmit, summary, LIMITS, BUTTON, SELECT };

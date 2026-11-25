@@ -315,7 +315,7 @@ module.exports = function register(socket, ctx) {
     for (const e of wanted) {
       const roleId = isInt(e && e.roleId) ? e.roleId : null;
       // A Unicode emoji, or a named one (Haven's own or the server's custom).
-      const emoji = isString(e && e.emoji, 1, 32) && isUsableEmoji(db, e.emoji) ? e.emoji : null;
+      const emoji = isString(e && e.emoji, 1, 70) && isUsableEmoji(db, e.emoji) ? e.emoji : null;
       if (!roleId || !emoji || seen.has(roleId) || seen.has(emoji)) continue;
       const role = db.prepare('SELECT id, name, level FROM roles WHERE id = ?').get(roleId);
       if (!role) continue;
