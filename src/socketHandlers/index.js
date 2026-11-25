@@ -86,6 +86,7 @@ const registerThreadReadState = require('./threadReadState');
 const registerForumVotes = require('./forumVotes');
 const registerCalendar = require('./calendar');
 const registerOverview = require('./overview');
+const registerBrackets = require('./brackets');
 const registerForumPictureVotes = require('./forumPictureVotes');
 const registerBadges = require('./badges');
 const registerMoveToThread = require('./moveToThread');
@@ -2902,6 +2903,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerForumVotes(socket, ctx);
     registerCalendar(socket, ctx);
     registerOverview(socket, ctx);
+    registerBrackets(socket, ctx);
     registerForumPictureVotes(socket, ctx);
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);

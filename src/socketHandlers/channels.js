@@ -15,6 +15,7 @@ const { removeChannelMember } = require('../channelMemberRemoval');
 const CHANNEL_VIEWS = [
   ['isOverview', 'overview', 'is_overview'],
   ['isCalendar', 'calendar', 'is_calendar'],
+  ['isBracket', 'bracket', 'is_bracket'],
   ['isForum', 'forum', 'is_forum'],
 ];
 
@@ -261,12 +262,13 @@ module.exports = function register(socket, ctx) {
     const view = (CHANNEL_VIEWS.find(([flag]) => data[flag]) || [])[2];
     const isOverview = view === 'is_overview' ? 1 : 0;
     const isCalendar = view === 'is_calendar' ? 1 : 0;
+    const isBracket = view === 'is_bracket' ? 1 : 0;
     const isForum = view === 'is_forum' ? 1 : 0;
 
     try {
       const result = db.prepare(
-        'INSERT INTO channels (name, code, created_by, is_private, expires_at, is_forum, is_calendar, is_overview) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(name.trim(), code, socket.user.id, isPrivate, expiresAt, isForum, isCalendar, isOverview);
+        'INSERT INTO channels (name, code, created_by, is_private, expires_at, is_forum, is_calendar, is_overview, is_bracket) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(name.trim(), code, socket.user.id, isPrivate, expiresAt, isForum, isCalendar, isOverview, isBracket);
 
       // Channel templates send the rest of the setup along with the name, so
       // an "Announcements" channel comes out read-only and in announcement
@@ -333,7 +335,8 @@ module.exports = function register(socket, ctx) {
         // list lands, so a forum has to say so here or it shows up as #.
         is_forum: isForum,
         is_calendar: isCalendar,
-        is_overview: isOverview
+        is_overview: isOverview,
+        is_bracket: isBracket
       };
 
       socket.join(`channel:${code}`);
@@ -1141,14 +1144,14 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
     const permission = typeof data.permission === 'string' ? data.permission.trim() : '';
-    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'calendar', 'overview', 'private', 'nsfw', 'reactions', 'forum_blog', 'forum_blog_pics_only'];
+    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'calendar', 'overview', 'bracket', 'private', 'nsfw', 'reactions', 'forum_blog', 'forum_blog_pics_only'];
     if (!validPerms.includes(permission)) return socket.emit('error-msg', 'Invalid permission');
 
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to toggle channel permissions');
 
-    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', calendar: 'is_calendar', overview: 'is_overview', private: 'is_private', nsfw: 'is_nsfw', reactions: 'reactions_enabled', forum_blog: 'forum_blog', forum_blog_pics_only: 'forum_blog_pics_only' };
+    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', calendar: 'is_calendar', overview: 'is_overview', bracket: 'is_bracket', private: 'is_private', nsfw: 'is_nsfw', reactions: 'reactions_enabled', forum_blog: 'forum_blog', forum_blog_pics_only: 'forum_blog_pics_only' };
     const colName = colMap[permission];
     const current = channel[colName];
     const newVal = current ? 0 : 1;

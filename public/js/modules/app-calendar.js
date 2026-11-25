@@ -249,10 +249,11 @@ _calendarMayDelete(ev) {
   return !!(st && (st.canModerate || ev.createdBy === this.user?.id));
 },
 
-_calendarOverlay(cls, html) {
-  document.querySelector('.cal-modal-overlay')?.remove();
+// A dialog over a channel view (calendars, brackets). One is open at a time.
+_viewDialog(cls, html) {
+  document.querySelector('.view-modal-overlay')?.remove();
   const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay cal-modal-overlay';
+  overlay.className = 'modal-overlay view-modal-overlay';
   overlay.style.display = 'flex';
   overlay.innerHTML = `<div class="modal ${cls}" role="dialog" aria-modal="true">${html}</div>`;
   const onKey = (e) => { if (e.key === 'Escape') close(); };
@@ -281,7 +282,7 @@ _calendarShowEvent(ev, attendees) {
     const names = attendees.filter(a => a.status === s).map(a => esc(a.name));
     return names.length ? `<div class="cal-attendees-row"><strong>${esc(label[s])} (${names.length})</strong> ${names.join(', ')}</div>` : '';
   }).join('');
-  const { overlay, close } = this._calendarOverlay('cal-event-modal', `
+  const { overlay, close } = this._viewDialog('cal-event-modal', `
     <div class="cal-event-stripe" style="--cal-color:${ev.color || 'var(--accent)'}"></div>
     <h3 class="cal-event-title">${esc(ev.title)}</h3>
     <p class="cal-event-when">🕒 ${esc(this._calendarWhen(ev))}</p>
@@ -332,7 +333,7 @@ _calendarOpenEditor(ev, day) {
     : { sd: localDay(new Date(ev.startsAt)), st: localTime(new Date(ev.startsAt)), ed: localDay(new Date(ev.endsAt)), et: localTime(new Date(ev.endsAt)) })
     : { sd: startDay, st: nextHour, ed: startDay, et: pad((now.getHours() + 2) % 24) + ':00' };
   let color = ev ? ev.color : null;
-  const { overlay, close } = this._calendarOverlay('cal-editor', `
+  const { overlay, close } = this._viewDialog('cal-editor', `
     <h3>${esc(t(ev ? 'calendar.edit_event' : 'calendar.new_event'))}</h3>
     <label class="cal-field"><span>${esc(t('calendar.title'))}</span>
       <input type="text" class="settings-text-input" id="cal-ed-title" maxlength="100" value="${esc(ev ? ev.title : '')}" required></label>
@@ -418,7 +419,7 @@ _listenCalendar() {
     const st = this._calendar;
     if (!data || !st || st.code !== data.channelCode) return;
     st.events.delete(data.id);
-    const open = document.querySelector('.cal-modal-overlay');
+    const open = document.querySelector('.view-modal-overlay');
     if (open && open.dataset.calOpen === String(data.id)) open.remove();
     if (this._channelView === 'calendar' && this.currentChannel === st.code) this._calendarDraw();
   });

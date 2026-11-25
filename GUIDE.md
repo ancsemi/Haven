@@ -223,13 +223,21 @@ Turn any channel into a forum from **Channel Functions → Forum**, or tick **Fo
 
 Turn any channel into a calendar from **Channel Functions → Calendar**, or tick **Calendar** when creating it. A calendar channel shows a month of events instead of messages, with the month's events listed under the grid. Anyone who can post in the channel adds an event with **Add event** or by clicking a day: give it a title, a start and end (or make it all day), and optionally a place, details and a color. Everyone who can read the channel opens an event to see who is coming and answers **Going**, **Maybe** or **Can't go**; press your answer again to take it back. Changes show up for everyone right away.
 
-Times show in each member's own time zone. An all-day event is a date, so it lands on the same day for everyone. An event's creator can edit or delete it, and so can anyone with **Delete Messages** in the channel. Make the calendar **Read Only** to keep event planning to the people with the read-only override while everyone else can still answer. A channel shows one view at most (forum, calendar or overview), and switching a calendar off keeps its events for when it is switched back on.
+Times show in each member's own time zone. An all-day event is a date, so it lands on the same day for everyone. An event's creator can edit or delete it, and so can anyone with **Delete Messages** in the channel. Make the calendar **Read Only** to keep event planning to the people with the read-only override while everyone else can still answer. A channel shows one view at most (forum, calendar, overview or brackets), and switching a calendar off keeps its events for when it is switched back on.
 
 ### Overview Channels 🏠
 
 Turn a channel into a front page for your server from **Channel Functions → Overview**, or tick **Overview** when creating it. Under the server banner, icon and name, an overview shows three cards: the **upcoming events** from calendar channels, the **latest announcements** from announcement channels, and the most active **forum topics**. The channel topic stays in the bar above, so it works well as a welcome line.
 
 Each member sees only what comes from channels they belong to and can read, so private and role-gated channels stay private. NSFW channels are left out unless the overview channel is itself marked NSFW. Self-destructing messages are never shown. The page refreshes when something changes in one of its channels. Click an event to open it in its calendar, an announcement to jump to it in its channel, or a topic to open its thread.
+
+### Bracket Channels 🏆
+
+Run single-elimination tournaments from **Channel Functions → Brackets**, or tick **Brackets** when creating a channel. A bracket channel shows its tournament trees instead of messages, with a picker at the top when it holds more than one. Anyone who can post there starts one with **New bracket**: give it a name, optional details, and the entrants, one per line with the top seed first (2 to 64). **Shuffle** mixes the order for a random draw.
+
+Seeds pair the usual way, so the top two seeds can only meet in the final. When the field is not a power of two, the top seeds get byes and go straight to the next round. Click a match to pick its winner and add a short note on how it ended, such as "Pinfall, 14:32". The winner moves on, and the final crowns the champion. A result can be changed or cleared until the match it leads to has a result of its own. Renaming entrants keeps the results; changing how many there are needs the results cleared first.
+
+A bracket's creator runs it, and so does anyone with **Delete Messages** in the channel. Make the channel **Read Only** to keep starting brackets to the people with the read-only override. Changes show up for everyone right away, and switching brackets off keeps them for when the channel is switched back on.
 
 ### Creating Sub-Channels
 

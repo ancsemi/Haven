@@ -1,0 +1,73 @@
+/* Bracket channels (app-brackets.js): single-elimination trees take the
+   place of the message log. Each round is a column; every slot takes an equal
+   share of its column's height, so the lines between rounds meet exactly. */
+
+.messages.bracket-view { display: flex; flex-direction: column; padding: 0.75rem 1rem 1.5rem; }
+.br-root { --br-line: var(--border); --br-gap: 1.1rem; display: flex; flex-direction: column; gap: 0.75rem; width: 100%; max-width: 1400px; margin: 0 auto; }
+
+.br-toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.br-pick { max-width: min(100%, 22rem); }
+.br-spacer { flex: 1; }
+.br-status, .br-empty { margin: 0; }
+.br-empty { text-align: center; padding: 1.5rem 0; }
+
+.br-head { display: flex; flex-direction: column; gap: 0.3rem; }
+.br-title { margin: 0; font-size: 1.25rem; color: var(--text-primary); overflow-wrap: anywhere; }
+.br-desc { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondary); }
+.br-champion { margin: 0.2rem 0; align-self: flex-start; padding: 0.3rem 0.75rem; border-radius: 999px; font-weight: 700; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text-primary); }
+.br-meta { margin: 0; font-size: 0.8rem; }
+.br-head-actions { display: flex; gap: 0.4rem; }
+.br-delete { color: var(--danger, #ed4245); }
+
+.br-tree { display: flex; overflow-x: auto; padding-bottom: 0.5rem; }
+.br-round { display: flex; flex-direction: column; flex: 1 0 13rem; min-width: 13rem; }
+.br-round-name { margin: 0 0 0.4rem; text-align: center; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.br-matches { display: flex; flex-direction: column; flex: 1; }
+.br-slot { position: relative; flex: 1 1 0; min-height: 5.5rem; display: flex; flex-direction: column; justify-content: center; padding: 0 var(--br-gap); }
+
+/* Lines: out of each match to the right edge of its column, joined with its
+   pair at their middle, and into the next match from the left. */
+.br-round:not(:last-child) .br-slot::after { content: ''; position: absolute; right: 0; width: var(--br-gap); height: 50%; border: 0 solid var(--br-line); }
+.br-round:not(:last-child) .br-slot:nth-child(odd)::after { top: 50%; border-top-width: 2px; border-right-width: 2px; border-top-right-radius: 6px; }
+.br-round:not(:last-child) .br-slot:nth-child(even)::after { bottom: 50%; border-bottom-width: 2px; border-right-width: 2px; border-bottom-right-radius: 6px; }
+.br-round:not(:first-child) .br-slot::before { content: ''; position: absolute; left: 0; top: 50%; width: var(--br-gap); border-top: 2px solid var(--br-line); }
+.br-round:not(:last-child) .br-slot.br-slot-decided::after { border-color: color-mix(in srgb, var(--accent) 70%, var(--br-line)); }
+
+.br-match { display: flex; flex-direction: column; width: 100%; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card, var(--bg-secondary)); color: var(--text-primary); font: inherit; text-align: left; overflow: hidden; }
+button.br-match { cursor: pointer; }
+button.br-match:hover, button.br-match:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.br-match.br-bye { opacity: 0.55; }
+.br-side { display: flex; align-items: center; gap: 0.45rem; min-height: 1.75rem; padding: 0.15rem 0.5rem; font-size: 0.85rem; }
+.br-side + .br-side { border-top: 1px solid var(--border); }
+.br-seed { min-width: 1.4em; font-size: 0.7rem; color: var(--text-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.br-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br-side.br-win { font-weight: 700; background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.br-side.br-win .br-name::after { content: ' ✓'; color: var(--accent); }
+.br-side.br-lose { color: var(--text-muted); }
+.br-side.br-lose .br-name { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-muted) 60%, transparent); }
+.br-side.br-tbd { color: var(--text-muted); font-style: italic; }
+/* The note hangs under the match so it does not move the match off the line. */
+.br-note { position: absolute; left: var(--br-gap); right: var(--br-gap); top: calc(50% + 1.85rem); font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+
+.br-editor, .br-result { width: min(480px, 94vw); max-height: 90vh; overflow-y: auto; }
+.br-field { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary); }
+.br-field textarea { resize: vertical; font: inherit; }
+.br-entrants { font-variant-numeric: tabular-nums; }
+.br-entrant-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.br-count { font-size: 0.8rem; }
+.br-hint { font-size: 0.8rem; margin: 0.4rem 0 0; }
+.br-error { color: var(--danger, #ed4245); font-size: 0.85rem; margin: 0.4rem 0 0; }
+.br-result-hint { margin: 0 0 0.5rem; font-size: 0.85rem; }
+.br-result-sides { display: flex; flex-direction: column; gap: 0.4rem; }
+.br-result-side { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-tertiary); color: var(--text-primary); font: inherit; font-weight: 600; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.br-result-side:hover { border-color: var(--accent); }
+.br-result-side.active { background: var(--accent); border-color: var(--accent); color: var(--accent-text, #fff); }
+.br-result-side.active .br-seed { color: inherit; }
+
+/* Small screens: narrower rounds; the tree scrolls sideways. */
+@media (max-width: 640px) {
+  .messages.bracket-view { padding: 0.5rem; }
+  .br-root { --br-gap: 0.7rem; }
+  .br-round { flex-basis: 10.5rem; min-width: 10.5rem; }
+  .br-side { font-size: 0.8rem; }
+}

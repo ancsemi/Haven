@@ -86,6 +86,7 @@ import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
 import CalendarMethods from './modules/app-calendar.js?v=4.31.2';
 import OverviewMethods from './modules/app-overview.js?v=4.31.2';
+import BracketMethods from './modules/app-brackets.js?v=4.31.2';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.29.102';
 import ChannelAddMemberMethods from './modules/app-channel-add-members.js?v=4.29.66';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.29.95';
@@ -691,6 +692,7 @@ Object.assign(HavenApp.prototype,
   ForumPictureVoteMethods,
   CalendarMethods,
   OverviewMethods,
+  BracketMethods,
   RoleToolMethods,
   PermMatrixMethods,
   CallMethods,
