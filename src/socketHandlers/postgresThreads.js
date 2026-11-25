@@ -121,7 +121,7 @@ function createPostgresThreads(io, db, posting, channelMembers) {
     try {
       posting.checkFlood(user);
       const picked = takeSilent(text, data.silent);
-      const result = await db.withTransaction(async tx => {
+      const result = await posting.withPostingTransaction(user, async tx => {
         const channel = await messageChannel(tx, null, { messageId: parentId });
         if (!channel) return;
         checkThreadChannel(channel);
@@ -150,7 +150,7 @@ function createPostgresThreads(io, db, posting, channelMembers) {
         if (Number.isSafeInteger(data.replyTo) && data.replyTo > 0 && data.replyTo !== parentId) {
           reply = await threadReplyTarget(tx, data.replyTo, parentId, channel.id);
         }
-        posting.checkSlowMode(user, channel, level);
+        const slowKey = posting.checkSlowMode(user, channel, level);
         const replyTo = reply?.id ?? null;
         const row = await insertThreadReply(tx, {
           channelId: channel.id, userId: user.id, parentId, content, replyTo, silent: picked.silent ? 1 : 0,
@@ -163,7 +163,7 @@ function createPostgresThreads(io, db, posting, channelMembers) {
         const followers = (await threadNotify.followerIds(tx, parentId, channel.id)).filter(id => memberIds.has(id));
         const startedFor = threadNotify.firstReplyRecipient(thread.count, parent.user_id, user.id, followers);
         return {
-          channelCode: channel.code, memberIds, followers, startedFor, thread,
+          slowKey, channelCode: channel.code, memberIds, followers, startedFor, thread,
           message: {
             id: row.lastInsertRowid, content, created_at: utcStamp(row.created_at),
             username: user.displayName, user_id: user.id, avatar: user.avatar,
