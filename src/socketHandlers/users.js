@@ -281,12 +281,15 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Profile ─────────────────────────────────────────────
-  socket.on('get-user-profile', async (data) => {
-    if (!data || typeof data.userId !== 'number') return;
+  // The app reads the user-profile event; a bot may pass a callback too and
+  // gets the same card back, or { error }.
+  socket.on('get-user-profile', async (data, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    if (!data || typeof data.userId !== 'number') return cb({ error: 'Invalid request' });
     const currentChannel = socket.currentChannel;
     try {
       const row = await profile.readProfile(asyncDb, data.userId);
-      if (!row) return;
+      if (!row) return cb({ error: 'Member not found' });
 
       const roles = await profile.profileServerRoles(asyncDb, data.userId);
       if (currentChannel) {
@@ -314,7 +317,7 @@ module.exports = function register(socket, ctx) {
         console.warn('[badges] profile badges failed:', err.message);
       }
 
-      socket.emit('user-profile', {
+      const payload = {
         ...card,
         roles: profile.visibleProfileRoles(roles, seesHidden),
         badges,
@@ -323,9 +326,12 @@ module.exports = function register(socket, ctx) {
         activity: card.online && ctx.state?.activity
           ? ctx.state.activity.getPublicActivity(data.userId)
           : null
-      });
+      };
+      socket.emit('user-profile', payload);
+      cb(payload);
     } catch (err) {
       console.error('Get user profile error:', err);
+      cb({ error: 'Could not load the profile' });
     }
   });
 

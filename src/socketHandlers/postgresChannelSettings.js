@@ -237,7 +237,7 @@ function createPostgresChannelSettings({ io, db, permissions, broadcastChannelLi
         if (!user.isAdmin && !await permissions.userHasPermission(user.id, 'view_audit_log')) {
           return cb({ error: 'Permission denied' });
         }
-        cb(await readAuditLog(db, opts, user.isAdmin));
+        cb(await readAuditLog(db, opts, user));
       } catch (err) {
         console.error('get-audit-log error:', err);
         cb({ error: 'Failed to load audit log' });

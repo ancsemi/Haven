@@ -2224,6 +2224,8 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, async (re
 
   const replies = db.prepare('SELECT content FROM messages WHERE thread_id = ?').all(mid);
   const botAuthor = ownMessage ? null : db.prepare('SELECT COALESCE(u.display_name, u.username, m.webhook_username) AS name FROM messages m LEFT JOIN users u ON u.id = m.user_id WHERE m.id = ?').get(mid);
+  // For bot accounts that hear of deletes (src/messageLog.js).
+  const logged = socketRuntime?.messageLog?.capture(webhook.channel_id, [mid]);
   try {
     db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(mid);
     db.prepare('DELETE FROM reactions WHERE message_id = ?').run(mid);
@@ -2232,6 +2234,7 @@ app.delete('/api/webhooks/:token/messages/:messageId', webhookLimiter, async (re
     console.error('Bot delete message error:', err);
     return res.status(500).json({ error: 'Failed to delete message' });
   }
+  socketRuntime?.messageLog?.deleted(logged, { webhook: webhook.name });
   if (!ownMessage) {
     const auth = botModAuth(webhook, 'delete_message', webhook.channel_id);
     const chName = db.prepare('SELECT name FROM channels WHERE id = ?').get(webhook.channel_id)?.name || null;
@@ -2315,6 +2318,7 @@ app.delete('/api/webhooks/:token/messages', webhookLimiter, async (req, res) => 
   const deletePin = db.prepare('DELETE FROM pinned_messages WHERE message_id = ?');
   const deleteReactions = db.prepare('DELETE FROM reactions WHERE message_id = ?');
   const deleteMessage = db.prepare('DELETE FROM messages WHERE id = ? AND channel_id = ?');
+  let logged = null;
   const purge = db.transaction(() => {
     const messages = selectMessages.all(channel.id, limit);
     if (messages.some(message => message.channel_id !== channel.id)) {
@@ -2322,6 +2326,8 @@ app.delete('/api/webhooks/:token/messages', webhookLimiter, async (req, res) => 
       error.statusCode = 409;
       throw error;
     }
+    // For bot accounts that hear of deletes, sent once this commits.
+    logged = socketRuntime?.messageLog?.capture(channel.id, messages.map(message => message.id));
     for (const message of messages) {
       deletePin.run(message.id);
       deleteReactions.run(message.id);
@@ -2339,6 +2345,7 @@ app.delete('/api/webhooks/:token/messages', webhookLimiter, async (req, res) => 
     const error = status === 409 ? err.message : 'Failed to delete messages';
     return res.status(status).json({ error });
   }
+  socketRuntime?.messageLog?.deleted(logged, { webhook: webhook.name });
   if (deletedMessages.length) {
     const auth = botModAuth(webhook, 'delete_message', channel.id);
     const chName = db.prepare('SELECT name FROM channels WHERE id = ?').get(channel.id)?.name || null;

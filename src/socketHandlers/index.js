@@ -93,6 +93,11 @@ const registerChannelAddAll = require('./channelAddAll');
 const registerChannelMerge = require('./channelMerge');
 const registerMessageNsfw = require('./messageNsfw');
 const registerBlockedNames = require('./blockedNames');
+const registerAuditStream = require('./auditStream');
+const { createAuditStream } = require('../auditStream');
+const registerMessageLog = require('./messageLog');
+const registerMessageStats = require('./messageStats');
+const { createMessageLog } = require('../messageLog');
 const createLiveAccess = require('./liveAccess');
 const { createMemberView } = require('../memberView');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
@@ -145,6 +150,11 @@ function setupSocketHandlers(io, db, opts = {}) {
     userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles,
     parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships
   } = createPermissions(db);
+
+  // Bot accounts that follow the audit log live (src/auditStream.js).
+  const auditStream = createAuditStream({ db, userHasPermission });
+  // And that hear of deleted and edited messages (src/messageLog.js).
+  const messageLog = createMessageLog({ db, userHasPermission, roleGateAllows });
 
   const { getEnrichedChannels, getEnrichedChannelsAsync } = createChannelLists({
     db, userHasPermission, roleGateAllows, getUserEffectiveLevel
@@ -611,19 +621,26 @@ function setupSocketHandlers(io, db, opts = {}) {
       const targetType = entry.target_type ? String(entry.target_type).slice(0, 32) : null;
       const targetId = Number.isInteger(entry.target_id) ? entry.target_id : null;
       const targetName = entry.target_name ? String(entry.target_name).slice(0, 200) : null;
-      let details = null;
-      if (entry.details !== undefined && entry.details !== null) {
-        try { details = JSON.stringify(entry.details).slice(0, 4000); } catch { details = null; }
-      }
-      _auditInsert.run(actorId, actorUsername, action, targetType, targetId, targetName, details);
       // Kicks, mutes and bans also go on the member's moderation history.
+      // The record is made first so this row can carry its id: a bot keeping
+      // its own copy of the history matches a later revoke by it.
+      let caseId = null;
       if (targetType === 'user') {
         try {
-          modCases.fromAudit(db, { action, actorId, actorName: actorUsername, targetId, details: entry.details });
+          caseId = modCases.fromAudit(db, { action, actorId, actorName: actorUsername, targetId, details: entry.details });
         } catch (err) {
           console.warn('[mod-cases] history record failed:', err.message);
         }
       }
+      const d = entry.details;
+      const withCase = caseId != null && (d == null || (typeof d === 'object' && !Array.isArray(d)))
+        ? { ...d, caseId } : d;
+      let details = null;
+      if (withCase !== undefined && withCase !== null) {
+        try { details = JSON.stringify(withCase).slice(0, 4000); } catch { details = null; }
+      }
+      const info = _auditInsert.run(actorId, actorUsername, action, targetType, targetId, targetName, details);
+      auditStream.publish(Number(info.lastInsertRowid));
     } catch (err) {
       console.warn('[audit] log failed:', err.message);
     }
@@ -2846,7 +2863,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Transfer admin mutex
       transferAdminRef,
       // Audit log
-      logAudit, revokeBotVoiceAccess,
+      logAudit, revokeBotVoiceAccess, auditStream, messageLog,
       // Auto-moderation (v3.42.0)
       automod,
       enforceAutomod,
@@ -2900,6 +2917,9 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerChannelMerge(socket, ctx);
     registerMessageNsfw(socket, ctx);
     registerBlockedNames(socket, ctx);
+    registerAuditStream(socket, ctx);
+    registerMessageLog(socket, ctx);
+    registerMessageStats(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made
@@ -3034,7 +3054,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Handed back so server.js can mount the account-linking HTTP routes against
   // the same engine instance the socket layer is using.
-  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval, broadcastChannelLists, syncRoleGateMemberships, settingEffects, logAudit, roleGateAllows, refreshRoleHolders: roleRefresh.refreshRoleHolders, sendPushNotifications };
+  return { activity, state, userHasPermission, getUserEffectiveLevel, rotatePrivateCodesAfterRemoval, broadcastChannelLists, syncRoleGateMemberships, settingEffects, logAudit, roleGateAllows, refreshRoleHolders: roleRefresh.refreshRoleHolders, sendPushNotifications, messageLog };
 }
 
 module.exports = { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext };

@@ -449,6 +449,15 @@ router.post('/guest-login', authLimiter, async (req, res) => {
  * lands in exactly the same state as someone who signed up with a password.
  * Every step is best-effort; none of it is worth failing a signup over.
  */
+// A member signing up, on the audit log, named by id and username as a
+// deleted account is. Only the two sign-up routes call this: a bot has its
+// own bot_create entry, and a guest is gone when they disconnect.
+function auditSignup(userId, username, extra = {}) {
+  const id = Number(userId);
+  require('./httpAudit').auditHttp({ id, username, displayName: username }, 'user_register',
+    { target_type: 'user', target_id: id, details: { userId: id, username, ...extra } });
+}
+
 function provisionNewUser(db, userId, username, io, { welcome = true } = {}) {
   // Auto-assign roles flagged as auto_assign to new users
   try {
@@ -706,6 +715,7 @@ router.post('/register', authLimiter, async (req, res) => {
     }
 
     provisionNewUser(db, result.lastInsertRowid, username, req.app.get('io'));
+    auditSignup(result.lastInsertRowid, username);
 
     const token = jwt.sign(
       { id: result.lastInsertRowid, username, isAdmin: !!isAdmin, displayName: username, pwv: 1 },
@@ -2455,6 +2465,7 @@ router.get('/oidc/callback', authLimiter, async (req, res) => {
         'INSERT INTO users (username, password_hash, is_admin, oidc_issuer, oidc_subject) VALUES (?, ?, 0, ?, ?)'
       ).run(username, OIDC_NO_PASSWORD, cfg.issuerKey, subject);
       provisionNewUser(db, result.lastInsertRowid, username, req.app.get('io'));
+      auditSignup(result.lastInsertRowid, username, { via: 'sso' });
       user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
       console.log(`🔐 OIDC: created account "${username}" for ${cfg.issuerKey} subject ${subject.slice(0, 8)}…`);
     }

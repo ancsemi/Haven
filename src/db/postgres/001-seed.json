@@ -1046,6 +1046,10 @@
       "value": "true"
     },
     {
+      "key": "bots_see_message_text",
+      "value": "false"
+    },
+    {
       "key": "fcm_hide_content",
       "value": "true"
     },

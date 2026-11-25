@@ -30,7 +30,8 @@ _setupAuditLog() {
   // yet shows its own name with spaces. The icon goes by what was acted on.
   const ICONS = {
     user_kick: '👢', user_ban: '🚫', user_sessions_revoke: '🖥️', user_unban: '✅', user_mute: '🔇', user_unmute: '🔊',
-    user_warn: '⚠️', user_delete: '🗑️', user_scrub: '🧹', voice_kick: '🎙️', admin_transfer: '👑',
+    user_warn: '⚠️', user_note: '📝', user_delete: '🗑️', user_self_delete: '🗑️', user_scrub: '🧹',
+    user_register: '👋', voice_kick: '🎙️', admin_transfer: '👑',
     admin_recover: '👑', roles_reset: '🎭', message_delete: '🗑️', messages_bulk_delete: '🗑️',
     message_pin: '📌', message_unpin: '📌', message_protect: '🛡️', message_unprotect: '🛡️',
     channel_create: '➕', channel_delete: '🗑️', channel_rename: '✏️', user_rename: '✏️',
@@ -41,6 +42,7 @@ _setupAuditLog() {
     ['webhook_', '🤖'], ['ferry_', '🌉'], ['badge_', '🏅'], ['tag_', '🏷️'], ['emoji_', '😀'],
     ['sticker_', '🖼️'], ['sound_', '🔉'], ['backup_', '💾'], ['ip_', '🚫'], ['automod_', '🤖'],
     ['invite_', '🔗'], ['server_', '⚙️'], ['whitelist_', '📋'], ['registration_', '📋'],
+    ['calendar_', '📅'],
   ];
   const actionLabel = (action) => {
     const key = `modals.audit_log.actions.${action}`;
@@ -86,9 +88,11 @@ _setupAuditLog() {
       if (v === false && !['value', 'autoAssign', 'active', 'linked', 'enabled', 'canModerate', 'canUseVoice'].includes(k) && r.action !== 'channel_setting_update') continue;
       // Permission lists read as the names the role editor shows.
       const permLabel = (p) => { const k = `permissions.${p}`; const l = t(k); return l && l !== k ? l : p; };
+      // A bulk cleanup lists the accounts it removed as { id, username }.
+      const accountText = (a) => (a && typeof a === 'object' ? `${a.username} (id ${a.id})` : valueText(a));
       const text = Array.isArray(v) && ['added', 'removed', 'permissions', 'granted', 'denied'].includes(k)
         ? v.map(permLabel).join(', ')
-        : valueText(v);
+        : k === 'accounts' && Array.isArray(v) ? v.map(accountText).join(', ') : valueText(v);
       parts.push(`<span class="audit-detail-pair"><b>${_esc(keyLabel(k))}:</b> ${_esc(text.length > 600 ? text.slice(0, 597) + '...' : text)}</span>`);
     }
     return parts.length ? `<div class="audit-details">${parts.join('')}</div>` : '';
@@ -290,6 +294,7 @@ _initAutomodPanel() {
   on('voice-force-relay', 'change', (e) => setKey('voice_force_relay', e.target.checked ? 'true' : 'false'));
   on('fcm-enabled', 'change', (e) => setKey('fcm_enabled', e.target.checked ? 'true' : 'false'));
   on('fcm-hide-content', 'change', (e) => setKey('fcm_hide_content', e.target.checked ? 'true' : 'false'));
+  on('bots-see-message-text', 'change', (e) => setKey('bots_see_message_text', e.target.checked ? 'true' : 'false'));
   on('media-proxy-enabled', 'change', (e) => {
     setKey('media_proxy_enabled', e.target.checked ? 'true' : 'false');
     // Re-read the token so images start (or stop) routing through the proxy
@@ -423,6 +428,7 @@ _applyAutomodSettings() {
   bool('media-proxy-enabled', 'media_proxy_enabled', 'true');
   bool('fcm-enabled', 'fcm_enabled', 'true');
   bool('fcm-hide-content', 'fcm_hide_content', 'true');
+  bool('bots-see-message-text', 'bots_see_message_text', 'false');
 
   num('automod-min-account-hours', 'automod_link_min_account_hours', '0');
   num('automod-new-account-post-minutes', 'automod_new_account_post_minutes', '0');

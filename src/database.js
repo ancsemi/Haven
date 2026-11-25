@@ -497,6 +497,9 @@ function initDatabase() {
   // relay and Google or Apple. Servers set up before 4.30 were seeded with it
   // shown, which nobody chose, so that is switched once; what the admin sets
   // afterwards is kept.
+  // Bots with View Audit Log hear of deleted and edited messages; the text
+  // goes with it only once the admin allows it (src/messageLog.js).
+  insertSetting.run('bots_see_message_text', 'false');
   insertSetting.run('fcm_hide_content', 'true');
   if (!db.prepare("SELECT 1 FROM server_settings WHERE key = 'fcm_hide_default_applied'").get()) {
     db.prepare("UPDATE server_settings SET value = 'true' WHERE key = 'fcm_hide_content'").run();
@@ -1668,6 +1671,9 @@ function initDatabase() {
   // it a GROUP BY over a few large channels scans every row: 15.7 s -> 0.5 s on
   // ~1M messages.
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_channel_top ON messages(channel_id, id) WHERE thread_id IS NULL");
+  // One member's messages: counting them (src/messageStats.js) and removing
+  // or unlinking them when an account goes read this instead of every row.
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id) WHERE user_id IS NOT NULL");
   // ── Migration: forum topics carry a title and tags ──────
   for (const col of [
     { name: 'title', sql: "ALTER TABLE messages ADD COLUMN title TEXT DEFAULT NULL" },

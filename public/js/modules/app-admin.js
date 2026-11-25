@@ -781,6 +781,7 @@ _syncSettingsNav() {
     'section-tunnel':       ['manage_server'],
     'section-bots':         ['manage_server', 'manage_webhooks'],
     'section-bot-accounts': ['manage_bots'],
+    'section-bot-message-text': [], // admin only, as the server enforces
     'section-ferry':        [],
     'section-custom-tos':   [],
     'section-import':       ['manage_server'],

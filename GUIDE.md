@@ -1484,8 +1484,9 @@ be handed to others through the role system, one permission at a time.
   against a domain policy you control, and rejects them before they are saved. This
   matters more than it sounds: Haven renders linked images and previews from the
   other site, so a hostile link exposes the IP of everyone who scrolls past it
-- **Audit log**: a record of channel changes, role updates, bans, kicks and server
-  setting changes, with who did what
+- **Audit log**: a record of channel changes, role updates, bans, kicks, warnings,
+  notes, sign-ups, deleted accounts and server setting changes, with who did
+  what. A note on someone never shows to them, even if they can read the log
 - **Guests**: an optional "Join as Guest" button on the login page. Guests pick a
   username, get a temporary account with no password, see only the channels you
   whitelist, cannot DM, and are deleted when they disconnect
@@ -1991,7 +1992,7 @@ socket.emit('get-channels');
 socket.on('new-message', ({ channelCode, message }) => { /* answer commands */ });
 ```
 
-From there it uses the app's own events, as a member does: `join-channel`, `send-message`, `send-thread-message`, `edit-message`, `delete-message`, `set-status`, and so on. Its picture is set with `POST /api/upload-avatar` (the token as a Bearer token) and then `set-avatar`. It renames itself with `rename-bot { botId, name }`, using its own id.
+From there it uses the app's own events, as a member does: `join-channel`, `send-message`, `send-thread-message`, `edit-message`, `delete-message`, `set-status`, and so on. Its picture is set with `POST /api/upload-avatar` (the token as a Bearer token) and then `set-avatar`. It renames itself with `rename-bot { botId, name }`, using its own id. `ban-user`, `get-user-profile` and `get-user-roles` also take a callback that gets the answer (or `{ error }`), so a bot does not have to wait for the matching event or read the toast.
 
 **Embeds, buttons and dropdowns.** `send-message` and `send-thread-message` take the same `embeds` and `components` as a webhook (see Embeds, Buttons and Dropdowns above), and the text may be empty when there is an embed. Only bot accounts may send them. A click or a pick comes straight back over the bot's connection, with no callback URL:
 
@@ -2025,6 +2026,63 @@ socket.on('bot-interaction', ({ interaction }) => {
   }
 });
 ```
+
+**Following the audit log.** A bot that can read the audit log (give it a role with **View Audit Log**) can get each new entry the moment it is written, for a mod log or a member's history. People read the log in Settings; only bot accounts can follow it.
+
+```js
+socket.emit('subscribe-audit-log', { actions: ['user_ban', 'user_warn', 'user_note'] }, (res) => {
+  // { ok: true, lastId } or { error }
+});
+socket.on('audit-entry', (row) => {
+  // { id, created_at, actor_id, actor_username, action, target_type,
+  //   target_id, target_name, details }
+});
+socket.on('audit-log-unsubscribed', ({ reason }) => { /* it lost the permission */ });
+```
+
+- Leave `actions` out to get every action. Subscribing again replaces the list, and `unsubscribe-audit-log` stops it.
+- An entry looks the same as a row from `get-audit-log`: `created_at` is UTC (`2026-11-24T10:00:00Z`) and `details` is JSON text. Entries arrive in `id` order, each `id` larger than the last.
+- The bot sees what the log would show it: channel codes are hidden unless it is the admin, and a note about the bot itself is left out.
+- Entries are only sent while the bot is connected, so save the `id` of the last one handled. After a restart, subscribe first, then call `get-audit-log { afterId: <saved id> }`, which pages forward oldest first (up to 200 a page with `limit`), until you reach `lastId`. An entry can arrive both ways, so skip ids you already have.
+- The permission is checked at every entry. A bot that loses it gets `audit-log-unsubscribed` and nothing more until it subscribes again.
+- Entries that add to a member's moderation history (warn, note, kick, mute, unmute, ban, unban) carry a `caseId` in `details`, the same id `get-mod-history` gives, and a `mod_case_revoke` entry names the `caseId` it takes back.
+
+**Deleted and edited messages.** A bot with **View Audit Log** can also hear when a message in a channel it can read is deleted or edited.
+
+```js
+socket.emit('subscribe-message-changes', (res) => { /* { ok, textIncluded } or { error } */ });
+socket.on('mod-message-deleted', (e) => {
+  // { channel: { id, code, name }, by, at, textIncluded,
+  //   messages: [{ id, threadId, createdAt, author, content? }] }
+});
+socket.on('mod-message-edited', (e) => {
+  // { channel, by, at, textIncluded,
+  //   message: { id, threadId, createdAt, author, before?, after? } }
+});
+```
+
+- `author` and `by` are `{ id, username, displayName }` for a person and `{ webhook }` for a webhook. A delete lists every message that went, the thread replies under a deleted message included. Times are UTC.
+- The text (`content`, or `before` and `after`) is only there while the admin turns on **Settings → Bots & data → Let bots see the text of deleted and edited messages**, which starts off. `textIncluded` says which it is.
+- DMs and groups never reach a bot, nor self-destructing messages, which are meant to vanish. Auto-cleanup, a channel clearing itself, a member clearing all their own messages at once and removing a banned member's messages are not sent either; the audit log records those.
+- Haven keeps none of it, so there is nothing to catch up on: what happens while the bot is offline is missed.
+- `unsubscribe-message-changes` stops it, and a bot that loses View Audit Log gets `message-changes-unsubscribed`.
+
+**Counting messages.** Two calls give counts, never the messages themselves.
+
+```js
+socket.emit('get-member-message-stats', { userId: 42 }, (res) => {
+  // { ok, userId, channel, thread, forumTopic, forumReply, dm, groupDm,
+  //   total, firstAt, lastAt } or { error }
+});
+socket.emit('get-message-activity', { days: 30, utcOffsetMinutes: -300 }, (res) => {
+  // { ok, days, utcOffsetMinutes, total,
+  //   byDay: [{ date: '2026-11-24', count }], byHour: [24 counts] } or { error }
+});
+```
+
+- `get-member-message-stats` counts one member's own posts everywhere: top-level channel messages, thread replies, forum topics and forum replies, DMs and group DMs. It never says who someone writes to. Notes to self, webhook posts and system notices are left out, and a deleted message no longer counts. `firstAt` and `lastAt` are UTC.
+- `get-message-activity` counts the messages in the server channels you can read (or one of them, with `channelCode`) over the last `days` days (1 to 365, 30 if left out), by day and by hour of the day. Days and hours are in the time zone you give as minutes from UTC (`-300` is UTC-5). It is a fixed offset, so a change to summer time is not followed.
+- Anyone may count their own messages. Someone else's, and the activity, take kick, mute or ban permission, or View Audit Log, as a member's moderation history does. People and bots use them alike.
 
 ---
 

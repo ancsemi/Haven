@@ -46,7 +46,8 @@ function add(db, { userId, actor, type, reason = null, severity = 0, durationMin
 }
 
 // The audit log already hears about every kick, mute and ban, from people
-// and from auto-mod alike; this turns those into history records.
+// and from auto-mod alike; this turns those into history records. Gives the
+// new record's id, or null when the action makes none.
 const FROM_AUDIT = {
   user_kick: 'kick', user_mute: 'mute', user_unmute: 'unmute', user_ban: 'ban', user_unban: 'unban',
   automod_mute: 'mute', automod_ban: 'ban',
@@ -54,10 +55,10 @@ const FROM_AUDIT = {
 
 function fromAudit(db, { action, actorId, actorName, targetId, details }) {
   const type = FROM_AUDIT[action];
-  if (!type || !Number.isInteger(targetId)) return;
+  if (!type || !Number.isInteger(targetId)) return null;
   const auto = action.startsWith('automod_');
   const d = details && typeof details === 'object' ? details : {};
-  add(db, {
+  return add(db, {
     userId: targetId,
     // Auto-mod logs the member as the actor; the record says auto-mod.
     actor: auto ? { name: 'Auto-mod' } : { id: actorId, name: actorName },

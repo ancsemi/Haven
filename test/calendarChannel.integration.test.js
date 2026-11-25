@@ -113,6 +113,19 @@ test('calendar channels: events, answers, live updates and who may change what',
   assert.ok((await h.ask(N, 'calendar-delete', { id: hour.event.id })).ok);
   assert.ok(await gone, 'deletes reach the channel');
 
+  // A moderator's change to someone else's event is on the audit log; the
+  // creator's own changes are not.
+  const spare = await h.ask(B, 'calendar-create', { code, title: 'Spare', startsAt: at(6) });
+  assert.ok(spare.ok, JSON.stringify(spare));
+  assert.ok((await h.ask(A, 'calendar-delete', { id: spare.event.id })).ok);
+  const audit = async (action) => (await h.ask(A, 'get-audit-log', { action })).rows;
+  const edited = await audit('calendar_event_update');
+  assert.deepStrictEqual(edited.map(r => [r.target_id, r.target_name]), [[ev.id, 'ana']]);
+  assert.deepStrictEqual(JSON.parse(edited[0].details), { channel: 'events', title: 'Title match: final' });
+  const removed = await audit('calendar_event_delete');
+  assert.deepStrictEqual(removed.map(r => [r.target_id, r.target_name]), [[spare.event.id, 'ben']]);
+  assert.deepStrictEqual(JSON.parse(removed[0].details), { channel: 'events', title: 'Spare' });
+
   // Read-only: members can still read and answer, not add.
   A.emit('toggle-channel-permission', { code, permission: 'read_only' });
   for (let i = 0; i < 30 && !db.prepare('SELECT read_only FROM channels WHERE code = ?').get(code).read_only; i++) await wait(100);

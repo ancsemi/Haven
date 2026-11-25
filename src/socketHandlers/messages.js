@@ -41,8 +41,10 @@ module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getChannelRoleChain,
           sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, processSlashCommand,
           touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay, ferryRelayReply,
-          logAudit } = ctx;
+          logAudit, messageLog } = ctx;
   const { slowModeTracker } = state;
+  // Who deleted, for bots that hear of deletes (src/messageLog.js).
+  const actingPerson = () => ({ id: socket.user.id, username: socket.user.username, displayName: socket.user.displayName });
   const readPositions = createReadPositions(db);
   // A moderator acting on a message in a channel goes on the audit log, with
   // the channel and whose message it was. DMs are left out: what happens in
@@ -1069,6 +1071,7 @@ module.exports = function register(socket, ctx) {
     const delRx  = db.prepare('DELETE FROM reactions WHERE message_id = ?');
     const delMsg = db.prepare('DELETE FROM messages WHERE id = ?');
     const bulkReplies = repliesUnder(deletable.map(r => r.id));
+    const logged = messageLog?.capture(channel.id, deletable.map(r => r.id));
     const purge = db.transaction(() => {
       for (const r of deletable) {
         delPin.run(r.id);
@@ -1080,6 +1083,7 @@ module.exports = function register(socket, ctx) {
       console.error('Bulk media delete error:', err);
       return cb({ error: 'Failed to delete items', detail: err && err.message });
     }
+    messageLog?.deleted(logged, actingPerson());
     const othersDeleted = deletable.filter(r => r.user_id !== socket.user.id);
     if (othersDeleted.length && !channel.is_dm && typeof logAudit === 'function') {
       const authorIds = [...new Set(othersDeleted.map(r => r.user_id))];
@@ -2193,12 +2197,14 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    const logged = messageLog?.captureEdit(channel.id, data.messageId);
     try {
       updateMessageContent(db, data.messageId, newContent);
     } catch (err) {
       console.error('Edit message error:', err);
       return socket.emit('error-msg', 'Failed to edit message');
     }
+    messageLog?.edited(logged, newContent);
 
     io.to(`channel:${code}`).emit('message-edited', {
       channelCode: code,
@@ -2273,6 +2279,7 @@ module.exports = function register(socket, ctx) {
     const authorName = othersMessage
       ? messageAuthor(db, msg.user_id)?.name || null
       : null;
+    const logged = messageLog?.capture(channel.id, [msg.id]);
     try {
       deletePin(db, data.messageId);
       db.prepare('DELETE FROM reactions WHERE message_id = ?').run(data.messageId);
@@ -2281,6 +2288,7 @@ module.exports = function register(socket, ctx) {
       console.error('Delete message error:', err);
       return socket.emit('error-msg', 'Failed to delete message');
     }
+    messageLog?.deleted(logged, actingPerson());
     if (othersMessage && typeof logAudit === 'function') {
       const chName = channel.name || null;
       logAudit({ actor: socket.user, action: 'message_delete',

@@ -24,16 +24,17 @@ function freshDb() {
 function fakeSocket(user, db, { perms = [], levels = {} } = {}) {
   const handlers = {};
   const emitted = [];
+  const audit = [];
   const socket = { user, on: (ev, fn) => { handlers[ev] = fn; }, emit: (...a) => emitted.push(a) };
   const io = { sockets: { sockets: new Map() } };
   register(socket, {
     io, db,
     userHasPermission: (_id, p) => user.isAdmin || perms.includes(p),
     getUserEffectiveLevel: (id) => levels[id] ?? 0,
-    logAudit: () => {},
+    logAudit: (entry) => audit.push(entry),
   });
   const call = (ev, data) => new Promise(res => handlers[ev](data, res));
-  return { call, emitted };
+  return { call, emitted, audit };
 }
 
 test('kicks, mutes and bans from the audit log land on the history; auto-mod is named as such', () => {
@@ -62,6 +63,27 @@ test('a moderator warns with a reason; the member sees it without the notes or w
   assert.ok(!('actor' in own.cases[0]));
   assert.equal(own.canAdd, false);
   assert.equal((await bob.call('get-pending-warnings', {})).warnings.length, 1);
+});
+
+test('warnings and notes go on the audit log with the id of their history record', async () => {
+  const db = freshDb();
+  const mod = fakeSocket({ id: 2, isAdmin: false, displayName: 'mod' }, db, { perms: ['kick_user'], levels: { 2: 25, 3: 0 } });
+  const warned = await mod.call('warn-user', { userId: 3, reason: 'Spam', severity: 2 });
+  const noted = await mod.call('add-mod-note', { userId: 3, text: 'keeps posting links' });
+  assert.deepEqual(mod.audit.map(e => e.action), ['user_warn', 'user_note']);
+  assert.equal(mod.audit[0].details.caseId, warned.id);
+  assert.deepEqual(mod.audit[1].details, { note: 'keeps posting links', caseId: noted.id });
+  assert.equal(mod.audit[1].target_id, 3);
+  // A refused note leaves no row.
+  await mod.call('add-mod-note', { userId: 3, text: '  ' });
+  assert.equal(mod.audit.length, 2);
+});
+
+test('a history record made from the audit log gives back its id', () => {
+  const db = freshDb();
+  const id = modCases.fromAudit(db, { action: 'user_ban', actorId: 2, actorName: 'mod', targetId: 3, details: { reason: 'spam' } });
+  assert.equal(modCases.get(db, id).type, 'ban');
+  assert.equal(modCases.fromAudit(db, { action: 'role_create', actorId: 1, targetId: 3, details: {} }), null);
 });
 
 test('nobody warns someone at or above their rank, an admin, or themselves; plain members cannot look', async () => {

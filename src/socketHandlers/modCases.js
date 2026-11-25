@@ -58,7 +58,7 @@ module.exports = function register(socket, ctx) {
     try {
       const id = modCases.add(db, { userId: target.id, actor: socket.user, type: 'warn', reason, severity });
       logAudit?.({ actor: socket.user, action: 'user_warn', target_type: 'user', target_id: target.id,
-        target_name: target.username, details: { reason, severity } });
+        target_name: target.username, details: { reason, severity, caseId: id } });
       const created = modCases.get(db, id);
       for (const [, s] of io.sockets.sockets) {
         if (s.user && s.user.id === target.id) s.emit('mod-warning', { id, reason, createdAt: created && created.created_at });
@@ -81,6 +81,9 @@ module.exports = function register(socket, ctx) {
     if (!text) return done({ ok: false, error: 'The note is empty' });
     try {
       const id = modCases.add(db, { userId: target.id, actor: socket.user, type: 'note', reason: text });
+      // The log hides this row from the member it is about (get-audit-log).
+      logAudit?.({ actor: socket.user, action: 'user_note', target_type: 'user', target_id: target.id,
+        target_name: target.username, details: { note: text, caseId: id } });
       done({ ok: true, id });
     } catch (err) {
       console.warn('[mod-cases] note failed:', err.message);
