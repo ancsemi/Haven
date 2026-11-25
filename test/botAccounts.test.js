@@ -83,6 +83,17 @@ test('a bot account signs in with its token and works like a member', async () =
   assert.equal(click.interaction.custom_id, 'yes');
   assert.equal(click.interaction.user.id, bob.id);
 
+  // It answers the click with a form, once, and gets back what Bob typed.
+  const opens = h.next(B, 'bot-modal');
+  const modal = { custom_id: 'more', title: 'Tell us more', components: [{ type: 1, components: [{ type: 4, custom_id: 'idea', label: 'Idea', style: 2 }] }] };
+  assert.deepEqual(await h.ask(R, 'open-bot-modal', { interactionId: click.interaction.id, ...modal }), { success: true });
+  assert.ok((await h.ask(R, 'open-bot-modal', { interactionId: click.interaction.id, ...modal })).error, 'one form per click');
+  assert.ok((await h.ask(B, 'open-bot-modal', { interactionId: click.interaction.id, ...modal })).error, 'only a bot opens one');
+  const shown = await opens;
+  const back = h.next(R, 'bot-interaction', (d) => d.interaction.type === 'modal_submit');
+  assert.deepEqual(await h.ask(B, 'submit-bot-modal', { formId: shown.formId, fields: [{ custom_id: 'idea', value: 'Привет\nworld 👋' }] }), { ok: true });
+  assert.deepEqual((await back).interaction.fields, [{ custom_id: 'idea', value: 'Привет\nworld 👋' }]);
+
   // The bot greys its button out.
   const swapped = h.next(B, 'message-bot-parts', (d) => d.messageId === m.id);
   assert.deepEqual(await h.ask(R, 'edit-bot-parts', { messageId: m.id, components: [{ type: 1, components: [{ type: 2, label: 'Yes', custom_id: 'yes', disabled: true }] }] }), { success: true });

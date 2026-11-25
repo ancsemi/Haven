@@ -50,7 +50,9 @@ _formatContent(str, opts) {
   // Control characters have no business in a message, and NUL in particular
   // is the delimiter of the placeholders below; strip them (keeping line
   // breaks and tabs) so typed text can never pose as a placeholder.
-  str = str.replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '');
+  // Direction overrides and isolates go too: they can show a file name as
+  // invoiceexe.pdf when it is really an .exe.
+  str = str.replace(/[\u0000-\u0008\u000B-\u001F\u007F‪-‮⁦-⁩]/g, '');
 
   // Spoiler image: spoiler-img:<payload> where payload is an /uploads URL or
   // an e2e-img: marker. The sender marked this image as a spoiler, so render
@@ -189,7 +191,7 @@ _formatContent(str, opts) {
     if (voiceDur !== null) {
       return `<div class="file-attachment voice-message">
         <div class="file-info"><span class="file-type-icon" aria-hidden="true">🎤</span> <span class="file-name">${t('app.messages.voice_message')}</span> <span class="file-size">(${voiceDur})</span></div>
-        <audio controls preload="metadata" src="${fileUrl}" class="file-audio"></audio>
+        <audio controls preload="${this._liteOn() ? 'none' : 'metadata'}" src="${fileUrl}" class="file-audio"></audio>
       </div>`;
     }
     // Audio/video get inline players. The extension lists are optimistic:
@@ -547,7 +549,7 @@ _formatContent(str, opts) {
   html = html.replace(/\|\|(.+?)\|\|/g, '<span class="spoiler">$1</span>');
 
   // Render custom + bundled built-in image emojis :name:
-  html = html.replace(/:([a-zA-Z0-9_-]+):/g, (match, name) => {
+  html = html.replace(/:([\p{L}\p{Nd}\p{M}_-]+):/gu, (match, name) => {
     const emoji = this._findNamedEmoji(name);
     if (emoji) return `<img src="${this._escapeHtml(emoji.url)}" alt=":${this._escapeHtml(name)}:" title=":${this._escapeHtml(name)}:" class="custom-emoji">`;
     return match;
@@ -875,7 +877,7 @@ _renderReactions(msgId, reactions) {
     const names = g.users.map(u => u.username).join(', ');
     const usersJson = this._escapeHtml(JSON.stringify(g.users.map(u => u.username)));
     // Check if it's a custom emoji
-    const customMatch = g.emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+    const customMatch = g.emoji.match(/^:([\p{L}\p{Nd}\p{M}_-]+):$/u);
     let emojiDisplay = this._escapeHtml(g.emoji);
     if (customMatch && this.customEmojis) {
       const ce = this._findNamedEmoji(customMatch[1]);

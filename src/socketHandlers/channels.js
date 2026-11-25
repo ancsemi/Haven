@@ -45,6 +45,10 @@ const { reachableChannel } = require('./channelAccess');
 const protectedMessages = require('../protectedMessages');
 const channelTypes = require('../channelTypes');
 const directMessages = require('../db/directMessages');
+const {
+  roomForSettings, updateRoomSettings, renameRoom, normalizeCategory, roomTopic, subchannelSortMode,
+  roomsForReorder, roomPositionUpdate,
+} = require('../db/channelSettings');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -166,18 +170,6 @@ module.exports = function register(socket, ctx) {
     }
   });
 
-  // An Organize tag as stored: trimmed, at most 30 characters, null when
-  // empty. If another channel already uses it in different casing, that
-  // casing is adopted so the two group together.
-  function normalizeCategory(raw, ownId = 0) {
-    const category = typeof raw === 'string' ? raw.trim().slice(0, 30) : '';
-    if (!category) return null;
-    const existing = db.prepare(
-      'SELECT category FROM channels WHERE category IS NOT NULL AND id != ? AND category COLLATE NOCASE = ?'
-    ).get(ownId, category);
-    return existing ? existing.category : category;
-  }
-
   // ── Create channel (permission-based) ─────────────────
   // (#5461) Assign the configured "channel creator role" to a non-admin who
   // just created a channel, scoped to that channel. The role is configurable
@@ -248,10 +240,14 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // A channel is a calendar or a forum, not both; the calendar wins.
+    const isCalendar = data.isCalendar ? 1 : 0;
+    const isForum = data.isForum && !isCalendar ? 1 : 0;
+
     try {
       const result = db.prepare(
-        'INSERT INTO channels (name, code, created_by, is_private, expires_at, is_forum) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(name.trim(), code, socket.user.id, isPrivate, expiresAt, data.isForum ? 1 : 0);
+        'INSERT INTO channels (name, code, created_by, is_private, expires_at, is_forum, is_calendar) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(name.trim(), code, socket.user.id, isPrivate, expiresAt, isForum, isCalendar);
 
       // Channel templates send the rest of the setup along with the name, so
       // an "Announcements" channel comes out read-only and in announcement
@@ -316,7 +312,8 @@ module.exports = function register(socket, ctx) {
         expires_at: expiresAt,
         // The creator's sidebar renders from this stub until the enriched
         // list lands, so a forum has to say so here or it shows up as #.
-        is_forum: data.isForum ? 1 : 0
+        is_forum: isForum,
+        is_calendar: isCalendar
       };
 
       socket.join(`channel:${code}`);
@@ -865,7 +862,7 @@ module.exports = function register(socket, ctx) {
       return socket.emit('error-msg', 'Channel name contains invalid characters');
     }
 
-    const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    const channel = roomForSettings(db, code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
 
     // Only a channel the renamer is in, through its gate.
@@ -877,16 +874,7 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      // Keep the old name, so a #old-name typed before the rename still points
-      // here and clients can show the name it has now (#5602). Newest first,
-      // capped, and a name the channel has come back to drops out of the list.
-      let former = [];
-      try { former = JSON.parse(channel.former_names || '[]'); } catch { former = []; }
-      if (!Array.isArray(former)) former = [];
-      former = [channel.name, ...former]
-        .filter((n, i, arr) => typeof n === 'string' && n && n.toLowerCase() !== name.toLowerCase() && arr.indexOf(n) === i)
-        .slice(0, 10);
-      db.prepare('UPDATE channels SET name = ?, former_names = ? WHERE id = ?').run(name, JSON.stringify(former), channel.id);
+      renameRoom(db, channel, name);
       broadcastChannelLists();
       io.to(code).emit('channel-renamed', { code, name });
       _audit({ actor: socket.user, action: 'channel_rename',
@@ -944,7 +932,7 @@ module.exports = function register(socket, ctx) {
     const position = (maxPos && maxPos.mp != null) ? maxPos.mp + 1 : 0;
     // The Organize tag, set here so it needs no second step. Same rules as
     // set-channel-category, which the creator is allowed to use on it too.
-    const category = normalizeCategory(data.category);
+    const category = normalizeCategory(db, data.category);
 
     try {
       const result = db.prepare(
@@ -1124,14 +1112,14 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
     const permission = typeof data.permission === 'string' ? data.permission.trim() : '';
-    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'private', 'nsfw', 'reactions', 'forum_blog', 'forum_blog_pics_only'];
+    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'calendar', 'private', 'nsfw', 'reactions', 'forum_blog', 'forum_blog_pics_only'];
     if (!validPerms.includes(permission)) return socket.emit('error-msg', 'Invalid permission');
 
-    const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    const channel = roomForSettings(db, code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to toggle channel permissions');
 
-    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', private: 'is_private', nsfw: 'is_nsfw', reactions: 'reactions_enabled', forum_blog: 'forum_blog', forum_blog_pics_only: 'forum_blog_pics_only' };
+    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', calendar: 'is_calendar', private: 'is_private', nsfw: 'is_nsfw', reactions: 'reactions_enabled', forum_blog: 'forum_blog', forum_blog_pics_only: 'forum_blog_pics_only' };
     const colName = colMap[permission];
     const current = channel[colName];
     const newVal = current ? 0 : 1;
@@ -1141,7 +1129,12 @@ module.exports = function register(socket, ctx) {
     }
 
     try {
-      db.prepare(`UPDATE channels SET ${colName} = ? WHERE id = ?`).run(newVal, channel.id);
+      updateRoomSettings(db, channel.id, { [colName]: newVal });
+      // A channel is a forum or a calendar, not both: turning one on turns
+      // the other off.
+      if (newVal === 1 && (permission === 'forum' || permission === 'calendar')) {
+        db.prepare(`UPDATE channels SET ${permission === 'forum' ? 'is_calendar' : 'is_forum'} = 0 WHERE id = ?`).run(channel.id);
+      }
       // Changing a function by hand takes the channel out of its type
       // (src/channelTypes.js), so the type's icon stops showing for it.
       if (channel.type_id && channelTypes.FUNCTIONS.includes(permission)) {
@@ -1209,11 +1202,11 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only admins can change welcome message settings');
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
-    const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    const channel = roomForSettings(db, code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     const newVal = channel.show_welcome ? 0 : 1;
     try {
-      db.prepare('UPDATE channels SET show_welcome = ? WHERE id = ?').run(newVal, channel.id);
+      updateRoomSettings(db, channel.id, { show_welcome: newVal });
       auditChannel(channel.id, 'welcome_messages', !!newVal);
       broadcastChannelLists();
       socket.emit('toast', { message: newVal ? '👋 New-member welcome messages will post in this channel' : 'Welcome messages disabled for this channel', type: 'success' });
@@ -1231,11 +1224,11 @@ module.exports = function register(socket, ctx) {
     if (isNaN(interval) || interval < 0 || interval > 3600) {
       return socket.emit('error-msg', 'Slow mode interval must be 0-3600 seconds');
     }
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    const channel = roomForSettings(db, code, 'id');
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to set slow mode');
     try {
-      db.prepare('UPDATE channels SET slow_mode_interval = ? WHERE id = ?').run(interval, channel.id);
+      updateRoomSettings(db, channel.id, { slow_mode_interval: interval });
       auditChannel(channel.id, 'slow_mode_seconds', interval);
       broadcastChannelLists();
       io.to(`channel:${code}`).emit('slow-mode-updated', { code, interval });
@@ -1326,16 +1319,12 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
-    let sortVal = 0;
-    if (data.mode === 'alpha' || data.enabled === true) sortVal = 1;
-    else if (data.mode === 'created') sortVal = 2;
-    else if (data.mode === 'oldest') sortVal = 3;
-    else if (data.mode === 'dynamic') sortVal = 4;
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    const sortVal = subchannelSortMode(data);
+    const channel = roomForSettings(db, code, 'id');
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to change sort settings');
     try {
-      db.prepare('UPDATE channels SET sort_alphabetical = ? WHERE id = ?').run(sortVal, channel.id);
+      updateRoomSettings(db, channel.id, { sort_alphabetical: sortVal });
       broadcastChannelLists();
     } catch (err) {
       console.error('Set sort mode error:', err);
@@ -1497,19 +1486,41 @@ module.exports = function register(socket, ctx) {
       details: { roleGate: stored ? JSON.parse(stored) : null } });
   });
 
+  socket.on('set-channel-default-notify', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    const mode = typeof data.mode === 'string' ? data.mode : '';
+    if (!['all', 'mentions', 'muted'].includes(mode)) return socket.emit('error-msg', 'Invalid notification level');
+    const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    if (!channel) return socket.emit('error-msg', 'Channel not found');
+    // The admin's alone: set to Muted it also hides the channel's unread
+    // badges from everyone who never chose, which is too much for a channel
+    // manager to decide for other people.
+    if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only the server admin can change the default notification level');
+    try {
+      db.prepare('UPDATE channels SET default_notify = ? WHERE id = ?').run(mode, channel.id);
+      auditChannel(channel.id, 'default_notify', mode);
+      broadcastChannelLists();
+    } catch (err) {
+      console.error('Set default notify error:', err);
+      socket.emit('error-msg', 'Failed to set the default notification level');
+    }
+  });
+
   socket.on('set-notification-type', (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     const type = typeof data.type === 'string' ? data.type : '';
     if (!['default', 'announcement'].includes(type)) return socket.emit('error-msg', 'Invalid notification type');
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    const channel = roomForSettings(db, code, 'id');
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     if (!_canManageSettingsOf(channel.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to change channel notification type');
     }
     try {
-      db.prepare('UPDATE channels SET notification_type = ? WHERE id = ?').run(type, channel.id);
+      updateRoomSettings(db, channel.id, { notification_type: type });
       auditChannel(channel.id, 'notification_type', type);
       broadcastChannelLists();
       const labels = { default: '🔔 Channel notifications reset to default', announcement: '📢 Channel set to announcement mode' };
@@ -1569,15 +1580,14 @@ module.exports = function register(socket, ctx) {
     try {
       const codes = order.map(it => (it && typeof it.code === 'string') ? it.code : null).filter(Boolean);
       if (codes.length) {
-        const ph = codes.map(() => '?').join(',');
-        const rows = db.prepare(`SELECT parent_channel_id FROM channels WHERE code IN (${ph}) AND is_dm = 0`).all(...codes);
+        const rows = roomsForReorder(db, codes);
         const parents = new Set(rows.map(r => r.parent_channel_id));
         if (parents.size === 1) _reorderParent = [...parents][0];
       }
     } catch { /* fall through to the stricter create_channel check, so this fails closed */ }
     if (!_canManageSubsOf(_reorderParent)) return socket.emit('error-msg', 'You don\'t have permission to reorder channels');
     try {
-      const update = db.prepare('UPDATE channels SET position = ? WHERE code = ?');
+      const update = roomPositionUpdate(db);
       const txn = db.transaction(() => {
         for (const item of order) {
           if (typeof item.code === 'string' && typeof item.position === 'number') {
@@ -1699,12 +1709,12 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
-    const channel = db.prepare('SELECT id, parent_channel_id FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    const channel = roomForSettings(db, code, 'id, parent_channel_id');
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     if (!_canManageSubsOf(channel.parent_channel_id)) return socket.emit('error-msg', 'You don\'t have permission to set categories'); // (#5424)
-    const category = normalizeCategory(data.category, channel.id);
+    const category = normalizeCategory(db, data.category, channel.id);
     try {
-      db.prepare('UPDATE channels SET category = ? WHERE id = ?').run(category, channel.id);
+      updateRoomSettings(db, channel.id, { category });
       broadcastChannelLists();
       socket.emit('toast', { message: category ? `Category set to "${category}"` : 'Category removed', type: 'success' });
     } catch (err) {
@@ -1718,19 +1728,18 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    const channel = roomForSettings(db, code, 'id');
     if (!channel) return;
     if (!socket.user.isAdmin && !reachableChannel(ctx, socket.user, channel.id)) return;
     if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'set_channel_topic', channel.id)) {
       return socket.emit('error-msg', 'You don\'t have permission to set channel topics');
     }
-    const { sanitizeText } = require('./helpers');
-    const topic = isString(data.topic, 0, 256) ? sanitizeText(data.topic.trim()) : '';
+    const topic = roomTopic(data.topic);
     // A channel topic sits above the message list for everyone in the channel,
     // so it is a link-placement surface like any other. (v3.42.0)
     if (topic && enforceAutomod(topic, { surface: 'channel', channelId: channel.id })) return;
     try {
-      db.prepare('UPDATE channels SET topic = ? WHERE id = ?').run(topic, channel.id);
+      updateRoomSettings(db, channel.id, { topic });
       auditChannel(channel.id, 'topic', topic);
     } catch (err) {
       console.error('Set topic error:', err);

@@ -219,6 +219,12 @@ Every conversation in Haven happens inside a **channel**. Channels are like room
 
 Turn any channel into a forum from **Channel Functions → Forum**, or tick **Forum** when creating it. In a forum channel every message is a topic, and the feed runs newest first: the most recently active topic sits at the top. Replies go in that message's thread, the topic shows its reply count, and a new reply moves the topic back to the top, so old topics resurface instead of sinking. Inside a topic's thread, replies read top to bottom as usual. Every topic carries a **Reply to this topic** button, and the Reply action on a topic opens its thread rather than quoting it as a new topic. Everything else works as usual: topics can be pinned, reacted to, searched, and moved between channels with Move Messages.
 
+### Calendar Channels 📅
+
+Turn any channel into a calendar from **Channel Functions → Calendar**, or tick **Calendar** when creating it. A calendar channel shows a month of events instead of messages, with the month's events listed under the grid. Anyone who can post in the channel adds an event with **Add event** or by clicking a day: give it a title, a start and end (or make it all day), and optionally a place, details and a color. Everyone who can read the channel opens an event to see who is coming and answers **Going**, **Maybe** or **Can't go**; press your answer again to take it back. Changes show up for everyone right away.
+
+Times show in each member's own time zone. An all-day event is a date, so it lands on the same day for everyone. An event's creator can edit or delete it, and so can anyone with **Delete Messages** in the channel. Make the calendar **Read Only** to keep event planning to the people with the read-only override while everyone else can still answer. A channel is a forum or a calendar, not both, and switching a calendar off keeps its events for when it is switched back on.
+
 ### Creating Sub-Channels
 
 Right-click (or click ⋯) on any channel to create a **sub-channel** beneath it. Sub-channels appear indented under their parent with a `↳` icon. They have their own code and their own message history.
@@ -1774,6 +1780,60 @@ X-Haven-Signature: sha256=<HMAC of the body with your callback secret>
 - a private answer to the person who clicked: POST with `"ephemeral": true, "recipient_id": <interaction.user.id>`
 - a message everyone sees: POST as usual, with `"reply_to": <message_id>` if you like
 - change the message itself (a vote count, a greyed-out button): PATCH it, below
+- a form for the person to fill in: answer the interaction itself with a modal, below
+
+#### Forms with text boxes
+
+A text box cannot sit in a message. As on Discord, it goes in a form (a modal) that the bot opens for the person who clicked a button or picked from a dropdown. A webhook opens one by answering the interaction request with Discord's modal reply instead of an empty `2xx`:
+
+```
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "type": 9,
+  "data": {
+    "custom_id": "feedback",
+    "title": "Tell us more",
+    "components": [
+      { "type": 1, "components": [
+        { "type": 4, "custom_id": "name", "label": "Your name", "style": 1, "max_length": 40 }
+      ]},
+      { "type": 1, "components": [
+        { "type": 4, "custom_id": "idea", "label": "Your idea", "style": 2,
+          "placeholder": "What should we build?", "min_length": 10, "required": false }
+      ]}
+    ]
+  }
+}
+```
+
+A form has a `title` (45) and a `custom_id` (100), and 1 to 5 action rows of one **text box** (`"type": 4`) each: `custom_id` (100, unique in the form), `label` (45), `style` 1 for one line or 2 for a paragraph that takes line breaks, `placeholder` (100), `value` to fill it in beforehand, `min_length` and `max_length` (0 to 4000, and 1 to 4000), and `required` (default `true`). No box takes more than a message on this server holds (2000 characters unless the admin changed it), so whatever someone types can always be posted back; a bigger `max_length` is lowered to that.
+
+A box takes any language and emoji. It refuses what could hide or reorder text: control characters, direction overrides, zero-width spaces and other invisible characters, and more than three accent marks on one letter. The joiners and direction marks Persian, Arabic and Indian scripts need are allowed.
+
+The form opens only for the person who clicked, and stays open for 15 minutes. What they send back is checked against the form, and reaches the bot as a second interaction:
+
+```
+{
+  "event": "interaction",
+  "channelId": "<channel code>",
+  "interaction": {
+    "id": "0b8e2c1d-...",
+    "type": "modal_submit",
+    "message_id": 124,
+    "thread_id": null,
+    "custom_id": "feedback",
+    "fields": [
+      { "custom_id": "name", "value": "Alice" },
+      { "custom_id": "idea", "value": "" }
+    ],
+    "user": { "id": 7, "username": "alice" }
+  }
+}
+```
+
+`fields` has every box in the form's order, an empty `value` for one left blank. Answer it like a click: a private reply, a message, or an edit. A form cannot open another form. A modal reply Haven cannot show is refused, and the person sees why.
 
 ### Editing Messages
 
@@ -1949,6 +2009,22 @@ socket.emit('edit-bot-parts', { messageId, components: [] }, (res) => { /* { suc
 ```
 
 As with a webhook's edit, a list given replaces the message's own, an empty list removes them, and a list left out stays as it is.
+
+To answer a click with a form (see Forms with text boxes above), send `open-bot-modal` within 5 seconds of the click, with the interaction's id and the modal's `data`. The form is held to AutoMod like the bot's messages. What the person sends back arrives as another `bot-interaction`, of type `modal_submit`:
+
+```js
+socket.on('bot-interaction', ({ interaction }) => {
+  if (interaction.type === 'component' && interaction.custom_id === 'suggest') {
+    socket.emit('open-bot-modal', {
+      interactionId: interaction.id, custom_id: 'feedback', title: 'Tell us more',
+      components: [{ type: 1, components: [{ type: 4, custom_id: 'idea', label: 'Your idea', style: 2 }] }],
+    }, (res) => { /* { success } or { error } */ });
+  }
+  if (interaction.type === 'modal_submit') {
+    // interaction.fields: [{ custom_id: 'idea', value: '...' }]
+  }
+});
+```
 
 ---
 

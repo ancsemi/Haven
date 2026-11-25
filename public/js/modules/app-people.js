@@ -317,6 +317,11 @@ _bindPeople() {
     this._markAvatarUnsaved();
   });
 
+  document.getElementById('edit-profile-link-add').addEventListener('click', () => {
+    this._pendingProfileLinks.push({ label: '', url: '' });
+    this._renderProfileLinkRows();
+    document.querySelector('#edit-profile-links .profile-link-row:last-child input')?.focus();
+  });
   document.getElementById('rename-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
       e.currentTarget.style.display = 'none';
@@ -347,6 +352,9 @@ _openRenameModal() {
   this._syncBirthdayEditor();
   this._pendingBannerColor = this.user.bannerColor || null;
   this._pendingProfileTheme = this.user.profileTheme || null;
+  this._pendingProfileLinks = (this.user.profileLinks || []).map((link) => ({ ...link }));
+  document.getElementById('edit-profile-links-group').style.display = Array.isArray(this.user.profileLinks) ? '' : 'none';
+  this._renderProfileLinkRows();
   // Load personas list (#86, #5349)
   this._loadPersonas?.();
   this._loadRoles(() => this._renderUserProfileGroupsList());
@@ -382,6 +390,9 @@ _saveRename() {
   if (/\p{M}{4,}/u.test(newName)) {
     return this._showToast(t('toasts.display_name_too_many_marks'), 'error');
   }
+  const linksOn = Array.isArray(this.user.profileLinks);
+  const links = linksOn ? this._collectProfileLinks() : [];
+  if (!links) return this._showToast(t('toasts.profile_link_invalid'), 'error');
   // Only an actual change goes to the server; a bio or avatar save with the
   // name left alone used to announce a rename to the whole channel.
   if (newName !== (this.user.displayName || this.user.username)) {
@@ -401,6 +412,7 @@ _saveRename() {
   if (birthday || hidden !== (this.user.birthdayHidden === true) || hideYear !== (this.user.birthdayHideYear !== false)) {
     this.socket.emit('set-birthday', birthday ? { birthday, hidden, hideYear } : { hidden, hideYear });
   }
+  if (linksOn && JSON.stringify(links) !== JSON.stringify(this.user.profileLinks)) this.socket.emit('set-profile-links', { links });
   if (this._pendingBannerColor !== (this.user.bannerColor || null)) {
     this.socket.emit('set-banner-color', { color: this._pendingBannerColor });
   }
@@ -414,6 +426,36 @@ _saveRename() {
   document.getElementById('rename-modal').style.display = 'none';
 },
 
+_collectProfileLinks() {
+  const links = this._pendingProfileLinks.filter((row) => row.label.trim() || row.url.trim()).map((row) => this._cleanProfileLink(row));
+  return links.every(Boolean) ? links : null;
+},
+_renderProfileLinkRows() {
+  const rows = this._pendingProfileLinks;
+  const field = (row, key, max, type, hint) => {
+    const input = document.createElement('input');
+    Object.assign(input, { className: 'profile-link-' + key + '-input', type, maxLength: max, value: row[key], placeholder: hint });
+    input.addEventListener('input', () => { row[key] = input.value; });
+    return input;
+  };
+  const button = (text, name, title, disabled, run) => {
+    const el = document.createElement('button');
+    Object.assign(el, { type: 'button', className: 'btn-sm profile-link-btn-' + name, textContent: text, disabled, title });
+    el.setAttribute('aria-label', el.title);
+    el.addEventListener('click', run);
+    return el;
+  };
+  const move = (i, by) => { rows.splice(i + by, 0, rows.splice(i, 1)[0]); this._renderProfileLinkRows(); };
+  document.getElementById('edit-profile-links').replaceChildren(...rows.map((row, i) => {
+    const el = document.createElement('div');
+    el.className = 'profile-link-row';
+    el.append(field(row, 'label', 32, 'text', t('modals.edit_profile.links_label_hint')), field(row, 'url', 300, 'url', 'https://'),
+      button('↑', 'up', t('modals.edit_profile.links_up'), i === 0, () => move(i, -1)), button('↓', 'down', t('modals.edit_profile.links_down'), i === rows.length - 1, () => move(i, 1)),
+      button('✕', 'remove', t('modals.edit_profile.links_remove'), false, () => { rows.splice(i, 1); this._renderProfileLinkRows(); }));
+    return el;
+  }));
+  document.getElementById('edit-profile-link-add').disabled = rows.length >= 5;
+},
 // The banner preview in Edit Profile, painted the way the card will be: the
 // picked color, else the avatar's (a new picture is sampled first), else the
 // name color.

@@ -404,7 +404,8 @@ _renderAllMembers(members) {
       if (m.storage.dm) parts.push(t('settings.admin.storage_private', { size: this._formatFileSize(m.storage.dm) }));
       if (m.storage.profile) parts.push(t('settings.admin.storage_profile', { size: this._formatFileSize(m.storage.profile) }));
       const title = t('settings.admin.storage_tooltip', { files: m.storage.files, breakdown: parts.join(', ') });
-      storageHtml = `<span class="aml-member-storage" title="${this._escapeHtml(title)}">💾 ${this._escapeHtml(this._formatFileSize(m.storage.total))}</span>`;
+      storageHtml = `<span class="aml-member-storage" title="${this._escapeHtml(title)}">💾 ${this._escapeHtml(this._formatFileSize(m.storage.total))}</span>`
+        + (m.storage.dm ? `<span class="aml-member-storage aml-member-storage-dm" title="${this._escapeHtml(t('settings.admin.storage_dm_chip', { size: this._formatFileSize(m.storage.dm) }))}">✉️ ${this._escapeHtml(this._formatFileSize(m.storage.dm))}</span>` : '');
     }
 
     const avatarUrl = m.avatar ? m.avatar : '';
@@ -422,6 +423,9 @@ _renderAllMembers(members) {
       btns += `<button class="aml-action-btn aml-btn-nick" data-uid="${m.id}" data-uname="${this._escapeHtml(m.username)}" data-dname="${this._escapeHtml(m.displayName)}" title="${t('users.set_nickname')}">🏷️</button>`;
       if (perms.canPromote && !m.banned) {
         btns += `<button class="aml-action-btn aml-btn-role" data-uid="${m.id}" data-uname="${this._escapeHtml(m.username)}" title="${t('users.gear_menu.assign_role')}">👑</button>`;
+      }
+      if (perms.canBan) {
+        btns += `<button class="aml-action-btn aml-btn-sessions" data-uid="${m.id}" data-uname="${this._escapeHtml(m.displayName)}" title="${this._escapeHtml(t('settings.admin.member_sessions_title', { name: m.displayName }))}">🖥️</button>`;
       }
       if (perms.canKick && !m.banned) {
         btns += `<button class="aml-action-btn aml-btn-addch" data-uid="${m.id}" data-uname="${this._escapeHtml(m.username)}" title="${t('settings.admin.add_to_channel_title')}">➕</button>`;
@@ -487,6 +491,7 @@ _renderStorageSummary() {
       size: this._formatFileSize(summary.unattributedBytes)
     });
   }
+  if (summary.dmBytes > 0) text += ' ' + t('settings.admin.storage_summary_dm', { size: this._formatFileSize(summary.dmBytes) });
   el.textContent = text;
   el.style.display = '';
 },
@@ -526,6 +531,12 @@ _bindMemberListActions(container) {
     });
   });
 
+  container.querySelectorAll('.aml-btn-sessions').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      self._openMemberSessions(parseInt(btn.dataset.uid), btn.dataset.uname);
+    });
+  });
   // Add to Channel
   container.querySelectorAll('.aml-btn-addch').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -578,6 +589,47 @@ _bindMemberListActions(container) {
   });
 },
 
+_openMemberSessions(userId, username) {
+  document.querySelector('.member-sessions-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay member-sessions-overlay';
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-header">
+        <h4>🖥️ ${this._escapeHtml(t('settings.admin.member_sessions_title', { name: username }))}</h4>
+        <button class="modal-close-btn ms-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted-text">${this._escapeHtml(t('settings.admin.member_sessions_hint'))}</p>
+        <div class="ms-list sessions-list"><p class="muted-text">${this._escapeHtml(t('modals.common.loading'))}</p></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm ms-cancel">${t('modals.common.close')}</button>
+        <button class="btn-sm btn-danger ms-revoke" disabled>${t('settings.admin.member_sessions_revoke')}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const list = overlay.querySelector('.ms-list');
+  const revoke = overlay.querySelector('.ms-revoke');
+  const close = () => overlay.remove();
+  overlay.querySelector('.ms-close').addEventListener('click', close);
+  overlay.querySelector('.ms-cancel').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  this.socket.emit('get-member-sessions', { userId }, (res) => {
+    if (!overlay.isConnected) return;
+    res && res.sessions ? this._renderSessionsList(res.sessions, list, 'settings.admin.member_sessions_none') : (list.textContent = (res && res.error) || t('settings.admin.member_sessions_failed'));
+    revoke.disabled = !(res && res.sessions);
+  });
+  revoke.addEventListener('click', async () => {
+    if (!await this._confirm(t('settings.admin.member_sessions_confirm', { name: username }), { danger: true, confirmLabel: t('settings.admin.member_sessions_revoke') })) return;
+    revoke.disabled = true;
+    this.socket.emit('revoke-member-sessions', { userId }, (res) => {
+      this._showToast(res && res.ok ? t('settings.admin.member_sessions_done', { name: username }) : (res && res.error) || t('settings.admin.member_sessions_failed'), res && res.ok ? 'success' : 'error');
+      res && res.ok ? close() : (revoke.disabled = false);
+    });
+  });
+},
 _openMemberChannelPicker(userId, username, mode, channelsOverride = null) {
   // mode: 'add' or 'remove'. channelsOverride is a ready-made [{ id, name }]
   // list for callers outside Settings, All Members (the user context menu),

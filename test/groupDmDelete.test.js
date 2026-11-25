@@ -57,6 +57,7 @@ function setup({ members, cached, confirmed = true, admin = false }) {
     // Opening a DM menu closes the channel menu (#5744); there is no page here.
     _closeChannelCtxMenu: () => {},
     _groupName: (ch) => ch.name,
+    _mutedChannelList: () => [],
     _groupRoster: async () => (members ? { members } : null),
     _collectDmAttachments: async () => ['/uploads/a.bin'],
     _showConfirmModal: async () => confirmed,

@@ -245,7 +245,9 @@ function withDeadline(promise, deadlineAt, message) {
   ]).finally(() => clearTimeout(timer));
 }
 
-function postResolvedCallback(destination, payload, headers, deadlineAt) {
+// The reply's body comes back as text only when maxBody is set and it fits;
+// otherwise it is read and dropped.
+function postResolvedCallback(destination, payload, headers, deadlineAt, maxBody = 0) {
   return new Promise((resolve, reject) => {
     const remaining = deadlineAt - Date.now();
     if (remaining <= 0) return reject(new Error('Webhook callback exceeded its deadline'));
@@ -266,11 +268,15 @@ function postResolvedCallback(destination, payload, headers, deadlineAt) {
     };
     const onResponse = incoming => {
       response = incoming;
+      const chunks = [];
+      let size = 0;
+      if (maxBody) incoming.on('data', chunk => { size += chunk.length; if (size <= maxBody) chunks.push(chunk); });
       incoming.on('error', finish);
-      incoming.on('end', () => finish(null, {
-        ok: incoming.statusCode >= 200 && incoming.statusCode < 300,
-        status: incoming.statusCode
-      }));
+      incoming.on('end', () => {
+        const result = { ok: incoming.statusCode >= 200 && incoming.statusCode < 300, status: incoming.statusCode };
+        if (maxBody) result.body = size <= maxBody ? Buffer.concat(chunks).toString('utf8') : null;
+        finish(null, result);
+      });
       incoming.resume();
     };
     const request = destination.proxy
@@ -298,7 +304,7 @@ async function postWebhookCallback(urlString, payload, headers, options = {}) {
     deadlineAt,
     'Webhook callback DNS resolution timed out'
   );
-  return postResolvedCallback(destination, payload, headers, deadlineAt);
+  return postResolvedCallback(destination, payload, headers, deadlineAt, options.maxBody);
 }
 
 module.exports = {

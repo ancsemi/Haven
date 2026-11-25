@@ -115,7 +115,7 @@ test('a revealed picture stays shown when the message is drawn again', () => {
   assert.match(app._formatContent('/uploads/other.png'), /hidden-image/);
 });
 
-test('link cards start folded while hidden, until opened', () => {
+test('link cards with a picture or video start folded while hidden, until opened', () => {
   const src = fs.readFileSync(path.join(ROOT, 'public/js/modules/app-link-previews.js'), 'utf8');
   const context = vm.createContext({ module: { exports: {} }, console, t: (k) => k, URL, URLSearchParams, localStorage: { getItem: () => null, setItem() {} }, document: {} });
   vm.runInContext(src.replace(/^export default/m, 'module.exports ='), context);
@@ -123,11 +123,12 @@ test('link cards start folded while hidden, until opened', () => {
   app._collapsedEmbeds = new Set();
   let hidden = false;
   app._hideMediaOn = () => hidden;
-  assert.equal(app._embedFolded('https://example.com/a'), false);
+  assert.equal(app._embedFolded('https://example.com/a', 0, true), false);
   hidden = true;
-  assert.equal(app._embedFolded('https://example.com/a'), true);
-  app._openedEmbeds = new Set(['https://example.com/a']);
+  assert.equal(app._embedFolded('https://example.com/a', 0, true), true);
   assert.equal(app._embedFolded('https://example.com/a'), false);
+  app._openedEmbeds = new Set(['https://example.com/a']);
+  assert.equal(app._embedFolded('https://example.com/a', 0, true), false);
 });
 
 test('the tooltip stays inside the window', async () => {

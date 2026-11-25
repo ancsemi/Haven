@@ -200,6 +200,10 @@ _showUserContextMenu(e, targetUserId, targetNameOverride) {
       this._hideUserContextMenu();
       this._openModHistory(targetUserId, targetName);
     });
+    if (canBan && targetUserId !== this.user?.id) addBtn(`🖥️ ${t('users.gear_menu.sessions')}`, () => {
+      this._hideUserContextMenu();
+      this._openMemberSessions(targetUserId, targetName);
+    });
     if (canBan) addBtn(`⛔ ${t('users.gear_menu.ban')}`, () => {
       this._hideUserContextMenu();
       this._showAdminActionModal('ban', targetUserId, targetName);

@@ -16,25 +16,30 @@ const BUILTIN_EMOJI_NAMES = new Set([
   'os_windows', 'os_mac', 'os_ios', 'os_android', 'os_linux',
 ]);
 
-const NAMED_EMOJI_RE = /^:([a-zA-Z0-9_-]{1,30}):$/;
+const NAME_CHAR = '(?![\\uFE00-\\uFE0F])[\\p{L}\\p{Nd}\\p{Mn}\\p{Mc}_-]';
+const NAMED_EMOJI_RE = new RegExp(`^:((?:${NAME_CHAR}){1,32}):$`, 'u');
+const EMOJI_NAME_RE = new RegExp(`^(?!\\p{M})(?:${NAME_CHAR}){2,32}$`, 'u');
+const NAME_CHAR_RE = new RegExp(`^${NAME_CHAR}$`, 'u');
+const isEmojiName = (name) => typeof name === 'string' && EMOJI_NAME_RE.test(name);
+const cleanEmojiName = (raw) => [...[...String(raw || '').normalize('NFC')].filter(c => NAME_CHAR_RE.test(c)).join('').replace(/^\p{M}+/u, '')].slice(0, 32).join('');
 const UNICODE_EMOJI_RE = /^[\p{Emoji}\p{Emoji_Component}️‍]+$/u;
 
 // True for :name: when it is one of Haven's own or the server's custom emoji.
 // The lookup returns a row on SQLite and a promise on the async adapters.
 function isKnownNamedEmoji(db, text) {
-  const m = NAMED_EMOJI_RE.exec(String(text || ''));
+  const m = NAMED_EMOJI_RE.exec(String(text || '').normalize('NFC'));
   if (!m) return false;
   const name = m[1].toLowerCase();
   if (BUILTIN_EMOJI_NAMES.has(name)) return true;
-  const row = db.prepare('SELECT 1 FROM custom_emojis WHERE lower(name) = ?').get(name);
+  const row = db.prepare('SELECT 1 FROM custom_emojis WHERE lower(name) = ? OR name = ?').get(name, m[1]);
   return row && typeof row.then === 'function' ? row.then(Boolean) : !!row;
 }
 
 // An emoji someone may react with or put on a role menu: a Unicode emoji, or
 // a named one this server knows.
 function isUsableEmoji(db, text) {
-  if (typeof text !== 'string' || !text || text.length > 32) return false;
-  return UNICODE_EMOJI_RE.test(text) || isKnownNamedEmoji(db, text);
+  if (typeof text !== 'string' || !text || text.length > 70) return false;
+  return (text.length <= 32 && UNICODE_EMOJI_RE.test(text)) || isKnownNamedEmoji(db, text);
 }
 
 // One that means the same on every server, for server templates: a Unicode
@@ -52,7 +57,7 @@ function cleanEmojiFavorites(raw) {
   let list;
   try { list = JSON.parse(raw); } catch { return null; } // not JSON: refused
   if (!Array.isArray(list)) return null;
-  const kept = list.filter(e => typeof e === 'string' && e.length <= 32 && (UNICODE_EMOJI_RE.test(e) || NAMED_EMOJI_RE.test(e)));
+  const kept = list.filter(e => typeof e === 'string' && ((e.length <= 32 && UNICODE_EMOJI_RE.test(e)) || NAMED_EMOJI_RE.test(e)));
   return JSON.stringify([...new Set(kept)].slice(0, EMOJI_FAVORITES_MAX));
 }
-module.exports = { BUILTIN_EMOJI_NAMES, NAMED_EMOJI_RE, EMOJI_FAVORITES_MAX, isKnownNamedEmoji, isUsableEmoji, isPortableEmoji, cleanEmojiFavorites };
+module.exports = { BUILTIN_EMOJI_NAMES, NAMED_EMOJI_RE, EMOJI_FAVORITES_MAX, isEmojiName, cleanEmojiName, isKnownNamedEmoji, isUsableEmoji, isPortableEmoji, cleanEmojiFavorites };

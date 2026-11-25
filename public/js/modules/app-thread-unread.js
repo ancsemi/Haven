@@ -59,7 +59,7 @@ _onThreadReply(data) {
   const mine = msg.user_id != null && msg.user_id === this.user.id;
   if (mine) return;
   let mutedChs = [];
-  try { mutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'); } catch (err) { console.warn('[Thread] could not read muted channels', err); }
+  try { mutedChs = this._mutedChannelList(); } catch (err) { console.warn('[Thread] could not read muted channels', err); }
   const channelMuted = mutedChs.includes(code);
   const content = msg.content || '';
   const meEsc = (this.user.username || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -80,7 +80,9 @@ _onThreadReply(data) {
   if (sound) {
     const opts = sound === 'mention' ? { isMention: true } : sound === 'reply' ? { isReply: true } : undefined;
     this.notifications.play(sound, opts);
-    if (document.hidden) this._fireNativeNotification({ ...msg, content: `[thread] ${content}` }, code, opts);
+    // Flattened before the prefix: a table needs its first line to itself
+    // to be read as one.
+    if (document.hidden) this._fireNativeNotification({ ...msg, content: `[thread] ${window.HavenNotifyPreview ? HavenNotifyPreview.preview(content) : content}` }, code, opts);
   }
 
   if (this._isForumCode(code)) return;
@@ -176,7 +178,7 @@ _updateThreadDot(code, el = null) {
   el = el || document.querySelector(`.channel-item[data-code="${code}"]`);
   if (!el) return;
   let muted = false;
-  try { muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]').includes(code); } catch (err) { console.warn('[Thread] could not read muted channels', err); }
+  try { muted = this._mutedChannelList().includes(code); } catch (err) { console.warn('[Thread] could not read muted channels', err); }
   let any = false;
   for (const e of (this._threadUnread || new Map()).values()) if (e.code === code && e.followed && e.count > 0) { any = true; break; }
   const show = any && !muted && !this._isForumCode(code);
