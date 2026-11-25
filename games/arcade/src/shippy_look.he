@@ -1,0 +1,688 @@
+namespace shippy_look
+use math
+use shippy
+use pool_look
+use gfx.gltf
+use gfx.shapes
+use gfx.scene3d
+use gfx.sparks
+use gfx.linalg
+use gfx
+var BUILT = false
+var CRATE_ASSET = 0
+var SPREADER_ASSET = 0
+var CABLE_ASSET = 0
+var TROLLEY_ASSET = 0
+var PONTOON_ASSET = 0
+var GIRDER_ASSET = 0
+var CRANE_ASSET = 0
+var MAST_ASSET = 0
+var CITY_ASSET = 0
+var QUAY_ASSET = 0
+var PAINT gltf::Material[8] = [default<gltf::Material>(); 8]
+var CRATES int[>..] = []
+var CRATE_PAINT int[>..] = []
+var PARTS int[>..] = []
+var GIRDERS int[7] = [0; 7]
+var CRANES int[7] = [0; 7]
+var MASTS int[4] = [0; 4]
+var MAST_LIGHTS int[4] = [0; 4]
+var CITY int[4] = [0; 4]
+var QUAYS int[7] = [0; 7]
+var FAR_QUAYS int[4] = [0; 4]
+var SKY = 0
+var SEA_ITEM = 0
+var MOON = 0
+var POD = 0
+var FACE = 0
+var WING_L = 0
+var WING_R = 0
+var POD_LIGHT = 0
+var CAMX = 0.0
+var SHAKE = 0.0
+var ASPECT = 1.7
+var LAST_STATE = -1
+var PREV_VY = 0.0
+var SPLASHED = false
+var FLAP_T = 0.0
+var SEED = 0
+var SPARKS = false
+CL := 6.8
+CH := 2.8
+CD := 2.5
+FOV := 0.72
+GIRDER_LEN := 24.0
+CRANE_GAP := 90.0
+MAST_GAP := 70.0
+CITY_LEN := 400.0
+QUAY_LEN := 70.0
+pt(x f32, y f32, z f32) float3: linalg::v3(x, y, z)
+ptd(x real, y real, z real) float3: linalg::v3(x as f32, y as f32, z as f32)
+smooth(a real, b real, x real) real:
+	t := clamp((x - a) / (b - a), 0.0, 1.0)
+	t * t * (3.0 - 2.0 * t)
+mix(a real, b real, t real) real: a + (b - a) * t
+lin1(c real) real: pow(c / 255.0, 2.2)
+lin(r real, g real, b real) float3: ptd(lin1(r), lin1(g), lin1(b))
+glow(e float3) gltf::Material:
+	m ~= shapes::material(pt(0.0, 0.0, 0.0), 0.0, 1.0)
+	m.emissive = e
+	m
+paint(k int) float3:
+	match k:
+		0 => lin(235.0, 72.0, 58.0)
+		1 => lin(40.0, 140.0, 238.0)
+		2 => lin(38.0, 197.0, 112.0)
+		3 => lin(250.0, 170.0, 24.0)
+		4 => lin(158.0, 92.0, 225.0)
+		5 => lin(20.0, 195.0, 170.0)
+		6 => lin(245.0, 124.0, 32.0)
+		_ => lin(210.0, 58.0, 44.0)
+grime_texture() int:
+	px byte[>..] ~= []
+	for j 128:
+		for i 256:
+			n := pool_look::vnoise(i / 16.0, j / 8.0, 16, 3)
+			streak := smooth(0.55, 0.85, pool_look::vnoise(i / 3.0, j / 48.0, 85, 5)) * (j / 128.0)
+			v := 0.87 + 0.12 * (n - 0.5) - 0.22 * streak + 0.04 * (pool_look::hash2(i, j, 9) - 0.5)
+			rk := if streak > 0.0 { 1.05 } else { 1.0 }
+			bk := if streak > 0.0 { 0.93 } else { 1.0 }
+			px.push(clamp(v * rk * 255.0, 0.0, 255.0) as byte)
+			px.push(clamp(v * 255.0, 0.0, 255.0) as byte)
+			px.push(clamp(v * bk * 255.0, 0.0, 255.0) as byte)
+			px.push(255)
+	gltf::add_texture_rgba(px, 256, 128, 10497)
+sky_add(buf real[:], i int, j int, amt real, bl real):
+	if i < 0 || i >= 1024 || j < 0 || j >= 512: return
+	k := (j * 1024 + i) * 3
+	buf[k] += amt
+	buf[k + 1] += amt
+	buf[k + 2] += amt + bl;
+sky_texture() int:
+	buf real[>..] ~= []
+	buf.resize(1024 * 512 * 3, 0.0)
+	for j 512:
+		v := (j + 0.5) / 512.0
+		fade := 1.0 - smooth(0.5, 0.8, v)
+		for i 1024:
+			u := (i + 0.5) / 1024.0
+			k := (j * 1024 + i) * 3
+			if v <= 0.55:
+				t := v / 0.55
+				buf[k] = mix(14.0, 52.0, t)
+				buf[k + 1] = mix(20.0, 40.0, t)
+				buf[k + 2] = mix(70.0, 120.0, t)
+			else if v <= 0.82:
+				t := (v - 0.55) / 0.27
+				buf[k] = mix(52.0, 150.0, t)
+				buf[k + 1] = mix(40.0, 72.0, t)
+				buf[k + 2] = mix(120.0, 130.0, t)
+			else:
+				t := (v - 0.82) / 0.18
+				buf[k] = mix(150.0, 250.0, t)
+				buf[k + 1] = mix(72.0, 140.0, t)
+				buf[k + 2] = mix(130.0, 90.0, t)
+			h := pool_look::hash2(i, j, 11)
+			if h > 0.9975:
+				amt := (120.0 + 135.0 * pool_look::hash2(i, j, 12)) * fade
+				sky_add(buf, i, j, amt, 20.0 * fade)
+				if h > 0.99975:
+					sky_add(buf, i - 1, j, amt * 0.5, 10.0 * fade)
+					sky_add(buf, i + 1, j, amt * 0.5, 10.0 * fade)
+					sky_add(buf, i, j - 1, amt * 0.5, 10.0 * fade)
+					sky_add(buf, i, j + 1, amt * 0.5, 10.0 * fade)
+			d := (v - 0.18 - 0.3 * u) / 0.08
+			bd := exp(-d * d) * pool_look::vnoise(u * 40.0, v * 20.0, 40, 13)
+			buf[k] += 27.0 * bd
+			buf[k + 1] += 27.0 * bd
+			buf[k + 2] += 34.0 * bd
+	px byte[>..] ~= []
+	for p 1024 * 512:
+		px.push(clamp(buf[p * 3], 0.0, 255.0) as byte)
+		px.push(clamp(buf[p * 3 + 1], 0.0, 255.0) as byte)
+		px.push(clamp(buf[p * 3 + 2], 0.0, 255.0) as byte)
+		px.push(255)
+	gltf::add_texture_rgba(px, 1024, 512, 33071)
+face_texture() int:
+	t1 := gltf::add_texture_file("../assets/shippy/avatar.png")
+	if t1 >= 0: return t1
+	t2 := gltf::add_texture_file("assets/shippy/avatar.png")
+	if t2 >= 0: return t2
+	t3 := gltf::add_texture_file("shippy/avatar.png")
+	if t3 >= 0: return t3
+	px byte[>..] ~= []
+	for j 128:
+		for i 128:
+			r ~= 124
+			g ~= 92
+			b ~= 252
+			if hypot(i - 64.0, j - 64.0) <= 62.0:
+				r = 240
+				g = 204
+				b = 172
+				sd := hypot(i - 64.0, j - 60.0)
+				if hypot(i - 44.0, j - 54.0) <= 9.0 || hypot(i - 84.0, j - 54.0) <= 9.0:
+					r = 40
+					g = 32
+					b = 36
+				else if sd >= 30.0 && sd <= 36.0 && j > 70:
+					r = 120
+					g = 40
+					b = 50
+			px.push(r as byte)
+			px.push(g as byte)
+			px.push(b as byte)
+			px.push(255)
+	gltf::add_texture_rgba(px, 128, 128, 33071)
+quv(a float3, b float3, c float3, d float3, n float3, vf int):
+	pool_look::push_quad(a, b, c, d, n, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, vf);
+box_faces(lo float3, hi float3, vf int, mask int):
+	x0 := lo.x
+	y0 := lo.y
+	z0 := lo.z
+	x1 := hi.x
+	y1 := hi.y
+	z1 := hi.z
+	if (mask & 1) != 0: quv(pt(x1, y0, z1), pt(x1, y0, z0), pt(x1, y1, z0), pt(x1, y1, z1), pt(1.0, 0.0, 0.0), vf)
+	if (mask & 2) != 0: quv(pt(x0, y0, z0), pt(x0, y0, z1), pt(x0, y1, z1), pt(x0, y1, z0), pt(-1.0, 0.0, 0.0), vf)
+	if (mask & 4) != 0: quv(pt(x0, y1, z1), pt(x1, y1, z1), pt(x1, y1, z0), pt(x0, y1, z0), pt(0.0, 1.0, 0.0), vf)
+	if (mask & 8) != 0: quv(pt(x0, y0, z0), pt(x1, y0, z0), pt(x1, y0, z1), pt(x0, y0, z1), pt(0.0, -1.0, 0.0), vf)
+	if (mask & 16) != 0: quv(pt(x0, y0, z1), pt(x1, y0, z1), pt(x1, y1, z1), pt(x0, y1, z1), pt(0.0, 0.0, 1.0), vf)
+	if (mask & 32) != 0: quv(pt(x1, y0, z0), pt(x0, y0, z0), pt(x0, y1, z0), pt(x1, y1, z0), pt(0.0, 0.0, -1.0), vf);
+box_into(lo float3, hi float3, vfirst int): box_faces(lo, hi, vfirst, 63)
+wall(xa real, xb real, y0 real, y1 real, za real, zb real, s real, vf int):
+	n := linalg::unit3(ptd(-s * (zb - za), 0.0, s * (xb - xa)))
+	u0 := (xa / CL + 0.5) as f32
+	u1 := (xb / CL + 0.5) as f32
+	v0 := (y0 / CH) as f32
+	v1 := (y1 / CH) as f32
+	if s > 0.0:
+		pool_look::push_quad(ptd(xa, y0, za), ptd(xb, y0, zb), ptd(xb, y1, zb), ptd(xa, y1, za), n, u0, v0, u1, v0, u1, v1, u0, v1, vf)
+	else:
+		pool_look::push_quad(ptd(xb, y0, zb), ptd(xa, y0, za), ptd(xa, y1, za), ptd(xb, y1, zb), n, u1, v0, u0, v0, u0, v1, u1, v1, vf);
+corrugate(z real, s real, vfirst int):
+	x0 := -CL / 2.0 + 0.12
+	x1 := CL / 2.0 - 0.12
+	w := (x1 - x0) / 18.0
+	fr := [0.0, 0.15, 0.35, 0.65, 0.85, 1.0]
+	oo := [0.0, 0.0, 0.07, 0.07, 0.0, 0.0]
+	for k 18:
+		for m 5:
+			xa := x0 + (k + fr[m]) * w
+			xb := x0 + (k + fr[m + 1]) * w
+			wall(xa, xb, 0.14, CH - 0.14, z + oo[m] * s, z + oo[m + 1] * s, s, vfirst)
+	wall(x0, x1, 0.0, 0.14, z + 0.07 * s, z + 0.07 * s, s, vfirst)
+	wall(x0, x1, CH - 0.14, CH, z + 0.07 * s, z + 0.07 * s, s, vfirst);
+crate_mesh() int:
+	steel := shapes::material(lin(46.0, 48.0, 52.0), 0.7, 0.45)
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	hx := (CL / 2.0) as f32
+	hz := (CD / 2.0) as f32
+	ch := CH as f32
+	corrugate(CD / 2.0, 1.0, v0)
+	corrugate(-CD / 2.0, -1.0, v0)
+	quv(pt(-hx, ch, hz), pt(hx, ch, hz), pt(hx, ch, -hz), pt(-hx, ch, -hz), pt(0.0, 1.0, 0.0), v0)
+	quv(pt(-hx, 0.0, -hz), pt(hx, 0.0, -hz), pt(hx, 0.0, hz), pt(-hx, 0.0, hz), pt(0.0, -1.0, 0.0), v0)
+	quv(pt(-hx, 0.0, -hz), pt(-hx, 0.0, hz), pt(-hx, ch, hz), pt(-hx, ch, -hz), pt(-1.0, 0.0, 0.0), v0)
+	for leaf 2:
+		zlo f32 := if leaf == 0 { -hz + 0.02 } else { 0.015 }
+		zhi f32 := if leaf == 0 { -0.015 } else { hz - 0.02 }
+		quv(pt(hx, 0.02, zhi), pt(hx, 0.02, zlo), pt(hx, ch - 0.02, zlo), pt(hx, ch - 0.02, zhi), pt(1.0, 0.0, 0.0), v0)
+	nb := gltf::indices.len - i0
+	bars f32[4] := [-0.9, -0.35, 0.35, 0.9]
+	for zb bars:
+		box_into(pt(hx, 0.2, zb - 0.025), pt(hx + 0.05, ch - 0.2, zb + 0.025), v0)
+	for a 2:
+		for b 2:
+			for c 2:
+				xl f32 := if a == 0 { -hx } else { hx - 0.18 }
+				yl f32 := if b == 0 { 0.0 } else { ch - 0.15 }
+				zl f32 := if c == 0 { -hz } else { hz - 0.18 }
+				box_into(pt(xl, yl, zl), pt(xl + 0.18, yl + 0.15, zl + 0.18), v0)
+	nh := gltf::indices.len - i0 - nb
+	ms := [PAINT[0], steel]
+	counts := [nb, nh]
+	shapes::finish_groups(v0, i0, pt(-hx, 0.0, -hz), pt(hx + 0.05, ch, hz), ms, counts)
+parts_meshes():
+	yellow := shapes::material(lin(226.0, 168.0, 30.0), 0.35, 0.5)
+	dark := shapes::material(lin(30.0, 32.0, 36.0), 0.7, 0.5)
+	hull := shapes::material(lin(92.0, 30.0, 28.0), 0.3, 0.7)
+	deck := shapes::material(lin(70.0, 72.0, 74.0), 0.0, 0.85)
+	v1 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i1 := gltf::indices.len
+	box_into(pt(-3.5, 0.0, -1.3), pt(3.5, 0.32, 1.3), v1)
+	SPREADER_ASSET = shapes::finish(v1, i1, pt(-3.5, 0.0, -1.3), pt(3.5, 0.32, 1.3), yellow)
+	v2 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i2 := gltf::indices.len
+	for a 2:
+		for b 2:
+			cx f32 := if a == 0 { -2.7 } else { 2.7 }
+			cz f32 := if b == 0 { -0.9 } else { 0.9 }
+			box_into(pt(cx - 0.035, 0.0, cz - 0.035), pt(cx + 0.035, 1.0, cz + 0.035), v2)
+	CABLE_ASSET = shapes::finish(v2, i2, pt(-2.7, 0.0, -0.9), pt(2.7, 1.0, 0.9), dark)
+	v3 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i3 := gltf::indices.len
+	box_into(pt(-2.2, -1.1, -1.7), pt(2.2, 0.0, 1.7), v3)
+	n31 := gltf::indices.len - i3
+	box_into(pt(-0.7, -1.5, -0.5), pt(0.7, -1.1, 0.5), v3)
+	n32 := gltf::indices.len - i3 - n31
+	tms := [yellow, dark]
+	tcs := [n31, n32]
+	TROLLEY_ASSET = shapes::finish_groups(v3, i3, pt(-2.2, -1.5, -1.7), pt(2.2, 0.0, 1.7), tms, tcs)
+	v4 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i4 := gltf::indices.len
+	box_faces(pt(-4.1, -1.0, -1.7), pt(4.1, 0.0, 1.7), v4, 59)
+	n41 := gltf::indices.len - i4
+	box_faces(pt(-4.1, -1.0, -1.7), pt(4.1, 0.0, 1.7), v4, 4)
+	n42 := gltf::indices.len - i4 - n41
+	pms := [hull, deck]
+	pcs := [n41, n42]
+	PONTOON_ASSET = shapes::finish_groups(v4, i4, pt(-4.1, -1.0, -1.7), pt(4.1, 0.0, 1.7), pms, pcs);
+brace(x0 real, y0 real, x1 real, y1 real, vf int):
+	dx := x1 - x0
+	dy := y1 - y0
+	ln := sqrt(dx * dx + dy * dy)
+	px := -dy / ln * 0.15
+	py := dx / ln * 0.15
+	cxs := [x0 + px, x1 + px, x1 - px, x0 - px]
+	cys := [y0 + py, y1 + py, y1 - py, y0 - py]
+	quv(ptd(cxs[0], cys[0], 0.15), ptd(cxs[1], cys[1], 0.15), ptd(cxs[2], cys[2], 0.15), ptd(cxs[3], cys[3], 0.15), pt(0.0, 0.0, 1.0), vf)
+	quv(ptd(cxs[3], cys[3], -0.15), ptd(cxs[2], cys[2], -0.15), ptd(cxs[1], cys[1], -0.15), ptd(cxs[0], cys[0], -0.15), pt(0.0, 0.0, -1.0), vf)
+	for m 4:
+		q := (m + 1) % 4
+		ex := cxs[q] - cxs[m]
+		ey := cys[q] - cys[m]
+		n := linalg::unit3(ptd(-ey, ex, 0.0))
+		quv(ptd(cxs[m], cys[m], -0.15), ptd(cxs[q], cys[q], -0.15), ptd(cxs[q], cys[q], 0.15), ptd(cxs[m], cys[m], 0.15), n, vf);
+girder_mesh():
+	yellow := shapes::material(lin(226.0, 168.0, 30.0), 0.35, 0.5)
+	dark := shapes::material(lin(30.0, 32.0, 36.0), 0.7, 0.5)
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	gl := GIRDER_LEN as f32
+	box_into(pt(0.0, 0.0, -0.5), pt(gl, 0.7, 0.5), v0)
+	box_into(pt(0.0, 3.4, -0.5), pt(gl, 4.0, 0.5), v0)
+	for k 7:
+		px := min(4.0 * k, GIRDER_LEN - 0.4)
+		box_into(ptd(px, 0.7, -0.2), ptd(px + 0.4, 3.4, 0.2), v0)
+	for k 6:
+		x := 4.0 * k
+		brace(x + 0.2, 0.7, x + 3.8, 3.4, v0)
+	n1 := gltf::indices.len - i0
+	box_into(pt(0.0, 4.0, -1.8), pt(gl, 4.4, 1.8), v0)
+	n2 := gltf::indices.len - i0 - n1
+	ms := [yellow, dark]
+	cs := [n1, n2]
+	GIRDER_ASSET = shapes::finish_groups(v0, i0, pt(0.0, 0.0, -1.8), pt(gl, 4.4, 1.8), ms, cs);
+crane_mesh():
+	blue := shapes::material(lin(28.0, 66.0, 120.0), 0.3, 0.55)
+	red := glow(pt(7.0, 0.4, 0.3))
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	box_into(pt(0.0, 0.0, -0.7), pt(1.4, 44.0, 0.7), v0)
+	box_into(pt(12.7, 0.0, -0.7), pt(14.1, 44.0, 0.7), v0)
+	box_into(pt(0.0, 30.0, -0.8), pt(14.0, 32.5, 0.8), v0)
+	box_into(pt(-27.0, 44.0, -1.0), pt(40.0, 47.5, 1.0), v0)
+	box_into(pt(2.0, 47.5, -2.5), pt(12.0, 51.0, 2.5), v0)
+	box_into(pt(7.0, 51.0, -0.7), pt(8.4, 72.0, 0.7), v0)
+	n1 := gltf::indices.len - i0
+	lx f32[3] := [-27.0, 40.0, 7.7]
+	ly f32[3] := [47.0, 47.0, 72.0]
+	for q 3:
+		box_into(pt(lx[q] - 0.4, ly[q] - 0.4, -0.4), pt(lx[q] + 0.4, ly[q] + 0.4, 0.4), v0)
+	n2 := gltf::indices.len - i0 - n1
+	ms := [blue, red]
+	cs := [n1, n2]
+	CRANE_ASSET = shapes::finish_groups(v0, i0, pt(-27.4, 0.0, -2.5), pt(40.4, 72.4, 2.5), ms, cs);
+mast_mesh():
+	dark := shapes::material(lin(30.0, 32.0, 36.0), 0.7, 0.5)
+	lamp := glow(pt(9.0, 5.6, 2.4))
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	box_into(pt(-0.3, -1.0, -0.3), pt(0.3, 34.0, 0.3), v0)
+	box_into(pt(-2.2, 34.0, -0.5), pt(2.2, 34.7, 0.5), v0)
+	n1 := gltf::indices.len - i0
+	box_into(pt(-2.0, 33.7, -0.45), pt(2.0, 34.0, 0.45), v0)
+	n2 := gltf::indices.len - i0 - n1
+	ms := [dark, lamp]
+	cs := [n1, n2]
+	MAST_ASSET = shapes::finish_groups(v0, i0, pt(-2.2, -1.0, -0.5), pt(2.2, 34.7, 0.5), ms, cs);
+quay_mesh():
+	conc ~= shapes::material(lin(104.0, 102.0, 98.0), 0.0, 0.9)
+	conc.base_tex = PAINT[0].base_tex
+	yel := shapes::material(lin(226.0, 168.0, 30.0), 0.0, 0.7)
+	dark := shapes::material(lin(30.0, 32.0, 36.0), 0.5, 0.7)
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	ql := QUAY_LEN as f32
+	box_into(pt(0.0, -1.5, -5.0), pt(ql, 1.2, 5.0), v0)
+	n1 := gltf::indices.len - i0
+	box_into(pt(0.0, 1.2, 4.55), pt(ql, 1.27, 5.0), v0)
+	n2 := gltf::indices.len - i0 - n1
+	bx ~= 7.0
+	while bx < QUAY_LEN:
+		box_into(ptd(bx - 0.35, 1.2, 3.65), ptd(bx + 0.35, 2.1, 4.35), v0)
+		bx += 14.0
+	fx ~= 2.0
+	while fx + 1.7 <= QUAY_LEN:
+		box_into(ptd(fx, -0.8, 5.0), ptd(fx + 1.7, 0.8, 5.4), v0)
+		fx += 10.0
+	n3 := gltf::indices.len - i0 - n1 - n2
+	ms := [conc, yel, dark]
+	cs := [n1, n2, n3]
+	QUAY_ASSET = shapes::finish_groups(v0, i0, pt(0.0, -1.5, -5.0), pt(ql, 2.1, 5.4), ms, cs);
+city_pass(pass int, vf int):
+	x ~= 0.0
+	idx ~= 0
+	while x < CITY_LEN:
+		w := 7.0 + 17.0 * pool_look::hash2(1, idx, 21)
+		r2 := pool_look::hash2(2, idx, 21)
+		h := 8.0 + 50.0 * r2 * r2
+		gap := 0.5 + 2.0 * pool_look::hash2(3, idx, 21)
+		if pass == 0:
+			box_into(ptd(x, -2.0, -12.0), ptd(x + w, h, 0.0), vf)
+		if pass == 1 || pass == 2:
+			col ~= 0
+			while 1.4 + col * 2.2 + 0.9 <= w - 1.4:
+				row ~= 0
+				while 1.4 + row * 2.7 + 1.2 <= h - 1.4:
+					hh := pool_look::hash2(col, row + 100 * idx, 23)
+					want := if pass == 1 { hh > 0.74 && hh <= 0.95 } else { hh > 0.95 }
+					if want:
+						wx := x + 1.4 + col * 2.2
+						wy := 1.4 + row * 2.7
+						quv(ptd(wx, wy, 0.02), ptd(wx + 0.9, wy, 0.02), ptd(wx + 0.9, wy + 1.2, 0.02), ptd(wx, wy + 1.2, 0.02), pt(0.0, 0.0, 1.0), vf)
+					row += 1
+				col += 1
+		if pass == 3 && h > 40.0:
+			cx := x + w / 2.0
+			box_into(ptd(cx - 0.4, h, -6.4), ptd(cx + 0.4, h + 0.8, -5.6), vf)
+		x += w + gap
+		idx += 1;
+city_mesh():
+	wall_m := shapes::material(lin(14.0, 18.0, 28.0), 0.0, 0.9)
+	warm := glow(pt(5.0, 3.4, 1.8))
+	cool := glow(pt(2.4, 3.4, 4.6))
+	redm := glow(pt(8.0, 0.5, 0.3))
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	city_pass(0, v0)
+	n0 := gltf::indices.len - i0
+	city_pass(1, v0)
+	n1 := gltf::indices.len - i0 - n0
+	city_pass(2, v0)
+	n2 := gltf::indices.len - i0 - n0 - n1
+	city_pass(3, v0)
+	n3 := gltf::indices.len - i0 - n0 - n1 - n2
+	ms := [wall_m, warm, cool, redm]
+	cs := [n0, n1, n2, n3]
+	CITY_ASSET = shapes::finish_groups(v0, i0, ptd(0.0, -2.0, -12.0), ptd(CITY_LEN + 30.0, 70.0, 0.1), ms, cs);
+pod_meshes():
+	pm ~= shapes::material(lin(124.0, 92.0, 252.0), 0.1, 0.28)
+	pm.coat = 1.0
+	pm.coat_r = 0.04
+	POD = s3d::add(shapes::sphere(2.0, 48, 32, pm))
+	fm ~= shapes::material(pt(1.0, 1.0, 1.0), 0.0, 0.35)
+	fm.base_tex = gltf::TexRef{texture: face_texture(), uv: 0}
+	fm.coat = 1.0
+	fm.coat_r = 0.02
+	v1 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i1 := gltf::indices.len
+	for i 13:
+		a := radians(40.0) * i / 12
+		for j 49:
+			b := 2.0 * PI * j / 48
+			px := 2.03 * sin(a) * cos(b)
+			py := 2.03 * sin(a) * sin(b)
+			pz := 2.03 * cos(a)
+			nrm := ptd(px / 2.03, py / 2.03, pz / 2.03)
+			shapes::vertex(ptd(px, py, pz), nrm, (0.5 + 0.5 * px / 1.305) as f32, (0.5 - 0.5 * py / 1.305) as f32, pool_look::tan_of(nrm))
+	for i 12:
+		for j 48:
+			a0 := i * 49 + j
+			b0 := a0 + 1
+			c0 := a0 + 49
+			d0 := c0 + 1
+			gltf::indices.push(a0 as u32)
+			gltf::indices.push(c0 as u32)
+			gltf::indices.push(d0 as u32)
+			gltf::indices.push(a0 as u32)
+			gltf::indices.push(d0 as u32)
+			gltf::indices.push(b0 as u32)
+	FACE = s3d::add(shapes::finish(v1, i1, pt(-1.305, -1.305, 1.55), pt(1.305, 1.305, 2.03), fm))
+	wm := shapes::material(lin(240.0, 236.0, 250.0), 0.0, 0.45)
+	WING_L = s3d::add(shapes::sphere(1.0, 24, 17, wm))
+	WING_R = s3d::add(shapes::sphere(1.0, 24, 17, wm));
+build():
+	if BUILT: return
+	s3d::clear_scene()
+	s3d::forget()
+	gltf::reset()
+	SPARKS = gfx::driver() != "webgl2"
+	if SPARKS: sparks::init(700)
+	grime := grime_texture()
+	sky := sky_texture()
+	for k 8:
+		pm ~= shapes::material(paint(k), 0.08, 0.5)
+		pm.base_tex = gltf::TexRef{texture: grime, uv: 0}
+		PAINT[k] = pm
+	CRATE_ASSET = crate_mesh()
+	parts_meshes()
+	girder_mesh()
+	crane_mesh()
+	mast_mesh()
+	city_mesh()
+	quay_mesh()
+	skm ~= shapes::material(pt(1.0, 1.0, 1.0), 0.0, 1.0)
+	skm.unlit = true
+	skm.base_tex = gltf::TexRef{texture: sky, uv: 0}
+	skm.no_shadow = true
+	qv := gltf::verts.len / gltf::VERTEX_FLOATS
+	qi := gltf::indices.len
+	pool_look::push_quad(pt(-1200.0, -250.0, 0.0), pt(1200.0, -250.0, 0.0), pt(1200.0, 250.0, 0.0), pt(-1200.0, 250.0, 0.0), pt(0.0, 0.0, 1.0), 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, qv)
+	SKY = s3d::add(shapes::finish(qv, qi, pt(-1200.0, -250.0, 0.0), pt(1200.0, 250.0, 0.0), skm))
+	mm ~= glow(pt(3.2, 3.1, 2.8))
+	mm.no_shadow = true
+	MOON = s3d::add(shapes::sphere(15.0, 32, 17, mm))
+	SEA_ITEM = s3d::add(shapes::sea(700.0, 170))
+	for k 7: GIRDERS[k] = s3d::add(GIRDER_ASSET)
+	for k 7: CRANES[k] = s3d::add(CRANE_ASSET)
+	for k 4:
+		MASTS[k] = s3d::add(MAST_ASSET)
+		s3d::add_light(pt(0.0, 33.0, 0.0), pt(900.0, 520.0, 220.0), 90.0)
+		MAST_LIGHTS[k] = s3d::lights.len - 1
+	for k 4: CITY[k] = s3d::add(CITY_ASSET)
+	for k 7: QUAYS[k] = s3d::add(QUAY_ASSET)
+	for k 4: FAR_QUAYS[k] = s3d::add(QUAY_ASSET)
+	pod_meshes()
+	s3d::add_light(pt(0.0, 0.0, 0.0), pt(60.0, 54.0, 46.0), 17.0)
+	POD_LIGHT = s3d::lights.len - 1
+	lights()
+	BUILT = true
+	LAST_STATE = -1
+	SPLASHED = false
+	FLAP_T = 9.0;
+lights():
+	s3d::sun.to_sun = linalg::unit3(pt(-0.35, 0.72, 0.7))
+	s3d::sun.rgb = pt(1.05, 0.98, 1.25)
+	s3d::sun.shadows = true
+	s3d::sun.shadow_far = 170.0
+	s3d::sun.map_size = 2048
+	s3d::sun.soft = 1.0
+	s3d::sun.angle = 0.15
+	s3d::sun.reach = 1.5
+	s3d::sun.fit = true
+	s3d::sun.contact = 0.05
+	s3d::sky.zenith = pt(0.03, 0.035, 0.11)
+	s3d::sky.horizon = pt(0.17, 0.09, 0.12)
+	s3d::sky.ground = pt(0.025, 0.022, 0.03)
+	s3d::sky.ambient = 0.9
+	s3d::sky.draw = true
+	s3d::look.exposure = 1.35
+	s3d::look.bloom = 0.27
+	s3d::look.bloom_cut = 1.1
+	s3d::look.ssao = true
+	s3d::look.ao_radius = 0.7
+	s3d::look.vignette = 0.24
+	s3d::look.curve = 1
+	s3d::look.saturation = 1.3
+	s3d::look.contrast = 1.1
+	s3d::look.warmth = 0.05;
+world_x(g shippy::Game&, x real) real: (x + g.travel - shippy::POD_X) / 10.0
+world_y(y real) real: (shippy::SEA - y) / 10.0
+lead(g shippy::Game&) real: if g.state == shippy::PLAY { g.acc } else { 0.0 }
+ident() linalg::Quat: linalg::qaxis(pt(0.0, 0.0, 1.0), 0.0)
+put_q(item int, t float3, q linalg::Quat, s float3):
+	s3d::items[item].visible = true
+	s3d::place(item, linalg::compose(t, q, s));
+put_s(item int, x real, y real, z real, sx real, sy real, sz real):
+	put_q(item, ptd(x, y, z), ident(), ptd(sx, sy, sz));
+put(item int, x real, y real, z real):
+	put_s(item, x, y, z, 1.0, 1.0, 1.0);
+hide(item int): s3d::items[item].visible = false
+camera(g shippy::Game&, aspect real, dt real, now real):
+	ASPECT = aspect
+	need_w := 52.0
+	need_h := 70.0
+	vis_h := max(need_h, need_w / aspect)
+	vis_w := vis_h * aspect
+	behind := 10.0 + 0.25 * (vis_w - need_w)
+	ahead := vis_w - behind
+	g.behind = behind * 10.0 + 40.0
+	g.ahead = ahead * 10.0 + 90.0
+	d := vis_h / (2.0 * tan(FOV / 2.0))
+	CAMX = (g.travel + shippy::SPEED * lead(g)) / 10.0 - behind + vis_w / 2.0
+	SHAKE = SHAKE * exp(-dt * 5.0)
+	off := ptd(SHAKE * 0.7 * sin(now * 47.0), SHAKE * 0.7 * cos(now * 39.0), 0.0)
+	s3d::view.eye = ptd(CAMX, 30.0 + 0.1 * d, d) + off
+	s3d::view.target = ptd(CAMX, 30.0, 0.0) + off
+	s3d::view.up = pt(0.0, 1.0, 0.0)
+	s3d::view.fov_y = FOV as f32
+	s3d::view.near = 1.0
+	s3d::view.far = 2700.0;
+scenery(g shippy::Game&):
+	put(SKY, CAMX * 0.92, 190.0, -1100.0)
+	put(MOON, CAMX * 0.92 + 170.0 * ASPECT, 205.0, -1050.0)
+	put(SEA_ITEM, floor(CAMX / 4.0) * 4.0, -0.7, -300.0)
+	g0 := floor((CAMX - 80.0) / GIRDER_LEN)
+	for k 7: put(GIRDERS[k], (g0 + k) * GIRDER_LEN, 60.0, 0.0)
+	c0 := floor((CAMX - 300.0) / CRANE_GAP)
+	for k 7: put(CRANES[k], (c0 + k) * CRANE_GAP + 20.0, -0.7, -130.0)
+	m0 := floor((CAMX - 120.0) / MAST_GAP)
+	for k 4:
+		mx := (m0 + k) * MAST_GAP + 31.0
+		put(MASTS[k], mx, -0.7, -42.0)
+		s3d::lights[MAST_LIGHTS[k]].pos = ptd(mx, 33.0, -40.0)
+	y0 := floor((CAMX - 700.0) / CITY_LEN)
+	for k 4: put(CITY[k], (y0 + k) * CITY_LEN, -0.7, -570.0)
+	q0 := floor((CAMX - 210.0) / QUAY_LEN)
+	for k 7: put_s(QUAYS[k], (q0 + k) * QUAY_LEN, -0.7, -42.0, 1.0, 1.0, 1.0)
+	f0 := floor((CAMX - 240.0) / (2.0 * QUAY_LEN))
+	for k 4: put_s(FAR_QUAYS[k], (f0 + k) * 2.0 * QUAY_LEN, -0.7, -130.0, 2.0, 1.0, 4.0);
+crate_item(n int, k int) int:
+	while CRATES.len <= n:
+		CRATES.push(s3d::add(CRATE_ASSET))
+		CRATE_PAINT.push(-1)
+	item := CRATES[n]
+	if CRATE_PAINT[n] != k:
+		s3d::recolor(item, 0, PAINT[k])
+		CRATE_PAINT[n] = k
+	item
+stacks(g shippy::Game&):
+	used ~= 0
+	for i g.stacks.len:
+		s := g.stacks[i]
+		while PARTS.len < (i + 1) * 4:
+			PARTS.push(s3d::add(SPREADER_ASSET))
+			PARTS.push(s3d::add(CABLE_ASSET))
+			PARTS.push(s3d::add(TROLLEY_ASSET))
+			PARTS.push(s3d::add(PONTOON_ASSET))
+		wx := world_x(g, s.x) + 3.5
+		ytop ~= s.top
+		j ~= 0
+		while s.top - 2.0 - 30.0 * j - 28.0 >= 0.0:
+			sbot := s.top - 2.0 - 30.0 * j
+			put(crate_item(used, (s.color + j) % 8), wx, world_y(sbot), 0.0)
+			used += 1
+			ytop = sbot - 28.0
+			j += 1
+		spy := world_y(ytop)
+		sp := PARTS[i * 4]
+		cb := PARTS[i * 4 + 1]
+		tr := PARTS[i * 4 + 2]
+		pn := PARTS[i * 4 + 3]
+		if j > 0:
+			put(sp, wx, spy, 0.0)
+		else:
+			hide(sp)
+		cy := spy + 0.32
+		cl := 60.0 - 1.5 - cy
+		if cl < 0.05:
+			hide(cb)
+		else:
+			put_s(cb, wx, cy, 0.0, 1.0, cl, 1.0)
+		put(tr, wx, 60.0, 0.0)
+		lb ~= s.bottom
+		j2 ~= 0
+		while s.bottom + 30.0 * j2 + 28.0 <= shippy::SEA:
+			sbot2 := s.bottom + 30.0 * j2 + 28.0
+			put(crate_item(used, (s.color + 3 + j2) % 8), wx, world_y(sbot2), 0.0)
+			used += 1
+			lb = sbot2
+			j2 += 1
+		pyd := world_y(lb)
+		put_s(pn, wx, pyd, 0.0, 1.0, max(pyd + 3.0, 0.1), 1.0)
+	for n used..CRATES.len: hide(CRATES[n])
+	first := g.stacks.len * 4
+	for p first..PARTS.len: hide(PARTS[p]);
+pod_center(g shippy::Game&, now real) float3:
+	bob := if g.state == shippy::WAIT { 0.7 * sin(now * 3.0) } else { 0.0 }
+	ptd((g.travel + shippy::SPEED * lead(g)) / 10.0 + 2.2, world_y(g.y + g.vy * lead(g) + 22.0) + bob, 0.0)
+rot_z(x real, y real, z real, a real) float3: ptd(x * cos(a) - y * sin(a), x * sin(a) + y * cos(a), z)
+pod(g shippy::Game&, now real, dt real):
+	tilt ~= 0.0
+	if g.state == shippy::PLAY:
+		tilt = clamp(-g.vy * 0.0011, -1.1, 0.42)
+	else if g.state == shippy::WAIT:
+		tilt = 0.08 * sin(now * 2.1)
+	else:
+		tilt = clamp(-g.vy * 0.0011, -1.1, 0.42) - g.t * 7.0
+	FLAP_T += dt
+	if g.vy < PREV_VY - 200.0: FLAP_T = 0.0
+	PREV_VY = g.vy
+	wa := 0.9 * exp(-FLAP_T * 7.0) * cos(FLAP_T * 27.0) + 0.25 * sin(now * 9.0) + 0.2
+	c := pod_center(g, now)
+	q := linalg::qaxis(pt(0.0, 0.0, 1.0), tilt as f32)
+	one := pt(1.0, 1.0, 1.0)
+	put_q(POD, c, q, one)
+	put_q(FACE, c, q, one)
+	wsc := pt(1.5, 0.72, 0.17)
+	qr := linalg::qmul(q, linalg::qaxis(pt(0.0, 0.0, 1.0), wa as f32))
+	ql := linalg::qmul(q, linalg::qaxis(pt(0.0, 0.0, 1.0), -wa as f32))
+	put_q(WING_R, c + rot_z(2.0, 0.35, 0.0, tilt), qr, wsc)
+	put_q(WING_L, c + rot_z(-2.0, 0.35, 0.0, tilt), ql, wsc)
+	s3d::lights[POD_LIGHT].pos = c + pt(0.8, 0.7, 3.0);
+effects(g shippy::Game&, now real):
+	c := pod_center(g, now)
+	if LAST_STATE == shippy::PLAY && g.state == shippy::DEAD:
+		SHAKE = 1.0
+		if g.crash != 2 && SPARKS:
+			sparks::burst(c, pt(-1.0, 0.4, 0.3), 70, 17.0, 1.2, 0.8, s3d::f4(2.4, 1.2, 0.35, 1.0), 0.28, g.score + 3)
+	if g.state == shippy::DEAD && !SPLASHED && g.y + shippy::POD >= shippy::SEA:
+		SPLASHED = true
+		if SPARKS:
+			sparks::burst(pt(c.x, 0.0, 0.0), pt(0.0, 1.0, 0.2), 90, 13.0, 0.7, 1.1, s3d::f4(0.8, 0.9, 1.0, 1.0), 0.3, 7)
+		SHAKE = max(SHAKE, 0.5)
+	if g.state != shippy::DEAD: SPLASHED = false
+	if FLAP_T == 0.0 && SPARKS:
+		sparks::burst(c + pt(-1.4, -1.7, 0.0), pt(-0.7, -1.0, 0.0), 10, 5.0, 0.7, 0.35, s3d::f4(0.9, 0.9, 1.0, 1.0), 0.18, (now * 1000.0) as int)
+	LAST_STATE = g.state;
+sync(g shippy::Game&, aspect real, dt real, now real):
+	build()
+	camera(g, aspect, dt, now)
+	scenery(g)
+	stacks(g)
+	pod(g, now, dt)
+	effects(g, now)
+	if SPARKS: sparks::step(dt as f32);

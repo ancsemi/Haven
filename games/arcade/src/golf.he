@@ -1,0 +1,1230 @@
+namespace golf
+use pool
+use math
+BR := 0.0214
+CUP_R := 0.054
+GRAV := 9.81
+DT := 1.0 / 480.0
+SLOPE_K := 7.0
+MU_GRASS := 0.13
+MU_SAND := 0.52
+MU_ICE := 0.012
+PAD_ACC := 9.0
+MIN_PUTT := 0.15
+MAX_PUTT := 5.9
+SPEED_CAP := 9.0
+CAP_V := 1.2
+E_RAIL := 0.7
+RAIL_H := 0.3
+DROP_TOL := 0.02
+STEP_UP := 0.04
+LIFT_V := 2.0
+REST_STEPS := 48
+MAX_STEPS := 19200
+STROKE_CAP := 7
+MAX_PLAYERS := 4
+BIOMES := 8
+GEN_HOLES := 18
+GRASS := 0
+SAND := 1
+ICE := 2
+BOUNCE := 3
+WATER := 4
+LAVA := 5
+VOID := 7
+struct Piece { n int, vx real[8], vy real[8], a real, b real, c real, kind int, pushx real, pushy real, minx real, maxx real, miny real, maxy real }
+struct Wall { x0 real, y0 real, x1 real, y1 real, zlo real, zhi real, e real, kind int }
+struct Post { x real, y real, r real, zlo real, zhi real, e real, kind int }
+struct Mover { kind int, x real, y real, zlo real, zhi real, len real, arms int, thick real, period real, phase real, amp real, dx real, dy real, e real }
+struct Lift { x real, y real, r real, ex real, ey real, ez real, dur real }
+struct Prop { kind int, x real, y real, z real, w real, d real, h real, rot real }
+struct Hole {
+	course int,
+	number int,
+	biome int,
+	name byte[..64],
+	par int,
+	tee_x real,
+	tee_y real,
+	tee_z real,
+	cup_x real,
+	cup_y real,
+	cup_z real,
+	zkill real,
+	minx real,
+	maxx real,
+	miny real,
+	maxy real,
+	gx0 real,
+	gy0 real,
+	gcell real,
+	gw int,
+	gh int,
+	pieces Piece[>..],
+	walls Wall[>..],
+	posts Post[>..],
+	movers Mover[>..],
+	lifts Lift[>..],
+	props Prop[>..],
+	rx real[>..],
+	ry real[>..],
+	rd real[>..],
+	gstart int[>..],
+	gitem int[>..]
+}
+struct Ball { x real, y real, z real, vx real, vy real, vz real, t real, piece int, air bool, mode int, lost int, still int, hit real, land real, lip bool, lift int, ride real, sx real, sy real, sz real }
+struct Pt { hole int, x real, y real }
+struct Sec { hole int, leg int, len real, kind int, dz real, step real, cut int, cutw real, cutk int, cutza real, cutzb real, pushx real, pushy real }
+struct Obs { hole int, leg int, along real, across real, kind int, a real, b real, c real, d real }
+struct Meta { hole int, biome int, par int, width real, name byte[..64] }
+struct Draft {
+	w real,
+	biome int,
+	par int,
+	name byte[..64],
+	px real[>..],
+	py real[>..],
+	secs Sec[>..],
+	obs Obs[>..],
+	ll real[>..],
+	ux real[>..],
+	uy real[>..],
+	jlx real[>..],
+	jly real[>..],
+	jrx real[>..],
+	jry real[>..],
+	sa real[>..],
+	za real[>..],
+	zb real[>..]
+}
+new_draft(w real, biome int, par int, name const byte[:]) Draft:
+	d ~= Draft{w: w, biome: biome, par: par, ..}
+	d.name.append(name)
+	d
+new_hole(course int, number int, biome int, name const byte[:], par int) Hole:
+	h ~= Hole{course: course, number: number, biome: biome, par: par, zkill: -1000.0, ..}
+	h.name.append(name)
+	h
+inside(p Piece&, x real, y real) bool:
+	for i p.n:
+		j := (i + 1) % p.n
+		cr := (p.vx[j] - p.vx[i]) * (y - p.vy[i]) - (p.vy[j] - p.vy[i]) * (x - p.vx[i])
+		if cr < -0.000000001: return false
+	true
+floor_h(p Piece&, x real, y real) real: p.a + p.b * x + p.c * y
+floor_at(h Hole&, x real, y real, zmax real) int:
+	best ~= -1
+	bz ~= 0.0
+	for i h.pieces.len:
+		let p .= h.pieces[i]
+		if x < p.minx || x > p.maxx || y < p.miny || y > p.maxy: continue
+		if !inside(p, x, y): continue
+		z := floor_h(p, x, y)
+		if z <= zmax && (best < 0 || z > bz): best = i; bz = z
+	best
+piece_at(h Hole&, x real, y real) int: floor_at(h, x, y, 1000.0)
+add_quad(h Hole&, x0 real, y0 real, x1 real, y1 real, x2 real, y2 real, x3 real, y3 real, a real, b real, c real, kind int, pushx real, pushy real):
+	p ~= Piece{n: 4, a: a, b: b, c: c, kind: kind, pushx: pushx, pushy: pushy, ..}
+	p.vx[0] = x0
+	p.vy[0] = y0
+	p.vx[1] = x1
+	p.vy[1] = y1
+	p.vx[2] = x2
+	p.vy[2] = y2
+	p.vx[3] = x3
+	p.vy[3] = y3
+	p.minx = min(min(x0, x1), min(x2, x3))
+	p.maxx = max(max(x0, x1), max(x2, x3))
+	p.miny = min(min(y0, y1), min(y2, y3))
+	p.maxy = max(max(y0, y1), max(y2, y3))
+	h.pieces.push(p);
+add_wall(h Hole&, x0 real, y0 real, x1 real, y1 real, zlo real, zhi real, e real, kind int):
+	h.walls.push(Wall{x0, y0, x1, y1, zlo, zhi, e, kind});
+lane_plane(ux real, uy real, rx real, ry real, z0 real, slope real) real, real, real:
+	b := slope * ux
+	c := slope * uy
+	a := z0 - b * rx - c * ry
+	return a, b, c
+layout(d Draft&):
+	d.ll.clear()
+	d.ux.clear()
+	d.uy.clear()
+	d.jlx.clear()
+	d.jly.clear()
+	d.jrx.clear()
+	d.jry.clear()
+	d.sa.clear()
+	d.za.clear()
+	d.zb.clear()
+	n := d.px.len
+	legs := n - 1
+	hw := d.w / 2.0
+	for k legs:
+		dx := d.px[k + 1] - d.px[k]
+		dy := d.py[k + 1] - d.py[k]
+		l := sqrt(dx * dx + dy * dy)
+		d.ll.push(l)
+		d.ux.push(dx / l)
+		d.uy.push(dy / l)
+	for j n:
+		qx := d.px[j]
+		qy := d.py[j]
+		if j == 0 || j == n - 1:
+			k := if j == 0 { 0 } else { n - 2 }
+			nx := -d.uy[k]
+			ny := d.ux[k]
+			d.jlx.push(qx + nx * hw)
+			d.jly.push(qy + ny * hw)
+			d.jrx.push(qx - nx * hw)
+			d.jry.push(qy - ny * hw)
+		else:
+			ax := -d.uy[j - 1]
+			ay := d.ux[j - 1]
+			bx := -d.uy[j]
+			by := d.ux[j]
+			mx ~= ax + bx
+			my ~= ay + by
+			ml := sqrt(mx * mx + my * my)
+			mx /= ml
+			my /= ml
+			dl := hw / (mx * ax + my * ay)
+			d.jlx.push(qx + mx * dl)
+			d.jly.push(qy + my * dl)
+			d.jrx.push(qx - mx * dl)
+			d.jry.push(qy - my * dl)
+	fixed Sec[>..] ~= []
+	i ~= 0
+	for k legs:
+		has ~= false
+		while i < d.secs.len && d.secs[i].leg == k:
+			fixed.push(d.secs[i])
+			i += 1
+			has = true
+		if !has: fixed.push(Sec{leg: k, len: d.ll[k], ..})
+	while i < d.secs.len:
+		fixed.push(d.secs[i])
+		i += 1
+	d.secs.clear()
+	d.secs.append(fixed)
+	z ~= 0.0
+	st ~= 0.0
+	prev ~= -1
+	for q d.secs.len:
+		let s .= d.secs[q]
+		if s.leg != prev:
+			st = 0.0
+			prev = s.leg
+		last := q + 1 >= d.secs.len || d.secs[q + 1].leg != s.leg
+		sl ~= s.len
+		if last: sl = d.ll[s.leg] - st
+		if sl < 0.25: sl = 0.25
+		s.len = sl
+		d.sa.push(st)
+		z0 := z + s.step
+		z1 := z0 + s.dz
+		d.za.push(z0)
+		d.zb.push(z1)
+		z = z1
+		st += sl
+leg_z(d Draft&, k int, s real) real:
+	best ~= -1
+	for i d.secs.len:
+		if d.secs[i].leg != k: continue
+		best = i
+		if s < d.sa[i] + d.secs[i].len: break
+	if best < 0: return 0.0
+	d.za[best] + (d.zb[best] - d.za[best]) * (s - d.sa[best]) / d.secs[best].len
+emit(d Draft&, h Hole&):
+	hw := d.w / 2.0
+	for i d.secs.len:
+		let s .= d.secs[i]
+		k := s.leg
+		ux := d.ux[k]
+		uy := d.uy[k]
+		nx := -uy
+		ny := ux
+		sa := d.sa[i]
+		sb := sa + s.len
+		c0x := d.px[k] + ux * sa
+		c0y := d.py[k] + uy * sa
+		slx ~= c0x + nx * hw
+		sly ~= c0y + ny * hw
+		srx ~= c0x - nx * hw
+		sry ~= c0y - ny * hw
+		if sa == 0.0:
+			slx = d.jlx[k]
+			sly = d.jly[k]
+			srx = d.jrx[k]
+			sry = d.jry[k]
+		ecx := d.px[k] + ux * sb
+		ecy := d.py[k] + uy * sb
+		elx ~= ecx + nx * hw
+		ely ~= ecy + ny * hw
+		erx ~= ecx - nx * hw
+		ery ~= ecy - ny * hw
+		if abs(sb - d.ll[k]) < 0.0001:
+			elx = d.jlx[k + 1]
+			ely = d.jly[k + 1]
+			erx = d.jrx[k + 1]
+			ery = d.jry[k + 1]
+		cnt ~= 1
+		pt0 real[3] ~= [0.0; 3]
+		pt1 real[3] ~= [1.0; 3]
+		pk int[3] ~= [0; 3]
+		pa real[3] ~= [0.0; 3]
+		pb real[3] ~= [0.0; 3]
+		for q 3: pk[q] = s.kind
+		if s.cut == 1:
+			m0 := 0.5 - s.cutw / 2.0
+			m1 := 0.5 + s.cutw / 2.0
+			cnt = 3
+			pt1[0] = m0
+			pt0[1] = m0
+			pt1[1] = m1
+			pt0[2] = m1
+			pk[1] = s.cutk
+			pa[1] = s.cutza
+			pb[1] = s.cutzb
+		else if s.cut == 2:
+			cnt = 2
+			pt1[0] = s.cutw
+			pt0[1] = s.cutw
+			pk[0] = s.cutk
+			pa[0] = s.cutza
+			pb[0] = s.cutzb
+		else if s.cut == 3:
+			m := 1.0 - s.cutw
+			cnt = 2
+			pt1[0] = m
+			pt0[1] = m
+			pk[1] = s.cutk
+			pa[1] = s.cutza
+			pb[1] = s.cutzb
+		for q cnt:
+			t0 := pt0[q]
+			t1 := pt1[q]
+			s1x := slx + (srx - slx) * t1
+			s1y := sly + (sry - sly) * t1
+			e1x := elx + (erx - elx) * t1
+			e1y := ely + (ery - ely) * t1
+			s0x := slx + (srx - slx) * t0
+			s0y := sly + (sry - sly) * t0
+			e0x := elx + (erx - elx) * t0
+			e0y := ely + (ery - ely) * t0
+			za0 := d.za[i] + pa[q]
+			zb0 := d.zb[i] + pb[q]
+			slope := (zb0 - za0) / s.len
+			a, b, c := lane_plane(ux, uy, c0x, c0y, za0, slope)
+			add_quad(h, s1x, s1y, e1x, e1y, e0x, e0y, s0x, s0y, a, b, c, pk[q], s.pushx, s.pushy)
+auto_walls(h Hole&):
+	for i h.pieces.len:
+		let p .= h.pieces[i]
+		for e p.n:
+			f := (e + 1) % p.n
+			ax := p.vx[e]
+			ay := p.vy[e]
+			dx := p.vx[f] - ax
+			dy := p.vy[f] - ay
+			ln := sqrt(dx * dx + dy * dy)
+			if ln <= 0.0: continue
+			onx := dy / ln
+			ony := -dx / ln
+			runs := max(1, ceil(ln / 0.4) as int)
+			lastw ~= -1
+			for r runs:
+				t0 := (r as real) / (runs as real)
+				t1 := ((r + 1) as real) / (runs as real)
+				px := ax + dx * t0
+				py := ay + dy * t0
+				qx := ax + dx * t1
+				qy := ay + dy * t1
+				mx := (px + qx) / 2.0 + onx * 0.004
+				my := (py + qy) / 2.0 + ony * 0.004
+				nb ~= -1
+				nbz ~= 0.0
+				for j h.pieces.len:
+					if j == i: continue
+					if !inside(h.pieces[j], mx, my): continue
+					zz := floor_h(h.pieces[j], mx, my)
+					if nb < 0 || zz > nbz:
+						nb = j
+						nbz = zz
+				hp := floor_h(p, px, py)
+				hq := floor_h(p, qx, qy)
+				if nb < 0:
+					zl := min(hp, hq) - 0.05
+					zh := max(hp, hq) + RAIL_H
+					if lastw >= 0:
+						let w .= h.walls[lastw]
+						w.x1 = qx
+						w.y1 = qy
+						w.zlo = min(w.zlo, zl)
+						w.zhi = max(w.zhi, zh)
+					else:
+						add_wall(h, px, py, qx, qy, zl, zh, E_RAIL, 0)
+						lastw = h.walls.len - 1
+				else:
+					lastw = -1
+					n0 := floor_h(h.pieces[nb], px, py)
+					n1 := floor_h(h.pieces[nb], qx, qy)
+					if n0 - hp > DROP_TOL || n1 - hq > DROP_TOL:
+						add_wall(h, px, py, qx, qy, min(hp, hq) - 0.05, min(n0, n1), E_RAIL, 1)
+add_post(h Hole&, x real, y real, r real, zlo real, zhi real, e real, kind int):
+	h.posts.push(Post{x, y, r, zlo, zhi, e, kind});
+add_mover(h Hole&, kind int, x real, y real, zlo real, zhi real, ln real, arms int, thick real, period real, phase real, amp real, dx real, dy real, e real):
+	h.movers.push(Mover{kind, x, y, zlo, zhi, ln, arms, thick, period, phase, amp, dx, dy, e});
+place_obs(d Draft&, h Hole&):
+	hw := d.w / 2.0
+	for i d.obs.len:
+		let o .= d.obs[i]
+		k := o.leg
+		ux := d.ux[k]
+		uy := d.uy[k]
+		nx := -uy
+		ny := ux
+		x := d.px[k] + ux * o.along + nx * o.across * hw
+		y := d.py[k] + uy * o.along + ny * o.across * hw
+		z := leg_z(d, k, o.along)
+		if o.kind == 0:
+			add_post(h, x, y, o.a, z - 0.05, z + o.b, 0.7, 0)
+		else if o.kind == 1:
+			add_post(h, x, y, o.a, z - 0.05, z + 0.25, o.b, 1)
+		else if o.kind == 2:
+			add_mover(h, 0, x, y, z - 0.05, z + 0.35, o.a, round(o.b) as int, 0.035, o.c, o.d, 0.0, 1.0, 0.0, 0.8)
+		else if o.kind == 3:
+			add_mover(h, 1, x, y, z - 0.05, z + 0.35, o.a, 1, 0.035, o.c, o.d, o.b, nx, ny, 0.8)
+		else if o.kind == 4:
+			sg := if o.across >= 0.0 { 1.0 } else { -1.0 }
+			add_wall(h, x, y, x - nx * sg * o.a, y - ny * sg * o.a, z - 0.05, z + RAIL_H, E_RAIL, 2)
+		else if o.kind == 5:
+			ax := ux * o.a
+			ay := uy * o.a
+			bx := nx * o.b
+			by := ny * o.b
+			p0x := x + ax + bx
+			p0y := y + ay + by
+			p1x := x - ax + bx
+			p1y := y - ay + by
+			p2x := x - ax - bx
+			p2y := y - ay - by
+			p3x := x + ax - bx
+			p3y := y + ay - by
+			zl := z - 0.05
+			zh := z + o.c
+			add_wall(h, p0x, p0y, p1x, p1y, zl, zh, E_RAIL, 2)
+			add_wall(h, p1x, p1y, p2x, p2y, zl, zh, E_RAIL, 2)
+			add_wall(h, p2x, p2y, p3x, p3y, zl, zh, E_RAIL, 2)
+			add_wall(h, p3x, p3y, p0x, p0y, zl, zh, E_RAIL, 2)
+		else if o.kind == 7:
+			k2 := round(o.b) as int
+			ex := d.px[k2] + d.ux[k2] * o.c + (-d.uy[k2]) * o.d * hw
+			ey := d.py[k2] + d.uy[k2] * o.c + d.ux[k2] * o.d * hw
+			ez := leg_z(d, k2, o.c)
+			h.lifts.push(Lift{x, y, o.a, ex, ey, ez, 0.7});
+finish(d Draft&, h Hole&):
+	n := d.px.len
+	last := n - 2
+	h.tee_x = d.px[0] + d.ux[0] * 1.0
+	h.tee_y = d.py[0] + d.uy[0] * 1.0
+	cs := d.ll[last] - 1.2
+	h.cup_x = d.px[last] + d.ux[last] * cs
+	h.cup_y = d.py[last] + d.uy[last] * cs
+	ti := piece_at(h, h.tee_x, h.tee_y)
+	if ti >= 0: h.tee_z = floor_h(h.pieces[ti], h.tee_x, h.tee_y)
+	ci := piece_at(h, h.cup_x, h.cup_y)
+	if ci >= 0: h.cup_z = floor_h(h.pieces[ci], h.cup_x, h.cup_y)
+	h.rx.push(h.tee_x)
+	h.ry.push(h.tee_y)
+	for j 1..(n - 1):
+		h.rx.push(d.px[j])
+		h.ry.push(d.py[j])
+	h.rx.push(h.cup_x)
+	h.ry.push(h.cup_y)
+	m := h.rx.len
+	for q m: h.rd.push(0.0)
+	for q 1..m:
+		i := m - 1 - q
+		ddx := h.rx[i + 1] - h.rx[i]
+		ddy := h.ry[i + 1] - h.ry[i]
+		h.rd[i] = h.rd[i + 1] + sqrt(ddx * ddx + ddy * ddy)
+	if h.pieces.len > 0:
+		lo ~= 1000000000.0
+		mnx ~= 1000000000.0
+		mxx ~= -1000000000.0
+		mny ~= 1000000000.0
+		mxy ~= -1000000000.0
+		for i h.pieces.len:
+			let p .= h.pieces[i]
+			for e p.n:
+				lo = min(lo, floor_h(p, p.vx[e], p.vy[e]))
+				mnx = min(mnx, p.vx[e])
+				mxx = max(mxx, p.vx[e])
+				mny = min(mny, p.vy[e])
+				mxy = max(mxy, p.vy[e])
+		h.zkill = lo - 2.0
+		h.minx = mnx
+		h.maxx = mxx
+		h.miny = mny
+		h.maxy = mxy
+	build_grid(h);
+grid_span(h Hole&, wi int) int, int, int, int:
+	let w .= h.walls[wi]
+	mg := BR + 0.01
+	lx := min(w.x0, w.x1) - mg
+	hx := max(w.x0, w.x1) + mg
+	ly := min(w.y0, w.y1) - mg
+	hy := max(w.y0, w.y1) + mg
+	cx0 := clamp(floor((lx - h.gx0) / h.gcell) as int, 0, h.gw - 1)
+	cx1 := clamp(floor((hx - h.gx0) / h.gcell) as int, 0, h.gw - 1)
+	cy0 := clamp(floor((ly - h.gy0) / h.gcell) as int, 0, h.gh - 1)
+	cy1 := clamp(floor((hy - h.gy0) / h.gcell) as int, 0, h.gh - 1)
+	return cx0, cx1, cy0, cy1
+build_grid(h Hole&):
+	h.gcell = 0.8
+	h.gx0 = h.minx - 1.0
+	h.gy0 = h.miny - 1.0
+	h.gw = (floor((h.maxx + 1.0 - h.gx0) / h.gcell) as int) + 1
+	h.gh = (floor((h.maxy + 1.0 - h.gy0) / h.gcell) as int) + 1
+	nc := h.gw * h.gh
+	h.gstart.clear()
+	h.gitem.clear()
+	cnt int[>..] ~= []
+	for c nc: cnt.push(0)
+	for wi h.walls.len:
+		cx0, cx1, cy0, cy1 := grid_span(h, wi)
+		for cy cy0..(cy1 + 1):
+			for cx cx0..(cx1 + 1): cnt[cx + cy * h.gw] += 1
+	total ~= 0
+	for c nc:
+		h.gstart.push(total)
+		total += cnt[c]
+	h.gstart.push(total)
+	for q total: h.gitem.push(0)
+	cur int[>..] ~= []
+	for c nc: cur.push(h.gstart[c])
+	for wi h.walls.len:
+		cx0, cx1, cy0, cy1 := grid_span(h, wi)
+		for cy cy0..(cy1 + 1):
+			for cx cx0..(cx1 + 1):
+				c := cx + cy * h.gw
+				h.gitem[cur[c]] = wi
+				cur[c] += 1
+build_hole(d Draft&, course int, number int) Hole:
+	h ~= new_hole(course, number, d.biome, d.name, d.par)
+	layout(d)
+	emit(d, h)
+	auto_walls(h)
+	place_obs(d, h)
+	finish(d, h)
+	h
+mu_of(kind int) real:
+	if kind == SAND: return MU_SAND
+	if kind == ICE: return MU_ICE
+	MU_GRASS
+new_ball(h Hole&) Ball:
+	b ~= Ball{x: h.tee_x, y: h.tee_y, z: h.tee_z + BR, piece: piece_at(h, h.tee_x, h.tee_y), lift: -1, ..}
+	b
+place(h Hole&, b Ball&, x real, y real):
+	b.x = x
+	b.y = y
+	b.piece = piece_at(h, x, y)
+	if b.piece >= 0: b.z = floor_h(h.pieces[b.piece], x, y) + BR
+	b.vx = 0.0
+	b.vy = 0.0
+	b.vz = 0.0
+	b.air = false
+	b.mode = 0
+	b.lost = 0
+	b.still = 0
+	b.lip = false
+	b.lift = -1
+	b.ride = 0.0
+putt_speed(power real) real:
+	p := clamp(power, 0.0, 1.0)
+	MIN_PUTT + (MAX_PUTT - MIN_PUTT) * p
+roll_len(power real) real:
+	v := putt_speed(power)
+	v * v / (2.0 * MU_GRASS * GRAV)
+strike(b Ball&, ang real, power real):
+	v := putt_speed(power)
+	b.vx = v * cos(ang)
+	b.vy = v * sin(ang)
+	b.vz = 0.0
+	b.still = 0
+	b.lip = false
+	b.hit = 0.0
+	b.land = 0.0
+speed(b Ball&) real: sqrt(b.vx * b.vx + b.vy * b.vy)
+bounce(b Ball&, nx real, ny real, e real, wvx real, wvy real):
+	rv := (b.vx - wvx) * nx + (b.vy - wvy) * ny
+	if rv < 0.0:
+		k := (1.0 + e) * rv
+		b.vx -= k * nx
+		b.vy -= k * ny
+		b.hit = max(b.hit, -rv)
+near_seg(x0 real, y0 real, x1 real, y1 real, px real, py real) real, real:
+	dx := x1 - x0
+	dy := y1 - y0
+	l2 := dx * dx + dy * dy
+	t ~= 0.0
+	if l2 >= 0.000000000001: t = clamp(((px - x0) * dx + (py - y0) * dy) / l2, 0.0, 1.0)
+	return x0 + t * dx, y0 + t * dy
+push_off(b Ball&, qx real, qy real, ax real, ay real, gap real, e real, wvx real, wvy real) bool:
+	dx := b.x - qx
+	dy := b.y - qy
+	d := sqrt(dx * dx + dy * dy)
+	if d >= gap: return false
+	nx ~= ax
+	ny ~= ay
+	if d >= 0.000000001:
+		nx = dx / d
+		ny = dy / d
+	b.x = qx + nx * (gap + 0.0001)
+	b.y = qy + ny * (gap + 0.0001)
+	bounce(b, nx, ny, e, wvx, wvy)
+	true
+spans(b Ball&, zlo real, zhi real) bool: b.z - BR < zhi - 0.01 && b.z + BR > zlo
+hit_walls(h Hole&, b Ball&):
+	cx := floor((b.x - h.gx0) / h.gcell) as int
+	cy := floor((b.y - h.gy0) / h.gcell) as int
+	if cx < 0 || cx > h.gw - 1 || cy < 0 || cy > h.gh - 1: return
+	c := cx + cy * h.gw
+	for i h.gstart[c]..h.gstart[c + 1]:
+		let w .= h.walls[h.gitem[i]]
+		if !spans(b, w.zlo, w.zhi): continue
+		qx, qy := near_seg(w.x0, w.y0, w.x1, w.y1, b.x, b.y)
+		dx := w.x1 - w.x0
+		dy := w.y1 - w.y0
+		l := sqrt(dx * dx + dy * dy)
+		ax ~= 1.0
+		ay ~= 0.0
+		if l > 0.0:
+			ax = -dy / l
+			ay = dx / l
+		push_off(b, qx, qy, ax, ay, BR, w.e, 0.0, 0.0)
+hit_posts(h Hole&, b Ball&):
+	for i h.posts.len:
+		let p .= h.posts[i]
+		if spans(b, p.zlo, p.zhi): push_off(b, p.x, p.y, 1.0, 0.0, p.r + BR, p.e, 0.0, 0.0)
+mover_arm(m Mover&, t real, k int) real, real, real, real:
+	if m.kind == 0:
+		ang := m.phase + TAU * t / m.period + TAU * (k as real) / (m.arms as real)
+		return m.x, m.y, m.x + m.len * cos(ang), m.y + m.len * sin(ang)
+	s := m.amp * sin(m.phase + TAU * t / m.period)
+	mx := m.x + m.dx * s
+	my := m.y + m.dy * s
+	return mx - m.dx * m.len, my - m.dy * m.len, mx + m.dx * m.len, my + m.dy * m.len
+mover_vel(m Mover&, t real, qx real, qy real) real, real:
+	if m.kind == 0:
+		w := TAU / m.period
+		return -(qy - m.y) * w, (qx - m.x) * w
+	f := m.amp * cos(m.phase + TAU * t / m.period) * TAU / m.period
+	return m.dx * f, m.dy * f
+hit_movers(h Hole&, b Ball&):
+	for i h.movers.len:
+		let m .= h.movers[i]
+		if !spans(b, m.zlo, m.zhi): continue
+		na := if m.kind == 0 { m.arms } else { 1 }
+		for k na:
+			x0, y0, x1, y1 := mover_arm(m, b.t, k)
+			qx, qy := near_seg(x0, y0, x1, y1, b.x, b.y)
+			wvx, wvy := mover_vel(m, b.t, qx, qy)
+			dx := x1 - x0
+			dy := y1 - y0
+			l := sqrt(dx * dx + dy * dy)
+			ax ~= 1.0
+			ay ~= 0.0
+			if l > 0.0:
+				ax = -dy / l
+				ay = dx / l
+			push_off(b, qx, qy, ax, ay, BR + m.thick, m.e, wvx, wvy)
+collide(h Hole&, b Ball&):
+	hit_walls(h, b)
+	hit_posts(h, b)
+	hit_movers(h, b)
+	s := speed(b)
+	if s > SPEED_CAP:
+		k := SPEED_CAP / s
+		b.vx *= k
+		b.vy *= k
+hazard(h Hole&, b Ball&):
+	if b.piece >= 0:
+		kd := h.pieces[b.piece].kind
+		if kd >= WATER:
+			b.mode = 2
+			b.lost = kd
+			b.vx = 0.0
+			b.vy = 0.0
+			b.vz = 0.0
+	if b.z < h.zkill && b.mode == 0:
+		b.mode = 2
+		b.lost = VOID
+cup(h Hole&, b Ball&):
+	dx := b.x - h.cup_x
+	dy := b.y - h.cup_y
+	d := sqrt(dx * dx + dy * dy)
+	if d < CUP_R && abs(b.z - BR - h.cup_z) <= 0.05:
+		if speed(b) < CAP_V * (1.0 + 0.7 * (1.0 - d / CUP_R)):
+			b.mode = 1
+			b.x = h.cup_x
+			b.y = h.cup_y
+			b.z = h.cup_z - BR
+			b.vx = 0.0
+			b.vy = 0.0
+			b.vz = 0.0
+		else if !b.lip:
+			b.lip = true
+			cr := b.vx * dy - b.vy * dx
+			s ~= 0.0
+			if cr > 0.0: s = 1.0
+			else if cr < 0.0: s = -1.0
+			a := s * 0.4 * (1.0 - d / CUP_R)
+			ca := cos(a)
+			sa := sin(a)
+			nvx := (b.vx * ca - b.vy * sa) * 0.8
+			nvy := (b.vx * sa + b.vy * ca) * 0.8
+			b.vx = nvx
+			b.vy = nvy
+	if d > CUP_R + BR: b.lip = false
+roll(h Hole&, b Ball&):
+	let p .= h.pieces[b.piece]
+	ax ~= -SLOPE_K * p.b + p.pushx
+	ay ~= -SLOPE_K * p.c + p.pushy
+	sp := speed(b)
+	if p.kind == BOUNCE && sp > 0.05:
+		ax += PAD_ACC * b.vx / sp
+		ay += PAD_ACC * b.vy / sp
+	b.vx += ax * DT
+	b.vy += ay * DT
+	s := speed(b)
+	f := mu_of(p.kind) * GRAV * DT
+	if s <= f:
+		b.vx = 0.0
+		b.vy = 0.0
+	else:
+		k := (s - f) / s
+		b.vx *= k
+		b.vy *= k
+	b.x += b.vx * DT
+	b.y += b.vy * DT
+	collide(h, b)
+	bottom := b.z - BR
+	q := floor_at(h, b.x, b.y, bottom + STEP_UP)
+	if q >= 0 && floor_h(h.pieces[q], b.x, b.y) >= bottom - DROP_TOL:
+		b.piece = q
+		b.z = floor_h(h.pieces[q], b.x, b.y) + BR
+	else:
+		b.air = true
+		b.vz = p.b * b.vx + p.c * b.vy
+		b.piece = -1
+	hazard(h, b)
+	if b.mode == 0 && !b.air: cup(h, b)
+fly(h Hole&, b Ball&):
+	b.vz -= GRAV * DT
+	b.x += b.vx * DT
+	b.y += b.vy * DT
+	b.z += b.vz * DT
+	collide(h, b)
+	bottom := b.z - BR
+	q := floor_at(h, b.x, b.y, bottom + STEP_UP)
+	if q >= 0 && b.vz <= 0.0 && bottom <= floor_h(h.pieces[q], b.x, b.y):
+		b.z = floor_h(h.pieces[q], b.x, b.y) + BR
+		b.land = -b.vz
+		b.piece = q
+		b.vx *= 0.88
+		b.vy *= 0.88
+		if -b.vz > 2.0:
+			b.vz = 0.3 * b.land
+		else:
+			b.vz = 0.0
+			b.air = false
+		hazard(h, b)
+		if b.mode == 0 && !b.air: cup(h, b)
+	else:
+		hazard(h, b)
+lift_check(h Hole&, b Ball&):
+	if b.air || b.lift != -1 || speed(b) >= LIFT_V: return
+	for i h.lifts.len:
+		let l .= h.lifts[i]
+		dx := l.x - b.x
+		dy := l.y - b.y
+		if sqrt(dx * dx + dy * dy) < l.r:
+			b.lift = i
+			b.ride = 0.0
+			b.sx = b.x
+			b.sy = b.y
+			b.sz = b.z
+			b.vx = 0.0
+			b.vy = 0.0
+			b.vz = 0.0
+			return
+ride(h Hole&, b Ball&):
+	let l .= h.lifts[b.lift]
+	b.ride += DT
+	f := min(b.ride / l.dur, 1.0)
+	b.x = b.sx + (l.ex - b.sx) * f
+	b.y = b.sy + (l.ey - b.sy) * f
+	b.z = b.sz + (l.ez + BR - b.sz) * f + 0.7 * sin(PI * f)
+	if f >= 1.0:
+		ex := l.ex
+		ey := l.ey
+		b.lift = -1
+		place(h, b, ex, ey)
+step(h Hole&, b Ball&):
+	if b.mode != 0: return
+	b.hit = 0.0
+	b.land = 0.0
+	if b.lift >= 0:
+		ride(h, b)
+	else if b.air || b.piece == -1:
+		b.air = true
+		fly(h, b)
+	else:
+		roll(h, b)
+		lift_check(h, b)
+	if b.mode == 0 && !b.air && b.lift == -1 && b.vx == 0.0 && b.vy == 0.0:
+		b.still += 1
+	else:
+		b.still = 0
+	b.t += DT
+settled(b Ball&) bool: b.mode != 0 || b.still >= REST_STEPS
+run(h Hole&, b Ball&) int:
+	n ~= 0
+	while !settled(b) && n < MAX_STEPS:
+		step(h, b)
+		n += 1
+	if !settled(b):
+		b.vx = 0.0
+		b.vy = 0.0
+		b.still = REST_STEPS
+	n
+remaining(h Hole&, x real, y real) real:
+	m := h.rx.len
+	if m < 2:
+		dx := h.cup_x - x
+		dy := h.cup_y - y
+		return sqrt(dx * dx + dy * dy)
+	best ~= 1000000000000.0
+	for j m - 1:
+		qx, qy := near_seg(h.rx[j], h.ry[j], h.rx[j + 1], h.ry[j + 1], x, y)
+		d1x := x - qx
+		d1y := y - qy
+		d2x := h.rx[j + 1] - qx
+		d2y := h.ry[j + 1] - qy
+		v := sqrt(d1x * d1x + d1y * d1y) + sqrt(d2x * d2x + d2y * d2y) + h.rd[j + 1]
+		best = min(best, v)
+	best
+CLASSIC_META Meta[9] := [Meta{1, 0, 2, 1.1, "First Putt"}, Meta{2, 4, 3, 1.1, "Jungle Bend"}, Meta{3, 1, 3, 1.2, "Canyon Ramp"}, Meta{4, 0, 3, 1.2, "Windmill"}, Meta{5, 5, 3, 1.2, "Sand Trap"}, Meta{6, 2, 2, 1.1, "Ice Slide"}, Meta{7, 3, 3, 1.2, "Lava Leap"}, Meta{8, 7, 3, 1.3, "Split Level"}, Meta{9, 6, 4, 1.2, "Grand Finale"}]
+CLASSIC_PTS Pt[22] := [Pt{1, 0.0, 0.0}, Pt{1, 8.5, 0.0}, Pt{2, 0.0, 0.0}, Pt{2, 6.0, 0.0}, Pt{2, 6.0, 5.5}, Pt{3, 0.0, 0.0}, Pt{3, 12.0, 0.0}, Pt{4, 0.0, 0.0}, Pt{4, 11.0, 0.0}, Pt{5, 0.0, 0.0}, Pt{5, 7.0, 0.0}, Pt{5, 7.0, -5.0}, Pt{6, 0.0, 0.0}, Pt{6, 13.0, 0.0}, Pt{7, 0.0, 0.0}, Pt{7, 13.0, 0.0}, Pt{8, 0.0, 0.0}, Pt{8, 12.0, 0.0}, Pt{9, 0.0, 0.0}, Pt{9, 5.5, 0.0}, Pt{9, 5.5, 5.5}, Pt{9, 11.0, 5.5}]
+CLASSIC_SECS Sec[23] := [Sec{3, 0, 3.5, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{3, 0, 2.5, GRASS, 0.55, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{3, 0, 1.0, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{5, 0, 2.5, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{5, 0, 2.0, GRASS, 0.0, 0.0, 1, 0.55, SAND, 0.0, 0.0, 0.0, 0.0}, Sec{5, 0, 1.0, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{5, 1, 2.0, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{5, 1, 1.5, SAND, 0.0, 0.0, 2, 0.5, GRASS, 0.0, 0.0, 0.0, 0.0}, Sec{5, 1, 1.0, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{6, 0, 2.5, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{6, 0, 7.0, ICE, -0.35, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{6, 0, 1.0, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{7, 0, 3.5, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{7, 0, 1.3, GRASS, 0.24, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{7, 0, 1.2, LAVA, 0.0, -0.7, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{7, 0, 1.0, GRASS, 0.0, 0.57, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{8, 0, 3.0, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{8, 0, 2.0, GRASS, 0.0, 0.0, 3, 0.45, GRASS, 0.0, 0.3, 0.0, 0.0}, Sec{8, 0, 4.0, SAND, 0.0, 0.0, 3, 0.45, GRASS, 0.3, 0.3, 0.0, 0.0}, Sec{8, 0, 1.0, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{9, 2, 2.0, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{9, 2, 1.5, GRASS, 0.2, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}, Sec{9, 2, 1.0, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0, 0.0, 0.0}]
+CLASSIC_OBS Obs[13] := [Obs{1, 0, 5.0, 0.3, 0, 0.08, 0.3, 0.0, 0.0}, Obs{2, 0, 5.95, -0.55, 1, 0.13, 1.25, 0.0, 0.0}, Obs{2, 1, 2.5, 0.35, 0, 0.09, 0.3, 0.0, 0.0}, Obs{3, 0, 8.5, 0.0, 5, 0.25, 0.2, 0.25, 0.0}, Obs{4, 0, 3.0, 1.0, 4, 0.35, 0.0, 0.0, 0.0}, Obs{4, 0, 5.5, 0.0, 2, 0.52, 4.0, 4.2, 0.0}, Obs{6, 0, 5.0, 0.4, 0, 0.09, 0.3, 0.0, 0.0}, Obs{6, 0, 7.5, -0.4, 0, 0.09, 0.3, 0.0, 0.0}, Obs{9, 0, 3.0, -0.45, 7, 0.2, 2.0, 2.0, 0.0}, Obs{9, 1, 1.0, 0.5, 1, 0.12, 1.3, 0.0, 0.0}, Obs{9, 1, 2.7, 0.0, 3, 0.35, 0.3, 3.0, 0.0}, Obs{9, 2, 3.0, 0.45, 1, 0.1, 1.3, 0.0, 0.0}, Obs{9, 2, 3.0, -0.45, 1, 0.1, 1.3, 0.0, 0.0}]
+draft_classic(n int) Draft:
+	let m .= CLASSIC_META[n - 1]
+	d ~= new_draft(m.width, m.biome, m.par, m.name)
+	for i CLASSIC_PTS.len:
+		let p .= CLASSIC_PTS[i]
+		if p.hole == n:
+			d.px.push(p.x)
+			d.py.push(p.y)
+	for i CLASSIC_SECS.len:
+		if CLASSIC_SECS[i].hole == n: d.secs.push(CLASSIC_SECS[i])
+	for i CLASSIC_OBS.len:
+		if CLASSIC_OBS[i].hole == n: d.obs.push(CLASSIC_OBS[i])
+	d
+GEN_NAMES byte[..16][32] := ["Clover Lane", "Daisy Dash", "Green Mile", "Hilltop Hop", "Red Rock Run", "Mesa Climb", "Dusty Gulch", "Canyon Cut", "Frost Run", "Ice Chute", "Snowdrift", "Polar Pass", "Magma Hop", "Ember Ridge", "Ash Alley", "Cinder Leap", "Vine Bend", "Fern Hollow", "Monkey Path", "Canopy Trail", "Tide Pool", "Sandbar", "Shell Shore", "Driftwood", "Glow Grid", "Laser Lane", "Pulse Way", "Night Circuit", "Gumdrop Glen", "Taffy Twist", "Sugar Slope", "Lolli Loop"]
+GEN_FEATURES int[24] := [1, 4, 0, 1, 2, 11, 3, 2, 3, 8, 1, 8, 7, 4, 7, 5, 7, 4, 10, 9, 10, 10, 1, 5]
+GEN_OBS int[24] := [2, 0, 4, 5, 0, 4, 0, 1, 3, 5, 1, 0, 0, 4, 3, 1, 5, 0, 3, 1, 2, 1, 2, 4]
+gen_ri(s int&, a int, b int) int:
+	v := a + (floor(pool::rng(s) * ((b - a + 1) as real)) as int)
+	min(v, b)
+gen_rr(s int&, a real, b real) real: a + pool::rng(s) * (b - a)
+new_course(seed int) int: 1 + abs(seed * 7919) % 99991
+add_sec(d Draft&, leg int, ln real, kind int, dz real, stp real, cut int, cutw real, cutk int, cutza real, cutzb real):
+	d.secs.push(Sec{0, leg, ln, kind, dz, stp, cut, cutw, cutk, cutza, cutzb, 0.0, 0.0});
+add_obs(d Draft&, leg int, along real, across real, kind int, a real, b real, c real, e real):
+	d.obs.push(Obs{0, leg, along, across, kind, a, b, c, e});
+gen_feature(d Draft&, s int&, f int, k int, ll real, last bool) real, real:
+	lead ~= if k == 0 { 2.5 } else { 1.7 }
+	tail ~= if last { 2.7 } else { 2.0 }
+	if f == 8:
+		lead = 3.5
+		tail = if last { 3.5 } else { 3.0 }
+	fl ~= 0.0
+	if f == 1: fl = 2.2
+	else if f == 2: fl = 2.7
+	else if f == 3: fl = min(7.0, ll - lead - tail)
+	else if f == 4: fl = 2.0
+	else if f == 5: fl = 1.3
+	else if f == 7: fl = gen_rr(s, 2.5, 3.5)
+	else if f == 8: fl = 2.5
+	else if f == 9: fl = 7.0
+	else if f == 10: fl = 0.7
+	else if f == 11: fl = 1.5
+	else: return 0.0, 0.0
+	room := ll - lead - fl - tail
+	if room < 0.0 || (f == 3 && fl < 3.0): return 0.0, 0.0
+	if f != 8: lead += room * gen_rr(s, 0.2, 0.8)
+	add_sec(d, k, lead, GRASS, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0)
+	if f == 1:
+		dz := gen_rr(s, 0.3, 0.5)
+		add_sec(d, k, fl, GRASS, dz, 0.0, 0, 0.0, 0, 0.0, 0.0)
+	else if f == 2:
+		dz := gen_rr(s, 0.3, 0.45)
+		kd := if d.biome == 2 { ICE } else { GRASS }
+		add_sec(d, k, fl, kd, -dz, 0.0, 0, 0.0, 0, 0.0, 0.0)
+	else if f == 3:
+		dz := gen_rr(s, 0.2, 0.35)
+		add_sec(d, k, fl, ICE, -dz, 0.0, 0, 0.0, 0, 0.0, 0.0)
+	else if f == 4:
+		add_sec(d, k, 2.0, GRASS, 0.0, 0.0, 1, 0.5, SAND, 0.0, 0.0)
+	else if f == 5:
+		add_sec(d, k, 1.3, SAND, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0)
+	else if f == 7:
+		cut := gen_ri(s, 2, 3)
+		add_sec(d, k, fl, GRASS, 0.0, 0.0, cut, 0.33, WATER, 0.0, 0.0)
+	else if f == 8:
+		add_sec(d, k, 1.3, GRASS, 0.24, 0.0, 0, 0.0, 0, 0.0, 0.0)
+		add_sec(d, k, 1.2, LAVA, 0.0, -0.7, 0, 0.0, 0, 0.0, 0.0)
+	else if f == 9:
+		add_sec(d, k, 2.0, GRASS, 0.0, 0.0, 3, 0.45, GRASS, 0.0, 0.3)
+		add_sec(d, k, 5.0, SAND, 0.0, 0.0, 3, 0.45, GRASS, 0.3, 0.3)
+	else if f == 10:
+		add_sec(d, k, 0.7, BOUNCE, 0.0, 0.0, 0, 0.0, 0, 0.0, 0.0)
+	else if f == 11:
+		add_sec(d, k, 1.5, GRASS, 0.0, -0.25, 0, 0.0, 0, 0.0, 0.0)
+	up := if f == 8 { 0.57 } else { 0.0 }
+	add_sec(d, k, tail, GRASS, 0.0, up, 0, 0.0, 0, 0.0, 0.0)
+	if f == 8: return 0.0, ll
+	if f == 9: return lead, ll
+	return lead, lead + fl
+gen_obstacles(d Draft&, s int&, count int, fk int, fa real, fb real):
+	legs := d.px.len - 1
+	for q count:
+		kind := GEN_OBS[d.biome * 3 + gen_ri(s, 0, 2)]
+		for attempt 7:
+			k := gen_ri(s, 0, legs - 1)
+			dx := d.px[k + 1] - d.px[k]
+			dy := d.py[k + 1] - d.py[k]
+			ll := sqrt(dx * dx + dy * dy)
+			lo := if k == 0 { 2.5 } else { 1.5 }
+			hi ~= if k == legs - 1 { ll - 2.7 } else { ll - 1.5 }
+			if kind == 4: hi -= 1.1
+			if hi < lo: continue
+			t := gen_rr(s, lo, hi)
+			if k == fk && fa != fb && t >= fa - 0.7 && t <= fb + 1.0: continue
+			bad ~= false
+			for i d.obs.len:
+				let o .= d.obs[i]
+				if o.leg == k && (abs(o.along - t) <= 1.1 || (kind == 4 && abs(o.along - (t + 1.1)) <= 1.1)): bad = true
+				if kind == 2 && o.kind == 2: bad = true
+			if bad: continue
+			if kind == 0:
+				across := gen_rr(s, -0.57, 0.57)
+				a := gen_rr(s, 0.07, 0.1)
+				add_obs(d, k, t, across, 0, a, 0.3, 0.0, 0.0)
+			else if kind == 1:
+				across := gen_rr(s, -0.57, 0.57)
+				a := gen_rr(s, 0.1, 0.13)
+				b := gen_rr(s, 1.2, 1.3)
+				add_obs(d, k, t, across, 1, a, b, 0.0, 0.0)
+			else if kind == 2:
+				a := d.w / 2.0 - 0.1
+				b := gen_ri(s, 2, 4) as real
+				c := gen_rr(s, 3.5, 5.0)
+				e := gen_rr(s, 0.0, 1.0)
+				add_obs(d, k, t, 0.0, 2, a, b, c, e)
+			else if kind == 3:
+				c := gen_rr(s, 2.5, 3.5)
+				e := gen_rr(s, 0.0, 1.0)
+				add_obs(d, k, t, 0.0, 3, 0.35, 0.3, c, e)
+			else if kind == 4:
+				a := gen_rr(s, 0.3, 0.4)
+				side := if gen_ri(s, 0, 1) == 1 { 1.0 } else { -1.0 }
+				add_obs(d, k, t, side, 4, a, 0.0, 0.0, 0.0)
+				add_obs(d, k, t + 1.1, -side, 4, a, 0.0, 0.0, 0.0)
+			else if kind == 5:
+				across := gen_rr(s, -0.25, 0.25)
+				add_obs(d, k, t, across, 5, 0.25, 0.2, 0.25, 0.0)
+			break
+gen_draft(course int, n int) Draft:
+	s ~= course * 7919 + n * 104729 + 13
+	for q 7: pool::rng(s)
+	biome := if n == 1 { 0 } else { (course * 3 + n * 5) % 7 + 1 }
+	slot := (if n == 9 { course + 2 } else { course }) % 4
+	w := gen_rr(s, 1.05, 1.3)
+	d ~= new_draft(w, biome, 3, GEN_NAMES[biome * 4 + slot])
+	f ~= GEN_FEATURES[biome * 3 + gen_ri(s, 0, 2)]
+	d.px.push(0.0)
+	d.py.push(0.0)
+	if n == 1:
+		d.px.push(gen_rr(s, 8.0, 10.0))
+		d.py.push(0.0)
+	else if f == 8:
+		d.px.push(gen_rr(s, 12.5, 13.5))
+		d.py.push(0.0)
+	else if f == 9:
+		d.px.push(gen_rr(s, 11.5, 13.0))
+		d.py.push(0.0)
+	else:
+		shape := gen_ri(s, 0, 3)
+		g := if gen_ri(s, 0, 1) == 1 { 1.0 } else { -1.0 }
+		if shape == 0:
+			d.px.push(gen_rr(s, 8.5, 13.0))
+			d.py.push(0.0)
+		else if shape == 1:
+			a := gen_rr(s, 5.5, 8.0)
+			b := gen_rr(s, 4.5, 7.0)
+			d.px.push(a)
+			d.py.push(0.0)
+			d.px.push(a)
+			d.py.push(g * b)
+		else if shape == 2:
+			a := gen_rr(s, 4.5, 7.0)
+			b := gen_rr(s, 4.0, 5.5)
+			c := gen_rr(s, 4.5, 7.0)
+			d.px.push(a)
+			d.py.push(0.0)
+			d.px.push(a)
+			d.py.push(g * b)
+			d.px.push(a + c)
+			d.py.push(g * b)
+		else:
+			a := gen_rr(s, 5.0, 7.0)
+			c := gen_rr(s, 5.0, 7.0)
+			d.px.push(a)
+			d.py.push(0.0)
+			d.px.push(a + c * 0.7071)
+			d.py.push(g * c * 0.7071)
+	legs := d.px.len - 1
+	fk ~= 0
+	flen ~= 0.0
+	total ~= 0.0
+	for k legs:
+		dx := d.px[k + 1] - d.px[k]
+		dy := d.py[k + 1] - d.py[k]
+		l := sqrt(dx * dx + dy * dy)
+		total += l
+		if k == 0 || l > flen:
+			fk = k
+			flen = l
+	fa, fb := gen_feature(d, s, f, fk, flen, fk == legs - 1)
+	if fa == fb: f = 0
+	count ~= 1
+	if n != 1: count = gen_ri(s, 1, 3)
+	gen_obstacles(d, s, count, fk, fa, fb)
+	if total < 10.0 && legs == 1 && (f == 0 || f == 4 || f == 10): d.par = 2
+	else if total >= 17.0 || (legs >= 3 && total >= 14.0): d.par = 4
+	else: d.par = 3
+	d
+holes_in(course int) int: 9
+course_name(course int) byte[>..]:
+	out byte[>..] ~= []
+	if course == 0: out.append("Classic")
+	else: format(out, "Course ", course)
+	out
+biome_name(b int) const byte[:]:
+	match b:
+		1 => "Canyon"
+		2 => "Glacier"
+		3 => "Volcano"
+		4 => "Jungle"
+		5 => "Beach"
+		6 => "Neon"
+		7 => "Candy"
+		_ => "Meadow"
+hole_for(course int, n int) Hole:
+	m := clamp(n, 1, 9)
+	if course == 0:
+		c ~= draft_classic(m)
+		return build_hole(c, course, m)
+	d ~= gen_draft(course, m)
+	build_hole(d, course, m)
+par_of(course int, n int) int:
+	if course == 0: return CLASSIC_META[clamp(n, 1, 9) - 1].par
+	d ~= gen_draft(course, n)
+	d.par
+struct Player {
+	name byte[..64],
+	cpu bool,
+	level int,
+	strokes int[18],
+	done bool,
+	rx real,
+	ry real,
+	ball Ball
+}
+struct Game {
+	course int,
+	count int,
+	hole int,
+	h Hole,
+	turn int,
+	honor int,
+	clock real,
+	moving bool,
+	hole_over bool,
+	over bool,
+	msg byte[..64],
+	msg_player int,
+	players Player[>..]
+}
+new_game(course int) Game:
+	g ~= Game{course: course, count: holes_in(course), msg_player: -1, ..}
+	g
+add_player(g Game&, name const byte[:], cpu bool, level int):
+	if g.players.len >= MAX_PLAYERS: return
+	p ~= Player{cpu: cpu, level: level, ..}
+	p.name.append(name)
+	g.players.push(p);
+start_hole(g Game&, i int):
+	best ~= 0
+	if i > 0 && g.players.len > 0:
+		for q 1..g.players.len:
+			if g.players[q].strokes[i - 1] < g.players[best].strokes[i - 1]: best = q
+	g.honor = best
+	g.hole = i
+	nh := hole_for(g.course, i + 1)
+	g.h.course = nh.course
+	g.h.number = nh.number
+	g.h.biome = nh.biome
+	g.h.name.clear()
+	g.h.name.append(nh.name)
+	g.h.par = nh.par
+	g.h.tee_x = nh.tee_x
+	g.h.tee_y = nh.tee_y
+	g.h.tee_z = nh.tee_z
+	g.h.cup_x = nh.cup_x
+	g.h.cup_y = nh.cup_y
+	g.h.cup_z = nh.cup_z
+	g.h.zkill = nh.zkill
+	g.h.minx = nh.minx
+	g.h.maxx = nh.maxx
+	g.h.miny = nh.miny
+	g.h.maxy = nh.maxy
+	g.h.gx0 = nh.gx0
+	g.h.gy0 = nh.gy0
+	g.h.gcell = nh.gcell
+	g.h.gw = nh.gw
+	g.h.gh = nh.gh
+	g.h.pieces = copy(nh.pieces)
+	g.h.walls = copy(nh.walls)
+	g.h.posts = copy(nh.posts)
+	g.h.movers = copy(nh.movers)
+	g.h.lifts = copy(nh.lifts)
+	g.h.props = copy(nh.props)
+	g.h.rx = copy(nh.rx)
+	g.h.ry = copy(nh.ry)
+	g.h.rd = copy(nh.rd)
+	g.h.gstart = copy(nh.gstart)
+	g.h.gitem = copy(nh.gitem)
+	g.clock = 0.0
+	g.moving = false
+	g.hole_over = false
+	g.msg.clear()
+	g.msg_player = -1
+	for q g.players.len:
+		let p .= g.players[q]
+		p.ball = new_ball(g.h)
+		p.done = false
+		p.strokes[i] = 0
+		p.rx = g.h.tee_x
+		p.ry = g.h.tee_y
+	g.turn = g.honor
+start(g Game&): start_hole(g, 0);
+tick(g Game&, dt real):
+	if !g.moving:
+		g.clock += dt
+		if g.turn < g.players.len: g.players[g.turn].ball.t = g.clock
+play_shot(g Game&, ang real, power real):
+	let p .= g.players[g.turn]
+	p.strokes[g.hole] += 1
+	p.ball.t = g.clock
+	strike(p.ball, ang, power)
+	g.moving = true
+advance(g Game&, steps int) bool:
+	if !g.moving: return true
+	let p .= g.players[g.turn]
+	n ~= 0
+	while n < steps && !settled(p.ball):
+		step(g.h, p.ball)
+		n += 1
+	g.clock = p.ball.t
+	settled(p.ball)
+set_msg(g Game&, s const byte[:]):
+	g.msg.clear()
+	g.msg.append(s)
+end_shot(g Game&):
+	g.moving = false
+	g.msg_player = g.turn
+	let p .= g.players[g.turn]
+	if p.ball.mode == 1:
+		p.done = true
+		lb := label(p.strokes[g.hole], g.h.par)
+		set_msg(g, lb)
+	else if p.ball.mode == 2:
+		p.strokes[g.hole] += 1
+		if p.ball.lost == WATER: set_msg(g, "Water! +1 stroke")
+		else if p.ball.lost == LAVA: set_msg(g, "Lava! +1 stroke")
+		else: set_msg(g, "Out of bounds! +1 stroke")
+		place(g.h, p.ball, p.rx, p.ry)
+	else:
+		p.rx = p.ball.x
+		p.ry = p.ball.y
+		set_msg(g, "")
+	if !p.done && p.strokes[g.hole] >= STROKE_CAP:
+		p.done = true
+		p.strokes[g.hole] = STROKE_CAP
+		set_msg(g, "Picked up")
+	next_turn(g)
+next_turn(g Game&):
+	n := g.players.len
+	all ~= true
+	for q n: if !g.players[q].done: all = false
+	if all:
+		g.hole_over = true
+		return
+	for k n:
+		q := (g.honor + k) % n
+		if !g.players[q].done && g.players[q].strokes[g.hole] == 0:
+			g.turn = q
+			return
+	best ~= -1
+	bd ~= 0.0
+	for q n:
+		if g.players[q].done: continue
+		let b .= g.players[q].ball
+		d := remaining(g.h, b.x, b.y)
+		if best < 0 || d > bd:
+			best = q
+			bd = d
+	g.turn = best
+next_hole(g Game&):
+	if g.hole + 1 == g.count:
+		g.over = true
+	else:
+		start_hole(g, g.hole + 1)
+label(strokes int, par int) byte[>..]:
+	out byte[>..] ~= []
+	d := strokes - par
+	if strokes == 1: out.append("Hole in one!")
+	else if d <= -3: out.append("Albatross!")
+	else if d == -2: out.append("Eagle!")
+	else if d == -1: out.append("Birdie!")
+	else if d == 0: out.append("Par")
+	else if d == 1: out.append("Bogey")
+	else if d == 2: out.append("Double bogey")
+	else: format(out, "+", d)
+	out
+total_of(g Game&, i int) int:
+	t ~= 0
+	for k 0..(g.hole + 1): t += g.players[i].strokes[k]
+	t
+par_to(g Game&, last int) int:
+	t ~= 0
+	for k 0..(last + 1): t += par_of(g.course, k + 1)
+	t
+leader(g Game&) int:
+	best ~= 0
+	for q 1..g.players.len:
+		if total_of(g, q) < total_of(g, best): best = q
+	best

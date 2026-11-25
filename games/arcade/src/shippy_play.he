@@ -1,0 +1,198 @@
+namespace shippy_play
+use math
+use os
+use vec
+use kit
+use sfx
+use gfx
+use gfx.scene3d
+use shippy
+use shippy_look
+fade(c float4, a real) float4: float4{c.x, c.y, c.z, c.w * (a as f32)}
+var G = shippy::new_game(7, 0)
+var SEED = 0
+var BEST_PATH byte[>..] = []
+var MENU_OPEN = false
+var QUIT = false
+var RESULT = 0
+var REPORTED = false
+var NEW_BEST = false
+var OLD_BEST = 0
+var POP = 9.0
+var NOW = 0.0
+var AUTO = false
+load_best(path const byte[:]) int:
+	if path.len == 0: return 0
+	b byte[>..] ~= []
+	if !read_file(path, b): return 0
+	n ~= 0
+	digits ~= 0
+	for c b:
+		if c < '0' || c > '9' || digits >= 9: break
+		n = n * 10 + (c as int) - 48
+		digits += 1
+	return n
+save_best(n int):
+	if BEST_PATH.len == 0: return
+	b byte[>..] ~= []
+	format(b, n)
+	write_file(BEST_PATH, b);
+start(seed int, path const byte[:]):
+	SEED = seed
+	BEST_PATH.clear()
+	BEST_PATH.append(path)
+	G = shippy::new_game(seed, load_best(path))
+	MENU_OPEN = false
+	QUIT = false
+	REPORTED = false
+	NEW_BEST = false
+	AUTO = false
+	RESULT = 0
+	OLD_BEST = G.best
+	POP = 9.0
+tap():
+	if shippy::flap(G): sfx::play(sfx::WHOOSH, 0.32, 0.0, 1.25 + 0.1 * sin(NOW * 13.0))
+	if G.state == shippy::WAIT:
+		OLD_BEST = G.best
+		NEW_BEST = false
+auto_pilot():
+	if shippy::wants_flap(G): tap()
+input():
+	if MENU_OPEN: return
+	if kit::PRESSED && !kit::TAKEN: tap()
+	if gfx::key_pressed("Space") || gfx::key_pressed("Up"): tap()
+frame(target gfx::Texture, dt real, now real):
+	NOW = now
+	if gfx::key_pressed("Escape"): MENU_OPEN = !MENU_OPEN
+	if kit::menu_button(): MENU_OPEN = !MENU_OPEN
+	if !MENU_OPEN:
+		if AUTO:
+			auto_pilot()
+		else:
+			input()
+	d ~= dt
+	if MENU_OPEN: d = 0.0
+	f := shippy::step(G, d)
+	if (f & 1) != 0:
+		POP = 0.0
+		sfx::play(sfx::TAP, 0.5, 0.0, 1.7 + 0.15 * min(7, G.score / 10))
+	if (f & 2) != 0:
+		sfx::play(sfx::THUD, 0.9, 0.0, 0.8)
+		if G.crash == 2: sfx::play(sfx::SPLASH, 0.7, 0.0, 1.0)
+		NEW_BEST = G.score > OLD_BEST && G.score > 0
+		if NEW_BEST: save_best(G.best)
+		RESULT = G.score
+		REPORTED = false
+	POP += dt
+	shippy_look::sync(G, kit::W / kit::H, d, now)
+	s3d::render(target)
+	hud()
+	kit::draw(target);
+hud():
+	u := kit::U
+	if G.state == shippy::PLAY || G.state == shippy::DEAD:
+		s byte[>..] ~= []
+		format(s, G.score)
+		kit::label(0.0, 30.0 * u, kit::W, 80.0 * u, s, kit::SCORE * (1.0 + 0.25 * exp(-POP * 9.0)), kit::INK, 1)
+	if G.state == shippy::WAIT:
+		ty := 0.17 * kit::H
+		kit::label(0.0, ty, kit::W, 40.0 * u, "Shippy Container", kit::HEAD, kit::INK, 1)
+		py := ty + 40.0 * u + 17.0 * u
+		ph := kit::pill(kit::W / 2.0, py, "Tap, click or press Space to fly", 1.0)
+		best byte[>..] ~= []
+		format(best, "Best ", G.best)
+		kit::label(0.0, py + ph + 10.0 * u, kit::W, 20.0 * u, best, kit::SMALL, kit::INK, 1)
+	if G.state == shippy::DEAD && G.t >= 0.7: result_card()
+	if MENU_OPEN: menu_panel()
+medal_name(m int) const byte[:]:
+	match m:
+		1 => "Bronze"
+		2 => "Silver"
+		3 => "Gold"
+		4 => "Platinum"
+		_ => ""
+medal_color(m int) float4:
+	match m:
+		1 => float4{0.86, 0.55, 0.3, 1.0}
+		2 => float4{0.82, 0.86, 0.92, 1.0}
+		3 => float4{1.0, 0.8, 0.25, 1.0}
+		4 => float4{0.7, 0.95, 1.0, 1.0}
+		_ => kit::MUTED
+result_card():
+	u := kit::U
+	a := clamp((G.t - 0.7) / 0.3, 0.0, 1.0)
+	pw ~= 340.0 * u
+	if pw > 0.92 * kit::W: pw = 0.92 * kit::W
+	ph := 320.0 * u
+	kit::dim(1.0)
+	left, top := kit::panel(pw, ph)
+	kit::text(left, top + 24.0 * u, pw, 32.0 * u, "Game over", kit::TITLE, fade(kit::INK, a), 1)
+	cw := pw / 2.0
+	kit::text(left, top + 74.0 * u, cw, 17.0 * u, "Score", kit::CAPTION, fade(kit::MUTED, a), 1)
+	kit::text(left + cw, top + 74.0 * u, cw, 17.0 * u, "Best", kit::CAPTION, fade(kit::MUTED, a), 1)
+	sc byte[>..] ~= []
+	format(sc, G.score)
+	bs byte[>..] ~= []
+	format(bs, G.best)
+	bc ~= kit::INK
+	if NEW_BEST: bc = kit::ACCENT
+	kit::text(left, top + 97.0 * u, cw, 48.0 * u, sc, kit::DISPLAY, fade(kit::INK, a), 1)
+	kit::text(left + cw, top + 97.0 * u, cw, 48.0 * u, bs, kit::DISPLAY, fade(bc, a), 1)
+	m := shippy::medal(G.score)
+	if m > 0:
+		mc := medal_color(m)
+		mx := left + (pw - 150.0 * u) / 2.0
+		kit::ring(mx, top + 167.0 * u, 150.0 * u, 32.0 * u, fade(mc, 0.17 * a), fade(mc, a), 1.5 * u, 15.0 * u)
+		kit::text(mx, top + 167.0 * u, 150.0 * u, 32.0 * u, medal_name(m), kit::SMALL, fade(mc, a), 1)
+	else:
+		more byte[>..] ~= []
+		format(more, 10 - G.score, " more for bronze")
+		kit::text(left, top + 167.0 * u, pw, 32.0 * u, more, kit::SMALL, fade(kit::MUTED, a), 1)
+	if NEW_BEST: kit::text(left, top + 207.0 * u, pw, 20.0 * u, "New best!", kit::SMALL, fade(kit::GOOD, a), 1)
+	bw := (pw - 48.0 * u - 12.0 * u) / 2.0
+	by := top + ph - 24.0 * u - 48.0 * u
+	if kit::button(left + 24.0 * u, by, bw, 48.0 * u, "Play again", 1):
+		tap()
+		tap()
+	if kit::button(left + 24.0 * u + bw + 12.0 * u, by, bw, 48.0 * u, "Leave", 0): QUIT = true
+	if kit::PRESSED && !kit::TAKEN && G.t > 1.0 && (kit::PX < left || kit::PX > left + pw || kit::PY < top || kit::PY > top + ph):
+		kit::TAKEN = true
+		tap()
+menu_panel():
+	if !MENU_OPEN: return
+	u := kit::U
+	x, y0, w := kit::sheet("Paused", 4)
+	h := 48.0 * u
+	step := 58.0 * u
+	lab byte[>..] ~= []
+	if kit::button(x, y0, w, h, "Resume", 1): MENU_OPEN = false
+	if kit::button(x, y0 + step, w, h, "Restart", 0):
+		shippy::reset(G)
+		OLD_BEST = G.best
+		NEW_BEST = false
+		MENU_OPEN = false
+		return
+	if sfx::MUTED:
+		lab.append("Sound: Off")
+	else:
+		lab.append("Sound: On")
+	if kit::button(x, y0 + 2.0 * step, w, h, lab, 0): sfx::MUTED = !sfx::MUTED
+	if kit::button(x, y0 + 3.0 * step, w, h, "Leave", 0): QUIT = true
+demo_set(name const byte[:]):
+	start(7, "")
+	if name == "wait": return
+	if name == "play" || name == "menu":
+		AUTO = true
+		for i 520:
+			auto_pilot()
+			shippy::step(G, 1.0 / 60.0)
+		if name == "menu": MENU_OPEN = true
+		return
+	if name == "dead":
+		AUTO = true
+		for i 400:
+			auto_pilot()
+			shippy::step(G, 1.0 / 60.0)
+		AUTO = false
+		for i 240: shippy::step(G, 1.0 / 60.0)
+		return

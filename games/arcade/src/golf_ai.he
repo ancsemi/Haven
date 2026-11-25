@@ -1,0 +1,112 @@
+namespace golf_ai
+use golf
+use pool
+use math
+struct Plan { ang real, power real, wait real, score real }
+struct Search { level int, clock real, next int, stage int, top int[3], best int, plans Plan[>..] }
+outcome(h golf::Hole&, b golf::Ball&, clock real, p Plan) real:
+	c ~= b
+	c.t = clock + p.wait
+	golf::strike(c, p.ang, p.power)
+	golf::run(h, c)
+	g := 0.5 * p.power * p.power
+	if c.mode == 1: return -100.0 + p.wait * 0.1 + g
+	if c.mode == 2: return 50.0 + golf::remaining(h, b.x, b.y) + g
+	s ~= golf::remaining(h, c.x, c.y)
+	if c.piece >= 0 && h.pieces[c.piece].kind == golf::SAND:
+		s += 0.7
+	s + g
+aim_err(level int) real: if level == 0 { 5.7 } else if level == 1 { 4.7 } else { 2.4 }
+power_err(level int) real: if level == 0 { 0.2 } else if level == 1 { 0.15 } else { 0.08 }
+robust(h golf::Hole&, b golf::Ball&, clock real, p Plan, level int) real:
+	ae := radians(aim_err(level))
+	pe := power_err(level)
+	s ~= outcome(h, b, clock, p)
+	q ~= p
+	q.ang = p.ang + ae
+	s += outcome(h, b, clock, q)
+	q = p
+	q.ang = p.ang - ae
+	s += outcome(h, b, clock, q)
+	q = p
+	q.power = clamp(p.power * (1.0 + pe), 0.02, 1.0)
+	s += outcome(h, b, clock, q)
+	q = p
+	q.power = clamp(p.power * (1.0 - pe), 0.02, 1.0)
+	s += outcome(h, b, clock, q)
+	s / 5.0
+rank(sr Search&, i int):
+	pos ~= 3
+	for k 3:
+		if sr.top[k] < 0 || sr.plans[i].score < sr.plans[sr.top[k]].score:
+			pos = k
+			break
+	if pos < 3:
+		j ~= 2
+		while j > pos:
+			sr.top[j] = sr.top[j - 1]
+			j -= 1
+		sr.top[pos] = i
+	sr.best = sr.top[0];
+start(h golf::Hole&, b golf::Ball&, level int, clock real) Search:
+	s ~= Search{level: level, clock: clock, next: 0, stage: 0, top: [-1, -1, -1], best: -1, ..}
+	pw real[10] := [0.2, 0.3, 0.4, 0.5, 0.57, 0.65, 0.73, 0.82, 0.91, 1.0]
+	for k 72:
+		for q 10:
+			s.plans.push(Plan{ang: radians(k * 5.0), power: pw[q], wait: 0.0, score: 0.0})
+	s
+work(sr Search&, h golf::Hole&, b golf::Ball&, budget int) bool:
+	n ~= budget
+	ds real[7] := [-2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0]
+	ms real[3] := [0.93, 1.0, 1.07]
+	while n > 0 && sr.stage < 3:
+		if sr.next < sr.plans.len:
+			sr.plans[sr.next].score = if sr.stage == 0 { outcome(h, b, sr.clock, sr.plans[sr.next]) } else { robust(h, b, sr.clock, sr.plans[sr.next], sr.level) }
+			rank(sr, sr.next)
+			sr.next += 1
+			n -= 1
+			if sr.best >= 0 && sr.plans[sr.best].score <= -99.9 && sr.plans[sr.best].wait == 0.0:
+				sr.stage = 3
+		else if sr.stage == 0:
+			sr.stage = 1
+			tp int[3] := sr.top
+			for t 3:
+				sr.top[t] = -1
+			sr.best = -1
+			for t 3:
+				idx := tp[t]
+				if idx >= 0:
+					p := sr.plans[idx]
+					for d ds:
+						for m ms:
+							sr.plans.push(Plan{ang: p.ang + radians(d), power: clamp(p.power * m, 0.05, 1.0), wait: p.wait, score: 0.0})
+		else if sr.stage == 1:
+			if sr.level == 2 && h.movers.len >= 1:
+				sr.stage = 2
+				for t 3:
+					idx := sr.top[t]
+					if idx >= 0:
+						p := sr.plans[idx]
+						for j 1..17:
+							sr.plans.push(Plan{ang: p.ang, power: p.power, wait: 0.25 * j, score: 0.0})
+			else:
+				sr.stage = 3
+		else:
+			sr.stage = 3
+	sr.stage == 3
+finish(sr Search&, level int, seed int) Plan:
+	p ~= Plan{ang: 0.0, power: 0.5, wait: 0.0, score: 0.0}
+	if sr.best >= 0:
+		p = sr.plans[sr.best]
+	s ~= seed * 2654435761 + 1
+	u1 := pool::rng(s)
+	u2 := pool::rng(s)
+	ae := aim_err(level)
+	pe := power_err(level)
+	p.ang += (u1 - 0.5) * 2.0 * radians(ae)
+	p.power = clamp(p.power * (1.0 + (u2 - 0.5) * 2.0 * pe), 0.02, 1.0)
+	p
+think(h golf::Hole&, b golf::Ball&, level int, clock real, seed int) Plan:
+	sr ~= start(h, b, level, clock)
+	work(sr, h, b, 1000000)
+	finish(sr, level, seed)

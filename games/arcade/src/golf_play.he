@@ -1,0 +1,692 @@
+namespace golf_play
+use golf
+use golf_ai
+use golf_look
+use kit
+use sfx
+use gfx
+use gfx.scene3d
+use math
+use gfx.linalg
+AIM := 0
+ROLL := 1
+THINK := 2
+CPU_AIM := 3
+CARD := 4
+OVER := 5
+SOLO := 0
+VS_CPU := 1
+TWO := 2
+var G golf::Game
+var MODE = 0
+var LEVEL = 1
+var SEED = 1
+var STATE = 0
+var T_STATE = 0.0
+var ANG = 0.0
+var POWER = 0.0
+var KPOWER = 0.5
+var KEYAIM = false
+var YAW = 0.0
+var PITCH = 0.45
+var DIST = 1.9
+var CAM = 0
+var FX = 0.0
+var FY = 0.0
+var FZ = 0.0
+var CE = linalg::v3(0.0, 0.0, 0.0)
+var CT = linalg::v3(0.0, 0.0, 0.0)
+var READY = false
+var CY = 0.0
+var CP = 0.0
+var CD = 0.0
+var COURSE = 0
+var DRAG = 0
+var SR golf_ai::Search
+var PLAN golf_ai::Plan
+var FROM = 0.0
+var SHOT_AT = 0.0
+var ACC = 0.0
+var MSG byte[>..] = []
+var MSG_T = 0.0
+var BIG byte[>..] = []
+var BIG_T = 0.0
+var MENU_OPEN = false
+var QUIT = false
+var RESULT = 0
+var REPORTED = false
+var OVER_TITLE byte[>..] = []
+var OVER_SUB byte[>..] = []
+var NOW = 0.0
+var HINT = true
+ball() golf::Ball&: G.players[G.turn].ball
+human() bool: !G.players[G.turn].cpu
+say(s const byte[:]):
+	MSG.clear()
+	MSG.append(s)
+	MSG_T = 3.2
+pop(s const byte[:]):
+	BIG.clear()
+	BIG.append(s)
+	BIG_T = 2.2
+v3r(x real, y real, z real): linalg::v3(x as f32, y as f32, z as f32)
+rp(x real, y real, z real): v3r(x, z, -y)
+enter(s int):
+	STATE = s
+	T_STATE = 0.0
+aim_hint() real:
+	b := ball()
+	n := G.h.rx.len
+	if n < 2: return 0.0
+	best ~= 1000000000.0
+	bj ~= 0
+	for j n - 1:
+		qx, qy := golf::near_seg(G.h.rx[j], G.h.ry[j], G.h.rx[j + 1], G.h.ry[j + 1], b.x, b.y)
+		v := hypot(b.x - qx, b.y - qy) + hypot(qx - G.h.rx[j + 1], qy - G.h.ry[j + 1]) + G.h.rd[j + 1]
+		if v < best:
+			best = v
+			bj = j
+	t ~= bj + 1
+	if t + 1 < n && hypot(G.h.rx[t] - b.x, G.h.ry[t] - b.y) < 0.4: t += 1
+	atan2(G.h.ry[t] - b.y, G.h.rx[t] - b.x)
+start(mode int, level int, seed int, course int):
+	MODE = mode
+	LEVEL = level
+	SEED = seed
+	COURSE = if course == -1 { golf::new_course(seed) } else { course }
+	G = golf::new_game(COURSE)
+	if mode == SOLO:
+		golf::add_player(G, "You", false, 0)
+	else if mode == VS_CPU:
+		golf::add_player(G, "You", false, 0)
+		golf::add_player(G, "Computer", true, level)
+	else:
+		golf::add_player(G, "Player 1", false, 0)
+		golf::add_player(G, "Player 2", false, 0)
+	golf::start(G)
+	QUIT = false
+	RESULT = 0
+	REPORTED = false
+	MENU_OPEN = false
+	MSG_T = 0.0
+	BIG_T = 0.0
+	begin_hole()
+begin_hole():
+	golf_look::build(G.h)
+	READY = false
+	PITCH = 0.45
+	DIST = 1.9
+	DRAG = 0
+	ACC = 0.0
+	pop(str("Hole ", G.h.number))
+	turn_start()
+turn_start():
+	ANG = aim_hint()
+	POWER = 0.0
+	KEYAIM = false
+	DRAG = 0
+	set_cam(0)
+	if human():
+		enter(AIM)
+		people ~= 0
+		started ~= false
+		for &p G.players:
+			if !p.cpu: people += 1
+			if p.strokes[G.hole] > 0: started = true
+		if people >= 2 && started: say(str(G.players[G.turn].name, "'s turn"))
+	else:
+		SR = golf_ai::start(G.h, ball(), LEVEL, G.clock + 2.5)
+		enter(THINK)
+FOV := 0.9
+to_screen(p) real, real, bool:
+	up := linalg::v3(0.0, 1.0, 0.0)
+	f := linalg::unit3(CT - CE)
+	r := linalg::unit3(linalg::cross3(f, up))
+	u := linalg::cross3(r, f)
+	d := p - CE
+	z real := linalg::dot3(d, f)
+	if z < 0.01: return 0.0, 0.0, false
+	t := tan(FOV / 2.0)
+	rx real := linalg::dot3(d, r)
+	uy real := linalg::dot3(d, u)
+	x := kit::W / 2.0 + rx / z / t * kit::H / 2.0
+	y := kit::H / 2.0 - uy / z / t * kit::H / 2.0
+	return x, y, true
+set_cam(c int):
+	CAM = c
+	if c == 0:
+		YAW = ANG
+		if DIST > 4.0:
+			DIST = 1.9
+			PITCH = 0.45
+	else if c == 1:
+		b := ball()
+		YAW = atan2(G.h.cup_y - b.y, G.h.cup_x - b.x)
+		PITCH = 0.7
+		DIST = 2.3
+	else if c == 2:
+		e, t := golf_look::focus_for(G.h, kit::W / kit::H)
+		dv := e - t
+		FX = t.x as real
+		FY = -(t.z as real)
+		FZ = t.y as real
+		DIST = sqrt(linalg::dot3(dv, dv) as real)
+		PITCH = asin(((e.y - t.y) as real) / DIST)
+		YAW = atan2(-((t.z - e.z) as real), (t.x - e.x) as real)
+camera(dt real):
+	k := 1.0 - exp(-dt * 4.0)
+	ko := if DRAG == 2 { 1.0 - exp(-dt * 17.0) } else { k }
+	DIST = clamp(DIST / kit::PINCH * exp(kit::WHEEL * log(0.88)), 0.7, 14.0)
+	if !MENU_OPEN && STATE != CARD && STATE != OVER:
+		fdx := cos(YAW)
+		fdy := sin(YAW)
+		rdx := sin(YAW)
+		rdy := -cos(YAW)
+		mx ~= 0.0
+		my ~= 0.0
+		mv ~= false
+		if kit::PANX != 0.0 || kit::PANY != 0.0:
+			s := DIST * 0.0021 / kit::U
+			mx += (-kit::PANX * rdx + kit::PANY * fdx) * s
+			my += (-kit::PANX * rdy + kit::PANY * fdy) * s
+			mv = true
+		sp := 0.9 * DIST * dt
+		if gfx::key_down("W"):
+			mx += fdx * sp
+			my += fdy * sp
+			mv = true
+		if gfx::key_down("S"):
+			mx -= fdx * sp
+			my -= fdy * sp
+			mv = true
+		if gfx::key_down("A"):
+			mx -= rdx * sp
+			my -= rdy * sp
+			mv = true
+		if gfx::key_down("D"):
+			mx += rdx * sp
+			my += rdy * sp
+			mv = true
+		if mv:
+			FX += mx
+			FY += my
+			CAM = 3
+	b := ball()
+	if CAM == 0:
+		FX = b.x
+		FY = b.y
+		FZ = b.z
+	else if CAM == 1:
+		FX = G.h.cup_x
+		FY = G.h.cup_y
+		FZ = G.h.cup_z
+	if STATE == ROLL && CAM == 0 && hypot(b.vx, b.vy) > 0.4:
+		dy ~= atan2(b.vy, b.vx) - YAW
+		while dy > PI: dy -= TAU
+		while dy < -PI: dy += TAU
+		YAW += dy * (1.0 - exp(-dt * 1.7))
+	tg := rp(FX, FY, FZ + 0.05)
+	tz := FZ + 0.05
+	need ~= 0.0
+	fl ~= FZ
+	fp := golf::piece_at(G.h, FX, FY)
+	if fp != -1: fl = golf::floor_h(G.h.pieces[fp], FX, FY)
+	lim := DIST * cos(PITCH)
+	stp := max(0.05, lim / 70.0)
+	w ~= 0.05
+	while w <= lim:
+		x := FX - cos(YAW) * w
+		y := FY - sin(YAW) * w
+		q := golf::piece_at(G.h, x, y)
+		if q == -1:
+			need = max(need, (fl + golf::RAIL_H + 0.05 - tz) / w)
+			break
+		fl = golf::floor_h(G.h.pieces[q], x, y)
+		need = max(need, (fl + 0.04 - tz) / w)
+		w += stp
+	pw := min(max(PITCH, atan(need)), 1.45)
+	if !READY:
+		CY = YAW
+		CP = pw
+		CD = DIST
+		CT = tg
+		READY = true
+	else:
+		turn ~= YAW - CY
+		while turn > PI: turn -= TAU
+		while turn < -PI: turn += TAU
+		CY += turn * ko
+		CP += (pw - CP) * ko
+		CD += (DIST - CD) * k
+		CT = CT + (tg - CT) * (k as f32)
+	r := CD * cos(CP)
+	CE = CT - v3r(cos(CY) * r, 0.0, -sin(CY) * r) + v3r(0.0, CD * sin(CP), 0.0)
+	s3d::view = s3d::Camera{eye: CE, target: CT, up: linalg::v3(0.0, 1.0, 0.0), fov_y: 0.9, near: 0.02, far: 300.0}
+aim_input(dt real):
+	if MENU_OPEN: return
+	u := kit::U
+	if kit::PRESSED && !kit::TAKEN:
+		bx, by, vis := to_screen(rp(ball().x, ball().y, ball().z))
+		near := max(80.0 * u, 0.12 * min(kit::W, kit::H))
+		if vis && hypot(kit::PX - bx, kit::PY - by) < near:
+			DRAG = 1
+		else:
+			DRAG = 2
+		kit::TAKEN = true
+	if DRAG == 1 && kit::DOWN:
+		dx := kit::PX - kit::SX
+		dy := kit::PY - kit::SY
+		l := hypot(dx, dy)
+		POWER = clamp((l - 14.0 * u) / (200.0 * u), 0.0, 1.0)
+		if l > 14.0 * u: ANG = YAW + atan2(dx, dy)
+	else if DRAG == 2 && kit::DOWN:
+		YAW += kit::DX * 0.0057 / u
+		PITCH = clamp(PITCH - kit::DY * 0.004 / u, 0.12, 1.45)
+	if kit::RELEASED && DRAG != 0:
+		shot := DRAG == 1 && POWER > 0.03
+		if shot:
+			shoot(ANG, POWER)
+			return
+		DRAG = 0
+		if !KEYAIM: POWER = 0.0
+	rate := if gfx::key_down("Left Shift") { 0.3 } else { 1.2 }
+	if gfx::key_down("Left"):
+		ANG += rate * dt
+		KEYAIM = true
+		YAW = ANG
+	if gfx::key_down("Right"):
+		ANG -= rate * dt
+		KEYAIM = true
+		YAW = ANG
+	if gfx::key_down("Up"):
+		KPOWER = clamp(KPOWER + 0.5 * dt, 0.02, 1.0)
+		KEYAIM = true
+	if gfx::key_down("Down"):
+		KPOWER = clamp(KPOWER - 0.5 * dt, 0.02, 1.0)
+		KEYAIM = true
+	if KEYAIM && DRAG == 0: POWER = KPOWER
+	if gfx::key_pressed("Space"): shoot(ANG, KPOWER)
+shoot(ang real, power real):
+	person := human()
+	golf::play_shot(G, ang, power)
+	sfx::play(sfx::PUTT, 0.3 + 0.7 * power, 0.0, 0.9 + 0.2 * power)
+	if person: HINT = false
+	ACC = 0.0
+	KEYAIM = false
+	DRAG = 0
+	enter(ROLL)
+roll(dt real):
+	ACC = min(ACC + dt, 0.1)
+	n := min(floor(ACC / golf::DT) as int, 480)
+	ACC -= (n as real) * golf::DT
+	m0 := ball().mode
+	hit ~= 0.0
+	land ~= 0.0
+	for i n:
+		golf::step(G.h, ball())
+		hit = max(hit, ball().hit)
+		land = max(land, ball().land)
+		if golf::settled(ball()): break
+	G.clock = ball().t
+	bx, by, vis := to_screen(rp(ball().x, ball().y, ball().z))
+	pan := bx / kit::W * 2.0 - 1.0
+	if hit > 0.12: sfx::hit(sfx::BUMP, hit, 3.0, pan)
+	if land > 0.7: sfx::hit(sfx::BUMP, land * 0.5, 3.0, pan)
+	if m0 == 0 && ball().mode == 1:
+		sfx::play(sfx::CUP, 0.9, 0.0, 1.0)
+	else if m0 == 0 && ball().mode == 2:
+		if ball().lost == golf::WATER:
+			sfx::play(sfx::SPLASH, 0.8, 0.0, 1.0)
+		else if ball().lost == golf::LAVA:
+			sfx::play(sfx::SPLASH, 0.8, 0.0, 0.7)
+		else:
+			sfx::play(sfx::LOSE, 0.5, 0.0, 1.0)
+	if golf::settled(ball()) && T_STATE > 0.25: settle()
+settle():
+	p := G.turn
+	holed := ball().mode == 1
+	golf::end_shot(G)
+	if G.msg.len > 0:
+		if holed:
+			pop(G.msg)
+			st := G.players[p].strokes[G.hole]
+			if !G.players[p].cpu:
+				if st <= G.h.par:
+					sfx::play(sfx::WIN, 0.7, 0.0, 1.0)
+				else if st > G.h.par + 1:
+					sfx::play(sfx::LOSE, 0.3, 0.0, 1.0)
+		else:
+			say(G.msg)
+	if G.hole_over:
+		enter(CARD)
+	else:
+		turn_start()
+think():
+	if golf_ai::work(SR, G.h, ball(), 5):
+		PLAN = golf_ai::finish(SR, LEVEL, SEED * 31 + G.hole * 7 + G.players[G.turn].strokes[G.hole])
+		FROM = ANG
+		SHOT_AT = SR.clock + PLAN.wait
+		enter(CPU_AIM)
+cpu_aim():
+	f0 := min(T_STATE / 0.9, 1.0)
+	f := f0 * f0 * (3.0 - 2.0 * f0)
+	d ~= PLAN.ang - FROM
+	while d > PI: d -= TAU
+	while d < -PI: d += TAU
+	ANG = FROM + d * f
+	YAW = ANG
+	POWER = PLAN.power * f
+	if T_STATE >= 0.9 && (G.clock >= SHOT_AT - 0.004 || SHOT_AT - G.clock > 7.0): shoot(PLAN.ang, PLAN.power)
+var CPX = 0.0
+var CPY = 0.0
+var CPW = 0.0
+var CPH = 0.0
+to_par(i int) int:
+	last ~= -1
+	for k G.count: if G.players[i].strokes[k] > 0: last = k
+	if last < 0: return 0
+	golf::total_of(G, i) - golf::par_to(G, last)
+par_text(out byte[>..]&, d int):
+	if d == 0:
+		out.append("E")
+	else if d > 0:
+		format(out, "+", d)
+	else:
+		format(out, "-", -d)
+	return
+holepar(k int) int:
+	if k == 0: return golf::par_to(G, 0)
+	golf::par_to(G, k) - golf::par_to(G, k - 1)
+cell(x real, y real, w real, h real, s const byte[:], c, al int):
+	fs := if CPW < 700.0 * kit::U { kit::CAPTION } else { kit::SMALL }
+	kit::text(x, y + h / 2.0 - 12.0 * kit::U, w, 24.0 * kit::U, s, fs, c, al)
+advance():
+	golf::next_hole(G)
+	if G.over:
+		finish_course()
+	else:
+		begin_hole()
+card_panel():
+	if STATE == CARD && T_STATE < 1.1: return
+	u := kit::U
+	a := if STATE == CARD { clamp((T_STATE - 1.1) / 0.5, 0.0, 1.0) } else { 1.0 }
+	np := G.players.len
+	pw := min(0.92 * kit::W, 870.0 * u)
+	ph ~= 210.0 * u + 40.0 * u * (np as real)
+	if STATE == OVER: ph += 14.0 * u
+	kit::dim(a)
+	px, py := kit::panel(pw, ph)
+	CPX = px
+	CPY = py
+	CPW = pw
+	CPH = ph
+	if STATE == CARD:
+		kit::text(px, py + 20.0 * u, pw, 32.0 * u, str("Hole ", G.h.number, " · ", G.h.name), kit::TITLE, kit::INK, 1)
+	else:
+		kit::text(px, py + 20.0 * u, pw, 32.0 * u, OVER_TITLE, kit::TITLE, kit::INK, 1)
+		kit::text(px, py + 54.0 * u, pw, 20.0 * u, OVER_SUB, kit::SMALL, kit::MUTED, 1)
+	nh := G.count
+	nw := if pw < 700.0 * u { 84.0 * u } else { 150.0 * u }
+	cw := (pw - 40.0 * u - nw) / ((nh as real) + 2.2)
+	tw := cw * 2.2
+	x0 := px + 20.0 * u
+	ty := if STATE == CARD { py + 70.0 * u } else { py + 84.0 * u }
+	rh := 30.0 * u
+	nx := x0 + nw
+	cell(x0, ty, nw, rh, "Hole", kit::MUTED, 0)
+	cell(x0, ty + rh, nw, rh, "Par", kit::MUTED, 0)
+	for k nh:
+		cx := nx + (k as real) * cw
+		cell(cx, ty, cw, rh, str(k + 1), kit::MUTED, 1)
+		cell(cx, ty + rh, cw, rh, str(holepar(k)), kit::MUTED, 1)
+	cell(nx + (nh as real) * cw, ty, tw, rh, "Total", kit::MUTED, 1)
+	cell(nx + (nh as real) * cw, ty + rh, tw, rh, str(golf::par_to(G, nh - 1)), kit::MUTED, 1)
+	kit::box(x0, ty + 2.0 * rh, pw - 40.0 * u, 1.0 * u, kit::LINE, 0.0)
+	for i np:
+		ry := ty + 2.0 * rh + (i as real) * 40.0 * u
+		cell(x0, ry, nw, 40.0 * u, G.players[i].name, kit::INK, 0)
+		for k nh:
+			st := G.players[i].strokes[k]
+			if st > 0:
+				c ~= kit::INK
+				if st == 1:
+					c = kit::ACCENT
+				else if st < holepar(k):
+					c = kit::GOOD
+				else if st > holepar(k) + 1:
+					c = kit::BAD
+				cell(nx + (k as real) * cw, ry, cw, 40.0 * u, str(st), c, 1)
+		ts byte[>..] ~= []
+		format(ts, golf::total_of(G, i), " (")
+		par_text(ts, to_par(i))
+		ts.append(")")
+		cell(nx + (nh as real) * cw, ry, tw, 40.0 * u, ts, kit::INK, 1)
+	if STATE == CARD:
+		islast := G.hole >= G.count - 1
+		lbl := if islast { "See results" } else { "Next hole" }
+		bw := 200.0 * u
+		if kit::button(px + (pw - bw) / 2.0, py + ph - 24.0 * u - 48.0 * u, bw, 48.0 * u, lbl, 1): advance()
+		anyh ~= false
+		for &p G.players: if !p.cpu: anyh = true
+		if STATE == CARD && !anyh && T_STATE > 3.5: advance()
+finish_course():
+	pt := golf::par_to(G, G.count - 1)
+	t0 := golf::total_of(G, 0)
+	t1 ~= 0
+	who ~= 0
+	won0 ~= false
+	OVER_TITLE.clear()
+	if MODE == SOLO:
+		OVER_TITLE.append("Course complete")
+	else if MODE == VS_CPU:
+		t1 = golf::total_of(G, 1)
+		won0 = t0 < t1
+		if t0 < t1:
+			OVER_TITLE.append("You win!")
+		else if t0 > t1:
+			OVER_TITLE.append("The computer wins")
+		else:
+			OVER_TITLE.append("Tie game")
+	else:
+		t1 = golf::total_of(G, 1)
+		won0 = t0 < t1
+		if t0 == t1:
+			OVER_TITLE.append("Tie game")
+		else:
+			who = golf::leader(G)
+			format(OVER_TITLE, G.players[who].name, " wins!")
+	tw := golf::total_of(G, who)
+	d := tw - pt
+	OVER_SUB.clear()
+	format(OVER_SUB, "Total ", tw, " · ")
+	if d == 0:
+		OVER_SUB.append("Even par")
+	else if d > 0:
+		format(OVER_SUB, d, " over par")
+	else:
+		format(OVER_SUB, -d, " under par")
+	RESULT = max(1, 100 + 10 * (pt - t0))
+	if won0 || t0 <= pt:
+		sfx::play(sfx::WIN, 0.8, 0.0, 1.0)
+	else:
+		sfx::play(sfx::LOSE, 0.5, 0.0, 1.0)
+	enter(OVER)
+over_panel():
+	card_panel()
+	u := kit::U
+	bw := 170.0 * u
+	bh := 48.0 * u
+	gap := 12.0 * u
+	x := CPX + (CPW - 2.0 * bw - gap) / 2.0
+	y := CPY + CPH - 24.0 * u - bh
+	again := if COURSE >= 1 { "New course" } else { "Play again" }
+	if kit::button(x, y, bw, bh, again, 1): start(MODE, LEVEL, SEED + 1, if COURSE >= 1 { -1 } else { 0 })
+	if kit::button(x + bw + gap, y, bw, bh, "Leave", 0): QUIT = true
+menu_panel():
+	if gfx::key_pressed("Escape"): MENU_OPEN = !MENU_OPEN
+	if !MENU_OPEN: return
+	u := kit::U
+	x, y, bw := kit::sheet("Paused", 6)
+	if kit::button(x, y, bw, 48.0 * u, "Resume", 1): MENU_OPEN = false
+	if kit::button(x, y + 58.0 * u, bw, 48.0 * u, "Restart course", 0): start(MODE, LEVEL, SEED + 1, COURSE)
+	if kit::button(x, y + 116.0 * u, bw, 48.0 * u, "New course", 0): start(MODE, LEVEL, SEED + 1, -1)
+	if kit::button(x, y + 174.0 * u, bw, 48.0 * u, "Classic course", 0): start(MODE, LEVEL, SEED + 1, 0)
+	sl := if sfx::MUTED { "Sound: Off" } else { "Sound: On" }
+	if kit::button(x, y + 232.0 * u, bw, 48.0 * u, sl, 0): sfx::MUTED = !sfx::MUTED
+	if kit::button(x, y + 290.0 * u, bw, 48.0 * u, "Leave", 0): QUIT = true
+controls():
+	if kit::menu_button(): MENU_OPEN = true
+	if MENU_OPEN || STATE == CARD || STATE == OVER: return
+	u := kit::U
+	bw := 78.0 * u
+	bh := 44.0 * u
+	gap := 8.0 * u
+	total := 3.0 * bw + 2.0 * gap
+	x0 := if kit::W < 570.0 * u { (kit::W - total) / 2.0 } else { 14.0 * u }
+	y := kit::H - 14.0 * u - bh
+	for i 3:
+		lbl := if i == 0 { "Ball" } else if i == 1 { "Hole" } else { "Course" }
+		kind := if CAM == i { 2 } else { 0 }
+		if kit::button(x0 + (i as real) * (bw + gap), y, bw, bh, lbl, kind): set_cam(i)
+hud():
+	u := kit::U
+	narrow := kit::W < 570.0 * u
+	top := if narrow { 70.0 * u } else { 14.0 * u }
+	py := top + 50.0 * u + 8.0 * u
+	if STATE != OVER:
+		title := str("Hole ", G.h.number, " of ", G.count, " · Par ", G.h.par)
+		hw := max(kit::text_w(title, kit::BODY), kit::text_w(G.h.name, kit::CAPTION)) + 40.0 * u
+		hx := (kit::W - hw) / 2.0
+		kit::ring(hx, top, hw, 50.0 * u, kit::GLASS, kit::LINE, 1.0 * u, 14.0 * u)
+		kit::text(hx, top + 7.0 * u, hw, 22.0 * u, title, kit::BODY, kit::INK, 1)
+		kit::text(hx, top + 28.0 * u, hw, 17.0 * u, G.h.name, kit::CAPTION, kit::MUTED, 1)
+		np := G.players.len
+		cw := if narrow { 0.44 * kit::W } else { 190.0 * u }
+		gap := 10.0 * u
+		x0 := (kit::W - (np as real) * cw - ((np - 1) as real) * gap) / 2.0
+		for i np:
+			cx := x0 + (i as real) * (cw + gap)
+			bc ~= kit::LINE
+			bt ~= 1.0 * u
+			if i == G.turn && !G.over:
+				bc = kit::ACCENT
+				bt = 2.0 * u
+			kit::ring(cx, py, cw, 48.0 * u, kit::GLASS, bc, bt, 14.0 * u)
+			kit::text(cx, py + 5.0 * u, cw, 22.0 * u, G.players[i].name, kit::BODY, kit::INK, 1)
+			ts byte[>..] ~= []
+			format(ts, "This hole ", G.players[i].strokes[G.hole], " · Total ")
+			par_text(ts, to_par(i))
+			kit::text(cx, py + 27.0 * u, cw, 17.0 * u, ts, kit::CAPTION, kit::MUTED, 1)
+	my ~= py + 48.0 * u + 10.0 * u
+	if MSG_T > 0.0: my += kit::pill(kit::W / 2.0, my, MSG, clamp(MSG_T / 0.5, 0.0, 1.0)) + 8.0 * u
+	if STATE == THINK: kit::pill(kit::W / 2.0, my, "Computer is thinking...", 1.0)
+	if BIG_T > 0.0:
+		grow := 0.8 + 0.2 * clamp((2.2 - BIG_T) / 0.2, 0.0, 1.0)
+		col ~= kit::ACCENT
+		col.w *= clamp(BIG_T / 0.4, 0.0, 1.0) as f32
+		kit::label(0.0, 0.38 * kit::H, kit::W, 70.0 * u, BIG, kit::DISPLAY * grow, col, 1)
+	if STATE == AIM && human():
+		base := kit::H - 58.0 * u - 12.0 * u
+		if POWER > 0.0:
+			bw := 220.0 * u
+			bx := (kit::W - bw) / 2.0
+			by := base - 50.0 * u
+			kit::ring(bx, by, bw, 50.0 * u, kit::GLASS, kit::LINE, 1.0 * u, 14.0 * u)
+			kit::text(bx + 14.0 * u, by + 8.0 * u, bw - 28.0 * u, 20.0 * u, "Power", kit::CAPTION, kit::MUTED, 0)
+			kit::text(bx + 14.0 * u, by + 8.0 * u, bw - 28.0 * u, 20.0 * u, str(round(POWER * 100.0) as int, "%"), kit::BODY, kit::INK, 2)
+			kit::box(bx + 14.0 * u, by + 32.0 * u, bw - 28.0 * u, 8.0 * u, s3d::f4(1.0, 1.0, 1.0, 0.12), 4.0 * u)
+			kit::box(bx + 14.0 * u, by + 32.0 * u, (bw - 28.0 * u) * POWER, 8.0 * u, kit::heat(POWER), 4.0 * u)
+		else if HINT && DRAG == 0:
+			hint := if kit::TOUCH || narrow { "Pull back from the ball to putt · drag to look · two fingers to move" } else { "Pull back from the ball to putt · drag to look · right-drag or W A S D to move" }
+			maxw := 0.92 * kit::W
+			rows ~= 1
+			if kit::text_w(hint, kit::SMALL) + 38.0 * u > maxw:
+				ls := kit::lines(hint, kit::SMALL * u, maxw - 38.0 * u)
+				rows = ls.len
+			tall := 34.0 * u + 22.0 * u * ((rows - 1) as real)
+			kit::pill(kit::W / 2.0, base - tall, hint, 1.0)
+	menu_panel()
+	if STATE == CARD: card_panel()
+	if STATE == OVER: over_panel()
+frame(target gfx::Texture, dt real, now real):
+	NOW = now
+	MSG_T -= dt
+	BIG_T -= dt
+	T_STATE += dt
+	controls()
+	if STATE != ROLL && STATE != OVER: golf::tick(G, dt)
+	if STATE == AIM:
+		if human() && !MENU_OPEN: aim_input(dt)
+	else if STATE == ROLL:
+		roll(dt)
+	else if STATE == THINK:
+		think()
+	else if STATE == CPU_AIM:
+		cpu_aim()
+	camera(dt)
+	golf_look::sync(G.h, ball(), now)
+	live := (STATE == AIM && (DRAG == 1 || KEYAIM)) || STATE == CPU_AIM
+	golf_look::aim(ball(), ANG, POWER, live)
+	golf_look::putter(ball(), ANG, POWER * 0.22, live)
+	s3d::render(target)
+	hud()
+	kit::draw(target)
+demo_set(name const byte[:]):
+	start(VS_CPU, 1, 7, 0)
+	if name == "aim":
+		DRAG = 1
+		POWER = 0.55
+		ANG = aim_hint()
+	else if starts_with(name, "hole ") && name.len > 5:
+		n, ok := parse_int(name[5..])
+		if ok:
+			golf::start_hole(G, n - 1)
+			begin_hole()
+			DRAG = 1
+			POWER = 0.5
+			ANG = aim_hint()
+	else if starts_with(name, "gen ") && name.len > 4:
+		n, ok := parse_int(name[4..])
+		if ok:
+			start(VS_CPU, 1, 7, 4242)
+			golf::start_hole(G, n - 1)
+			begin_hole()
+			DRAG = 1
+			POWER = 0.5
+			ANG = aim_hint()
+	else if name == "view":
+		golf::start_hole(G, 3)
+		begin_hole()
+		set_cam(2)
+	else if name == "look":
+		golf::start_hole(G, 4)
+		begin_hole()
+		set_cam(1)
+	else if name == "roll":
+		golf::start_hole(G, 1)
+		begin_hole()
+		shoot(aim_hint(), 0.7)
+		n := (0.7 / golf::DT) as int
+		for i n: golf::step(G.h, ball())
+		G.clock = ball().t
+	else if name == "card":
+		G.players[0].strokes[0] = 2
+		G.players[1].strokes[0] = 3
+		G.players[0].done = true
+		G.players[1].done = true
+		G.hole_over = true
+		enter(CARD)
+		T_STATE = 2.0
+	else if name == "menu":
+		MENU_OPEN = true
+	else if name == "over":
+		for i G.count:
+			par := holepar(i)
+			G.players[0].strokes[i] = if i % 2 == 0 { par - 1 } else { par }
+			G.players[1].strokes[i] = par
+		G.players[0].done = true
+		G.players[1].done = true
+		G.hole = G.count - 1
+		finish_course()
+		T_STATE = 2.0
+	READY = false

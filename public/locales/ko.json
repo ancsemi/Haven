@@ -1318,6 +1318,8 @@
   },
   "activities_registry": {
     "flappy": "컨테이너를 피하고 최고 점수에 도전하세요!",
+    "arcade_pool": "친구나 컴퓨터와 8볼 대결",
+    "arcade_minigolf": "초원에서 화산까지 9홀",
     "flight": "종이비행기를 최대한 멀리 날려 보세요!",
     "learn_to_fly": "펭귄이 나는 법을 배우도록 도와주세요!",
     "bubble_tanks": "버블 기반 아레나 슈팅 게임",

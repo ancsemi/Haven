@@ -1,0 +1,391 @@
+namespace kit
+use gfx
+use gfx.hud
+use math
+use vec
+struct Label { root int, x real, y real, w real, h real, s byte[], px real, color float4, align int, shadow bool }
+var W real = 0.0
+var H real = 0.0
+var U real = 1.0
+var PX real = 0.0
+var PY real = 0.0
+var DOWN bool = false
+var PRESSED bool = false
+var RELEASED bool = false
+var DX real = 0.0
+var DY real = 0.0
+var SX real = 0.0
+var SY real = 0.0
+var MOVED real = 0.0
+var PRESS_T real = 0.0
+var FRAME int = 0
+var PRESS_F int = 0
+var NOW real = 0.0
+var TAPPED bool = false
+var WHEEL real = 0.0
+var PINCH real = 1.0
+var PANX real = 0.0
+var PANY real = 0.0
+var RDOWN bool = false
+var TOUCH bool = false
+var FINGER int = -1
+var PDIST real = 0.0
+var PCX real = 0.0
+var PCY real = 0.0
+var ROOT int = 0
+var ROOTS int[>..] = []
+var LABELS Label[>..] = []
+var TAKEN bool = false
+var DIM real = 0.0
+var CLICK bool = false
+INK := float4{0.96, 0.97, 1.0, 1.0}
+MUTED := float4{0.7, 0.74, 0.82, 1.0}
+GLASS := float4{0.05, 0.07, 0.11, 0.84}
+GLASS2 := float4{0.13, 0.15, 0.22, 0.94}
+PANEL := float4{0.08, 0.09, 0.14, 0.95}
+ACCENT := float4{1.0, 0.77, 0.24, 1.0}
+ACCENT2 := float4{0.3, 0.75, 1.0, 1.0}
+PRIMARY := float4{0.49, 0.37, 0.99, 1.0}
+GOOD := float4{0.35, 0.87, 0.5, 1.0}
+BAD := float4{1.0, 0.4, 0.37, 1.0}
+LINE := float4{1.0, 1.0, 1.0, 0.12}
+CAPTION := 10.0
+SMALL := 12.0
+BODY := 13.0
+LEAD := 15.0
+TITLE := 20.0
+HEAD := 28.0
+DISPLAY := 40.0
+SCORE := 57.0
+nearest_finger(x real, y real) int:
+	best ~= -2
+	bd ~= 1.0e30
+	for f gfx::fingers():
+		d := hypot(f.x - x, f.y - y)
+		if d < bd:
+			bd = d
+			best = f.id
+	best
+finger_present(id int) bool:
+	for f gfx::fingers():
+		if f.id == id: return true
+	return false
+track(x real, y real):
+	if DOWN:
+		MOVED = max(MOVED, hypot(x - SX, y - SY))
+move_to(x real, y real):
+	if DOWN:
+		DX += x - PX
+		DY += y - PY
+	if RDOWN:
+		PANX += x - PX
+		PANY += y - PY
+	PX = x
+	PY = y
+	track(x, y);
+press(x real, y real, touch bool):
+	PX = x
+	PY = y
+	DOWN = true
+	PRESSED = true
+	SX = x
+	SY = y
+	MOVED = 0.0
+	PRESS_T = NOW
+	PRESS_F = FRAME
+	TOUCH = touch;
+release():
+	if DOWN:
+		RELEASED = true
+		DOWN = false
+begin(w real, h real, now real):
+	W = w
+	H = h
+	FRAME += 1
+	R ~= 1.0
+	if gfx::WPW > 0 && gfx::WW > 0: R = (gfx::WPW as real) / (gfx::WW as real)
+	U = R * clamp(min(w, h) / R / 720.0, 0.9, 1.4)
+	NOW = now
+	PRESSED = false
+	RELEASED = false
+	TAPPED = false
+	TAKEN = false
+	DX = 0.0
+	DY = 0.0
+	PANX = 0.0
+	PANY = 0.0
+	WHEEL = 0.0
+	PINCH = 1.0
+	LABELS.clear()
+	for e gfx::events():
+		k := e.kind
+		if k == gfx::EVENT_MOUSE_BUTTON && e.button == 1:
+			if e.down: press(e.x, e.y, false)
+			else: release()
+		if k == gfx::EVENT_MOUSE_BUTTON && (e.button == 3 || e.button == 2): RDOWN = e.down
+		if k == gfx::EVENT_MOUSE_MOTION:
+			if !(TOUCH && gfx::fingers().len > 0): move_to(e.x, e.y)
+		if k == gfx::EVENT_MOUSE_WHEEL: WHEEL += e.y
+		if k == gfx::EVENT_FINGER_DOWN:
+			if FINGER == -1:
+				FINGER = nearest_finger(e.x, e.y)
+				press(e.x, e.y, true)
+			else:
+				DOWN = false
+				MOVED = 1000.0
+		if k == gfx::EVENT_FINGER_MOTION:
+			if FINGER == -2 || (FINGER != -1 && nearest_finger(e.x, e.y) == FINGER): move_to(e.x, e.y)
+		if k == gfx::EVENT_FINGER_UP:
+			if FINGER != -1 && (FINGER == -2 || !finger_present(FINGER)):
+				release()
+				FINGER = -1
+	if RELEASED && MOVED < 14.0 * U && (NOW - PRESS_T < 0.4 || FRAME - PRESS_F <= 2): TAPPED = true
+	fs := gfx::fingers()
+	if fs.len >= 2:
+		d := hypot(fs[0].x - fs[1].x, fs[0].y - fs[1].y)
+		mx := (fs[0].x + fs[1].x) / 2.0
+		my := (fs[0].y + fs[1].y) / 2.0
+		if PDIST > 0.0:
+			PINCH = d / PDIST
+			PANX += mx - PCX
+			PANY += my - PCY
+		PDIST = d
+		PCX = mx
+		PCY = my
+	else:
+		PDIST = 0.0
+	hud::clear()
+	ROOT = hud::node(-1)
+	ROOTS.clear()
+	ROOTS.push(ROOT)
+	DIM = DIM * 0.8;
+inside(x real, y real, w real, h real) bool: PX >= x && PX < x + w && PY >= y && PY < y + h
+pressed_in(x real, y real, w real, h real) bool:
+	if PRESSED && !TAKEN && inside(x, y, w, h):
+		TAKEN = true
+		return true
+	return false
+tapped_in(x real, y real, w real, h real) bool:
+	if !TAPPED || !inside(x, y, w, h): return false
+	return SX >= x && SX < x + w && SY >= y && SY < y + h
+box(x real, y real, w real, h real, color float4, radius real) int:
+	n := hud::node(ROOT)
+	let r .= hud::N[n]
+	r.abs = true
+	r.l = x as f32
+	r.t = y as f32
+	r.wm = hud::PX
+	r.wv = w as f32
+	r.hm = hud::PX
+	r.hv = h as f32
+	r.color = color
+	r.radius = radius as f32
+	n
+ring(x real, y real, w real, h real, fill float4, border float4, bw real, radius real) int:
+	n := box(x, y, w, h, fill, radius)
+	let r .= hud::N[n]
+	r.border = border
+	r.bw = bw as f32
+	n
+adv(t const byte[:], i int, s real) real, int:
+	if t[i] == 194 && i + 1 < t.len && t[i + 1] == 183: return (SDF_ADV[14] + 0.5 * SDF_CAP_H) * s, 2
+	k ~= (t[i] as int) - 32
+	if k < 0 || k > 94: k = 0
+	return (SDF_ADV[k] + sdf_kern(t, i)) * s, 1
+measure(t const byte[:], px real) real:
+	s := px / SDF_CAP_H
+	w ~= 0.0
+	i ~= 0
+	while i < t.len:
+		a, n := adv(t, i, s)
+		w += a
+		i += n
+	w
+glyphs(vs TextVtx[>..]&, x real, y real, px real, t const byte[:], c float4):
+	sdf_build_glyphs()
+	s := px / SDF_CAP_H
+	cb byte[4] := [clamp(round(c.x * 255.0) as int, 0, 255) as byte, clamp(round(c.y * 255.0) as int, 0, 255) as byte, clamp(round(c.z * 255.0) as int, 0, 255) as byte, clamp(round(c.w * 255.0) as int, 0, 255) as byte]
+	vtx(vx real, vy real, u real, v real):
+		vs.push(TextVtx{pos: float2{vx as f32, vy as f32}, uv: float2{u as f32, v as f32}, col: cb});
+	pen ~= x
+	i ~= 0
+	while i < t.len:
+		a, n := adv(t, i, s)
+		dotc := t[i] == 194 && i + 1 < t.len && t[i + 1] == 183
+		k ~= 14
+		if !dotc:
+			k = (t[i] as int) - 32
+			if k < 0 || k > 94: k = 0
+		if k != 0:
+			left ~= pen + (SDF_OFF[k] - 8.0) * s
+			top ~= y - 11.0 * s
+			if dotc:
+				left += 0.25 * SDF_CAP_H * s
+				top -= 0.42 * px
+			size := SDF_CELL * s
+			cx := k % SDF_COLS
+			cy := k / SDF_COLS
+			u0 := ((cx * SDF_CELL) as real) / (SDF_ATLAS_W as real)
+			u1 := (((cx + 1) * SDF_CELL) as real) / (SDF_ATLAS_W as real)
+			v0 := ((cy * SDF_CELL) as real) / (SDF_ATLAS_H as real)
+			v1 := (((cy + 1) * SDF_CELL) as real) / (SDF_ATLAS_H as real)
+			x0 := left
+			x1 := left + size
+			y0 := top
+			y1 := top + size
+			vtx(x0, y0, u0, v0)
+			vtx(x1, y0, u1, v0)
+			vtx(x1, y1, u1, v1)
+			vtx(x0, y0, u0, v0)
+			vtx(x1, y1, u1, v1)
+			vtx(x0, y1, u0, v1)
+		pen += a
+		i += n;
+lines(t const byte[:], px real, maxw real) byte[>..][>..]:
+	out byte[>..][>..] ~= []
+	add(line const byte[:]):
+		b byte[>..] ~= []
+		b.append(line)
+		out.push(copy(b));
+	if maxw <= 0.0 || measure(t, px) <= maxw:
+		add(t)
+		return out
+	cur byte[>..] ~= []
+	lastdot ~= false
+	for w split(t, ' '):
+		if w.len == 0: continue
+		dotw := w.len == 2 && w[0] == 194 && w[1] == 183
+		if cur.len == 0:
+			if !dotw: cur.append(w)
+		else:
+			cand byte[>..] ~= []
+			cand.append(cur)
+			cand.push(' ')
+			cand.append(w)
+			if measure(cand, px) <= maxw:
+				cur.clear()
+				cur.append(cand)
+				lastdot = dotw
+			else:
+				if lastdot: cur.pop_n(3)
+				lastdot = false
+				add(cur)
+				cur.clear()
+				if !dotw: cur.append(w)
+	if lastdot: cur.pop_n(3)
+	if cur.len > 0 || out.len == 0: add(cur)
+	out
+text(x real, y real, w real, h real, s const byte[:], size real, color float4, align int) int:
+	LABELS.push(Label{root: ROOT, x: x, y: y, w: w, h: h, s: copy(s), px: size * U, color: color, align: align, shadow: false});
+	LABELS.len - 1
+label(x real, y real, w real, h real, s const byte[:], size real, color float4, align int) int:
+	LABELS.push(Label{root: ROOT, x: x, y: y, w: w, h: h, s: copy(s), px: size * U, color: color, align: align, shadow: true});
+	LABELS.len - 1
+text_w(s const byte[:], size real) real: measure(s, size * U)
+emit(vs TextVtx[>..]&, l Label):
+	ls := lines(l.s, l.px, l.w)
+	pitch := 1.9 * l.px
+	n := ls.len
+	bh := l.px + pitch * ((n - 1) as real)
+	top := l.y + (l.h - bh) / 2.0
+	pass(ox real, oy real, c float4):
+		for ln, i ls:
+			lw := measure(ln, l.px)
+			lx ~= l.x
+			if l.align == 1: lx = l.x + (l.w - lw) / 2.0
+			if l.align == 2: lx = l.x + l.w - lw
+			glyphs(vs, lx + ox, top + pitch * (i as real) + oy, l.px, ln, c);
+	if l.shadow:
+		off := max(1.0, 0.07 * l.px)
+		pass(off / 2.0, off, float4{0.0, 0.0, 0.0, 0.42 * l.color.w})
+	pass(0.0, 0.0, l.color);
+button(x real, y real, w real, h real, label const byte[:], kind int) bool:
+	inb := inside(x, y, w, h)
+	lift f32 ~= 0.0
+	if inb && DOWN: lift = 0.07
+	else if inb && !TOUCH: lift = 0.035
+	base ~= GLASS2
+	if kind == 1: base = PRIMARY
+	if kind == 2: base = float4{0.23, 0.18, 0.47, 0.97}
+	fill := float4{base.x + lift, base.y + lift, base.z + lift, base.w}
+	radius := min(12.0 * U, h / 2.0)
+	if kind == 0: ring(x, y, w, h, fill, LINE, U, radius)
+	else if kind == 2: ring(x, y, w, h, fill, PRIMARY, 1.5 * U, radius)
+	else: box(x, y, w, h, fill, radius)
+	size ~= BODY
+	if h < 40.0 * U: size = SMALL
+	tw := text_w(label, size)
+	room := w - 24.0 * U
+	if tw > room && tw > 0.0: size = size * room / tw
+	text(x, y, w, h, label, size, INK, 1)
+	pressed_in(x, y, w, h)
+	if tapped_in(x, y, w, h):
+		CLICK = true
+		return true
+	return false
+clicked() bool:
+	c := CLICK
+	CLICK = false
+	c
+menu_button() bool:
+	x := 14.0 * U
+	y := 14.0 * U
+	s := 44.0 * U
+	lift f32 ~= 0.0
+	if DOWN && inside(x, y, s, s): lift = 0.07
+	fill := float4{GLASS.x + lift, GLASS.y + lift, GLASS.z + lift, GLASS.w}
+	ring(x, y, s, s, fill, LINE, U, 12.0 * U)
+	for j 3: box(x + (s - 18.0 * U) / 2.0, y + s / 2.0 + ((j as real) - 1.0) * 7.0 * U - 1.25 * U, 18.0 * U, 2.5 * U, INK, 1.25 * U)
+	return pressed_in(x, y, s, s)
+dim(a real):
+	ROOT = hud::node(-1)
+	ROOTS.push(ROOT)
+	box(0.0, 0.0, W, H, float4{0.0, 0.0, 0.0, (a * 0.58) as f32}, 0.0)
+	DIM = a;
+panel(w real, h real) real, real:
+	x := (W - w) / 2.0
+	y := (H - h) / 2.0
+	ring(x, y, w, h, PANEL, LINE, U, 20.0 * U)
+	return x, y
+sheet(title const byte[:], n int) real, real, real:
+	dim(1.0)
+	bw := min(300.0 * U, 0.9 * W)
+	bh := 77.0 * U + (n as real) * 48.0 * U + ((n - 1) as real) * 10.0 * U + 24.0 * U
+	x, y := panel(bw, bh)
+	text(x, y + 24.0 * U, bw, 32.0 * U, title, TITLE, INK, 1)
+	return x + 24.0 * U, y + 77.0 * U, bw - 48.0 * U
+pill(cx real, y real, s const byte[:], alpha real) real:
+	w ~= text_w(s, SMALL) + 38.0 * U
+	capped := w > 0.92 * W
+	if capped: w = 0.92 * W
+	nl ~= 1
+	if capped: nl = lines(s, SMALL * U, w - 38.0 * U).len
+	h := 34.0 * U + 22.0 * U * ((nl - 1) as real)
+	x := cx - w / 2.0
+	a := alpha as f32
+	fill := float4{GLASS.x, GLASS.y, GLASS.z, GLASS.w * a}
+	border := float4{LINE.x, LINE.y, LINE.z, LINE.w * a}
+	ring(x, y, w, h, fill, border, U, 17.0 * U)
+	ink := float4{INK.x, INK.y, INK.z, INK.w * a}
+	text(x + 19.0 * U - 0.25, y, w - 38.0 * U + 0.5, h, s, SMALL, ink, 1)
+	return h
+dot(cx real, cy real, r real, color float4) int: box(cx - r, cy - r, 2.0 * r, 2.0 * r, color, r)
+heat(p real) float4:
+	q := clamp(p, 0.0, 1.0)
+	a ~= GOOD
+	b ~= ACCENT
+	t ~= q * 2.0
+	if q >= 0.5:
+		a = ACCENT
+		b = BAD
+		t = (q - 0.5) * 2.0
+	m := t as f32
+	return float4{a.x + (b.x - a.x) * m, a.y + (b.y - a.y) * m, a.z + (b.z - a.z) * m, a.w + (b.w - a.w) * m}
+draw(target gfx::Texture):
+	for r ROOTS: hud::layout_root(r, 0.0, 0.0, W as f32, H as f32)
+	for r ROOTS:
+		for q ROOTS: hud::N[q].visible = q == r
+		hud::draw(target, W as int, H as int, false, float4{0.0, 0.0, 0.0, 0.0})
+		vs TextVtx[>..] ~= []
+		for l LABELS: if l.root == r: emit(vs, l)
+		if vs.len > 0: sdf_draw(target, W as int, H as int, vs);

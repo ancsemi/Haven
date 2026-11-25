@@ -1,0 +1,228 @@
+use os
+use math
+use golf
+use golf_ai
+check(h golf::Hole&) int:
+	bad ~= 0
+	tp := golf::piece_at(h, h.tee_x, h.tee_y)
+	if tp < 0:
+		print("  bad: no piece under the tee")
+		bad += 1
+	else if h.pieces[tp].kind >= golf::WATER:
+		print("  bad: tee on a hazard")
+		bad += 1
+	cp := golf::piece_at(h, h.cup_x, h.cup_y)
+	if cp < 0:
+		print("  bad: no piece under the cup")
+		bad += 1
+	else if h.pieces[cp].kind >= golf::WATER:
+		print("  bad: cup on a hazard")
+		bad += 1
+	for i h.rx.len:
+		if golf::piece_at(h, h.rx[i], h.ry[i]) < 0:
+			print("  bad: route point ", i, " is not on a piece")
+			bad += 1
+	if h.walls.len == 0:
+		print("  bad: no walls")
+		bad += 1
+	for i h.rx.len - 1:
+		dx := h.cup_x - h.rx[i]
+		dy := h.cup_y - h.ry[i]
+		if sqrt(dx * dx + dy * dy) < 0.15:
+			print("  bad: cup too close to route point ", i)
+			bad += 1
+	if !(h.zkill < h.tee_z && h.zkill < h.cup_z):
+		print("  bad: zkill not below the tee and the cup")
+		bad += 1
+	bad
+var VERBOSE = false
+solo(h golf::Hole&, level int, seed int) int:
+	b ~= golf::new_ball(h)
+	clock ~= 0.0
+	strokes ~= 0
+	rx ~= h.tee_x
+	ry ~= h.tee_y
+	while b.mode != 1 && strokes < golf::STROKE_CAP:
+		plan := golf_ai::think(h, b, level, clock, seed * 101 + strokes)
+		clock += plan.wait
+		b.t = clock
+		golf::strike(b, plan.ang, plan.power)
+		n := golf::run(h, b)
+		clock = b.t
+		strokes += 1
+		if VERBOSE:
+			line byte[>..] ~= []
+			format(line, "    putt ang ")
+			format_flt(line, plan.ang * 180.0 / PI, 2)
+			format(line, " power ")
+			format_flt(line, plan.power, 2)
+			format(line, " wait ")
+			format_flt(line, plan.wait, 2)
+			format(line, " -> x ")
+			format_flt(line, b.x, 2)
+			format(line, " y ")
+			format_flt(line, b.y, 2)
+			format(line, " z ")
+			format_flt(line, b.z, 2)
+			format(line, " mode ", b.mode, " steps ", n)
+			print(line)
+		if b.mode == 2:
+			strokes += 1
+			golf::place(h, b, rx, ry)
+		else if b.mode != 1:
+			rx = b.x
+			ry = b.y
+	min(strokes, golf::STROKE_CAP)
+gen_run(first int, last int, level int, plays int):
+	holes ~= 0
+	total ~= 0
+	total_par ~= 0
+	unfinished ~= 0
+	hard ~= 0
+	bad ~= 0
+	ms ~= 0.0
+	for c first..last + 1:
+		for n 1..10:
+			h ~= golf::hole_for(c, n)
+			problems := check(h)
+			if problems > 0:
+				print("course ", c, " hole ", n, " ", h.name)
+				bad += problems
+			sum ~= 0
+			for k 1..plays + 1:
+				t0 := time()
+				st := solo(h, level, k)
+				ms += (time() - t0) * 1000.0
+				sum += st
+				if st == golf::STROKE_CAP: unfinished += 1
+			avg := sum as real / plays as real
+			if avg > (h.par + 2) as real:
+				print("course ", c, " hole ", n, " ", h.name, " par ", h.par, " avg ", fmt2(avg))
+				hard += 1
+			holes += 1
+			total += sum
+			total_par += h.par
+	d := total as real / (holes * plays) as real - total_par as real / holes as real
+	t byte[>..] ~= []
+	format_flt(t, ms, 0)
+	print("gen holes ", holes, " plays ", plays, " avg vs par ", signed2(d), " unfinished ", unfinished, " hard ", hard, " bad ", bad, " ms ", t);
+f3(v real) byte[>..]:
+	s byte[>..] ~= []
+	format_flt(s, v, 3)
+	s
+trace_line(steps int, b golf::Ball&):
+	v := sqrt(b.vx * b.vx + b.vy * b.vy)
+	print("step ", steps, " x ", f3(b.x), " y ", f3(b.y), " z ", f3(b.z), " v ", f3(v), " piece ", b.piece, " air ", b.air, " mode ", b.mode);
+trace(n int, ang real, power real):
+	h ~= golf::hole_for(0, n)
+	b ~= golf::new_ball(h)
+	golf::strike(b, ang * PI / 180.0, power)
+	steps ~= 0
+	while true:
+		done := golf::settled(b) || steps >= 19200
+		if steps % 48 == 0 || done:
+			trace_line(steps, b)
+		if done: break
+		golf::step(h, b)
+		steps += 1
+fmt2(v real) byte[>..]:
+	s byte[>..] ~= []
+	format_flt(s, v, 2)
+	s
+signed2(v real) byte[>..]:
+	s byte[>..] ~= []
+	if v >= 0.0: s.push('+')
+	format_flt(s, v, 2)
+	s
+main():
+	a := args()
+	if a.len > 1 && a[1] == "trace":
+		n, ok1 := parse_int(a[2], 10)
+		ang, ok2 := parse_flt(a[3])
+		power, ok3 := parse_flt(a[4])
+		trace(n, ang, power)
+		return
+	if a.len > 1 && a[1] == "vg":
+		VERBOSE = true
+		c, ok1 := parse_int(a[2], 10)
+		hn, ok2 := parse_int(a[3], 10)
+		lv, ok3 := parse_int(a[4], 10)
+		pl, ok4 := parse_int(a[5], 10)
+		d := golf::gen_draft(c, hn)
+		print("draft ", d.name, " biome ", d.biome, " par ", d.par, " width ", fmt2(d.w))
+		for i d.px.len:
+			print("  pt ", fmt2(d.px[i]), " ", fmt2(d.py[i]))
+		for s d.secs:
+			print("  sec leg ", s.leg, " len ", fmt2(s.len), " kind ", s.kind, " dz ", fmt2(s.dz), " step ", fmt2(s.step), " cut ", s.cut, " cutw ", fmt2(s.cutw), " cutk ", s.cutk)
+		for o d.obs:
+			print("  obs leg ", o.leg, " along ", fmt2(o.along), " across ", fmt2(o.across), " kind ", o.kind, " a ", fmt2(o.a), " b ", fmt2(o.b))
+		h ~= golf::hole_for(c, hn)
+		sum ~= 0
+		line byte[>..] ~= []
+		format(line, "  strokes")
+		for k 1..pl + 1:
+			st := solo(h, lv, k)
+			sum += st
+			format(line, " ", st)
+		avg := sum as real / pl as real
+		format(line, " avg ", fmt2(avg))
+		print(line)
+		return
+	if a.len > 1 && a[1] == "gen":
+		c0, ok1 := parse_int(a[2], 10)
+		c1, ok2 := parse_int(a[3], 10)
+		lv ~= 2
+		pl ~= 2
+		if a.len > 4:
+			v, ok := parse_int(a[4], 10)
+			lv = v
+		if a.len > 5:
+			v, ok := parse_int(a[5], 10)
+			pl = v
+		gen_run(c0, c1, lv, pl)
+		return
+	level ~= 2
+	plays ~= 3
+	first ~= 1
+	last ~= golf::holes_in(0) + 1
+	if a.len > 1 && a[1] == "v":
+		VERBOSE = true
+		hn, ok1 := parse_int(a[2], 10)
+		lv, ok2 := parse_int(a[3], 10)
+		pl, ok3 := parse_int(a[4], 10)
+		first = hn
+		last = hn + 1
+		level = lv
+		plays = pl
+	else:
+		if a.len > 1:
+			lv, ok := parse_int(a[1], 10)
+			if ok: level = lv
+		if a.len > 2:
+			pl, ok := parse_int(a[2], 10)
+			if ok: plays = pl
+	total_par ~= 0
+	total_avg ~= 0.0
+	unfinished ~= 0
+	bad_total ~= 0
+	for n first..last:
+		h ~= golf::hole_for(0, n)
+		print("hole ", n, " ", h.name, " par ", h.par, " pieces ", h.pieces.len, " walls ", h.walls.len, " posts ", h.posts.len, " movers ", h.movers.len, " lifts ", h.lifts.len)
+		bad_total += check(h)
+		t0 := time()
+		sum ~= 0
+		line byte[>..] ~= []
+		format(line, "  strokes")
+		for k 1..plays + 1:
+			st := solo(h, level, k)
+			sum += st
+			if st == golf::STROKE_CAP: unfinished += 1
+			format(line, " ", st)
+		ms := (time() - t0) * 1000.0
+		avg := sum as real / plays as real
+		d := avg - h.par as real
+		format(line, " avg ", fmt2(avg), " vs par ", signed2(d), " ms ", fmt2(ms))
+		print(line)
+		total_par += h.par
+		total_avg += avg
+	print("total par ", total_par, " avg ", fmt2(total_avg), " unfinished ", unfinished, " bad ", bad_total);

@@ -1522,6 +1522,8 @@
   },
   "activities_registry": {
     "flappy": "Dodge containers, chase high scores!",
+    "arcade_pool": "Eight-ball against a friend or the computer",
+    "arcade_minigolf": "Nine holes from meadow to volcano",
     "flight": "Throw a paper plane as far as you can!",
     "learn_to_fly": "Help a penguin learn to fly!",
     "bubble_tanks": "Bubble-based arena shooter",

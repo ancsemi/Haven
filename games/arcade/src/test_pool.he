@@ -1,0 +1,188 @@
+use os
+use pool
+use pool_ai
+pocket_center(k int) real, real:
+	ax, ay := pool_ai::aim_point(k)
+	l := sqrt(ax * ax + ay * ay)
+	d := if abs(ax) < 0.1 { 0.015 } else { 0.03 }
+	return ax + d * ax / l, ay + d * ay / l
+pockets():
+	g ~= pool::new_game(1)
+	pool::table()
+	for i 1..16: g.balls[i].on = false
+	speeds := [0.6, 1.5, 3.0, 6.0]
+	total ~= 0
+	for k 6:
+		px, py := pocket_center(k)
+		ax, ay := pool_ai::aim_point(k)
+		l := sqrt(ax * ax + ay * ay)
+		nx := -ay / l
+		ny := ax / l
+		drops ~= 0
+		for si 7:
+			x0 ~= 0.0
+			y0 ~= 0.0
+			if si > 0:
+				idx := (si - 1) / 2
+				f := 0.3 + 0.2 * idx
+				sg := if (si - 1) % 2 == 0 { 1.0 } else { -1.0 }
+				x0 = f * ax + sg * 0.04 * nx
+				y0 = f * ay + sg * 0.04 * ny
+			for v speeds:
+				g.balls[0].x = x0
+				g.balls[0].y = y0
+				g.balls[0].vx = 0.0
+				g.balls[0].vy = 0.0
+				g.balls[0].wx = 0.0
+				g.balls[0].wy = 0.0
+				g.balls[0].wz = 0.0
+				g.balls[0].on = true
+				g.balls[0].pocket = -1
+				g.balls[0].fall = 0.0
+				pool::begin_shot(g)
+				pool::strike(g.balls, atan2(py - y0, px - x0), (v - 0.35) / 9.15, 0.0, 0.0)
+				s ~= pool::Shot{first: -1, ..}
+				pool::simulate(g.balls, s)
+				if !g.balls[0].on: drops += 1
+		total += drops
+		print("pocket ", k, " drops ", drops, " of 28")
+	print("pocket total ", total, " of 168");
+breaks(n int):
+	pool::table()
+	sunk_total ~= 0
+	sunk_max ~= 0
+	none ~= 0
+	scratches ~= 0
+	near ~= 0
+	for k 1..n + 1:
+		g ~= pool::new_game(k * 7919)
+		plan := pool_ai::think(g, 2, k)
+		if plan.place: pool::place_cue(g, plan.px, plan.py)
+		pool::begin_shot(g)
+		pool::strike(g.balls, plan.angle, plan.power, plan.sx, plan.sy)
+		s ~= pool::Shot{first: -1, ..}
+		pool::simulate(g.balls, s)
+		pool::end_shot(g, s, "A", "B")
+		c ~= 0
+		for q s.sunk: if q != 0: c += 1
+		sunk_total += c
+		sunk_max = max(sunk_max, c)
+		if c == 0: none += 1
+		if s.cue_sunk: scratches += 1
+		for i 16:
+			if g.balls[i].on:
+				for pk 6:
+					cx, cy := pocket_center(pk)
+					dx := g.balls[i].x - cx
+					dy := g.balls[i].y - cy
+					if sqrt(dx * dx + dy * dy) < 0.09: near += 1
+	avg := if n > 0 { sunk_total * 1.0 / n } else { 0.0 }
+	out byte[>..] ~= []
+	format_flt(out, avg, 1)
+	print("breaks ", n, " average sunk ", out, " max ", sunk_max, " none ", none, " scratches ", scratches)
+	print("near pockets ", near);
+dump_lines(balls pool::Ball[:]):
+	for i 1..16:
+		b := balls[i]
+		out byte[>..] ~= []
+		format(out, "  n ", b.num, " on ", b.on, " x ")
+		format_flt(out, b.x, 3)
+		format(out, " y ")
+		format_flt(out, b.y, 3)
+		format(out, " speed ")
+		format_flt(out, sqrt(b.vx * b.vx + b.vy * b.vy), 3)
+		print(out)
+dump(seed int):
+	pool::table()
+	g ~= pool::new_game(seed * 7919)
+	plan := pool_ai::think(g, 2, seed)
+	if plan.place: pool::place_cue(g, plan.px, plan.py)
+	pool::begin_shot(g)
+	pool::strike(g.balls, plan.angle, plan.power, plan.sx, plan.sy)
+	s ~= pool::Shot{first: -1, ..}
+	n ~= 0
+	while n < 11520 && pool::moving(g.balls):
+		pool::step(g.balls, s)
+		n += 1
+		if n == 20 || n == 60 || n == 200 || n == 960:
+			print("step ", n)
+			dump_lines(g.balls)
+	print("rest after ", n, " steps")
+	dump_lines(g.balls)
+	print("first ", s.first, " sunk ", s.sunk);
+state_ok(balls pool::Ball[:]) bool:
+	for i 16:
+		if balls[i].on:
+			if abs(balls[i].x) > pool::HL + pool::R || abs(balls[i].y) > pool::HW + pool::R: return false
+			for j i + 1..16:
+				if balls[j].on:
+					dx := balls[i].x - balls[j].x
+					dy := balls[i].y - balls[j].y
+					if sqrt(dx * dx + dy * dy) < 2.0 * pool::R - 0.002: return false
+	return true
+main():
+	a := args()
+	if a.len > 1 && a[1] == "dump":
+		seed ~= 1
+		if a.len > 2:
+			v, vok := parse_int(a[2], 10)
+			if vok: seed = v
+		dump(seed)
+		return
+	if a.len > 1 && a[1] == "pockets":
+		pockets()
+		return
+	if a.len > 1 && a[1] == "break":
+		breaks(40)
+		return
+	games ~= 20
+	level ~= 2
+	if a.len > 1:
+		v, vok := parse_int(a[1], 10)
+		if vok: games = v
+	if a.len > 2:
+		v, vok := parse_int(a[2], 10)
+		if vok: level = v
+	pool::table()
+	t0 := clock()
+	finished ~= 0
+	errors ~= 0
+	total_shots ~= 0
+	wins_a ~= 0
+	wins_b ~= 0
+	for k 1..games + 1:
+		g ~= pool::new_game(k * 7919)
+		shots ~= 0
+		steps_max ~= 0
+		on_break ~= 0
+		for shot 1..201:
+			plan := pool_ai::think(g, level, k * 1000 + shot)
+			if plan.place:
+				if !pool::place_cue(g, plan.px, plan.py):
+					print("bad place")
+					break
+			pool::begin_shot(g)
+			pool::strike(g.balls, plan.angle, plan.power, plan.sx, plan.sy)
+			s ~= pool::Shot{first: -1, ..}
+			steps := pool::simulate(g.balls, s)
+			pool::end_shot(g, s, "A", "B")
+			shots = shot
+			steps_max = max(steps_max, steps)
+			if shot == 1:
+				for q s.sunk: if q != 0: on_break += 1
+			if !state_ok(g.balls):
+				print("bad state game ", k, " shot ", shot)
+				errors += 1
+			if g.over: break
+		if g.over:
+			finished += 1
+			if g.winner == 0: wins_a += 1
+			if g.winner == 1: wins_b += 1
+		total_shots += shots
+		print("game ", k, " shots ", shots, " winner ", g.winner, " sunk_on_break ", on_break, " steps_max ", steps_max, " msg ", g.msg)
+	avg := if games > 0 { total_shots * 1.0 / games } else { 0.0 }
+	out byte[>..] ~= []
+	format_flt(out, avg, 1)
+	print("games ", games, " finished ", finished, " unfinished ", games - finished, " errors ", errors, " average shots ", out)
+	print("wins A ", wins_a, " B ", wins_b)
+	print("ms ", ((clock() - t0) * 1000.0) as int);

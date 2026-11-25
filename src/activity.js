@@ -168,6 +168,8 @@ const HAVEN_GAMES = {
   'super-smash-flash-2': 'Super Smash Flash 2',
   'io-games': '.io Games',
   willowmere: 'Birch',
+  'arcade-pool': 'Pool',
+  'arcade-minigolf': 'Minigolf',
 };
 
 function createActivity({ db, getOnlineUserIds, onChange, onConnectionsChanged }) {

@@ -1,0 +1,130 @@
+namespace shippy
+use pool
+use math
+FIELD_H := 640.0
+SEA := 600.0
+POD := 44.0
+POD_X := 80.0
+INSET := 4.0
+STACK_W := 70.0
+GAP := 160.0
+CRATE_H := 30.0
+GRAVITY := 1260.0
+FLAP := -390.0
+SPEED := 150.0
+SPACING := 225.0
+FIRST := 715.0
+MIN_TOP := 80.0
+MAX_TOP := 400.0
+STEP := 1.0 / 60.0
+COLORS := 8
+WAIT := 0
+PLAY := 1
+DEAD := 2
+struct Stack { x real, top real, bottom real, scored bool, color int, id int }
+struct Game { state int, y real, vy real, t real, next_x real, next_id int, score int, best int, ahead real, behind real, rng int, acc real, flaps int, crash int, travel real, stacks Stack[>..] }
+new_game(seed int, best int) Game:
+	s := if seed == 0 { 7 } else { seed }
+	g ~= Game{state: WAIT, best: best, rng: s, ahead: 410.0, behind: 90.0, travel: 0.0, ..}
+	reset(g)
+	return g
+reset(g Game&):
+	g.state = WAIT
+	g.y = FIELD_H / 2.0 - POD / 2.0
+	g.vy = 0.0
+	g.t = 0.0
+	g.acc = 0.0
+	g.stacks.clear()
+	g.next_x = FIRST
+	g.next_id = 1
+	g.score = 0
+	g.flaps = 0
+	g.crash = 0
+	fill(g)
+fill(g Game&):
+	while g.next_x <= POD_X + g.ahead + STACK_W:
+		top := MIN_TOP + pool::rng(g.rng) * (MAX_TOP - MIN_TOP)
+		c := min((pool::rng(g.rng) * COLORS) as int, COLORS - 1)
+		g.stacks.push(Stack{x: g.next_x, top: top, bottom: top + GAP, scored: false, color: c, id: g.next_id})
+		g.next_id += 1
+		g.next_x += SPACING
+flap(g Game&) bool:
+	if g.state == WAIT:
+		g.state = PLAY
+		g.t = 0.0
+		g.vy = FLAP
+		g.flaps += 1
+		return true
+	if g.state == PLAY:
+		g.vy = FLAP
+		g.flaps += 1
+		return true
+	if g.state == DEAD && g.t >= 0.45:
+		reset(g)
+	return false
+hits(g Game&) int:
+	if g.y < 0.0: return 3
+	if g.y + POD > SEA: return 2
+	for s g.stacks:
+		if POD_X + POD - INSET > s.x && POD_X + INSET < s.x + STACK_W && (g.y + INSET < s.top || g.y + POD - INSET > s.bottom): return 1
+	return 0
+step(g Game&, dt real) int:
+	flags ~= 0
+	g.t += dt
+	if g.state == DEAD:
+		if g.y + POD < SEA + 30.0:
+			g.vy = min(g.vy + GRAVITY * dt, 900.0)
+			g.y += g.vy * dt
+	else if g.state == PLAY:
+		g.acc = min(g.acc + dt, 0.1)
+		while g.acc >= STEP && g.state == PLAY:
+			g.acc -= STEP
+			g.vy += GRAVITY * STEP
+			g.y += g.vy * STEP
+			for &s g.stacks:
+				s.x -= SPEED * STEP
+			g.next_x -= SPEED * STEP
+			g.travel += SPEED * STEP
+			for &s g.stacks:
+				if !s.scored && s.x + STACK_W < POD_X:
+					s.scored = true
+					g.score += 1
+					flags |= 1
+			i ~= 0
+			while i < g.stacks.len:
+				if g.stacks[i].x + STACK_W < POD_X - g.behind - 40.0:
+					g.stacks.remove_at(i)
+				else:
+					i += 1
+			fill(g)
+			c := hits(g)
+			if c > 0:
+				g.crash = c
+				g.state = DEAD
+				g.t = 0.0
+				g.best = max(g.best, g.score)
+				g.vy = max(g.vy, -70.0)
+				flags |= 2
+	return flags
+medal(score int) int:
+	if score >= 100: return 4
+	if score >= 50: return 3
+	if score >= 25: return 2
+	if score >= 10: return 1
+	return 0
+wants_flap(g Game&) bool:
+	if g.state == WAIT: return true
+	if g.state != PLAY: return false
+	aim ~= FIELD_H / 2.0
+	ci ~= -1
+	for i g.stacks.len:
+		if g.stacks[i].x + STACK_W >= POD_X - INSET:
+			ci = i
+			break
+	if ci >= 0:
+		cur := g.stacks[ci]
+		aim = (cur.top + cur.bottom) / 2.0
+		if ci + 1 < g.stacks.len && cur.x <= POD_X + POD:
+			nxt := g.stacks[ci + 1]
+			aim = clamp((nxt.top + nxt.bottom) / 2.0, cur.top + 74.0, cur.bottom - 70.0)
+	return (g.y + POD / 2.0 > aim + 14.0 && g.vy > -70.0) || (g.y + POD / 2.0 > aim + 70.0 && g.vy > -200.0)

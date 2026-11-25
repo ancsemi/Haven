@@ -1,0 +1,421 @@
+namespace pool
+use math
+use vec
+use gfx.linalg
+R := 0.028575
+HL := 1.12
+HW := 0.56
+GRAV := 9.81
+MU_S := 0.2
+MU_R := 0.011
+SPIN_DECAY := 9.0
+E_BALL := 0.95
+E_RAIL := 0.78
+E_JAW := 0.55
+RAIL_GRIP := 0.18
+DT := 1.0 / 960.0
+HEAD_X := -HL / 2.0
+FOOT_X := HL / 2.0
+MAX_SPEED := 9.5
+struct Ball { num int, x real, y real, vx real, vy real, wx real, wy real, wz real, on bool, pocket int, q float4, fall real }
+struct Seg { x0 real, y0 real, x1 real, y1 real, e real }
+struct Pocket { x real, y real, r real, side bool }
+struct Shot { first int, rail bool, cue_sunk bool, click real, thud real, drop real, sunk int[>..] }
+var SEGS Seg[>..]
+var POCKETS Pocket[>..]
+table():
+	if POCKETS.len > 0: return
+	cm := 0.085
+	sm := 0.064
+	jw := 0.028
+	for sy [-1.0, 1.0]:
+		y := sy * HW
+		SEGS.push(Seg{-HL + cm, y, -sm, y, E_RAIL})
+		SEGS.push(Seg{sm, y, HL - cm, y, E_RAIL})
+	for sx [-1.0, 1.0]:
+		SEGS.push(Seg{sx * HL, -HW + cm, sx * HL, HW - cm, E_RAIL})
+	for sy [-1.0, 1.0]:
+		for sx [-1.0, 1.0]:
+			SEGS.push(Seg{sx * (HL - cm), sy * HW, sx * (HL - cm + jw), sy * (HW + jw), E_JAW})
+			SEGS.push(Seg{sx * HL, sy * (HW - cm), sx * (HL + jw), sy * (HW - cm + jw), E_JAW})
+			SEGS.push(Seg{sx * sm, sy * HW, sx * (sm - 0.012), sy * (HW + 0.045), E_JAW})
+	for sy [-1.0, 1.0]:
+		for sx [-1.0, 1.0]:
+			POCKETS.push(Pocket{sx * (HL + 0.022), sy * (HW + 0.022), 0.064, false})
+	POCKETS.push(Pocket{0.0, -(HW + 0.042), 0.06, true})
+	POCKETS.push(Pocket{0.0, HW + 0.042, 0.06, true});
+rng(s int&) real:
+	if s == 0: s = 88172645463325252
+	x ~= s as uint
+	x = x ^ (x << 13)
+	x = x ^ (x >> 7)
+	x = x ^ (x << 17)
+	s = x as! int
+	top := x >> 11
+	r := top as real
+	r / 9007199254740992.0
+new_ball(num int, x real, y real) Ball:
+	Ball{num: num, x: x, y: y, vx: 0.0, vy: 0.0, wx: 0.0, wy: 0.0, wz: 0.0, on: true, pocket: -1, q: linalg::col(0.0, 0.0, 0.0, 1.0), fall: 0.0}
+rack(seed int) Ball[16]:
+	s ~= seed
+	balls Ball[16] ~= [new_ball(0, HEAD_X, 0.0); 16]
+	px real[15] ~= [0.0; 15]
+	py real[15] ~= [0.0; 15]
+	rt := sqrt(3.0)
+	for k 5:
+		kr := k as real
+		for j k + 1:
+			i := k * (k + 1) / 2 + j
+			jr := j as real
+			px[i] = FOOT_X + kr * rt * (R + 0.0004) + (rng(s) * 2.0 - 1.0) * 0.0004
+			py[i] = (jr - kr / 2.0) * 2.0 * (R + 0.0004) + (rng(s) * 2.0 - 1.0) * 0.0004
+	nums int[15] ~= [0; 15]
+	nums[0] = 1
+	nums[4] = 8
+	a := (rng(s) * 6.0) as int
+	sol := 2 + a
+	b := (rng(s) * 7.0) as int
+	stp := 9 + b
+	if rng(s) < 0.5:
+		nums[10] = sol
+		nums[14] = stp
+	else:
+		nums[10] = stp
+		nums[14] = sol
+	rest int[>..] ~= []
+	for n 2..16:
+		if n != 8 && n != sol && n != stp: rest.push(n)
+	i ~= rest.len - 1
+	while i > 0:
+		jr := rng(s) * ((i + 1) as real)
+		j := jr as int
+		tmp := rest[i]
+		rest[i] = rest[j]
+		rest[j] = tmp
+		i -= 1
+	m ~= 0
+	for e 15:
+		if nums[e] == 0:
+			nums[e] = rest[m]
+			m += 1
+	for e 15:
+		balls[e + 1] = new_ball(nums[e], px[e], py[e])
+	balls
+speed(b Ball&) real: sqrt(b.vx * b.vx + b.vy * b.vy)
+moving(balls Ball[:]) bool:
+	for &b balls:
+		if b.on && (speed(b) > 0.0 || b.wx != 0.0 || b.wy != 0.0 || b.wz != 0.0): return true
+	return false
+roll(b Ball&):
+	g := MU_S * GRAV * DT
+	sx := b.vx - R * b.wy
+	sy := b.vy + R * b.wx
+	u := sqrt(sx * sx + sy * sy)
+	if u > 3.5 * g:
+		ux := sx / u
+		uy := sy / u
+		b.vx -= g * ux
+		b.vy -= g * uy
+		b.wy += 2.5 * g * ux / R
+		b.wx -= 2.5 * g * uy / R
+	else:
+		sp := speed(b)
+		f := MU_R * GRAV * DT
+		if sp <= f || sp < 0.004:
+			b.vx = 0.0
+			b.vy = 0.0
+			b.wx = 0.0
+			b.wy = 0.0
+		else:
+			k := (sp - f) / sp
+			b.vx *= k
+			b.vy *= k
+		b.wx = -b.vy / R
+		b.wy = b.vx / R
+	d := SPIN_DECAY * DT
+	if b.wz > d:
+		b.wz -= d
+	else if b.wz < -d:
+		b.wz += d
+	else:
+		b.wz = 0.0
+	b.x += b.vx * DT
+	b.y += b.vy * DT
+	rx := b.wx
+	ry := b.wz
+	rz := -b.wy
+	wl := sqrt(rx * rx + ry * ry + rz * rz)
+	if wl > 0.0:
+		axis := linalg::v3((rx / wl) as f32, (ry / wl) as f32, (rz / wl) as f32)
+		qq := linalg::Quat{b.q.x, b.q.y, b.q.z, b.q.w}
+		r := linalg::qnorm(linalg::qmul(linalg::qaxis(axis, (wl * DT) as f32), qq))
+		b.q = linalg::col(r.x, r.y, r.z, r.w);
+hit_balls(balls Ball[:], s Shot&):
+	n := balls.len
+	for i n:
+		for j i + 1..n:
+			if !balls[i].on || !balls[j].on: continue
+			dx := balls[j].x - balls[i].x
+			dy := balls[j].y - balls[i].y
+			dist := sqrt(dx * dx + dy * dy)
+			if dist < 2.0 * R && dist > 0.0:
+				nx := dx / dist
+				ny := dy / dist
+				c := (balls[i].vx - balls[j].vx) * nx + (balls[i].vy - balls[j].vy) * ny
+				if c > 0.0:
+					k := (1.0 + E_BALL) / 2.0 * c
+					balls[i].vx -= k * nx
+					balls[i].vy -= k * ny
+					balls[j].vx += k * nx
+					balls[j].vy += k * ny
+					s.click = max(s.click, c)
+					if s.first == -1:
+						if balls[i].num == 0:
+							s.first = balls[j].num
+						else if balls[j].num == 0:
+							s.first = balls[i].num
+				ov := (2.0 * R - dist) / 2.0
+				balls[i].x -= ov * nx
+				balls[i].y -= ov * ny
+				balls[j].x += ov * nx
+				balls[j].y += ov * ny;
+hit_rails(balls Ball[:], s Shot&):
+	for i balls.len:
+		if !balls[i].on: continue
+		for sg SEGS:
+			ex := sg.x1 - sg.x0
+			ey := sg.y1 - sg.y0
+			l2 := ex * ex + ey * ey
+			tt := if l2 > 0.0 { clamp(((balls[i].x - sg.x0) * ex + (balls[i].y - sg.y0) * ey) / l2, 0.0, 1.0) } else { 0.0 }
+			cx := sg.x0 + tt * ex
+			cy := sg.y0 + tt * ey
+			dx := balls[i].x - cx
+			dy := balls[i].y - cy
+			dist := sqrt(dx * dx + dy * dy)
+			if dist < R && dist > 0.0:
+				nx := dx / dist
+				ny := dy / dist
+				vn := balls[i].vx * nx + balls[i].vy * ny
+				if vn < 0.0:
+					tx := -ny
+					ty := nx
+					vt := balls[i].vx * tx + balls[i].vy * ty
+					slip := vt - R * balls[i].wz
+					balls[i].vx -= (1.0 + sg.e) * vn * nx
+					balls[i].vy -= (1.0 + sg.e) * vn * ny
+					balls[i].vx -= RAIL_GRIP * slip * tx
+					balls[i].vy -= RAIL_GRIP * slip * ty
+					balls[i].wz += 2.5 * RAIL_GRIP * slip / R
+					s.thud = max(s.thud, -vn)
+					if s.first != -1: s.rail = true
+				balls[i].x = cx + nx * R
+				balls[i].y = cy + ny * R;
+sink(balls Ball[:], s Shot&):
+	for i balls.len:
+		if balls[i].on:
+			hit ~= false
+			best ~= 0
+			bd ~= 1.0e9
+			for p, k POCKETS:
+				dx := balls[i].x - p.x
+				dy := balls[i].y - p.y
+				d := sqrt(dx * dx + dy * dy)
+				if d <= p.r: hit = true
+				if d < bd:
+					bd = d
+					best = k
+			if abs(balls[i].x) > HL + 1.2 * R || abs(balls[i].y) > HW + 1.2 * R: hit = true
+			if hit:
+				balls[i].on = false
+				balls[i].pocket = best
+				balls[i].vx = 0.0
+				balls[i].vy = 0.0
+				balls[i].wx = 0.0
+				balls[i].wy = 0.0
+				balls[i].wz = 0.0
+				balls[i].fall = 0.0
+				s.sunk.push(balls[i].num)
+				s.drop = 1.0
+				if balls[i].num == 0: s.cue_sunk = true
+		else:
+			balls[i].fall += DT;
+step(balls Ball[:], s Shot&):
+	s.click = 0.0
+	s.thud = 0.0
+	s.drop = 0.0
+	for i balls.len:
+		if balls[i].on: roll(balls[i])
+	hit_balls(balls, s)
+	hit_rails(balls, s)
+	sink(balls, s);
+simulate(balls Ball[:], s Shot&) int:
+	table()
+	n ~= 0
+	while moving(balls) && n < 11520:
+		step(balls, s)
+		n += 1
+	n
+strike(balls Ball[:], angle real, power real, sx real, sy real):
+	sp := 0.35 + (MAX_SPEED - 0.35) * clamp(power, 0.0, 1.0)
+	ox ~= sx
+	oy ~= sy
+	l := sqrt(ox * ox + oy * oy)
+	if l > 0.5:
+		ox *= 0.5 / l
+		oy *= 0.5 / l
+	balls[0].vx = sp * cos(angle)
+	balls[0].vy = sp * sin(angle)
+	balls[0].wx = -2.5 * oy * balls[0].vy / R
+	balls[0].wy = 2.5 * oy * balls[0].vx / R
+	balls[0].wz = -2.5 * ox * sp / R;
+struct Game { turn int, group int[2], in_hand bool, kitchen bool, broke bool, aim8 bool, over bool, winner int, foul bool, msg byte[..160], balls Ball[>..] }
+set_msg(g Game&, t const byte[:]):
+	g.msg.clear()
+	g.msg.append(t);
+new_game(seed int) Game:
+	g ~= Game{turn: 0, group: [0, 0], in_hand: true, kitchen: true, broke: false, aim8: false, over: false, winner: -1, foul: false, msg: [], balls: []}
+	g.balls.append(rack(seed))
+	set_msg(g, "Break")
+	g
+is_solid(n int) bool: n >= 1 && n <= 7
+is_stripe(n int) bool: n >= 9 && n <= 15
+owns(g Game&, p int, n int) bool:
+	if n < 1 || n > 15 || n == 8: return false
+	gr := g.group[p]
+	if gr == 0: return true
+	if gr == 1: return is_solid(n)
+	is_stripe(n)
+cleared(g Game&, p int) bool:
+	gr := g.group[p]
+	if gr == 0: return false
+	for &b g.balls:
+		if b.on && ((gr == 1 && is_solid(b.num)) || (gr == 2 && is_stripe(b.num))): return false
+	return true
+find_ball(g Game&, n int) int:
+	for &b, i g.balls:
+		if b.num == n: return i
+	return -1
+can_place(g Game&, x real, y real) bool:
+	if x < -HL + R || x > HL - R || y < -HW + R || y > HW - R: return false
+	if g.kitchen && x > HEAD_X: return false
+	for &b g.balls:
+		if b.on && b.num != 0:
+			dx := b.x - x
+			dy := b.y - y
+			if sqrt(dx * dx + dy * dy) < 2.0 * R + 0.0005: return false
+	return true
+put_cue(g Game&, x real, y real):
+	g.balls[0].x = x
+	g.balls[0].y = y
+	g.balls[0].on = true
+	g.balls[0].pocket = -1
+	g.balls[0].vx = 0.0
+	g.balls[0].vy = 0.0
+	g.balls[0].wx = 0.0
+	g.balls[0].wy = 0.0
+	g.balls[0].wz = 0.0
+	g.balls[0].fall = 0.0;
+place_cue(g Game&, x real, y real) bool:
+	if !can_place(g, x, y): return false
+	put_cue(g, x, y)
+	return true
+spot_free(g Game&, x real, y real) bool:
+	for &b g.balls:
+		if b.on:
+			dx := b.x - x
+			dy := b.y - y
+			if sqrt(dx * dx + dy * dy) < 2.0 * R + 0.0005: return false
+	return true
+legal_first(g Game&, n int) bool:
+	if !g.broke: return n >= 1
+	if g.aim8: return n == 8
+	owns(g, g.turn, n)
+begin_shot(g Game&):
+	g.aim8 = cleared(g, g.turn)
+	g.foul = false;
+end_shot(g Game&, s Shot&, name0 const byte[:], name1 const byte[:]):
+	me := if g.turn == 0 { name0 } else { name1 }
+	opp := if g.turn == 0 { name1 } else { name0 }
+	breaking := !g.broke
+	reason byte[>..] ~= []
+	if s.cue_sunk:
+		reason.append("Scratch")
+	else if s.first == -1:
+		reason.append("No ball hit")
+	else if !legal_first(g, s.first):
+		reason.append("Wrong ball first")
+	else if !breaking && s.sunk.len == 0 && !s.rail:
+		reason.append("No rail after contact")
+	foul := reason.len > 0
+	m byte[>..] ~= []
+	has8 ~= false
+	for n s.sunk:
+		if n == 8: has8 = true
+	if has8:
+		if breaking:
+			ei := find_ball(g, 8)
+			px ~= FOOT_X
+			while !spot_free(g, px, 0.0) && px < HL - R: px += R
+			if ei >= 0:
+				g.balls[ei].x = px
+				g.balls[ei].y = 0.0
+				g.balls[ei].on = true
+				g.balls[ei].pocket = -1
+				g.balls[ei].vx = 0.0
+				g.balls[ei].vy = 0.0
+				g.balls[ei].wx = 0.0
+				g.balls[ei].wy = 0.0
+				g.balls[ei].wz = 0.0
+				g.balls[ei].fall = 0.0
+		else:
+			g.over = true
+			if g.aim8 && !foul:
+				g.winner = g.turn
+				format(m, me, " wins!")
+			else if !g.aim8:
+				g.winner = 1 - g.turn
+				format(m, me, " sank the 8 early. ", opp, " wins!")
+			else:
+				g.winner = 1 - g.turn
+				format(m, "Foul on the 8. ", opp, " wins!")
+			set_msg(g, m)
+			return
+	if !breaking && g.group[0] == 0 && g.group[1] == 0 && !foul:
+		for n s.sunk:
+			if n != 0 && n != 8 && m.len == 0:
+				mine := if is_solid(n) { 1 } else { 2 }
+				g.group[g.turn] = mine
+				g.group[1 - g.turn] = 3 - mine
+				if mine == 1:
+					format(m, me, " takes solids")
+				else:
+					format(m, me, " takes stripes")
+	keep ~= false
+	if !foul:
+		for n s.sunk:
+			if n != 0 && breaking: keep = true
+			if n != 0 && n != 8 && owns(g, g.turn, n): keep = true
+	if !keep: g.turn = 1 - g.turn
+	if foul:
+		g.foul = true
+		g.in_hand = true
+		if s.cue_sunk:
+			placed ~= place_cue(g, HEAD_X, 0.0)
+			cx ~= HEAD_X
+			while !placed && cx < HL:
+				cx += R
+				placed = place_cue(g, cx, 0.0)
+			if !placed: put_cue(g, HEAD_X, 0.0)
+		m.clear()
+		format(m, reason, ". ", opp, " has ball in hand")
+	else:
+		g.in_hand = false
+	if breaking:
+		g.broke = true
+		g.kitchen = false
+	if m.len == 0:
+		if keep:
+			format(m, "Nice shot, ", me)
+		else:
+			format(m, opp, " to shoot")
+	set_msg(g, m);

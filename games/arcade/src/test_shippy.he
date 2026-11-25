@@ -1,0 +1,38 @@
+use shippy
+use tiles.js
+use os
+rise() real:
+	g ~= shippy::new_game(1, 0)
+	start := g.y
+	shippy::flap(g)
+	low ~= g.y
+	while g.vy < 0.0:
+		shippy::step(g, 1.0 / 60.0)
+		low = min(low, g.y)
+	return start - low
+fly(seed int, seconds real) int, int, int:
+	g ~= shippy::new_game(seed, 0)
+	total := (seconds * 60.0) as int
+	frames ~= 0
+	for f total:
+		if shippy::wants_flap(g):
+			shippy::flap(g)
+		shippy::step(g, 1.0 / 60.0)
+		frames += 1
+		if g.state == shippy::DEAD:
+			break
+	return g.score, g.crash, frames
+main():
+	print("rise ", js::to_fixed(rise(), 2))
+	sum ~= 0
+	for s 1..13:
+		sc, cr, fr := fly(s, 180.0)
+		print("seed ", s, " score ", sc, " crash ", cr, " time ", js::to_fixed(fr / 60.0, 1))
+		sum += sc
+	a, af, ab := fly(5, 70.0)
+	b, bf, bb := fly(5, 70.0)
+	if a == b && ab == bb:
+		print("repeat ok")
+	else:
+		print("repeat MISMATCH")
+	print("mean score ", js::to_fixed(sum / 12.0, 2));
