@@ -42,6 +42,7 @@ _setupAuditLog() {
     ['webhook_', '🤖'], ['ferry_', '🌉'], ['badge_', '🏅'], ['tag_', '🏷️'], ['emoji_', '😀'],
     ['sticker_', '🖼️'], ['sound_', '🔉'], ['backup_', '💾'], ['ip_', '🚫'], ['automod_', '🤖'],
     ['invite_', '🔗'], ['server_', '⚙️'], ['whitelist_', '📋'], ['registration_', '📋'],
+    ['calendar_', '📅'],
   ];
   const actionLabel = (action) => {
     const key = `modals.audit_log.actions.${action}`;

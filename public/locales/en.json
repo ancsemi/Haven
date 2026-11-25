@@ -4260,6 +4260,8 @@
         "media_cache_clear": "cleared the media cache",
         "media_reconcile": "rebuilt the media index",
         "message_delete": "deleted a message by",
+        "calendar_event_update": "edited an event by",
+        "calendar_event_delete": "deleted an event by",
         "message_pin": "pinned a message by",
         "message_protect": "protected a message by",
         "message_unpin": "unpinned a message by",

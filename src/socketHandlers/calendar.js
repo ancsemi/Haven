@@ -18,10 +18,11 @@ const cal = require('../calendarEvents');
 const { reachableChannel, reachableChannelByCode } = require('./channelAccess');
 const { sanitizeText } = require('./helpers');
 const { getActiveMute, muteNotice } = require('../db/messagePosting');
+const { messageAuthor } = require('../db/messageManagement');
 const createPostingWait = require('./postingWait');
 
 module.exports = function register(socket, ctx) {
-  const { io, db, userHasPermission, enforceAutomod, floodCheck } = ctx;
+  const { io, db, userHasPermission, enforceAutomod, floodCheck, logAudit } = ctx;
   const uid = () => socket.user.id;
   const ack = (fn) => (typeof fn === 'function' ? fn : () => {});
   const idOf = (data) => (data && Number.isInteger(data.id) && data.id > 0 ? data.id : null);
@@ -48,6 +49,13 @@ module.exports = function register(socket, ctx) {
   const mayPost = (ch) => socket.user.isAdmin || !ch.read_only || userHasPermission(uid(), 'read_only_override', ch.id);
   const postRefusal = (ch) => (!mayPost(ch) ? 'Only some members can add events to this calendar'
     : (socket.user.isAdmin ? null : mutedNotice() || youngAccountWait(ch.id)?.message || null));
+  // A moderator changing or removing someone else's event goes on the audit
+  // log, as deleting someone else's message does.
+  const auditOthers = (action, row, ch) => {
+    if (row.created_by === uid()) return;
+    logAudit?.({ actor: socket.user, action, target_type: 'calendar_event', target_id: row.id,
+      target_name: messageAuthor(db, row.created_by)?.name || null, details: { channel: ch.name, title: row.title } });
+  };
 
   // Clean the text, then let automod judge it as one message would be judged.
   // automod tells the sender itself when it refuses, so the reply only says
@@ -133,6 +141,7 @@ module.exports = function register(socket, ctx) {
       const ev = screened(parsed.event, ch);
       if (!ev) return cb({ blocked: true });
       cal.updateEvent(db, row.id, ev);
+      auditOthers('calendar_event_update', row, ch);
       announce(ch, row.id);
       cb({ ok: true, event: cal.getEvent(db, row.id, uid()) });
     } catch (err) {
@@ -150,6 +159,7 @@ module.exports = function register(socket, ctx) {
       const { row, ch } = found;
       if (row.created_by !== uid() && !moderates(ch)) return cb({ error: 'You can only delete your own events' });
       cal.deleteEvent(db, row.id);
+      auditOthers('calendar_event_delete', row, ch);
       io.to(`channel:${ch.code}`).emit('calendar-removed', { channelCode: ch.code, id: row.id });
       cb({ ok: true });
     } catch (err) {
