@@ -658,6 +658,7 @@ function initDatabase() {
   // to bottom. Both set, or both NULL for no theme.
   addColumn('users', 'profile_theme_top', "TEXT DEFAULT NULL");
   addColumn('users', 'profile_theme_bottom', "TEXT DEFAULT NULL");
+  addColumn('users', 'profile_links', "TEXT DEFAULT NULL");
 
   // ── Migration: birthday (YYYY-MM-DD) and when it was set (ISO UTC).
   // A birthday is set once and never changes; birthday_hidden keeps it off
