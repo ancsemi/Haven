@@ -89,6 +89,7 @@ test('editing a batch edits its text and keeps its pictures', () => {
 
 test('the grid markup: spans, +N, hidden extras and video tiles', () => {
   const ctx = Object.assign(Object.create(M), {
+    _liteOn: () => false,
     _escapeHtml: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'),
     _formatContent: (l) => `<img class="chat-image" data-line="${l}">`,
   });
@@ -160,6 +161,7 @@ test('the stacked frame has no sizes, hides nothing and has no +N', () => {
 });
 
 const htmlCtx = (extra = {}) => Object.assign(Object.create(M), {
+  _liteOn: () => false,
   _escapeHtml: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'),
   _formatContent: (l) => (l.startsWith('spoiler-img:')
     ? `<span class="spoiler-media"><img class="chat-image" data-line="${l}"></span>`
@@ -259,4 +261,10 @@ test('your own pick is saved on your account, and Server default clears it', () 
   const picker = html.slice(html.indexOf('id="media-layout-picker"'), html.indexOf('id="animate-pfp-subsection"'));
   assert.deepEqual([...picker.matchAll(/data-media-layout="([^"]*)"/g)].map(m => m[1]), ['', 'grid', 'stacked']);
   assert.ok(html.indexOf('id="media-layout-picker"') > html.indexOf('id="section-image-display"'), 'it sits in Image Display');
+});
+
+test('Lite mode keeps video tiles from preloading', () => {
+  const lines = ['/uploads/a.png', '[file:clip.mp4](/uploads/clip.mp4|1 MB)'];
+  assert.match(htmlCtx({ _liteOn: () => true })._mediaGridHtml(lines, 'stacked').concat(htmlCtx({ _liteOn: () => true })._mediaGridHtml(lines)), /preload="none"/);
+  assert.doesNotMatch(htmlCtx()._mediaGridHtml(lines), /preload="none"/);
 });

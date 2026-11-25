@@ -33,7 +33,7 @@
 @import url('/css/style-media-grid.css?v=4.24.34');
 @import url('/css/style-emoji-chooser.css?v=4.27.54');
 @import url('/css/style-tooltips.css?v=4.27.51');
-@import url('/css/style-accessibility.css?v=4.22.13');
+@import url('/css/style-accessibility.css?v=4.22.771');
 
 /* The rules themselves live in the files imported above, in this order. Later
    files win over earlier ones on equal specificity, as they did when this was

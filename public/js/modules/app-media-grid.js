@@ -244,7 +244,7 @@ _mediaGridHtml(lines, layout = this._mediaGroupLayoutPref()) {
     const tile = frame.tiles[i];
     const video = this._mediaGridKind(line) === 'video' ? VIDEO_LINE.exec(line) : null;
     const inner = video
-      ? `<video class="media-grid-video" src="${this._escapeHtml(video[1])}" preload="metadata" muted playsinline></video><span class="media-grid-play" aria-hidden="true">▶</span>`
+      ? `<video class="media-grid-video" src="${this._escapeHtml(video[1])}" preload="${this._liteOn() ? 'none' : 'metadata'}" muted playsinline></video><span class="media-grid-play" aria-hidden="true">▶</span>`
       : this._formatContent(line);
     const more = frame.more && i === frame.more.index ? this._mediaGridMoreHtml(frame.more.count) : '';
     const cls = 'media-grid-tile' + (video ? ' is-video' : '') + (tile.hidden ? ' mg-hidden' : '');
