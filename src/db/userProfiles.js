@@ -1,12 +1,12 @@
 'use strict';
 
-const { parseBorderTransform, sanitizeBorderTransform, cleanHexColor, cleanProfileTheme, isValidUploadPath } = require('../socketHandlers/helpers');
+const { parseBorderTransform, sanitizeBorderTransform, cleanHexColor, cleanProfileTheme, profileLinksFromRow, isValidUploadPath } = require('../socketHandlers/helpers');
 
 function readProfile(db, userId) {
   return db.prepare(`
     SELECT u.id, u.username, COALESCE(u.display_name, u.username) AS "displayName",
            u.avatar, u.avatar_shape, u.border, u.border_transform, u.animate_profile, u.status, u.status_text, u.bio, u.created_at,
-           u.banner_color, u.avatar_color, u.banner, u.profile_theme_top, u.profile_theme_bottom,
+           u.banner_color, u.avatar_color, u.banner, u.profile_theme_top, u.profile_theme_bottom, u.profile_links,
            CASE WHEN u.birthday_hidden <> 0 OR u.birthday_hidden IS NULL THEN NULL
                 WHEN u.birthday_hide_year = 0 THEN u.birthday ELSE substr(u.birthday, 6) END AS birthday
     FROM users u WHERE u.id = ?
@@ -82,6 +82,7 @@ function profileCard(row, viewerId, isOnline) {
     banner: isValidUploadPath(row.banner) ? row.banner : null,
     // The two colors the card fades between, or null for none.
     profileTheme: cleanProfileTheme(row.profile_theme_top, row.profile_theme_bottom),
+    profileLinks: profileLinksFromRow(row.profile_links),
     // MM-DD, or YYYY-MM-DD when the owner turned off Hide birth year.
     birthday: row.birthday || null,
     online: !hidden && isOnline,
@@ -130,6 +131,9 @@ function setProfileTheme(db, userId, theme) {
     .run(theme?.top ?? null, theme?.bottom ?? null, userId);
 }
 
+function setProfileLinks(db, userId, links) {
+  return db.prepare('UPDATE users SET profile_links = ? WHERE id = ?').run(links.length ? JSON.stringify(links) : null, userId);
+}
 // A real calendar date from 1900 up to today as YYYY-MM-DD, else null. A day
 // of slack lets someone whose local date is ahead of UTC pick their today.
 function cleanBirthday(value) {
@@ -206,7 +210,7 @@ function dmPartners(db, userId) {
 
 module.exports = {
   readProfile, profileServerRoles, profileChannel, profileChannelRoles, mergeProfileRoles, visibleProfileRoles, profileCard,
-  avatarShape, animationMode, borderFit, setAvatarShape, setAnimationMode, setBorderFit, setBio, setBannerColor, setProfileTheme,
+  avatarShape, animationMode, borderFit, setAvatarShape, setAnimationMode, setBorderFit, setBio, setBannerColor, setProfileTheme, setProfileLinks,
   cleanBirthday, birthdayForUpdate, birthdayChange, setBirthday,
   lockAccountNames, displayNameForUpdate, conflictingDisplayName, setDisplayName, dmPartners,
 };

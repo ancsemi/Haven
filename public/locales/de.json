@@ -4074,7 +4074,8 @@
   "notifications_runtime": {
     "title": "{{sender}} in {{channel}}",
     "burn_message": "🔥 Nachricht mit Selbstzerstörung gesendet",
-    "sent_message": "Nachricht gesendet"
+    "sent_message": "Nachricht gesendet",
+    "more_rows": "+{{count}} weitere Zeilen"
   },
   "activities_registry": {
     "flappy": "Weiche Containern aus und knacke den Highscore!",

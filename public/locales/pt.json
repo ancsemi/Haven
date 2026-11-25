@@ -1301,7 +1301,8 @@
   "notifications_runtime": {
     "title": "{{sender}} em {{channel}}",
     "burn_message": "🔥 Enviou uma mensagem efêmera",
-    "sent_message": "Enviou uma mensagem"
+    "sent_message": "Enviou uma mensagem",
+    "more_rows": "+{{count}} linhas a mais"
   },
   "activities_registry": {
     "flappy": "Desvie dos contêineres e bata recordes!",

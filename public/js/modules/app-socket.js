@@ -249,6 +249,7 @@ _listenSession() {
     if (data.bannerColor !== undefined) this.user.bannerColor = this._safeHexColor(data.bannerColor);
     if (data.avatarColor !== undefined) this.user.avatarColor = this._safeHexColor(data.avatarColor);
     if (data.profileTheme !== undefined) this.user.profileTheme = this._cleanProfileTheme(data.profileTheme);
+    if (Array.isArray(data.profileLinks)) this.user.profileLinks = this._cleanProfileLinks(data.profileLinks);
     if (data.birthdayHidden !== undefined) {
       this.user.birthday = data.birthday || null;
       this.user.birthdaySetAt = data.birthdaySetAt || null;
