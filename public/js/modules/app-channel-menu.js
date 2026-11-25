@@ -40,7 +40,7 @@ _bindChannelMenu() {
       const isOverview = document.getElementById('new-channel-overview')?.checked || false;
       const isBracket = document.getElementById('new-channel-bracket')?.checked || false;
       if (name) {
-        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum, isCalendar, isOverview, isBracket, ...this._channelTemplateExtras() });
+        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum, isCalendar, isOverview, isBracket, subserverId: this._subserverId || undefined, ...this._channelTemplateExtras() });
         this._resetChannelTemplate();
         nameInput.value = '';
         const pvt = document.getElementById('new-channel-private');

@@ -239,6 +239,14 @@ Seeds pair the usual way, so the top two seeds can only meet in the final. When 
 
 A bracket's creator runs it, and so does anyone with **Delete Messages** in the channel. Make the channel **Read Only** to keep starting brackets to the people with the read-only override. Changes show up for everyone right away, and switching brackets off keeps them for when the channel is switched back on.
 
+### Sub-servers 🗂️
+
+Split one server into groups of channels, such as a main chat area and an 18+ area, instead of running two servers. Right-click a top-level channel, choose **Move to sub-server…**, and pick **New sub-server** to make the first one. Once a server has sub-servers, a row of pills above the channel list picks which one the sidebar shows; **Main** holds the channels outside any sub-server. A dot on a pill means one of its channels has unread messages, and opening a channel from a link or a mention brings its sub-server up. New channels are made in the sub-server you are looking at, and sub-channels always stay with their parent.
+
+A sub-server can need roles. In its editor (the ⚙ next to the pills, or **＋** for a new one), tick **Required roles** and choose whether members need any or all of them. Members without those roles do not see the sub-server or any channel in it, and the sub-server opens for them as soon as they get the role. Every channel in the sub-server takes these roles as its own required roles, so they cannot be set per channel while it is there. Untick every role to open the sub-server to everyone again.
+
+Making, editing, reordering and deleting sub-servers, and moving channels between them, needs **Manage Server**. Only the admin can move a private channel into a sub-server with required roles. Moving a channel out of a sub-server keeps the roles it had there, and so does deleting the sub-server, which sends its channels to **Main**; change them afterwards in **Channel Functions → Required roles**.
+
 ### Creating Sub-Channels
 
 Right-click (or click ⋯) on any channel to create a **sub-channel** beneath it. Sub-channels appear indented under their parent with a `↳` icon. They have their own code and their own message history.

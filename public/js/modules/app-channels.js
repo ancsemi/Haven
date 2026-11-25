@@ -73,6 +73,7 @@ async switchChannel(code) {
   const jumpBtn = document.getElementById('jump-to-bottom');
   if (jumpBtn) jumpBtn.classList.remove('visible');
   const channel = this.channels.find(c => c.code === code);
+  this._subserverFollow?.(channel);
   const isDm = channel && channel.is_dm;
   const displayName = isDm && channel.is_group ? `👥 ${this._groupName(channel)}` : isDm && channel.dm_target
     ? `@ ${this._getNickname(channel.dm_target.id, channel.dm_target.username)}`
@@ -466,8 +467,10 @@ _renderChannels() {
   // out from under us until we navigate away). Hiding a parent hides its
   // sub-channels too, since they're orphaned once the parent isn't rendered.
   const _hiddenChannels = this._getHiddenChannels();
+  // Sub-servers: the sidebar shows the picked one's channels (app-subservers.js).
+  this._renderSubserverBar?.();
   const regularChannels = this.channels.filter(c =>
-    !c.is_dm && (!_hiddenChannels.includes(c.code) || c.code === this.currentChannel));
+    !c.is_dm && (!_hiddenChannels.includes(c.code) || c.code === this.currentChannel) && this._subserverShows?.(c) !== false);
   const dmChannels = this.channels.filter(c => c.is_dm);
 
   // Build parent → sub-channel tree

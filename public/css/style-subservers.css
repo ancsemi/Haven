@@ -1,0 +1,40 @@
+/* Sub-servers (app-subservers.js): a row of pills above the channel list
+   picks which group of channels the sidebar shows. The row scrolls sideways
+   when it does not fit, and hides with the channel list when that collapses. */
+
+.subserver-bar { display: flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.5rem 0.4rem; overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
+.subserver-bar::-webkit-scrollbar { display: none; }
+#channels-pane:has(> #channel-list[style*="display: none"]) .subserver-bar { display: none !important; }
+
+.subserver-pill { position: relative; display: inline-flex; align-items: center; gap: 0.3rem; flex-shrink: 0; max-width: 11rem; padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 0.8rem; line-height: 1.3; cursor: pointer; }
+.subserver-pill:hover { color: var(--text-primary); background: var(--bg-tertiary, var(--bg-secondary)); }
+.subserver-pill:focus-visible, .subserver-tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.subserver-pill.active { color: var(--text-primary); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); font-weight: 600; }
+.subserver-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subserver-lock { font-size: 0.7rem; opacity: 0.75; }
+.subserver-dot { display: none; position: absolute; top: -1px; right: -1px; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg-secondary); }
+.subserver-pill.has-unread .subserver-dot { display: block; }
+.subserver-pill.has-unread:not(.active) { color: var(--text-primary); }
+
+.subserver-tool { flex-shrink: 0; width: 1.7rem; height: 1.7rem; padding: 0; border: 1px dashed var(--border); border-radius: 50%; background: transparent; color: var(--text-muted); font: inherit; font-size: 0.85rem; cursor: pointer; }
+.subserver-tool:hover { color: var(--text-primary); border-color: var(--accent); }
+
+.subserver-field { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.6rem; }
+.subserver-field > span { font-size: 0.8rem; color: var(--text-secondary); }
+.subserver-quick { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: -0.2rem 0 0.7rem; }
+.subserver-quick-btn { width: 2rem; height: 2rem; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: transparent; font-size: 1rem; cursor: pointer; }
+.subserver-quick-btn:hover, .subserver-quick-btn:focus-visible { border-color: var(--accent); }
+.subserver-roles-title { margin: 0.4rem 0 0.2rem; font-size: 0.9rem; }
+.subserver-edit-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid var(--border); }
+.subserver-edit-actions .subserver-delete { margin-left: auto; color: var(--danger, #ed4245); }
+
+.subserver-pick { display: flex; flex-direction: column; gap: 0.3rem; }
+.subserver-pick-btn { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.subserver-pick-btn:hover, .subserver-pick-btn:focus-visible { border-color: var(--accent); }
+.subserver-pick-btn.current { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.subserver-pick-new { border-style: dashed; color: var(--text-secondary); }
+
+@media (max-width: 768px) {
+  .subserver-pill { padding: 0.3rem 0.7rem; font-size: 0.85rem; }
+  .subserver-tool { width: 2rem; height: 2rem; }
+}

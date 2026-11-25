@@ -41,6 +41,8 @@ _openChannelCtxMenu(code, btnEl) {
   });
   const cfnCtxBtn = menu.querySelector('[data-action="channel-functions"]');
   if (cfnCtxBtn) cfnCtxBtn.style.display = canManageSettings ? '' : 'none';
+  const subCtxBtn = menu.querySelector('[data-action="move-to-subserver"]');
+  if (subCtxBtn) subCtxBtn.style.display = this._subserverManage && ch && !ch.is_dm && !ch.parent_channel_id ? '' : 'none';
   const typeCtxBtn = menu.querySelector('[data-action="channel-type"]');
   if (typeCtxBtn) {
     typeCtxBtn.style.display = canManageSettings ? '' : 'none';

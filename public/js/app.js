@@ -87,6 +87,7 @@ import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24
 import CalendarMethods from './modules/app-calendar.js?v=4.31.2';
 import OverviewMethods from './modules/app-overview.js?v=4.31.2';
 import BracketMethods from './modules/app-brackets.js?v=4.31.2';
+import SubserverMethods from './modules/app-subservers.js?v=4.31.2';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.29.102';
 import ChannelAddMemberMethods from './modules/app-channel-add-members.js?v=4.29.66';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.29.95';
@@ -432,6 +433,7 @@ class HavenApp {
 
     this._setupSocketListeners();
     this._setupChannelTypes();
+    this._setupSubservers();
     this._initLinkPolicy?.();
     this._setupUI();
     this._setupThemes();
@@ -693,6 +695,7 @@ Object.assign(HavenApp.prototype,
   CalendarMethods,
   OverviewMethods,
   BracketMethods,
+  SubserverMethods,
   RoleToolMethods,
   PermMatrixMethods,
   CallMethods,

@@ -303,6 +303,7 @@ _setupDmDragDrop() {
 },
 
 _updateBadge(code) {
+  this._subserverDots?.();
   const el = document.querySelector(`.channel-item[data-code="${code}"]`);
   if (el) {
     let badge = el.querySelector('.channel-badge:not(.channel-badge-bubble)');

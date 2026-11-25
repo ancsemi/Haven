@@ -7,6 +7,7 @@ const storage = require('../storage');
 const { isSafeUploadRelPath } = storage;
 const { isString, isInt, releasableUploads, CHANNEL_NAME_RE, NEW_DMS_PER_HOUR } = require('./helpers');
 const { removeChannelMember } = require('../channelMemberRemoval');
+const subservers = require('../subservers');
 
 // What a channel can show in place of its message log, as
 // [create-channel flag, Channel Functions name, column]. A channel shows one
@@ -264,6 +265,16 @@ module.exports = function register(socket, ctx) {
     const isCalendar = view === 'is_calendar' ? 1 : 0;
     const isBracket = view === 'is_bracket' ? 1 : 0;
     const isForum = view === 'is_forum' ? 1 : 0;
+    // A channel made while a sub-server is open goes in it and takes its
+    // required roles.
+    const sub = data.subserverId == null ? null : subservers.get(db, data.subserverId);
+    const subGate = sub && ctx.parseRoleGate(sub.role_gate) ? sub.role_gate : null;
+    if (data.subserverId != null && (!sub || (subGate && !socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, { id: 0, role_gate: subGate })))) {
+      return socket.emit('error-msg', 'Sub-server not found');
+    }
+    if (subGate && isPrivate && !socket.user.isAdmin) {
+      return socket.emit('error-msg', 'Only the admin can put required roles on a private channel');
+    }
 
     try {
       const result = db.prepare(
@@ -282,6 +293,7 @@ module.exports = function register(socket, ctx) {
       if (isInt(data.slowMode) && data.slowMode > 0) extras.push(['slow_mode_interval', Math.min(3600, data.slowMode)]);
       if (data.mediaEnabled === false) extras.push(['media_enabled', 0]);
       if (data.voiceEnabled === false) extras.push(['voice_enabled', 0]);
+      if (sub) extras.push(['subserver_id', sub.id]);
       if (extras.length) {
         db.prepare(`UPDATE channels SET ${extras.map(([k]) => `${k} = ?`).join(', ')} WHERE id = ?`)
           .run(...extras.map(([, v]) => v), result.lastInsertRowid);
@@ -320,6 +332,7 @@ module.exports = function register(socket, ctx) {
       }
 
       assignChannelCreatorRole(socket.user.id, result.lastInsertRowid);
+      if (subGate) ctx.applyRoleGate({ id: result.lastInsertRowid, code }, subGate);
 
       const channel = {
         id: result.lastInsertRowid,
@@ -336,7 +349,9 @@ module.exports = function register(socket, ctx) {
         is_forum: isForum,
         is_calendar: isCalendar,
         is_overview: isOverview,
-        is_bracket: isBracket
+        is_bracket: isBracket,
+        subserver_id: sub ? sub.id : null,
+        role_gate: subGate
       };
 
       socket.join(`channel:${code}`);
@@ -358,6 +373,7 @@ module.exports = function register(socket, ctx) {
       if (addAll) {
         for (const [, s] of io.sockets.sockets) {
           if (!s.user || s.user.isBot || s.user.id === socket.user.id) continue;
+          if (subGate && !s.user.isAdmin && !ctx.roleGateAllows(s.user.id, { id: result.lastInsertRowid, role_gate: subGate })) continue;
           s.join(`channel:${code}`);
           s.emit('channel-created', channel);
         }
@@ -965,11 +981,16 @@ module.exports = function register(socket, ctx) {
     // The Organize tag, set here so it needs no second step. Same rules as
     // set-channel-category, which the creator is allowed to use on it too.
     const category = normalizeCategory(data.category);
+    // A sub-channel sits in its parent's sub-server and takes its required roles.
+    const subGate = subservers.gateFor(db, parentChannel.id)?.role_gate || null;
+    if (subGate && isPrivate && !socket.user.isAdmin) {
+      return socket.emit('error-msg', 'Only the admin can put required roles on a private channel');
+    }
 
     try {
       const result = db.prepare(
-        'INSERT INTO channels (name, code, created_by, parent_channel_id, position, is_private, expires_at, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(name, code, socket.user.id, parentChannel.id, position, isPrivate, expiresAt, category);
+        'INSERT INTO channels (name, code, created_by, parent_channel_id, position, is_private, expires_at, category, subserver_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(name, code, socket.user.id, parentChannel.id, position, isPrivate, expiresAt, category, parentChannel.subserver_id ?? null);
 
       const parentMembers = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(parentChannel.id);
       const membersToAdd = isPrivate ? [{ user_id: socket.user.id }] : parentMembers;
@@ -1013,6 +1034,7 @@ module.exports = function register(socket, ctx) {
       } catch (rcaErr) {
         console.error('Sub-channel role inheritance error:', rcaErr);
       }
+      if (subGate) ctx.applyRoleGate({ id: result.lastInsertRowid, code }, subGate);
 
       broadcastChannelLists();
     } catch (err) {
@@ -1482,6 +1504,8 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin && db.prepare('SELECT is_private FROM channels WHERE id = ?').get(channel.id)?.is_private) {
       return cb({ error: 'Only the admin can change who can open a private channel' });
     }
+    const fromSub = subservers.gateFor(db, channel.id);
+    if (fromSub) return cb({ error: `This channel takes its required roles from the ${fromSub.name} sub-server` });
     const gate = ctx.parseRoleGate({ mode: data.mode, roles: Array.isArray(data.roles) ? data.roles.slice(0, 50) : [] });
     if (gate) {
       const ph = gate.roles.map(() => '?').join(',');
@@ -1490,32 +1514,11 @@ module.exports = function register(socket, ctx) {
     }
     const stored = gate && gate.roles.length ? JSON.stringify(gate) : null;
     try {
-      db.prepare('UPDATE channels SET role_gate = ? WHERE id = ?').run(stored, channel.id);
+      ctx.applyRoleGate(channel, stored);
     } catch (err) {
       console.error('Set role gate error:', err);
       return cb({ error: 'Failed to save the role gate' });
     }
-    // Holding the required roles is membership (#5649): everyone who passes
-    // the gate is put in the channel, and rows the gate added come out for
-    // anyone who no longer passes. Removing the gate keeps whoever it let in.
-    if (!stored) {
-      db.prepare('UPDATE channel_members SET via_role_gate = 0 WHERE channel_id = ?').run(channel.id);
-    }
-    let changes = [];
-    try { changes = ctx.syncRoleGateMemberships({ channelId: channel.id }); } catch (err) { console.error('role gate membership sync failed:', err.message); }
-    const joined = new Set(changes.filter(c => c.joined).map(c => c.userId));
-    // Anyone who no longer qualifies leaves the room now; broadcastChannelLists
-    // rebuilds every list, so their sidebar entry goes with it.
-    const fresh = db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id);
-    for (const [, s] of io.sockets.sockets) {
-      if (!s.user || s.user.isAdmin) continue;
-      if (joined.has(s.user.id)) s.join(`channel:${channel.code}`);
-      else if (stored && !ctx.roleGateAllows(s.user.id, fresh)) ctx.liveAccess?.cutOff(s.user.id, [channel.code], 'This channel needs a role you do not hold');
-    }
-    broadcastChannelLists();
-    // The member list follows the requirement too (#5703).
-    emitOnlineUsers(channel.code);
-    io.to(`channel:${code}`).emit('channel-role-gate-updated', { code, roleGate: stored ? JSON.parse(stored) : null });
     cb({ success: true, roleGate: stored ? JSON.parse(stored) : null });
     _audit({ actor: socket.user, action: 'channel_role_gate',
       target_type: 'channel', target_id: channel.id, target_name: code,
@@ -1707,9 +1710,16 @@ module.exports = function register(socket, ctx) {
         if (!channel.parent_channel_id && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'delete_channel', channel.id)) {
           return socket.emit('error-msg', "You don't have permission to move a top-level channel under another");
         }
+        // It joins its new parent's sub-server, and takes that sub-server's
+        // required roles if it has some.
+        const subGate = (newParent.subserver_id ?? null) !== (channel.subserver_id ?? null) ? subservers.gateFor(db, newParent.id)?.role_gate || null : null;
+        if (subGate && channel.is_private && !socket.user.isAdmin) {
+          return socket.emit('error-msg', 'Only the admin can put required roles on a private channel');
+        }
         const maxPos = db.prepare('SELECT MAX(position) as mp FROM channels WHERE parent_channel_id = ?').get(newParent.id);
         const position = (maxPos && maxPos.mp != null) ? maxPos.mp + 1 : 0;
-        db.prepare('UPDATE channels SET parent_channel_id = ?, position = ?, category = NULL WHERE id = ?').run(newParent.id, position, channel.id);
+        db.prepare('UPDATE channels SET parent_channel_id = ?, position = ?, category = NULL, subserver_id = ? WHERE id = ?').run(newParent.id, position, newParent.subserver_id ?? null, channel.id);
+        if (subGate) ctx.applyRoleGate(channel, subGate);
         broadcastChannelLists();
         socket.emit('error-msg', `"${channel.name}" moved under "${newParent.name}"`);
       }

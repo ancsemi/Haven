@@ -7,6 +7,7 @@ const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('../roleDe
 const createRoleRefresh = require('./roleRefresh');
 const { reachableChannel } = require('./channelAccess');
 const picks = require('../roleMenuPicks');
+const subservers = require('../subservers');
 const { isUsableEmoji } = require('../builtinEmojis');
 
 module.exports = function register(socket, ctx) {
@@ -93,6 +94,10 @@ module.exports = function register(socket, ctx) {
   // Holding the required roles is membership (#5649), so the rows follow the
   // roles; then leave the rooms they lost and push a fresh list either way.
   function syncRoleGateRooms(userId) {
+    // Sub-servers can open and close with roles, and Manage Server edits them.
+    if (db.prepare('SELECT 1 FROM subservers LIMIT 1').get()) {
+      for (const [, s] of io.sockets.sockets) if (s.user && s.user.id === userId) s.emit('subservers-changed');
+    }
     const gated = db.prepare('SELECT id, code, role_gate FROM channels WHERE role_gate IS NOT NULL').all();
     if (!gated.length) return;
     const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
@@ -912,6 +917,8 @@ module.exports = function register(socket, ctx) {
       const rest = gate.roles.filter(r => r !== roleId);
       db.prepare('UPDATE channels SET role_gate = ? WHERE id = ?').run(rest.length ? JSON.stringify({ mode: gate.mode, roles: rest }) : null, ch.id);
     }
+    // Sub-servers stop asking for it too; their channels lost it just above.
+    if (subservers.dropRole(db, roleId).length) io.except('bot-sockets').emit('subservers-changed');
     // Gates changed, so who is a member through them may have too (#5649).
     try { ctx.syncRoleGateMemberships(); } catch (err) { console.error('role gate membership sync failed:', err.message); }
     broadcastChannelLists();

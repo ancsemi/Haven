@@ -13,6 +13,7 @@ const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
 const calendarEvents = require('./calendarEvents');
 const brackets = require('./brackets');
+const subservers = require('./subservers');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
 const { migrateMessageNsfw } = require('./messageNsfw');
@@ -1135,6 +1136,8 @@ function initDatabase() {
     { name: 'is_overview',       sql: "ALTER TABLE channels ADD COLUMN is_overview INTEGER DEFAULT 0" },
     // Bracket mode: the channel shows tournament brackets (src/brackets.js).
     { name: 'is_bracket',        sql: "ALTER TABLE channels ADD COLUMN is_bracket INTEGER DEFAULT 0" },
+    // The sub-server a channel sits in; NULL is the main server (src/subservers.js).
+    { name: 'subserver_id',      sql: "ALTER TABLE channels ADD COLUMN subserver_id INTEGER DEFAULT NULL" },
     // #5390: extend the self-destruct timer with a "clear messages only"
     // mode. `auto_delete_mode` is 'delete' (existing behaviour: drop the
     // whole channel) or 'clear' (wipe messages but keep channel, perms,
@@ -1750,6 +1753,7 @@ function initDatabase() {
   forumUnread.ensureTable(db);
   calendarEvents.ensureTables(db);
   brackets.ensureTables(db);
+  subservers.ensureTables(db);
   // Profile badges (#5632); needs forum_votes, made above.
   migrateBadges(db);
 

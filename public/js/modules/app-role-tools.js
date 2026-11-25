@@ -103,16 +103,15 @@ export default {
     } catch { return null; }
   },
 
-  _openRoleGateModal(code) {
-    const ch = this.channels.find(c => c.code === code);
-    if (!ch) return;
-    const gate = this._roleGateOf(ch);
+  // The "any / all of these roles" fields, shared by a channel's required
+  // roles and a sub-server's. Passes their HTML to `done`; _roleGateRead reads
+  // them back.
+  _roleGateFields(gate, done) {
     const chosen = new Set(gate ? gate.roles : []);
     const mode = gate ? gate.mode : 'any';
     this._roleEmit('get-roles', {}, (res) => {
       const roles = (res.roles || []).filter(r => r.scope !== 'channel');
-      const body = `<p class="settings-hint">${t('channel_functions.role_gate_hint')}</p>
-        <div class="rg-mode">
+      done(`<div class="rg-mode">
           <label class="toggle-row"><span>${t('channel_functions.role_gate_any')}</span><input type="radio" name="rg-mode" value="any" ${mode === 'any' ? 'checked' : ''}></label>
           <label class="toggle-row"><span>${t('channel_functions.role_gate_all')}</span><input type="radio" name="rg-mode" value="all" ${mode === 'all' ? 'checked' : ''}></label>
         </div>
@@ -120,14 +119,32 @@ export default {
           <label class="toggle-row">
             <span><span class="role-color-dot" style="background:${this._roleFill(r, '#aaa')}"></span> ${this._escapeHtml(r.name)} <span class="muted-text">Lv.${r.level}</span></span>
             <input type="checkbox" class="rg-role" value="${r.id}" ${chosen.has(r.id) ? 'checked' : ''}>
-          </label>`).join('') : `<p class="muted-text">${t('settings.admin.roles_no_custom')}</p>`}</div>
+          </label>`).join('') : `<p class="muted-text">${t('settings.admin.roles_no_custom')}</p>`}</div>`);
+    });
+  },
+
+  _roleGateRead(ov) {
+    return {
+      mode: ov.querySelector('input[name="rg-mode"]:checked')?.value || 'any',
+      roles: [...ov.querySelectorAll('.rg-role:checked')].map(i => parseInt(i.value, 10)),
+    };
+  },
+
+  _openRoleGateModal(code) {
+    const ch = this.channels.find(c => c.code === code);
+    if (!ch) return;
+    // A channel in a sub-server with required roles takes those.
+    const sub = this._subserverGateOf?.(ch);
+    if (sub) return this._showToast(t('subservers.gate_locked', { name: sub.name }), 'info');
+    this._roleGateFields(this._roleGateOf(ch), (fields) => {
+      const body = `<p class="settings-hint">${t('channel_functions.role_gate_hint')}</p>
+        ${fields}
         <small class="settings-hint">${t('channel_functions.role_gate_clear_hint')}</small>`;
       this._openToolModal({
         title: `${t('channel_functions.role_gate')} · #${this._escapeHtml(ch.name)}`, body,
         confirmText: t('settings.admin.roles_save'),
         onConfirm: (ov) => {
-          const picked = [...ov.querySelectorAll('.rg-role:checked')].map(i => parseInt(i.value, 10));
-          const m = ov.querySelector('input[name="rg-mode"]:checked')?.value || 'any';
+          const { mode: m, roles: picked } = this._roleGateRead(ov);
           this.socket.emit('set-channel-role-gate', { code, mode: m, roles: picked }, (r) => {
             if (r?.error) return this._showToast(r.error, 'error');
             ch.role_gate = r.roleGate ? JSON.stringify(r.roleGate) : null;

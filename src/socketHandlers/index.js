@@ -87,6 +87,7 @@ const registerForumVotes = require('./forumVotes');
 const registerCalendar = require('./calendar');
 const registerOverview = require('./overview');
 const registerBrackets = require('./brackets');
+const registerSubservers = require('./subservers');
 const registerForumPictureVotes = require('./forumPictureVotes');
 const registerBadges = require('./badges');
 const registerMoveToThread = require('./moveToThread');
@@ -538,6 +539,33 @@ function setupSocketHandlers(io, db, opts = {}) {
       else s.emit('channel-members', { channelCode: channel.code, members: members.filter(m => m.id === s.user.id) });
     }
     if (full.length) io.to(full).emit('channel-members', { channelCode: channel.code, members });
+  }
+
+  // ── Put a channel's required roles in place ──────────────
+  // `stored` is the role_gate JSON, or null for none. Holding the required
+  // roles is membership (#5649): everyone who passes the gate is put in the
+  // channel, and rows the gate added come out for anyone who no longer passes.
+  // Removing the gate keeps whoever it let in. Rooms, lists and the member
+  // list follow. Used by Channel Functions and by sub-servers, whose required
+  // roles are written onto each of their channels.
+  function applyRoleGate(channel, stored) {
+    db.prepare('UPDATE channels SET role_gate = ? WHERE id = ?').run(stored, channel.id);
+    if (!stored) db.prepare('UPDATE channel_members SET via_role_gate = 0 WHERE channel_id = ?').run(channel.id);
+    let changes = [];
+    try { changes = syncRoleGateMemberships({ channelId: channel.id }); } catch (err) { console.error('role gate membership sync failed:', err.message); }
+    const joined = new Set(changes.filter(c => c.joined).map(c => c.userId));
+    // Anyone who no longer qualifies leaves the room now; broadcastChannelLists
+    // rebuilds every list, so their sidebar entry goes with it.
+    const fresh = { id: channel.id, role_gate: stored };
+    for (const [, s] of io.sockets.sockets) {
+      if (!s.user || s.user.isAdmin) continue;
+      if (joined.has(s.user.id)) s.join(`channel:${channel.code}`);
+      else if (stored && !roleGateAllows(s.user.id, fresh)) liveAccess.cutOff(s.user.id, [channel.code], 'This channel needs a role you do not hold');
+    }
+    broadcastChannelLists();
+    // The member list follows the requirement too (#5703).
+    emitOnlineUsers(channel.code);
+    io.to(`channel:${channel.code}`).emit('channel-role-gate-updated', { code: channel.code, roleGate: stored ? JSON.parse(stored) : null });
   }
 
   // ── broadcastChannelLists (debounced, shared timer) ─────
@@ -2827,7 +2855,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Permissions
       getChannelRoleChain, getUserEffectiveLevel,
       userHasPermission, getUserPermissions, getUserGlobalPermissions, getUserRoles, getUserHighestRole, getUserAllRoles,
-      parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships,
+      parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships, applyRoleGate,
       // Broadcast helpers
       broadcastChannelLists, broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, emitDmPresence, resetPresenceSync,
       dropRelayUser, closeRelaySources,
@@ -2904,6 +2932,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerCalendar(socket, ctx);
     registerOverview(socket, ctx);
     registerBrackets(socket, ctx);
+    registerSubservers(socket, ctx);
     registerForumPictureVotes(socket, ctx);
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);
