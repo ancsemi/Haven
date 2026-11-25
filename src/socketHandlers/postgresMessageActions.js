@@ -160,7 +160,7 @@ function createPostgresMessageActions(io, db, channelMembers) {
   }
 
   async function react(socket, data, added) {
-    if (!Number.isSafeInteger(data?.messageId) || data.messageId <= 0 || !isString(data.emoji, 1, 32)) return;
+    if (!Number.isSafeInteger(data?.messageId) || data.messageId <= 0 || !isString(data.emoji, 1, 70)) return;
     const userId = socket.user.id;
     return changeMessage(socket, data.messageId, null, async (tx, { channel }) => {
       if (!await lockMessage(tx, channel.id, data.messageId)) return;

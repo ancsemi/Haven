@@ -29,9 +29,9 @@ module.exports = function registerChannelPrefs({ app, verifyToken }) {
     try {
       const { getAsyncDb } = require('../database');
       const rows = await getAsyncDb().prepare(
-        'SELECT channel_code FROM user_channel_prefs WHERE user_id = ? AND muted = 1'
+        'SELECT channel_code, muted FROM user_channel_prefs WHERE user_id = ?'
       ).all(user.id);
-      res.json({ muted: rows.map(r => r.channel_code) });
+      res.json({ muted: rows.filter(r => r.muted).map(r => r.channel_code), all: rows.filter(r => !r.muted).map(r => r.channel_code) });
     } catch (err) {
       console.error('[user/channel-prefs GET]', err);
       res.status(500).json({ error: 'Internal server error' });

@@ -16,7 +16,9 @@ _updateComposerVisibility(channel) {
   // override in one channel used to reveal the composer in all of them, and the
   // send was then refused. (#5468)
   const _isReadOnly = channel && channel.read_only === 1 && !this.user?.isAdmin && !channel.canOverrideReadOnly;
-  if (msgInputArea) msgInputArea.style.display = (_isReadOnly || (_textOff && _mediaOff)) ? 'none' : '';
+  // A calendar is added to through its own dialog, not the composer.
+  const _isCalendar = !!(channel && channel.is_calendar && !channel.is_dm);
+  if (msgInputArea) msgInputArea.style.display = (_isReadOnly || _isCalendar || (_textOff && _mediaOff)) ? 'none' : '';
   // A media-only channel has no text box to press Enter in, so the send
   // button is the only way to post an attachment: it stays, even for
   // someone who chose to hide it (#5880).
@@ -615,7 +617,7 @@ _renderChannels() {
     const isAnnouncement = ch.notification_type === 'announcement';
     const isTemporary = !!ch.expires_at;
     const isTempVoice = !!ch.is_temp_voice;
-    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_forum ? '🗂️' : (ch.is_nsfw ? '🔞' : '#')))));
+    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_calendar ? '📅' : ch.is_forum ? '🗂️' : (ch.is_nsfw ? '🔞' : '#')))));
     // NSFW channels stay out of sight when the user asked for that (phone in
     // public), except the one they are actually in.
     if (ch.is_nsfw && this._hideNsfw && this._hideNsfw() && ch.code !== this.currentChannel) el.style.display = 'none';
@@ -635,7 +637,7 @@ _renderChannels() {
       if (ch.slow_mode_interval > 0) _badges.push(`<span title="${t('channels.slow_mode_title', { seconds: ch.slow_mode_interval })}" style="opacity:0.5;font-size:0.65rem">🐢</span>`);
       if (ch.cleanup_exempt === 1) _badges.push(`<span title="${t('channels.cleanup_exempt_title')}" style="opacity:0.5;font-size:0.65rem">🛡️</span>`);
     }
-    const _mutedList = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+    const _mutedList = this._mutedChannelList();
     if (_mutedList.includes(ch.code)) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.muted_unsubscribed')}">🔕</span>`);
     const indicators = _badges.length ? `<span class="channel-indicators" style="margin-left:auto;display:flex;gap:2px;align-items:center;flex-shrink:0">${_badges.join('')}</span>` : '';
 

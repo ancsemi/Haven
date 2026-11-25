@@ -219,6 +219,12 @@ Every conversation in Haven happens inside a **channel**. Channels are like room
 
 Turn any channel into a forum from **Channel Functions → Forum**, or tick **Forum** when creating it. In a forum channel every message is a topic, and the feed runs newest first: the most recently active topic sits at the top. Replies go in that message's thread, the topic shows its reply count, and a new reply moves the topic back to the top, so old topics resurface instead of sinking. Inside a topic's thread, replies read top to bottom as usual. Every topic carries a **Reply to this topic** button, and the Reply action on a topic opens its thread rather than quoting it as a new topic. Everything else works as usual: topics can be pinned, reacted to, searched, and moved between channels with Move Messages.
 
+### Calendar Channels 📅
+
+Turn any channel into a calendar from **Channel Functions → Calendar**, or tick **Calendar** when creating it. A calendar channel shows a month of events instead of messages, with the month's events listed under the grid. Anyone who can post in the channel adds an event with **Add event** or by clicking a day: give it a title, a start and end (or make it all day), and optionally a place, details and a color. Everyone who can read the channel opens an event to see who is coming and answers **Going**, **Maybe** or **Can't go**; press your answer again to take it back. Changes show up for everyone right away.
+
+Times show in each member's own time zone. An all-day event is a date, so it lands on the same day for everyone. An event's creator can edit or delete it, and so can anyone with **Delete Messages** in the channel. Make the calendar **Read Only** to keep event planning to the people with the read-only override while everyone else can still answer. A channel is a forum or a calendar, not both, and switching a calendar off keeps its events for when it is switched back on.
+
 ### Creating Sub-Channels
 
 Right-click (or click ⋯) on any channel to create a **sub-channel** beneath it. Sub-channels appear indented under their parent with a `↳` icon. They have their own code and their own message history.

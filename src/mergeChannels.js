@@ -56,6 +56,8 @@ function refusal(db, from, to) {
   if (from.id === to.id) return 'Pick a different channel to merge into';
   if (from.is_dm || to.is_dm) return 'Direct messages cannot be merged';
   if (!!from.is_forum !== !!to.is_forum) return 'A forum can only be merged into another forum';
+  // Merging deletes the channel merged away, and its events with it.
+  if (from.is_calendar || to.is_calendar) return 'A calendar cannot be merged';
   if (forumBlog.blogOn(db, from.id) !== forumBlog.blogOn(db, to.id)) {
     return 'A blog forum can only be merged into another blog forum';
   }

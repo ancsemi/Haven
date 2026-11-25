@@ -17,9 +17,9 @@
 // (src/ferryReplies.js), so only messages Ferry carried take part.
 
 const { listReactions } = require('./db/messageReactions');
+const { NAMED_EMOJI_RE: NAMED } = require('./builtinEmojis');
 
 const SNOWFLAKE = /^\d{5,25}$/;
-const NAMED = /^:([a-zA-Z0-9_-]{1,30}):$/;
 const MAX_NAME = 80;
 const MARK = ' (Discord)';
 

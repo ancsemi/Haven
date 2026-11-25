@@ -37,10 +37,11 @@ async _bootstrapChannelPrefs() {
       headers: { 'Authorization': `Bearer ${tok}` },
     });
     if (!resp.ok) { this._channelPrefsSynced = false; return; }
-    const { muted: serverMuted = [] } = await resp.json();
+    const { muted: serverMuted = [], all: serverAll = [] } = await resp.json();
     const local = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
     const union = Array.from(new Set([...serverMuted, ...local]));
     localStorage.setItem('haven_muted_channels', JSON.stringify(union));
+    localStorage.setItem('haven_unmuted_channels', JSON.stringify(Array.from(new Set([...serverAll, ...this._readChannelList('haven_unmuted_channels')])).filter(c => !union.includes(c))));
     // If local had entries the server didn't know about, push the union
     // back so the next message blast filters correctly.
     const localOnly = local.filter(c => !serverMuted.includes(c));
@@ -497,13 +498,13 @@ _isEmojiOnly(str) {
   // A Discord emote token counts as one emoji, like a resolved :name: does.
   const discordEmotes = (str.match(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g) || []).length;
   str = str.replace(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g, ' ');
-  const customMatches = str.match(/:([a-zA-Z0-9_-]+):/g) || [];
+  const customMatches = str.match(/:([\p{L}\p{Nd}\p{M}_-]+):/gu) || [];
   // Only expand custom tokens that actually exist as loaded emojis
   const resolvedCustom = customMatches.filter(m => {
     const name = m.slice(1, -1).toLowerCase();
     return !!this._findNamedEmoji(name);
   });
-  let s = str.replace(/:([a-zA-Z0-9_-]+):/g, ' ');
+  let s = str.replace(/:([\p{L}\p{Nd}\p{M}_-]+):/gu, ' ');
   try {
     // Strip unicode emoji, skin-tone modifiers, ZWJ, variation selectors, flags.
     // Skin tones (1F3FB-1F3FF) are Emoji_Modifier, not Extended_Pictographic, so
@@ -541,14 +542,14 @@ _discordEmoteHtml(name, id, animated) {
 // Returns { name, url } or null.
 _findNamedEmoji(name) {
   if (!name) return null;
-  const s = String(name), lower = s.toLowerCase(), pools = [this.builtinEmojis || [], this.customEmojis || []];
+  const s = String(name).normalize('NFC'), lower = s.toLowerCase(), pools = [this.builtinEmojis || [], this.customEmojis || []];
   return pools.map(p => p.find(e => e.name === s)).find(Boolean) || pools.map(p => p.find(e => e.name.toLowerCase() === lower)).find(Boolean) || null;
 },
 
 _autoEmoteWords(text) {
   const names = new Set((this.customEmojis || []).map(e => e.name));
   try { if (localStorage.getItem('haven-emote-words') !== 'true') return text; } catch { return text; } // private mode: storage is unavailable, so the setting is off
-  return !text || !names.size || text.startsWith('/') ? text : text.split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) => i % 2 ? part : part.replace(/(?<!\S)[A-Za-z0-9_-]{1,30}(?!\S)/g, w => names.has(w) ? `:${w}:` : w)).join('');
+  return !text || !names.size || text.startsWith('/') ? text : text.split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) => i % 2 ? part : part.replace(/(?<!\S)[\p{L}\p{Nd}\p{M}_-]{1,32}(?!\S)/gu, w => names.has(w) ? `:${w}:` : w)).join('');
 },
 
 // Punctuation search aliases: typing an actual punctuation mark (e.g. "?"
@@ -1245,11 +1246,11 @@ async _loadMediaToken() {
 // blank gap, with no error and no retry. Reloading fixed it, which is why this
 // looked random and unreproducible. Refreshed on a timer, on reconnect, and on
 // a failed image below.
-_renderSessionsList(sessions) {
-  const el = document.getElementById('sessions-list');
+_renderSessionsList(sessions, target = null, noneKey = 'settings.sessions_section.none') {
+  const el = target || document.getElementById('sessions-list');
   if (!el) return;
   if (!sessions.length) {
-    el.innerHTML = `<p class="muted-text">${this._escapeHtml(t('settings.sessions_section.none'))}</p>`;
+    el.innerHTML = `<p class="muted-text">${this._escapeHtml(t(noneKey))}</p>`;
     return;
   }
   const rel = (ms) => {
