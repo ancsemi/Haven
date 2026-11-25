@@ -80,7 +80,9 @@ _onThreadReply(data) {
   if (sound) {
     const opts = sound === 'mention' ? { isMention: true } : sound === 'reply' ? { isReply: true } : undefined;
     this.notifications.play(sound, opts);
-    if (document.hidden) this._fireNativeNotification({ ...msg, content: `[thread] ${content}` }, code, opts);
+    // Flattened before the prefix: a table needs its first line to itself
+    // to be read as one.
+    if (document.hidden) this._fireNativeNotification({ ...msg, content: `[thread] ${window.HavenNotifyPreview ? HavenNotifyPreview.preview(content) : content}` }, code, opts);
   }
 
   if (this._isForumCode(code)) return;

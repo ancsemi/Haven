@@ -1519,7 +1519,8 @@
   "notifications_runtime": {
     "title": "{{sender}} in {{channel}}",
     "burn_message": "🔥 Sent a burn message",
-    "sent_message": "Sent a message"
+    "sent_message": "Sent a message",
+    "more_rows": "+{{count}} more rows"
   },
   "activities_registry": {
     "flappy": "Dodge containers, chase high scores!",

@@ -5683,7 +5683,10 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.31.780"></script>
+  <!-- Shared with the server (push bodies use the same flattening). -->
+  <script src="/js/notify-preview.js?v=4.31.0"></script>
+  <script src="/js/message-links.js?v=4.31.0"></script>
+  <script type="module" src="/js/app.js?v=4.31.781"></script>
   <script src="/js/plugin-loader.js?v=4.29.63"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
