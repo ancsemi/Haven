@@ -1905,7 +1905,7 @@
         "full_hint": "Full: large inline images like Discord"
       },
       "hide_media": "Hide pictures and videos",
-      "hide_media_hint": "Pictures, GIFs and videos in chat show as a small tag you click to see them, and link cards start folded. Handy around other people. Only changes what you see, on this device.",
+      "hide_media_hint": "Pictures, GIFs and videos in chat show as a small tag you click to see them, and link previews with a picture or video start folded. Handy around other people. Only changes what you see, on this device.",
       "media_layout": {
         "title": "Pictures Sent Together",
         "default": "Server default",
@@ -1939,8 +1939,8 @@
     },
     "embed_display": {
       "title": "Link Previews",
-      "off": "Off",
-      "off_hint": "Off: hide all link previews",
+      "hide": "Hide link previews",
+      "hide_hint": "Links stay plain links: no preview cards and no video players, and nothing is fetched for them. Pictures posted in chat still show. Only changes what you see, on this device.",
       "small": "Small",
       "small_hint": "Small: compact card with small media",
       "medium": "Medium",

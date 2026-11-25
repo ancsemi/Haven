@@ -620,6 +620,9 @@ _setupEmbedSizePicker() {
     const btn = e.target.closest('[data-embed-size]');
     if (btn) this._applyEmbedSize(btn.dataset.embedSize);
   });
+  const hide = document.getElementById('hide-embeds-toggle');
+  document.body.classList.toggle('hide-embeds', this._hideEmbedsOn());
+  hide && (hide.checked = this._hideEmbedsOn(), hide.addEventListener('change', () => { this._setHideEmbeds(hide.checked); this._redrawOpenChannel(); }));
   const fold = document.getElementById('previews-folded-toggle');
   if (!fold) return;
   fold.checked = this._previewsStartFolded();
@@ -627,8 +630,12 @@ _setupEmbedSizePicker() {
     this._startFolded = fold.checked;
     try { localStorage.setItem('haven-previews-folded', String(fold.checked)); }
     catch { /* private mode: the choice lasts until the page closes */ }
-    this.currentChannel && this.socket?.connected && this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
+    this._redrawOpenChannel();
   });
+},
+
+_redrawOpenChannel() {
+  this.currentChannel && this.socket?.connected && this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
 },
 
 _previewsStartFolded() {
@@ -636,21 +643,35 @@ _previewsStartFolded() {
   return this._startFolded;
 },
 
+_hideEmbedsOn() {
+  const v = this._hideEmbeds === undefined ? localStorage.getItem('haven-hide-embeds') : null;
+  this._hideEmbeds === undefined && (this._hideEmbeds = v === null ? localStorage.getItem('haven-embed-size') === 'off' : v === 'true');
+  return this._hideEmbeds;
+},
+
+_setHideEmbeds(on) {
+  this._hideEmbeds = !!on;
+  try { localStorage.setItem('haven-hide-embeds', String(!!on)); } catch {}
+  document.body?.classList?.toggle('hide-embeds', !!on);
+},
+
 // Embed size is the single source of truth shared by the Settings picker and
 // the per-embed size menu (see app-media-playback.js). Legacy values are migrated.
 _normalizeEmbedSize(mode) {
   mode = ({ normal: 'medium', large: 'full' })[mode] || mode;
-  return ['full', 'medium', 'small', 'off'].includes(mode) ? mode : 'medium';
+  return ['full', 'medium', 'small'].includes(mode) ? mode : 'medium';
 },
 
 _embedSize() {
-  return this._normalizeEmbedSize(localStorage.getItem('haven-embed-size'));
+  const raw = localStorage.getItem('haven-embed-size');
+  raw === 'off' && localStorage.getItem('haven-hide-embeds') === null && this._setHideEmbeds(true);
+  return this._normalizeEmbedSize(raw);
 },
 
 _applyEmbedSize(mode) {
   mode = this._normalizeEmbedSize(mode);
   localStorage.setItem('haven-embed-size', mode);
-  document.body.classList.remove('embed-size-off', 'embed-size-small', 'embed-size-medium', 'embed-size-full');
+  document.body.classList.remove('embed-size-small', 'embed-size-medium', 'embed-size-full');
   document.body.classList.add(`embed-size-${mode}`);
   const label = t(`settings.embed_display.${mode}`);
   document.querySelectorAll('.lp-size-label').forEach(b => { b.textContent = label; });
