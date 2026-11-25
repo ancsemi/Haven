@@ -24,6 +24,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Translation pull requests are no longer merged automatically, and the translation checker refuses markup the English text does not have. A translated command hint such as `<recherche>` is still fine.
 
 ### Fixed
+
+- The server you are on has a ring around its icon in the server rail, so you can tell which one it is when the icons are fully opaque squares (#5933, asked for by QUAKEMAN).
 - A muted channel no longer lights the @ button, a category's dot or collapsed count, a parent channel's dot or a tag row's count. Its own row can still show its count. Mentions in a muted channel were already left out live; the @ button now leaves them out when the channel list loads too.
 - Coming back from deafen played the people who joined while you were deafened twice, so they sounded louder and echoed. This happened after moving from a room where you were deafened into another one and then turning deafen off (reported in #5925). Turning deafen off now brings back only the volume that deafen took away.
 - People who are offline no longer show as idle. The status someone last chose (Away or Do Not Disturb) is kept while they are gone, and the pop-out DM and the profile card showed that instead of offline. Every status dot now checks offline first, and offline looks the same everywhere: a hollow dot.
