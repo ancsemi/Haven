@@ -28,6 +28,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Translation pull requests are no longer merged automatically, and the translation checker refuses markup the English text does not have. A translated command hint such as `<recherche>` is still fine.
 
 ### Fixed
+- A screen share or camera that froze for a viewer while the call stayed connected now recovers on its own. After 8 seconds without new frames the viewer asks for a fresh keyframe, and after 14 it reconnects that video. A video the relay paused because its tile is hidden is left alone.
 - A message with a table showed up in push and desktop notifications as raw pipes and dashes. Notifications now read a table as rows of text (cells joined with " · ", the header and first three rows, then "+N more rows") and leave out markdown markers, the way the Android and iOS apps already do.
 - A link to a thread reply or a forum post opened the channel without the post. It now opens the thread or topic at that post, links in the apps' `/#CODE/ID` form work, and a link to the same server opens in place instead of in a new tab.
 - People who are offline no longer show as idle. The status someone last chose (Away or Do Not Disturb) is kept while they are gone, and the pop-out DM and the profile card showed that instead of offline. Every status dot now checks offline first, and offline looks the same everywhere: a hollow dot.

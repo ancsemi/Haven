@@ -606,6 +606,16 @@ module.exports = function register(socket, ctx) {
     });
   });
 
+  socket.on('request-video-keyframe', (data) => {
+    if (!data || typeof data !== 'object' || !isString(data.code, 8, 8) || !isInt(data.sharerId)) return;
+    const voiceRoom = voiceUsers.get(data.code);
+    if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+    const webcam = data.source === 'webcam';
+    if (!(webcam ? activeWebcamUsers : activeScreenSharers).get(data.code)?.has(data.sharerId)) return;
+    const sharerInfo = voiceRoom.get(data.sharerId);
+    sharerInfo && io.to(sharerInfo.socketId).emit('video-keyframe-request', { targetUserId: socket.user.id, channelCode: data.code, source: webcam ? 'webcam' : 'screen' });
+  });
+
   // ── Webcam ─────────────────────────────────────────────────
   socket.on('webcam-started', (data) => {
     if (!data || typeof data !== 'object') return;
