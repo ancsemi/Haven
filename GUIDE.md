@@ -239,6 +239,14 @@ Seeds pair the usual way, so the top two seeds can only meet in the final. When 
 
 A bracket's creator runs it, and so does anyone with **Delete Messages** in the channel. Make the channel **Read Only** to keep starting brackets to the people with the read-only override. Changes show up for everyone right away, and switching brackets off keeps them for when the channel is switched back on.
 
+### Docs Channels 📄
+
+Keep longer writing (stories, guides, rules, notes) in a docs channel: turn one on from **Channel Functions → Docs**, or tick **Docs** when creating a channel. A docs channel shows its documents instead of messages, with the list on the left (most recently changed first) and the open document beside it. On a phone the list and the document take turns, with **← Documents** to go back.
+
+Anyone who can post there starts one with **New document**. Documents use the same formatting as messages (headings, bold, italics, lists, quotes and code), which the toolbar or Ctrl+B and Ctrl+I add for you, and **Preview** shows how it will look. Ctrl+S saves. Changes you have not saved yet are kept on your device, so closing the tab or reloading brings them back. A document can be up to 50,000 characters.
+
+A document belongs to the person who wrote it. Tick **Let everyone who can post here edit it** to share it; only its author and anyone with **Delete Messages** in the channel change that or delete the document. If someone else saves while you are still writing, Haven tells you and lets you choose: **Save mine over it**, or **Discard mine and read theirs**. Nothing is overwritten without someone choosing it. Changes show for everyone live. Make the channel **Read Only** to keep writing to the people with the read-only override.
+
 ### Sub-servers 🗂️
 
 Split one server into groups of channels, such as a main chat area and an 18+ area, instead of running two servers. Right-click a top-level channel, choose **Move to sub-server…**, and pick **New sub-server** to make the first one. Once a server has sub-servers, a row of pills above the channel list picks which one the sidebar shows; **Main** holds the channels outside any sub-server. A dot on a pill means one of its channels has unread messages, and opening a channel from a link or a mention brings its sub-server up. New channels are made in the sub-server you are looking at, and sub-channels always stay with their parent.

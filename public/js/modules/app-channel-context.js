@@ -380,6 +380,8 @@ _updateChannelFunctionsPanel(ch) {
   this._setCfnBadge('overview', isOverview, t(isOverview ? 'channel_functions.on' : 'channel_functions.off'));
   const isBracket = ch.is_bracket === 1;
   this._setCfnBadge('bracket', isBracket, t(isBracket ? 'channel_functions.on' : 'channel_functions.off'));
+  const isDocs = ch.is_docs === 1;
+  this._setCfnBadge('docs', isDocs, t(isDocs ? 'channel_functions.on' : 'channel_functions.off'));
   const isPrivate = !!ch.is_private;
   {
     const _cfnPanel = document.getElementById('channel-functions-panel'); const nsfwRow = _cfnPanel?.querySelector('.cfn-row[data-fn="nsfw"] .cfn-badge');

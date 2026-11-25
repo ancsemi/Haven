@@ -489,7 +489,7 @@ _renderMessages(messages, lastReadMessageId) {
   container.style.removeProperty('--forum-tile');
   delete container.dataset.forumTile;
   this._forumActive = false;
-  container.classList.remove('calendar-view', 'overview-view', 'bracket-view');
+  container.classList.remove('calendar-view', 'overview-view', 'bracket-view', 'docs-view');
   this._channelView = null;
   // A calendar channel shows its month of events instead of messages.
   if (this._isCalendarChannel?.(this.currentChannel)) {
@@ -504,6 +504,11 @@ _renderMessages(messages, lastReadMessageId) {
   // A bracket channel shows its tournaments.
   if (this._isBracketChannel?.(this.currentChannel)) {
     this._renderBrackets();
+    return;
+  }
+  // A docs channel shows its documents.
+  if (this._isDocsChannel?.(this.currentChannel)) {
+    this._renderDocs();
     return;
   }
   if (this._isForumChannel && this._isForumChannel(this.currentChannel)) {

@@ -18,7 +18,7 @@ _updateComposerVisibility(channel) {
   const _isReadOnly = channel && channel.read_only === 1 && !this.user?.isAdmin && !channel.canOverrideReadOnly;
   // A calendar is added to through its own dialog, and an overview only
   // shows what is posted elsewhere, so neither has a composer.
-  const _ownView = !!(channel && (channel.is_calendar || channel.is_overview || channel.is_bracket) && !channel.is_dm);
+  const _ownView = !!(channel && (channel.is_calendar || channel.is_overview || channel.is_bracket || channel.is_docs) && !channel.is_dm);
   if (msgInputArea) msgInputArea.style.display = (_isReadOnly || _ownView || (_textOff && _mediaOff)) ? 'none' : '';
   // A media-only channel has no text box to press Enter in, so the send
   // button is the only way to post an attachment: it stays, even for
@@ -621,7 +621,7 @@ _renderChannels() {
     const isAnnouncement = ch.notification_type === 'announcement';
     const isTemporary = !!ch.expires_at;
     const isTempVoice = !!ch.is_temp_voice;
-    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_overview ? '🏠' : ch.is_calendar ? '📅' : ch.is_bracket ? '🏆' : ch.is_forum ? '🗂️' : (ch.is_nsfw ? '🔞' : '#')))));
+    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_overview ? '🏠' : ch.is_calendar ? '📅' : ch.is_bracket ? '🏆' : ch.is_docs ? '📄' : ch.is_forum ? '🗂️' : (ch.is_nsfw ? '🔞' : '#')))));
     // NSFW channels stay out of sight when the user asked for that (phone in
     // public), except the one they are actually in.
     if (ch.is_nsfw && this._hideNsfw && this._hideNsfw() && ch.code !== this.currentChannel) el.style.display = 'none';

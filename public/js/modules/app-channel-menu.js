@@ -39,8 +39,9 @@ _bindChannelMenu() {
       const isCalendar = document.getElementById('new-channel-calendar')?.checked || false;
       const isOverview = document.getElementById('new-channel-overview')?.checked || false;
       const isBracket = document.getElementById('new-channel-bracket')?.checked || false;
+      const isDocs = document.getElementById('new-channel-docs')?.checked || false;
       if (name) {
-        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum, isCalendar, isOverview, isBracket, subserverId: this._subserverId || undefined, ...this._channelTemplateExtras() });
+        this.socket.emit('create-channel', { name, isPrivate, temporary, duration, addAllMembers, isForum, isCalendar, isOverview, isBracket, isDocs, subserverId: this._subserverId || undefined, ...this._channelTemplateExtras() });
         this._resetChannelTemplate();
         nameInput.value = '';
         const pvt = document.getElementById('new-channel-private');
@@ -49,7 +50,7 @@ _bindChannelMenu() {
         if (tmp) tmp.checked = false;
         const all = document.getElementById('new-channel-add-all');
         if (all) all.checked = false;
-        for (const id of ['new-channel-calendar', 'new-channel-overview', 'new-channel-bracket']) {
+        for (const id of ['new-channel-calendar', 'new-channel-overview', 'new-channel-bracket', 'new-channel-docs']) {
           const box = document.getElementById(id);
           if (box) box.checked = false;
         }
@@ -61,7 +62,7 @@ _bindChannelMenu() {
   }
 
   // A channel shows one view at most: ticking one clears the others.
-  const viewBoxes = ['new-channel-forum', 'new-channel-calendar', 'new-channel-overview', 'new-channel-bracket']
+  const viewBoxes = ['new-channel-forum', 'new-channel-calendar', 'new-channel-overview', 'new-channel-bracket', 'new-channel-docs']
     .map(id => document.getElementById(id)).filter(Boolean);
   for (const box of viewBoxes) {
     box.addEventListener('change', () => { if (box.checked) viewBoxes.forEach(other => { if (other !== box) other.checked = false; }); });
@@ -304,13 +305,13 @@ _bindChannelMenu() {
       const newVal = ch && ch.read_only ? 0 : 1;
       optimistic({ read_only: newVal });
       this.socket.emit('toggle-channel-permission', { code, permission: 'read_only' });
-    } else if (fn === 'forum' || fn === 'calendar' || fn === 'overview' || fn === 'bracket') {
+    } else if (fn === 'forum' || fn === 'calendar' || fn === 'overview' || fn === 'bracket' || fn === 'docs') {
       // A channel shows one view at most: turning one on turns the others
       // off, as the server does. The open channel reloads into its new view
       // now instead of on the next visit.
       const col = `is_${fn}`;
       const newVal = ch && ch[col] ? 0 : 1;
-      optimistic(newVal ? { is_forum: 0, is_calendar: 0, is_overview: 0, is_bracket: 0, [col]: 1 } : { [col]: 0 });
+      optimistic(newVal ? { is_forum: 0, is_calendar: 0, is_overview: 0, is_bracket: 0, is_docs: 0, [col]: 1 } : { [col]: 0 });
       this.socket.emit('toggle-channel-permission', { code, permission: fn });
       if (code === this.currentChannel) {
         this._updateComposerVisibility?.(ch);

@@ -87,6 +87,7 @@ const registerForumVotes = require('./forumVotes');
 const registerCalendar = require('./calendar');
 const registerOverview = require('./overview');
 const registerBrackets = require('./brackets');
+const registerDocs = require('./docs');
 const registerSubservers = require('./subservers');
 const registerForumPictureVotes = require('./forumPictureVotes');
 const registerBadges = require('./badges');
@@ -2932,6 +2933,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerCalendar(socket, ctx);
     registerOverview(socket, ctx);
     registerBrackets(socket, ctx);
+    registerDocs(socket, ctx);
     registerSubservers(socket, ctx);
     registerForumPictureVotes(socket, ctx);
     registerBadges(socket, ctx);

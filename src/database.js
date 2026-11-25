@@ -14,6 +14,7 @@ const forumUnread = require('./forumUnread');
 const calendarEvents = require('./calendarEvents');
 const brackets = require('./brackets');
 const subservers = require('./subservers');
+const docs = require('./docs');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
 const { migrateMessageNsfw } = require('./messageNsfw');
@@ -1136,6 +1137,8 @@ function initDatabase() {
     { name: 'is_overview',       sql: "ALTER TABLE channels ADD COLUMN is_overview INTEGER DEFAULT 0" },
     // Bracket mode: the channel shows tournament brackets (src/brackets.js).
     { name: 'is_bracket',        sql: "ALTER TABLE channels ADD COLUMN is_bracket INTEGER DEFAULT 0" },
+    // Docs mode: the channel holds written documents (src/docs.js).
+    { name: 'is_docs',           sql: "ALTER TABLE channels ADD COLUMN is_docs INTEGER DEFAULT 0" },
     // The sub-server a channel sits in; NULL is the main server (src/subservers.js).
     { name: 'subserver_id',      sql: "ALTER TABLE channels ADD COLUMN subserver_id INTEGER DEFAULT NULL" },
     // #5390: extend the self-destruct timer with a "clear messages only"
@@ -1754,6 +1757,7 @@ function initDatabase() {
   calendarEvents.ensureTables(db);
   brackets.ensureTables(db);
   subservers.ensureTables(db);
+  docs.ensureTables(db);
   // Profile badges (#5632); needs forum_votes, made above.
   migrateBadges(db);
 

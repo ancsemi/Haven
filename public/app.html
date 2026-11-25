@@ -134,6 +134,10 @@
                 <input type="checkbox" id="new-channel-bracket">
                 <span>🏆 <span data-i18n="app.sidebar.bracket_channel">Brackets</span></span>
               </label>
+              <label class="checkbox-row" data-i18n-title="app.sidebar.docs_hint" title="Written documents instead of messages" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
+                <input type="checkbox" id="new-channel-docs">
+                <span>📄 <span data-i18n="app.sidebar.docs_channel">Docs</span></span>
+              </label>
               <label class="checkbox-row" id="new-channel-add-all-row" data-i18n-title="app.sidebar.add_all_hint" title="Everyone joins automatically" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
                 <input type="checkbox" id="new-channel-add-all">
                 <span>👥 <span data-i18n="app.sidebar.add_all_members">Add all members</span></span>
@@ -4869,6 +4873,10 @@
       </div>
       <div class="cfn-row" data-fn="bracket" data-i18n-title="channel_functions.bracket_hint" title="Show tournament brackets instead of messages. Members start brackets; the person who started one, or a moderator, reports the results">
         <span class="cfn-label">🏆 <span data-i18n="channel_functions.bracket">Brackets</span></span>
+        <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
+      </div>
+      <div class="cfn-row" data-fn="docs" data-i18n-title="channel_functions.docs_hint" title="Show written documents instead of messages. Members write documents; the author, or anyone when the author allows it, edits them">
+        <span class="cfn-label">📄 <span data-i18n="channel_functions.docs">Docs</span></span>
         <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
       </div>
       <div class="cfn-row" data-fn="forum-tags" data-i18n-title="channel_functions.forum_tags_hint" title="The tags topics in this forum can carry, one per line">
