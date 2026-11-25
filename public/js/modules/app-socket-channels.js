@@ -97,31 +97,18 @@ _listenChannelsAndMessages() {
       window.history.replaceState({}, '', cleanUrl);
     }
 
-    // Channel / message deep link (?channel=CODE[&message=ID])
-    const linkChannel = urlParams.get('channel');
-    const linkMessage = urlParams.get('message');
-    if (linkChannel && !this._channelLinkHandled) {
+    // Channel / message deep link (?channel=CODE[&message=ID], or the apps'
+    // /#CODE/ID form when the app is opened with it directly)
+    const link = window.HavenMessageLinks
+      ? (HavenMessageLinks.fromSearch(window.location.search) || HavenMessageLinks.fromHash(window.location.hash))
+      : null;
+    if (link && !this._channelLinkHandled) {
       this._channelLinkHandled = true;
       sessionStorage.removeItem('haven_pending_channel');
       sessionStorage.removeItem('haven_pending_message');
-      const known = (channels || []).some(c => c.code === linkChannel);
-      const go = () => {
-        this.switchChannel(linkChannel);
-        if (linkMessage) {
-          const msgId = parseInt(linkMessage, 10);
-          if (!isNaN(msgId)) {
-            // Wait briefly for messages to load before jumping
-            setTimeout(() => this._jumpToMessage(msgId), 600);
-          }
-        }
-      };
-      if (known) {
-        go();
-      } else {
-        // Do not auto-join by deep link. Message/channel links are for members
-        // who already have channel access.
-        this._showToast?.(t('toasts.channel_link_unavailable'), 'error');
-      }
+      // Do not auto-join by deep link. Message/channel links are for members
+      // who already have channel access; _openMessageLink says so otherwise.
+      this._openMessageLink(link.channel, link.message);
       window.history.replaceState({}, '', window.location.pathname);
     }
 
@@ -283,7 +270,15 @@ _listenChannelsAndMessages() {
       this._appendMessages(data.messages);
       this._loadingFuture = false;
     } else if (data.around) {
-      // Jump-to-message: replace everything and scroll to target
+      // Jump-to-message: replace everything and scroll to target. A thread
+      // reply (or a reply in a forum topic) never shows in the channel: the
+      // server centres the window on its parent and names the reply in
+      // threadReply, and the thread is opened at it once the channel is drawn.
+      const asked = this._jumpAsked;
+      this._jumpAsked = null;
+      const tr = data.threadReply;
+      const ours = !!asked && (Number(data.around) === asked || Number(tr?.messageId) === asked);
+      if (ours) this._jumpTargetId = tr ? tr.parentId : asked;
       if (data.messages.length > 0) {
         this._oldestMsgId = data.messages[0].id;
         this._newestMsgId = data.messages[data.messages.length - 1].id;
@@ -296,6 +291,7 @@ _listenChannelsAndMessages() {
       this._historyAfter = null;
       // _jumpTargetId is already set by _jumpToMessage; _renderMessages reads it
       this._renderMessages(data.messages);
+      if (ours) this._afterJumpHistory(data);
     } else {
       // Initial load: replace everything
       this._noMoreFuture = true;
@@ -307,6 +303,8 @@ _listenChannelsAndMessages() {
         this._noMoreHistory = true;
       }
       this._renderMessages(data.messages, data.lastReadMessageId);
+      // A link opened into this channel jumps once its history is drawn.
+      this._runPendingLinkJump(data.channelCode);
     }
 
     // Re-append any pending E2E notice (survives message re-render after key change)

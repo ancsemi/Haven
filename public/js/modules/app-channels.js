@@ -660,9 +660,10 @@ _renderChannels() {
         });
         if (collapsed) {
           // Bubble up sub-channel unreads to the parent
+          const counted = this._countedUnread();
           const subTotal = this.channels
             .filter(c => c.parent_channel_id === ch.id)
-            .reduce((sum, c) => sum + (this.unreadCounts[c.code] || 0), 0);
+            .reduce((sum, c) => sum + counted(c.code), 0);
           if (subTotal > 0) {
             let bubble = el.querySelector('.channel-badge-bubble');
             if (!bubble) {
@@ -852,9 +853,10 @@ _renderChannels() {
         if (nowCollapsed) {
           const allChans = categories.get(cat) || [];
           let total = 0;
+          const counted = this._countedUnread();
           allChans.forEach(c => {
-            total += this.unreadCounts[c.code] || 0;
-            (subChannelMap[c.id] || []).forEach(s => { total += this.unreadCounts[s.code] || 0; });
+            total += counted(c.code);
+            (subChannelMap[c.id] || []).forEach(s => { total += counted(s.code); });
           });
           if (total > 0) {
             if (badge) { badge.textContent = total > 99 ? '99+' : total; badge.style.display = ''; }
@@ -930,10 +932,8 @@ _renderChannels() {
 
       // If collapsed and sub-channels have unreads, bubble a badge onto the parent
       if (isSubCollapsed && subs.length) {
-        const subTotal = subs.reduce((sum, s) => {
-          const cnt = (s.code in this.unreadCounts) ? this.unreadCounts[s.code] : (s.unreadCount || 0);
-          return sum + cnt;
-        }, 0);
+        const counted = this._countedUnread();
+        const subTotal = subs.reduce((sum, s) => sum + counted(s.code, s.unreadCount || 0), 0);
         if (subTotal > 0) {
           const parentEl = list.querySelector(`.channel-item[data-code="${ch.code}"]`);
           if (parentEl) {
@@ -950,9 +950,10 @@ _renderChannels() {
     if (cat && catCollapsed) {
       const allChans = categories.get(cat) || [];
       let total = 0;
+      const counted = this._countedUnread();
       allChans.forEach(c => {
-        total += this.unreadCounts[c.code] || 0;
-        (subChannelMap[c.id] || []).forEach(s => { total += this.unreadCounts[s.code] || 0; });
+        total += counted(c.code);
+        (subChannelMap[c.id] || []).forEach(s => { total += counted(s.code); });
       });
       if (total > 0) {
         const catEl = list.querySelector(`[data-category="${CSS.escape(cat)}"]`);

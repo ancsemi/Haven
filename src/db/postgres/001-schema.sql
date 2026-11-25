@@ -805,6 +805,7 @@ CREATE TABLE "users" (
   "banner" TEXT DEFAULT NULL,
   "profile_theme_top" TEXT DEFAULT NULL,
   "profile_theme_bottom" TEXT DEFAULT NULL,
+  "profile_links" TEXT DEFAULT NULL,
   "public_key" TEXT DEFAULT NULL,
   "signing_key" TEXT DEFAULT NULL,
   "signing_backup" TEXT DEFAULT NULL,

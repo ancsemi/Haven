@@ -230,14 +230,19 @@ async _openThreadMentionFrom(code) {
   this._openMostRecentThreadMention();
 },
 
-// After a thread loads: bring the reply that mentioned you into view.
+// After a thread loads: bring the reply that mentioned you, or the reply a
+// link pointed at, into view.
 _threadJumpToMention() {
   const id = this._threadJumpTarget;
   this._threadJumpTarget = null;
   if (!id) return;
   const el = document.querySelector(`#thread-messages [data-msg-id="${Number(id)}"]`);
   if (!el) return;
-  el.scrollIntoView({ block: 'center' });
+  // Pictures and link cards above it still settle after the first pass.
+  const bring = () => el.scrollIntoView({ block: 'center' });
+  bring();
+  requestAnimationFrame(bring);
+  setTimeout(bring, 300);
   el.classList.add('highlight-flash');
   setTimeout(() => el.classList.remove('highlight-flash'), 2000);
 },

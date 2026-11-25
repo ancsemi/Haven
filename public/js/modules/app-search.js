@@ -740,7 +740,7 @@ _searchHighlightTextNodes(root, query) {
 // _fetchLinkPreviews: inline images and internal URLs never get a button.
 _searchDeferEmbeds(item) {
   const content = item.querySelector('.search-result-content');
-  if (!content) return;
+  if (!content || this._hideEmbedsOn?.()) return;
   const seen = new Set();
   content.querySelectorAll('a[href]').forEach(link => {
     const url = link.href;

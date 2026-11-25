@@ -1314,7 +1314,8 @@
   "notifications_runtime": {
     "title": "{{channel}}의 {{sender}}",
     "burn_message": "🔥 사라지는 메시지를 보냈습니다",
-    "sent_message": "메시지를 보냈습니다"
+    "sent_message": "메시지를 보냈습니다",
+    "more_rows": "+{{count}}개 행 더"
   },
   "activities_registry": {
     "flappy": "컨테이너를 피하고 최고 점수에 도전하세요!",

@@ -1850,8 +1850,6 @@
     },
     "embed_display": {
       "title": "Aperçus de liens",
-      "off": "Désactivés",
-      "off_hint": "Désactivés : masquer tous les aperçus de liens",
       "small": "Petits",
       "small_hint": "Petits : carte compacte avec un petit média",
       "medium": "Moyens",
