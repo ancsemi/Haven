@@ -301,13 +301,13 @@ _renderThreadList(filter = '') {
     const preview = this._threadRootPreview(th.content, 300);
     return `
       <div class="thread-list-row" role="button" tabindex="0" data-parent-id="${th.id}">
+        <span class="thread-list-preview">${this._escapeHtml(preview)}</span>
         <span class="thread-list-row-top">
           <span class="thread-list-author">${this._escapeHtml(th.username || '')}</span>
           <span class="thread-list-replies">${this._escapeHtml(label)}</span>
           <span class="thread-list-when">${this._escapeHtml(this._formatTime?.(th.last_reply_at) || '')}</span>
           ${this._threadListNewHtml?.(th) || ''}
         </span>
-        <span class="thread-list-preview">${this._escapeHtml(preview)}</span>
       </div>`;
   }).join('');
 },
@@ -509,7 +509,7 @@ _renderMediaGalleryTab(tab) {
     body.innerHTML = `<div class="media-gallery-grid${selectMode ? ' select-mode' : ''}">${items.map(it => `
       <div class="media-grid-item${selected.has(this._mediaItemKey(it)) ? ' selected' : ''}" data-url="${esc(it.url)}" data-msg-id="${it.message_id}" data-action="video-lightbox" title="${esc(it.username || '')} • ${esc(fmt(it.created_at))}">
         ${selBox(it)}
-        <video src="${esc(it.url)}" preload="metadata" muted></video>
+        <video src="${esc(it.url)}" preload="${this._liteOn() ? 'none' : 'metadata'}" muted></video>
         <div class="media-grid-play">▶</div>
         <button class="media-grid-jump" data-action="jump" data-msg-id="${it.message_id}" title="${t('app.actions.jump_to_message')}">↗</button>
         <div class="media-grid-meta">${tileTags(it)}<div class="media-grid-date">${esc(fmt(it.created_at))}${sizeBadge(it) ? ' • ' + sizeBadge(it) : ''}</div></div>

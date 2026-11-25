@@ -502,7 +502,7 @@
   gap: 0.5rem;
   flex-wrap: wrap;
 }
-.thread-list-author { font-weight: 600; font-size: 0.85rem; }
+.thread-list-author { color: var(--text-muted); font-size: 0.78rem; }
 .thread-list-replies {
   background: var(--bg-tertiary, var(--bg-secondary));
   color: var(--text-muted);
@@ -512,8 +512,9 @@
 }
 .thread-list-when { color: var(--text-muted); font-size: 0.72rem; margin-left: auto; }
 .thread-list-preview {
-  color: var(--text-muted);
-  font-size: 0.82rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

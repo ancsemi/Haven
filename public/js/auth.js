@@ -5,9 +5,11 @@
   const _urlParams = new URLSearchParams(window.location.search);
   let _pendingInvite = _urlParams.get('invite') || sessionStorage.getItem('haven_pending_invite') || '';
   if (_pendingInvite) sessionStorage.setItem('haven_pending_invite', _pendingInvite);
-  // Preserve channel/message deep-link params (?channel=CODE&message=ID) too
-  const _pendingChannel = _urlParams.get('channel') || sessionStorage.getItem('haven_pending_channel') || '';
-  const _pendingMessage = _urlParams.get('message') || sessionStorage.getItem('haven_pending_message') || '';
+  // Preserve channel/message deep-link params (?channel=CODE&message=ID) too,
+  // and the apps' copied form (/#CODE/ID), which lands on this page.
+  const _hashLink = window.HavenMessageLinks?.fromHash(window.location.hash) || null;
+  const _pendingChannel = _urlParams.get('channel') || _hashLink?.channel || sessionStorage.getItem('haven_pending_channel') || '';
+  const _pendingMessage = _urlParams.get('message') || (_hashLink?.message ? String(_hashLink.message) : '') || sessionStorage.getItem('haven_pending_message') || '';
   if (_pendingChannel) sessionStorage.setItem('haven_pending_channel', _pendingChannel);
   if (_pendingMessage) sessionStorage.setItem('haven_pending_message', _pendingMessage);
 

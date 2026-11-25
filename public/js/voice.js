@@ -176,6 +176,7 @@ class VoiceManager {
     this._pendingConfiguredStun = null;
 
     this._setupSocketListeners();
+    this._stallWatch = typeof window !== 'undefined' && window.HavenVideoStall ? new window.HavenVideoStall({ targets: () => this._stallTargets(), onStall: (target, step) => this._recoverStalledVideo(target, step) }).start() : null;
   }
 
   // ── Fetch ICE servers from backend (STUN + optional TURN) ──
@@ -1251,6 +1252,11 @@ class VoiceManager {
       tryRenegotiate(6);
     });
 
+    this.socket.on('video-keyframe-request', (data) => {
+      if (data?.channelCode !== this.currentChannel || data.targetUserId == null || this._isRelayedPeer(data.targetUserId)) return;
+      data.source === 'webcam' ? this.isWebcamActive && this._requestKeyframe(this.webcamStream, data.targetUserId) : this._requestScreenKeyframe(data.targetUserId);
+    });
+
     // Server asks us to renegotiate our webcam with a late joiner
     this.socket.on('renegotiate-webcam', async (data) => {
       if (!this.webcamStream || !this.isWebcamActive) return;
@@ -1360,8 +1366,12 @@ class VoiceManager {
   // generateKeyFrame exists on Chromium video senders; elsewhere it is a
   // guarded no-op.
   _requestScreenKeyframe(targetUserId = null) {
-    if (!this.isScreenSharing || !this.screenStream) return;
-    const videoTracks = new Set(this.screenStream.getVideoTracks());
+    this._requestKeyframe(this.isScreenSharing && this.screenStream, targetUserId);
+  }
+
+  _requestKeyframe(stream, targetUserId = null) {
+    if (!stream) return;
+    const videoTracks = new Set(stream.getVideoTracks());
     if (!videoTracks.size) return;
     const peers = targetUserId != null
       ? [[targetUserId, this.peers.get(targetUserId)]]
@@ -1378,6 +1388,33 @@ class VoiceManager {
         }
       } catch { /* sender gone mid-iteration, ignore */ }
     }
+  }
+
+  // Inbound video that stopped decoding while its track is still live: the
+  // audio keeps playing and only a rejoin used to bring the picture back.
+  _stallTargets() {
+    if (!this.inVoice) return [];
+    const targets = [];
+    for (const [userId, peer] of this.peers) {
+      const conn = peer?.connection;
+      if (!conn || conn.connectionState !== 'connected' || typeof conn.getReceivers !== 'function' || this._isRelayedPeer(userId)) continue;
+      const wanted = [['screen', this.screenSharers.has(userId) && (this._screenTileTrackId(userId) || peer._screenTrackId)], ['webcam', this.webcamUsers.has(userId) && peer._webcamTrackId]];
+      for (const [source, trackId] of wanted) {
+        const receiver = trackId && conn.getReceivers().find((r) => r.track && r.track.kind === 'video' && r.track.id === trackId);
+        if (receiver) targets.push({ key: `p2p:${source}:${userId}`, track: receiver.track, stats: () => receiver.getStats(), userId, source });
+      }
+    }
+    return targets.concat(this._relay?.stallTargets?.() || []);
+  }
+
+  async _recoverStalledVideo(target, step) {
+    console.warn('[Voice] Inbound video stalled, recovering', target.key, 'step', step);
+    if (target.producerId) {
+      const relay = this._relay;
+      return relay && (step === 1 ? relay.requestKeyFrame(target.producerId) : relay.resubscribe(target.producerId)).catch((err) => console.warn('[Relay] Stalled video recovery failed:', err.message));
+    }
+    this.socket.emit('request-video-keyframe', { code: this.currentChannel, sharerId: target.userId, source: target.source });
+    step > 1 && target.source === 'screen' && this.requestScreenStream(target.userId);
   }
 
   // ── Public API ──────────────────────────────────────────
@@ -2133,12 +2170,7 @@ class VoiceManager {
     }
     // Also mute all audio elements as fallback
     document.querySelectorAll('#audio-container audio').forEach(el => {
-      if (this.isDeafened) {
-        el.dataset.prevVolume = el.volume;
-        el.volume = 0;
-      } else {
-        el.volume = parseFloat(el.dataset.prevVolume || 1);
-      }
+      this.isDeafened ? (el.dataset.prevVolume = el.volume, el.volume = 0) : (el.dataset.prevVolume !== undefined && (el.volume = parseFloat(el.dataset.prevVolume)), delete el.dataset.prevVolume);
     });
     if (this._botAudio) this._botAudio.audio.volume = this.isDeafened ? 0 : 1;
     return this.isDeafened;

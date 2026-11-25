@@ -440,6 +440,7 @@
     "muted_reason": "You have been given a {{duration}} min timeout: {{reason}}",
     "unmuted": "Your timeout has ended",
     "bio_updated": "Bio updated",
+    "profile_link_invalid": "Each link needs a label and an address that starts with https://",
     "birthday_updated": "Birthday updated",
     "birthday_hidden": "Birthday hidden from your profile",
     "birthday_shown": "Birthday shown on your profile",
@@ -1518,7 +1519,8 @@
   "notifications_runtime": {
     "title": "{{sender}} in {{channel}}",
     "burn_message": "🔥 Sent a burn message",
-    "sent_message": "Sent a message"
+    "sent_message": "Sent a message",
+    "more_rows": "+{{count}} more rows"
   },
   "activities_registry": {
     "flappy": "Dodge containers, chase high scores!",
@@ -1613,6 +1615,7 @@
       "user_group": "User",
       "language": "Language",
       "localization": "Localization",
+      "lite_mode": "Lite Mode",
       "layout": "Layout",
       "sounds": "Sounds",
       "call_settings": "Voice & Video",
@@ -1709,6 +1712,11 @@
     },
     "localization_section": {
       "title": "Localization"
+    },
+    "lite_mode": {
+      "title": "Lite Mode",
+      "label": "Lite mode",
+      "hint": "For slow or older devices. Turns on Reduce Motion, keeps GIFs, animated emoji, avatars, banners and stickers on their first frame until you point at them, drops blur effects, shows link previews as text only and loads videos only when you press play. Only changes this device."
     },
     "language_section": {
       "title": "Language",
@@ -1897,7 +1905,7 @@
         "full_hint": "Full: large inline images like Discord"
       },
       "hide_media": "Hide pictures and videos",
-      "hide_media_hint": "Pictures, GIFs and videos in chat show as a small tag you click to see them, and link cards start folded. Handy around other people. Only changes what you see, on this device.",
+      "hide_media_hint": "Pictures, GIFs and videos in chat show as a small tag you click to see them, and link previews with a picture or video start folded. Handy around other people. Only changes what you see, on this device.",
       "media_layout": {
         "title": "Pictures Sent Together",
         "default": "Server default",
@@ -1931,8 +1939,8 @@
     },
     "embed_display": {
       "title": "Link Previews",
-      "off": "Off",
-      "off_hint": "Off: hide all link previews",
+      "hide": "Hide link previews",
+      "hide_hint": "Links stay plain links: no preview cards and no video players, and nothing is fetched for them. Pictures posted in chat still show. Only changes what you see, on this device.",
       "small": "Small",
       "small_hint": "Small: compact card with small media",
       "medium": "Medium",
@@ -3556,6 +3564,13 @@
       "bio_label": "Bio",
       "bio_max": "(max 190 chars)",
       "bio_placeholder": "Tell people about yourself…",
+      "links_label": "Links",
+      "links_hint": "(up to 5, https only)",
+      "links_add": "Add link",
+      "links_label_hint": "Label",
+      "links_up": "Move up",
+      "links_down": "Move down",
+      "links_remove": "Remove link",
       "birthday_label": "Birthday",
       "birthday_hint": "You can only set your birthday once, so double-check it.",
       "birthday_set_note": "Your birthday is set and can't be changed.",
