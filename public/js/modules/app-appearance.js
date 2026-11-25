@@ -651,7 +651,8 @@ _hideEmbedsOn() {
 
 _setHideEmbeds(on) {
   this._hideEmbeds = !!on;
-  try { localStorage.setItem('haven-hide-embeds', String(!!on)); } catch {}
+  try { localStorage.setItem('haven-hide-embeds', String(!!on)); }
+  catch { /* private mode: the choice lasts until the page closes */ }
   document.body?.classList?.toggle('hide-embeds', !!on);
 },
 
