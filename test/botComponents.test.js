@@ -101,19 +101,19 @@ test('a form keeps Discord\'s shape, its boxes held to the message limit', () =>
   bad(form(box('a', { label: '' })), /label is required/);
   bad(form(box('a', { min_length: 5, max_length: 4 })), /max_length/);
   bad(form(box('a', { value: 'one\ntwo' })), /one line/);
-  bad(form(box('a', { value: 'x‮y' })), /invisible/);
+  bad(form(box('a', { value: 'x\u202Ey' })), /invisible/);
 });
 
 test('what someone types is checked against the form', () => {
   const m = parts.cleanModal(form(box('name', { max_length: 40 }), box('idea', { style: 2, min_length: 5, required: false })), 2000);
   const send = (name, idea) => parts.checkModalSubmit(m, [{ custom_id: 'name', value: name }, { custom_id: 'idea', value: idea }]);
   // Any language, with the joiners Persian needs, and whole emoji.
-  for (const ok of ['Alice', 'Zoë', 'Привет', '你好', 'می‌خواهم', 'Tiếng Việt', '👨‍👩‍👧 🏴󠁧󠁢󠁳󠁣󠁴󠁿 1️⃣']) {
+  for (const ok of ['Alice', 'Zoë', 'Привет', '你好', 'می\u200Cخواهم', 'Tiếng Việt', '👨\u200D👩\u200D👧 🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F} 1\uFE0F⃣']) {
     assert.deepEqual(send(ok, ''), { fields: [{ custom_id: 'name', value: ok }, { custom_id: 'idea', value: '' }] }, ok);
   }
   assert.equal(send('a', 'one\r\ntwo\tthree').fields[1].value, 'one\ntwo\tthree');
   // Nothing that hides or reorders text.
-  for (const sneaky of ['invoice‮fdp.exe', 'a​b', 'x⁦y', 'tag\u{E0041}', 'blankㅤ', 'nul\u0000', 'x\u{F8FF}', 'Ź̂̃̄̅']) {
+  for (const sneaky of ['invoice\u202Efdp.exe', 'a\u200Bb', 'x\u2066y', 'tag\u{E0041}', 'blank\u3164', 'nul\u0000', 'x\u{F8FF}', 'Ź̂̃̄̅']) {
     assert.ok(send(sneaky, '').error, JSON.stringify(sneaky));
   }
   assert.match(send('a\nb', '').error, /one line/);
@@ -223,7 +223,7 @@ test('a click reaches the bot, signed, and the bot can change the message', asyn
   assert.equal(shown.components[0].components[0].max_length, 2000);
   const fill = (sock, value) => h.ask(sock, 'submit-bot-modal', { formId: shown.formId, fields: [{ custom_id: 'place', value }] });
   assert.ok((await fill(A, 'x')).error, 'only the person who clicked');
-  assert.match((await fill(B, 'caf‮é')).error, /invisible/);
+  assert.match((await fill(B, 'caf\u202Eé')).error, /invisible/);
   assert.deepEqual(await fill(B, 'Café Zoë'), { ok: true });
   const submitted = JSON.parse(heard.at(-1).body).interaction;
   assert.equal(submitted.type, 'modal_submit');

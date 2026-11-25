@@ -75,6 +75,7 @@ _openBotModal(form) {
   overlay.style.display = 'flex';
   overlay.innerHTML = `
     <form class="modal bot-modal">
+      <p class="bot-modal-from">${esc(t('bot_parts.modal_from', { name: form.from || t('bot_parts.modal_a_bot') }))}</p>
       <h3 style="margin-top:0">${esc(form.title)}</h3>
       ${inputs.map((c, i) => {
         const attrs = `id="bot-modal-${i}" class="settings-text-input" dir="auto" data-custom-id="${esc(c.custom_id)}"`
@@ -83,6 +84,7 @@ _openBotModal(form) {
         return `<label class="bot-modal-label" for="bot-modal-${i}">${esc(c.label)}${c.required ? ' <span class="bot-modal-required" aria-hidden="true">*</span>' : ''}</label>`
           + (c.style === 2 ? `<textarea ${attrs} rows="4"></textarea>` : `<input type="text" ${attrs}>`);
       }).join('')}
+      <p class="bot-modal-note">${esc(t('bot_parts.modal_warning', { name: form.from || t('bot_parts.modal_a_bot') }))}</p>
       <p class="bot-modal-error" role="alert" hidden></p>
       <div class="modal-actions" style="margin-top:12px">
         <button type="button" class="btn-sm" data-bot-modal="cancel">${esc(t('modals.common.cancel'))}</button>

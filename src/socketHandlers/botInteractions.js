@@ -55,6 +55,14 @@ module.exports = function register(socket, ctx) {
     return { ...msg, fromWebhook, channel };
   }
 
+  // The name people know the bot behind msg by.
+  function botName(msg) {
+    const row = msg.fromWebhook
+      ? db.prepare('SELECT name FROM webhooks WHERE id = ?').get(msg.webhook_id)
+      : db.prepare('SELECT COALESCE(display_name, username) AS name FROM users WHERE id = ?').get(msg.user_id);
+    return String(row?.name || '').slice(0, 80);
+  }
+
   // Hands an interaction to the bot behind msg: a bot account over its own
   // connection, a webhook at its callback URL. { ok, body } or { error }.
   async function deliver(msg, interaction) {
@@ -82,7 +90,9 @@ module.exports = function register(socket, ctx) {
     sweep(forms);
     const formId = crypto.randomUUID();
     forms.set(formId, { userId: click.userId, messageId: click.messageId, modal, expires: Date.now() + FORM_MS });
-    target.emit('bot-modal', { formId, title: modal.title, components: modal.components });
+    // The form names its bot: it looks like any other dialog, and nothing
+    // else on it says the answers leave Haven for that bot.
+    target.emit('bot-modal', { formId, from: click.from || '', title: modal.title, components: modal.components });
     return true;
   }
 
@@ -113,7 +123,7 @@ module.exports = function register(socket, ctx) {
       user: clicker(),
     };
 
-    const click = { userId: socket.user.id, socketId: socket.id, messageId, channelId: msg.channel_id };
+    const click = { userId: socket.user.id, socketId: socket.id, messageId, channelId: msg.channel_id, from: botName(msg) };
     if (!msg.fromWebhook) {
       sweep(clicks);
       clicks.set(interaction.id, { ...click, botId: msg.user_id, expires: Date.now() + ANSWER_MS });

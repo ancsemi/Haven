@@ -1605,3 +1605,6 @@ html.reduce-motion :is(.call-ring, .call-ring-pulse) { animation: none; }
 .merge-repost input { margin-top: 3px; flex-shrink: 0; }
 .merge-repost-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .merge-repost-text { font-size: .85rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A bot's form says whose it is and where the answers go (#5935). */
+.bot-modal-from { margin: 0 0 0.25rem; font-size: 0.75rem; font-weight: 600; color: var(--accent); }
+.bot-modal-note { margin: 0.75rem 0 0; padding: 0.5rem 0.625rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 0.75rem; color: var(--text-muted); }

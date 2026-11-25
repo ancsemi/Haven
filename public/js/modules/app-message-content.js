@@ -52,7 +52,7 @@ _formatContent(str, opts) {
   // breaks and tabs) so typed text can never pose as a placeholder.
   // Direction overrides and isolates go too: they can show a file name as
   // invoiceexe.pdf when it is really an .exe.
-  str = str.replace(/[\u0000-\u0008\u000B-\u001F\u007F‪-‮⁦-⁩]/g, '');
+  str = str.replace(/[\u0000-\u0008\u000B-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g, '');
 
   // Spoiler image: spoiler-img:<payload> where payload is an /uploads URL or
   // an e2e-img: marker. The sender marked this image as a spoiler, so render

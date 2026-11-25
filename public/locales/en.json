@@ -5095,7 +5095,10 @@
     "select_done": "Done",
     "select_count": "Pick {{min}} to {{max}}",
     "external_link": "Opens {{url}}",
-    "modal_submit": "Submit"
+    "modal_submit": "Submit",
+    "modal_from": "Form from the bot {{name}}",
+    "modal_a_bot": "a bot",
+    "modal_warning": "What you type here goes to {{name}}, not to Haven. Never enter a password or your encryption passphrase."
   },
   "role_menu": {
     "pick_one_only": "Pick one",

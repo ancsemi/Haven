@@ -315,10 +315,10 @@ function checkValues(component, raw) {
 // Zalgo. Persian, Arabic and Indic writing needs the joiners and direction
 // marks (U+200C to U+200F, U+061C), so those stay.
 const TYPED_EMOJI = /\p{RGI_Emoji}/gv;
-const TYPED_ALLOWED = /^[\p{L}\p{M}\p{N}\p{P}\p{S}\p{Zs}‌-‏؜]*$/u;
+const TYPED_ALLOWED = /^[\p{L}\p{M}\p{N}\p{P}\p{S}\p{Zs}\u200C-\u200F\u061C]*$/u;
 // Some invisible characters count as letters or marks: Hangul fillers,
 // variation selectors past the two emoji use, the grapheme joiner.
-const TYPED_INVISIBLE = /[\p{Default_Ignorable_Code_Point}--[‌-‏؜︎️]]/v;
+const TYPED_INVISIBLE = /[\p{Default_Ignorable_Code_Point}--[\u200C-\u200F\u061C\uFE0E\uFE0F]]/v;
 // As for display names: past three marks on one letter it is Zalgo.
 const TYPED_MARK_RUN = /\p{M}{4,}/u;
 
@@ -385,6 +385,11 @@ function cleanModal(raw, maxChars) {
       if (!r || r.type !== 1 || !Array.isArray(r.components) || r.components.length !== 1) fail(`${at} must be an action row holding one text input`);
       return { type: 1, components: [cleanTextInput(r.components[0], `${at}.components[0]`, seen, ceiling)] };
     });
+    // What the form says is held to the rule for what is typed into it: no
+    // invisible or text-direction characters, so a title or label cannot be
+    // made to read as something other than what it is.
+    const shown = [title, ...components.flatMap(r => [r.components[0].label, r.components[0].placeholder])];
+    if (shown.some(s => s && typed(String(s), true).error)) fail('The form text has an invisible or unsupported character');
     return { custom_id: id, title, components };
   } catch (err) {
     if (err instanceof PartsError) return { error: err.message };
