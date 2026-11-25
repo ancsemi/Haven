@@ -223,7 +223,13 @@ Turn any channel into a forum from **Channel Functions → Forum**, or tick **Fo
 
 Turn any channel into a calendar from **Channel Functions → Calendar**, or tick **Calendar** when creating it. A calendar channel shows a month of events instead of messages, with the month's events listed under the grid. Anyone who can post in the channel adds an event with **Add event** or by clicking a day: give it a title, a start and end (or make it all day), and optionally a place, details and a color. Everyone who can read the channel opens an event to see who is coming and answers **Going**, **Maybe** or **Can't go**; press your answer again to take it back. Changes show up for everyone right away.
 
-Times show in each member's own time zone. An all-day event is a date, so it lands on the same day for everyone. An event's creator can edit or delete it, and so can anyone with **Delete Messages** in the channel. Make the calendar **Read Only** to keep event planning to the people with the read-only override while everyone else can still answer. A channel is a forum or a calendar, not both, and switching a calendar off keeps its events for when it is switched back on.
+Times show in each member's own time zone. An all-day event is a date, so it lands on the same day for everyone. An event's creator can edit or delete it, and so can anyone with **Delete Messages** in the channel. Make the calendar **Read Only** to keep event planning to the people with the read-only override while everyone else can still answer. A channel shows one view at most (forum, calendar or overview), and switching a calendar off keeps its events for when it is switched back on.
+
+### Overview Channels 🏠
+
+Turn a channel into a front page for your server from **Channel Functions → Overview**, or tick **Overview** when creating it. Under the server banner, icon and name, an overview shows three cards: the **upcoming events** from calendar channels, the **latest announcements** from announcement channels, and the most active **forum topics**. The channel topic stays in the bar above, so it works well as a welcome line.
+
+Each member sees only what comes from channels they belong to and can read, so private and role-gated channels stay private. NSFW channels are left out unless the overview channel is itself marked NSFW. Self-destructing messages are never shown. The page refreshes when something changes in one of its channels. Click an event to open it in its calendar, an announcement to jump to it in its channel, or a topic to open its thread.
 
 ### Creating Sub-Channels
 

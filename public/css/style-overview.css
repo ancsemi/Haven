@@ -1,0 +1,39 @@
+/* Overview channels (app-overview.js): a front page for the server takes the
+   place of the message log. */
+
+.messages.overview-view { display: flex; flex-direction: column; padding: 0.75rem 1rem 1.5rem; }
+.ov-root { display: flex; flex-direction: column; gap: 0.85rem; max-width: 1100px; width: 100%; margin: 0 auto; }
+
+.ov-hero { border-radius: var(--radius); background: var(--bg-tertiary); background-size: cover; background-position: center; min-height: 84px; display: flex; align-items: flex-end; overflow: hidden; }
+.ov-hero.ov-has-banner { min-height: 170px; }
+.ov-hero-inner { display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem 1rem; width: 100%; }
+.ov-has-banner .ov-hero-inner { background: linear-gradient(transparent, rgba(0, 0, 0, 0.65)); color: #fff; }
+.ov-icon { width: 56px; height: 56px; border-radius: 14px; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 7px rgba(0, 0, 0, 0.35); }
+.ov-name { margin: 0; font-size: 1.45rem; overflow-wrap: anywhere; }
+.ov-error { margin: 0; color: var(--danger, #ed4245); font-size: 0.85rem; }
+
+.ov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 0.85rem; align-items: start; }
+.ov-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-secondary); padding: 0.75rem; min-width: 0; }
+.ov-card h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--text-primary); }
+.ov-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.ov-empty { margin: 0.25rem 0; font-size: 0.85rem; }
+
+.ov-item { display: flex; gap: 0.65rem; align-items: flex-start; width: 100%; text-align: left; border: none; background: none; color: var(--text-primary); padding: 0.45rem 0.5rem; border-radius: var(--radius-sm); cursor: pointer; font: inherit; }
+.ov-item:hover, .ov-item:focus-visible { background: var(--bg-hover); }
+.ov-body { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
+.ov-title { font-weight: 600; overflow-wrap: anywhere; }
+.ov-meta { font-size: 0.78rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.ov-excerpt { font-size: 0.85rem; color: var(--text-secondary); white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ov-channel { color: var(--text-secondary); }
+.ov-going { color: var(--success, #3ba55d); font-weight: 600; }
+
+.ov-date { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 44px; flex-shrink: 0; border-radius: var(--radius-sm); border-top: 4px solid var(--cal-color); background: var(--bg-tertiary); padding: 2px 0 4px; }
+.ov-date-month { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.ov-date-day { font-size: 1.15rem; font-weight: 700; line-height: 1.1; }
+
+@media (max-width: 640px) {
+  .messages.overview-view { padding: 0.5rem; }
+  .ov-hero.ov-has-banner { min-height: 120px; }
+  .ov-icon { width: 42px; height: 42px; border-radius: 10px; }
+  .ov-name { font-size: 1.2rem; }
+}

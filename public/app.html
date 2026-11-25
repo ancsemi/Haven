@@ -126,6 +126,10 @@
                 <input type="checkbox" id="new-channel-calendar">
                 <span>📅 <span data-i18n="app.sidebar.calendar_channel">Calendar</span></span>
               </label>
+              <label class="checkbox-row" data-i18n-title="app.sidebar.overview_hint" title="A front page for the server instead of messages" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
+                <input type="checkbox" id="new-channel-overview">
+                <span>🏠 <span data-i18n="app.sidebar.overview_channel">Overview</span></span>
+              </label>
               <label class="checkbox-row" id="new-channel-add-all-row" data-i18n-title="app.sidebar.add_all_hint" title="Everyone joins automatically" style="margin:2px 0;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.8rem;opacity:0.8">
                 <input type="checkbox" id="new-channel-add-all">
                 <span>👥 <span data-i18n="app.sidebar.add_all_members">Add all members</span></span>
@@ -4851,6 +4855,10 @@
       </div>
       <div class="cfn-row" data-fn="calendar" data-i18n-title="channel_functions.calendar_hint" title="Show a month of events instead of messages. Members add events and say if they are going">
         <span class="cfn-label">📅 <span data-i18n="channel_functions.calendar">Calendar</span></span>
+        <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
+      </div>
+      <div class="cfn-row" data-fn="overview" data-i18n-title="channel_functions.overview_hint" title="Show a front page for the server instead of messages: upcoming events, the latest announcements and forum activity">
+        <span class="cfn-label">🏠 <span data-i18n="channel_functions.overview">Overview</span></span>
         <span class="cfn-badge cfn-off" data-i18n="channel_functions.off">OFF</span>
       </div>
       <div class="cfn-row" data-fn="forum-tags" data-i18n-title="channel_functions.forum_tags_hint" title="The tags topics in this forum can carry, one per line">

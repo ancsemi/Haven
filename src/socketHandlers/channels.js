@@ -8,6 +8,16 @@ const { isSafeUploadRelPath } = storage;
 const { isString, isInt, releasableUploads, CHANNEL_NAME_RE, NEW_DMS_PER_HOUR } = require('./helpers');
 const { removeChannelMember } = require('../channelMemberRemoval');
 
+// What a channel can show in place of its message log, as
+// [create-channel flag, Channel Functions name, column]. A channel shows one
+// of them at most: asking for several when creating keeps the first in this
+// list, and turning one on in Channel Functions turns the others off.
+const CHANNEL_VIEWS = [
+  ['isOverview', 'overview', 'is_overview'],
+  ['isCalendar', 'calendar', 'is_calendar'],
+  ['isForum', 'forum', 'is_forum'],
+];
+
 // The files the messages in these channels point at, kept per author, read
 // before the rows go. A file only goes with its own uploader's messages
 // (releasableUploads), so posting another member's avatar or emoji in a
@@ -248,14 +258,15 @@ module.exports = function register(socket, ctx) {
       }
     }
 
-    // A channel is a calendar or a forum, not both; the calendar wins.
-    const isCalendar = data.isCalendar ? 1 : 0;
-    const isForum = data.isForum && !isCalendar ? 1 : 0;
+    const view = (CHANNEL_VIEWS.find(([flag]) => data[flag]) || [])[2];
+    const isOverview = view === 'is_overview' ? 1 : 0;
+    const isCalendar = view === 'is_calendar' ? 1 : 0;
+    const isForum = view === 'is_forum' ? 1 : 0;
 
     try {
       const result = db.prepare(
-        'INSERT INTO channels (name, code, created_by, is_private, expires_at, is_forum, is_calendar) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(name.trim(), code, socket.user.id, isPrivate, expiresAt, isForum, isCalendar);
+        'INSERT INTO channels (name, code, created_by, is_private, expires_at, is_forum, is_calendar, is_overview) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(name.trim(), code, socket.user.id, isPrivate, expiresAt, isForum, isCalendar, isOverview);
 
       // Channel templates send the rest of the setup along with the name, so
       // an "Announcements" channel comes out read-only and in announcement
@@ -321,7 +332,8 @@ module.exports = function register(socket, ctx) {
         // The creator's sidebar renders from this stub until the enriched
         // list lands, so a forum has to say so here or it shows up as #.
         is_forum: isForum,
-        is_calendar: isCalendar
+        is_calendar: isCalendar,
+        is_overview: isOverview
       };
 
       socket.join(`channel:${code}`);
@@ -1129,14 +1141,14 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
     const permission = typeof data.permission === 'string' ? data.permission.trim() : '';
-    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'calendar', 'private', 'nsfw', 'reactions', 'forum_blog', 'forum_blog_pics_only'];
+    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'calendar', 'overview', 'private', 'nsfw', 'reactions', 'forum_blog', 'forum_blog_pics_only'];
     if (!validPerms.includes(permission)) return socket.emit('error-msg', 'Invalid permission');
 
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to toggle channel permissions');
 
-    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', calendar: 'is_calendar', private: 'is_private', nsfw: 'is_nsfw', reactions: 'reactions_enabled', forum_blog: 'forum_blog', forum_blog_pics_only: 'forum_blog_pics_only' };
+    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', calendar: 'is_calendar', overview: 'is_overview', private: 'is_private', nsfw: 'is_nsfw', reactions: 'reactions_enabled', forum_blog: 'forum_blog', forum_blog_pics_only: 'forum_blog_pics_only' };
     const colName = colMap[permission];
     const current = channel[colName];
     const newVal = current ? 0 : 1;
@@ -1147,10 +1159,10 @@ module.exports = function register(socket, ctx) {
 
     try {
       db.prepare(`UPDATE channels SET ${colName} = ? WHERE id = ?`).run(newVal, channel.id);
-      // A channel is a forum or a calendar, not both: turning one on turns
-      // the other off.
-      if (newVal === 1 && (permission === 'forum' || permission === 'calendar')) {
-        db.prepare(`UPDATE channels SET ${permission === 'forum' ? 'is_calendar' : 'is_forum'} = 0 WHERE id = ?`).run(channel.id);
+      // A channel shows one view at most (CHANNEL_VIEWS).
+      if (newVal === 1 && CHANNEL_VIEWS.some(([, name]) => name === permission)) {
+        const others = CHANNEL_VIEWS.filter(([, name]) => name !== permission).map(([, , col]) => `${col} = 0`).join(', ');
+        db.prepare(`UPDATE channels SET ${others} WHERE id = ?`).run(channel.id);
       }
       // Changing a function by hand takes the channel out of its type
       // (src/channelTypes.js), so the type's icon stops showing for it.

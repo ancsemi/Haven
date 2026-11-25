@@ -1127,8 +1127,11 @@ function initDatabase() {
     { name: 'forum_tags',        sql: "ALTER TABLE channels ADD COLUMN forum_tags TEXT DEFAULT NULL" },
     { name: 'is_nsfw',           sql: "ALTER TABLE channels ADD COLUMN is_nsfw INTEGER DEFAULT 0" },
     // Calendar mode: the channel shows a month of events (src/calendarEvents.js)
-    // instead of its messages. A channel is a forum or a calendar, not both.
+    // instead of its messages.
     { name: 'is_calendar',       sql: "ALTER TABLE channels ADD COLUMN is_calendar INTEGER DEFAULT 0" },
+    // Overview mode: the channel shows a front page for the server
+    // (src/overview.js). A channel shows one view at most.
+    { name: 'is_overview',       sql: "ALTER TABLE channels ADD COLUMN is_overview INTEGER DEFAULT 0" },
     // #5390: extend the self-destruct timer with a "clear messages only"
     // mode. `auto_delete_mode` is 'delete' (existing behaviour: drop the
     // whole channel) or 'clear' (wipe messages but keep channel, perms,

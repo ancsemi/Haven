@@ -218,6 +218,8 @@
       "forum_hint": "(each message starts a topic)",
       "calendar_channel": "Calendar",
       "calendar_hint": "(a month of events instead of messages)",
+      "overview_channel": "Overview",
+      "overview_hint": "(a front page for the server instead of messages)",
       "hours": "hours",
       "channels": "Channels",
       "direct_messages": "Direct Messages",
@@ -4443,6 +4445,19 @@
     "need_title": "Give the event a title",
     "need_date": "Pick a date"
   },
+  "overview": {
+    "loading": "Loading…",
+    "load_failed": "The overview could not load. Try again in a moment.",
+    "events": "Upcoming events",
+    "announcements": "Latest announcements",
+    "topics": "Forum activity",
+    "no_events": "No events coming up.",
+    "no_announcements": "No announcements yet.",
+    "no_topics": "No forum topics yet.",
+    "replies_one": "1 reply",
+    "replies_other": "{{count}} replies",
+    "active": "active {{when}}"
+  },
   "channel_functions": {
     "voice": "Voice",
     "voice_hint": "Enable or disable voice chat in this channel",
@@ -4491,6 +4506,8 @@
     "forum_hint": "Each message is a topic. Replies go in its thread and bump the topic back to the newest end of the channel",
     "calendar": "Calendar",
     "calendar_hint": "Show a month of events instead of messages. Members add events and say if they are going",
+    "overview": "Overview",
+    "overview_hint": "Show a front page for the server instead of messages: upcoming events, the latest announcements and forum activity",
     "private": "Private",
     "private_hint": "Only members can see this channel. Turning it on keeps everyone who is already in; turning it off opens it to the whole server, history included",
     "default_role": "Default Role",

@@ -174,6 +174,24 @@ function listRange(db, channelId, userId, fromMs, toMs) {
     .map(r => shape(r, true));
 }
 
+// The next events across several calendars, soonest first, each with the
+// viewer's own answer and its channel id. An all-day event stays listed for a
+// day past its UTC end, so it is still there for a member whose clock has
+// not reached the next date; the client drops it once its date has passed.
+function upcoming(db, channelIds, userId, nowMs, limit) {
+  if (!channelIds.length) return [];
+  return db.prepare(`SELECT ${EVENT_COLS},
+      (SELECT status FROM calendar_rsvps r WHERE r.event_id = e.id AND r.user_id = ?) AS mine
+    FROM calendar_events e LEFT JOIN users u ON u.id = e.created_by
+    WHERE e.channel_id IN (SELECT value FROM json_each(?))
+      AND e.starts_at >= ? AND e.starts_at < ?
+      AND e.ends_at >= CASE WHEN e.all_day = 1 THEN ? ELSE ? END
+    ORDER BY e.starts_at, e.id LIMIT ?`)
+    .all(userId, JSON.stringify(channelIds), iso(nowMs - MAX_SPAN_MS - DAY_MS), iso(nowMs + 366 * DAY_MS),
+      iso(nowMs - DAY_MS), iso(nowMs), limit)
+    .map(r => ({ ...shape(r, true), channelId: r.channel_id }));
+}
+
 function getRow(db, id) {
   return db.prepare('SELECT * FROM calendar_events WHERE id = ?').get(id) || null;
 }
@@ -228,6 +246,6 @@ function setRsvp(db, id, userId, status) {
 }
 
 module.exports = {
-  LIMITS, STATUSES, ensureTables, parseEvent, parseRange, listRange,
+  LIMITS, STATUSES, ensureTables, parseEvent, parseRange, listRange, upcoming,
   getRow, getEvent, attendees, createEvent, updateEvent, deleteEvent, setRsvp,
 };

@@ -210,6 +210,7 @@ CREATE TABLE "channels" (
   "former_names" TEXT DEFAULT NULL,
   "type_id" BIGINT DEFAULT NULL,
   "is_calendar" BIGINT DEFAULT 0,
+  "is_overview" BIGINT DEFAULT 0,
   PRIMARY KEY ("id")
 );
 
