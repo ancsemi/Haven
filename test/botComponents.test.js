@@ -80,14 +80,61 @@ test('a pick must come from the list, as many as it allows', () => {
   assert.deepEqual(parts.checkValues({ type: 2 }, ['ignored']), { values: [] });
 });
 
+const box = (custom_id, extra = {}) => ({ type: 4, custom_id, label: custom_id, ...extra });
+const form = (...boxes) => ({ custom_id: 'f', title: 'Form', components: boxes.map(b => row(b)) });
+
+test('a form keeps Discord\'s shape, its boxes held to the message limit', () => {
+  const m = parts.cleanModal(form(box('name', { max_length: 4000 }), box('idea', { style: 2, min_length: 10, required: false, value: 'one\ntwo' })), 2000);
+  assert.equal(m.error, undefined);
+  assert.equal(m.components[0].components[0].max_length, 2000, 'lowered to the server limit');
+  assert.equal(m.components[0].components[0].required, true);
+  assert.equal(m.components[1].components[0].value, 'one\ntwo');
+  const bad = (raw, re) => assert.match(parts.cleanModal(raw, 2000).error || '', re);
+  bad({ ...form(box('a')), title: '' }, /title is required/);
+  bad({ ...form(box('a')), title: 'x'.repeat(46) }, /longer than 45/);
+  bad(form(), /1 to 5 action rows/);
+  bad(form(...'abcdef'.split('').map(c => box(c))), /1 to 5 action rows/);
+  bad(form(box('a'), box('a')), /used twice/);
+  bad(form(button('b')), /text input \(type 4\)/);
+  bad({ ...form(), components: [row(box('a'), box('b'))] }, /one text input/);
+  bad(form(box('a', { style: 3 })), /style must be 1/);
+  bad(form(box('a', { label: '' })), /label is required/);
+  bad(form(box('a', { min_length: 5, max_length: 4 })), /max_length/);
+  bad(form(box('a', { value: 'one\ntwo' })), /one line/);
+  bad(form(box('a', { value: 'x‮y' })), /invisible/);
+});
+
+test('what someone types is checked against the form', () => {
+  const m = parts.cleanModal(form(box('name', { max_length: 40 }), box('idea', { style: 2, min_length: 5, required: false })), 2000);
+  const send = (name, idea) => parts.checkModalSubmit(m, [{ custom_id: 'name', value: name }, { custom_id: 'idea', value: idea }]);
+  // Any language, with the joiners Persian needs, and whole emoji.
+  for (const ok of ['Alice', 'Zoë', 'Привет', '你好', 'می‌خواهم', 'Tiếng Việt', '👨‍👩‍👧 🏴󠁧󠁢󠁳󠁣󠁴󠁿 1️⃣']) {
+    assert.deepEqual(send(ok, ''), { fields: [{ custom_id: 'name', value: ok }, { custom_id: 'idea', value: '' }] }, ok);
+  }
+  assert.equal(send('a', 'one\r\ntwo\tthree').fields[1].value, 'one\ntwo\tthree');
+  // Nothing that hides or reorders text.
+  for (const sneaky of ['invoice‮fdp.exe', 'a​b', 'x⁦y', 'tag\u{E0041}', 'blankㅤ', 'nul\u0000', 'x\u{F8FF}', 'Ź̂̃̄̅']) {
+    assert.ok(send(sneaky, '').error, JSON.stringify(sneaky));
+  }
+  assert.match(send('a\nb', '').error, /one line/);
+  assert.match(send('', '').error, /required/);
+  assert.match(send('a', 'abc').error, /at least 5/);
+  assert.match(send('x'.repeat(41), '').error, /up to 40/);
+  // Only the form's own boxes, once each.
+  assert.equal(parts.checkModalSubmit(m, [{ custom_id: 'name', value: 'a' }, { custom_id: 'other', value: 'x' }]).error, 'Invalid request');
+  assert.equal(parts.checkModalSubmit(m, [{ custom_id: 'name', value: 'a' }, { custom_id: 'name', value: 'b' }]).error, 'Invalid request');
+  assert.equal(parts.checkModalSubmit(m, 'a').error, 'Invalid request');
+});
+
 const h = createHarness(3647, 'bot-components');
 let hook;
+let hookReply = 'ok';
 const heard = [];
 test.before(async () => {
   hook = http.createServer((req, res) => {
     let body = '';
     req.on('data', (c) => (body += c));
-    req.on('end', () => { heard.push({ headers: req.headers, body }); res.end('ok'); });
+    req.on('end', () => { heard.push({ headers: req.headers, body }); res.end(hookReply); });
   });
   await new Promise((r) => hook.listen(0, '127.0.0.1', r));
   process.env.HAVEN_ALLOW_PRIVATE_CALLBACKS = 'true';
@@ -164,6 +211,32 @@ test('a click reaches the bot, signed, and the bot can change the message', asyn
   assert.ok((await h.ask(B, 'bot-interaction', { messageId: mid, customId: 'nope' })).error);
   assert.ok((await h.ask(B, 'bot-interaction', { messageId: mid, customId: 'pick', values: ['purple'] })).error);
   assert.equal(heard.length, count, 'the bot was not bothered');
+
+  // The bot answers a pick with a form. Only Bob gets it, and what he types
+  // goes back to the bot once.
+  hookReply = JSON.stringify({ type: 9, data: { custom_id: 'lunch-form', title: 'Where to?', components: [row(box('place', { max_length: 4000 }))] } });
+  const opened = h.next(B, 'bot-modal');
+  assert.deepEqual(await h.ask(B, 'bot-interaction', { messageId: mid, customId: 'pick', values: ['r'] }), { ok: true });
+  hookReply = 'ok';
+  const shown = await opened;
+  assert.equal(shown.title, 'Where to?');
+  assert.equal(shown.components[0].components[0].max_length, 2000);
+  const fill = (sock, value) => h.ask(sock, 'submit-bot-modal', { formId: shown.formId, fields: [{ custom_id: 'place', value }] });
+  assert.ok((await fill(A, 'x')).error, 'only the person who clicked');
+  assert.match((await fill(B, 'caf‮é')).error, /invisible/);
+  assert.deepEqual(await fill(B, 'Café Zoë'), { ok: true });
+  const submitted = JSON.parse(heard.at(-1).body).interaction;
+  assert.equal(submitted.type, 'modal_submit');
+  assert.equal(submitted.custom_id, 'lunch-form');
+  assert.equal(submitted.message_id, mid);
+  assert.deepEqual(submitted.fields, [{ custom_id: 'place', value: 'Café Zoë' }]);
+  assert.equal(submitted.user.id, bob.id);
+  assert.ok((await fill(B, 'again')).error, 'a form is sent once');
+
+  // A form the bot got wrong is refused, with the reason.
+  hookReply = JSON.stringify({ type: 9, data: { custom_id: 'x', title: '', components: [row(box('a'))] } });
+  assert.match((await h.ask(B, 'bot-interaction', { messageId: mid, customId: 'pick', values: ['r'] })).error, /title is required/);
+  hookReply = 'ok';
 
   // The bot greys the button out; text stays as it was.
   const swapped = h.next(B, 'message-bot-parts', (d) => d.messageId === mid);

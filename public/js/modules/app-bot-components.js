@@ -3,8 +3,9 @@
 // is still escaped and links and pictures still go through the usual guards.
 //
 // A click or a pick goes to the server, which hands it to the bot. The bot
-// answers on its own: a private reply, a new message, or an edit that swaps
-// these parts, which arrives as message bot parts.
+// answers on its own: a private reply, a new message, an edit that swaps
+// these parts, which arrives as message bot parts, or a form of text boxes
+// for this person to fill in, which arrives as bot-modal.
 
 const BUTTON = 2;
 const SELECT = 3;
@@ -57,6 +58,62 @@ _setupBotComponents() {
       el.querySelector('.message-content, .thread-msg-content')?.insertAdjacentHTML('afterend', html);
     });
   });
+
+  this.socket.on('bot-modal', (form) => this._openBotModal(form));
+},
+
+// A form a bot opened for this person. One at a time, so a new one replaces
+// the last. The browser checks the lengths as they type; the server checks
+// everything again, and its refusal shows in the form so nothing is lost.
+_openBotModal(form) {
+  if (!form || typeof form.formId !== 'string' || !Array.isArray(form.components)) return;
+  document.querySelector('.bot-modal-overlay')?.remove();
+  const esc = (s) => this._escapeHtml(s || '');
+  const inputs = form.components.map(r => r?.components?.[0]).filter(c => c && c.type === 4);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay bot-modal-overlay';
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <form class="modal bot-modal">
+      <h3 style="margin-top:0">${esc(form.title)}</h3>
+      ${inputs.map((c, i) => {
+        const attrs = `id="bot-modal-${i}" class="settings-text-input" dir="auto" data-custom-id="${esc(c.custom_id)}"`
+          + ` maxlength="${Number(c.max_length) || 4000}"${c.min_length ? ` minlength="${Number(c.min_length)}"` : ''}`
+          + `${c.required ? ' required' : ''}${c.placeholder ? ` placeholder="${esc(c.placeholder)}"` : ''}`;
+        return `<label class="bot-modal-label" for="bot-modal-${i}">${esc(c.label)}${c.required ? ' <span class="bot-modal-required" aria-hidden="true">*</span>' : ''}</label>`
+          + (c.style === 2 ? `<textarea ${attrs} rows="4"></textarea>` : `<input type="text" ${attrs}>`);
+      }).join('')}
+      <p class="bot-modal-error" role="alert" hidden></p>
+      <div class="modal-actions" style="margin-top:12px">
+        <button type="button" class="btn-sm" data-bot-modal="cancel">${esc(t('modals.common.cancel'))}</button>
+        <button type="submit" class="btn-sm btn-accent">${esc(t('bot_parts.modal_submit'))}</button>
+      </div>
+    </form>`;
+  // Set as values, not markup, so a prefill keeps its first line break.
+  overlay.querySelectorAll('[data-custom-id]').forEach((box, i) => { box.value = inputs[i].value || ''; });
+  document.body.appendChild(overlay);
+
+  const formEl = overlay.querySelector('form');
+  const error = overlay.querySelector('.bot-modal-error');
+  const send = overlay.querySelector('[type="submit"]');
+  overlay.querySelector('[data-bot-modal="cancel"]').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.remove(); });
+  formEl.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (send.disabled) return;
+    send.disabled = true;
+    const fields = [...formEl.querySelectorAll('[data-custom-id]')].map(box => ({ custom_id: box.dataset.customId, value: box.value }));
+    this.socket.emit('submit-bot-modal', { formId: form.formId, fields }, (res) => {
+      send.disabled = false;
+      if (res?.error) {
+        error.textContent = res.error;
+        error.hidden = false;
+        return;
+      }
+      overlay.remove();
+    });
+  });
+  overlay.querySelector('[data-custom-id]')?.focus();
 },
 
 _sendBotInteraction(el, customId, values, pickedLabel) {

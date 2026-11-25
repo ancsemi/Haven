@@ -5094,7 +5094,8 @@
     "select_placeholder": "Make a selection",
     "select_done": "Done",
     "select_count": "Pick {{min}} to {{max}}",
-    "external_link": "Opens {{url}}"
+    "external_link": "Opens {{url}}",
+    "modal_submit": "Submit"
   },
   "role_menu": {
     "pick_one_only": "Pick one",

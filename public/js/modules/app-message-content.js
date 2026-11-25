@@ -50,7 +50,9 @@ _formatContent(str, opts) {
   // Control characters have no business in a message, and NUL in particular
   // is the delimiter of the placeholders below; strip them (keeping line
   // breaks and tabs) so typed text can never pose as a placeholder.
-  str = str.replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '');
+  // Direction overrides and isolates go too: they can show a file name as
+  // invoiceexe.pdf when it is really an .exe.
+  str = str.replace(/[\u0000-\u0008\u000B-\u001F\u007F‪-‮⁦-⁩]/g, '');
 
   // Spoiler image: spoiler-img:<payload> where payload is an /uploads URL or
   // an e2e-img: marker. The sender marked this image as a spoiler, so render
