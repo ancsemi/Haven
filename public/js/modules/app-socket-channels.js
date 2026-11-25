@@ -65,7 +65,7 @@ _listenChannelsAndMessages() {
     // Skip muted channels entirely; server has no knowledge of client-side
     // mute state, so bot/webhook messages can leave stale unread counts on
     // the server that would otherwise re-appear on every reconnect.
-    const _mutedChsAtSeed = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+    const _mutedChsAtSeed = new Set(this._mutedChannelList(channels));
     for (const ch of channels) {
       if (_mutedChsAtSeed.has(ch.code)) {
         // Pre-populate with 0 so future channels-list snapshots won't re-seed.
@@ -97,31 +97,18 @@ _listenChannelsAndMessages() {
       window.history.replaceState({}, '', cleanUrl);
     }
 
-    // Channel / message deep link (?channel=CODE[&message=ID])
-    const linkChannel = urlParams.get('channel');
-    const linkMessage = urlParams.get('message');
-    if (linkChannel && !this._channelLinkHandled) {
+    // Channel / message deep link (?channel=CODE[&message=ID], or the apps'
+    // /#CODE/ID form when the app is opened with it directly)
+    const link = window.HavenMessageLinks
+      ? (HavenMessageLinks.fromSearch(window.location.search) || HavenMessageLinks.fromHash(window.location.hash))
+      : null;
+    if (link && !this._channelLinkHandled) {
       this._channelLinkHandled = true;
       sessionStorage.removeItem('haven_pending_channel');
       sessionStorage.removeItem('haven_pending_message');
-      const known = (channels || []).some(c => c.code === linkChannel);
-      const go = () => {
-        this.switchChannel(linkChannel);
-        if (linkMessage) {
-          const msgId = parseInt(linkMessage, 10);
-          if (!isNaN(msgId)) {
-            // Wait briefly for messages to load before jumping
-            setTimeout(() => this._jumpToMessage(msgId), 600);
-          }
-        }
-      };
-      if (known) {
-        go();
-      } else {
-        // Do not auto-join by deep link. Message/channel links are for members
-        // who already have channel access.
-        this._showToast?.(t('toasts.channel_link_unavailable'), 'error');
-      }
+      // Do not auto-join by deep link. Message/channel links are for members
+      // who already have channel access; _openMessageLink says so otherwise.
+      this._openMessageLink(link.channel, link.message);
       window.history.replaceState({}, '', window.location.pathname);
     }
 
@@ -283,7 +270,15 @@ _listenChannelsAndMessages() {
       this._appendMessages(data.messages);
       this._loadingFuture = false;
     } else if (data.around) {
-      // Jump-to-message: replace everything and scroll to target
+      // Jump-to-message: replace everything and scroll to target. A thread
+      // reply (or a reply in a forum topic) never shows in the channel: the
+      // server centres the window on its parent and names the reply in
+      // threadReply, and the thread is opened at it once the channel is drawn.
+      const asked = this._jumpAsked;
+      this._jumpAsked = null;
+      const tr = data.threadReply;
+      const ours = !!asked && (Number(data.around) === asked || Number(tr?.messageId) === asked);
+      if (ours) this._jumpTargetId = tr ? tr.parentId : asked;
       if (data.messages.length > 0) {
         this._oldestMsgId = data.messages[0].id;
         this._newestMsgId = data.messages[data.messages.length - 1].id;
@@ -296,6 +291,7 @@ _listenChannelsAndMessages() {
       this._historyAfter = null;
       // _jumpTargetId is already set by _jumpToMessage; _renderMessages reads it
       this._renderMessages(data.messages);
+      if (ours) this._afterJumpHistory(data);
     } else {
       // Initial load: replace everything
       this._noMoreFuture = true;
@@ -307,6 +303,8 @@ _listenChannelsAndMessages() {
         this._noMoreHistory = true;
       }
       this._renderMessages(data.messages, data.lastReadMessageId);
+      // A link opened into this channel jumps once its history is drawn.
+      this._runPendingLinkJump(data.channelCode);
     }
 
     // Re-append any pending E2E notice (survives message re-render after key change)
@@ -366,7 +364,8 @@ _listenChannelsAndMessages() {
 
     this._historyDebounce = 0; // timestamp of last history request
     msgContainer.addEventListener('scroll', () => {
-      if (this._suppressCoupleCheck) return;
+      // A calendar has no message history to page through.
+      if (this._suppressCoupleCheck || this._channelView) return;
       const now = Date.now();
       // A forum feed runs newest first, so its older topics load from the bottom.
       const forumFeed = !!this._isForumFeed?.();
@@ -465,7 +464,7 @@ _listenChannelsAndMessages() {
           // count it as unread even though it's the "current" channel, so
           // the sidebar dot + taskbar badge actually fire.
           // Skip the unread bump for muted channels; muting should also silence badges.
-          const _hiddenMutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+          const _hiddenMutedChs = this._mutedChannelList();
           if (!_hiddenMutedChs.includes(data.channelCode)) {
             this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
             this._updateBadge(data.channelCode);
@@ -473,7 +472,7 @@ _listenChannelsAndMessages() {
         }
       }
       if (data.message.user_id !== this.user.id) {
-        const _mutedChs = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+        const _mutedChs = this._mutedChannelList();
         // Server mute and members muted for you are decided below, once it is
         // known whether this is a DM or mentions you (app-server-mute.js).
         const _isMuted = _mutedChs.includes(data.channelCode);
@@ -491,7 +490,7 @@ _listenChannelsAndMessages() {
           const _isMention = mentionRegex.test(data.message.content) || everyoneRegex.test(data.message.content) || this._mentionsMyRole?.(data.message.content);
           const _notifOpts = _isMention ? { isMention: true } : _isReplyToMe ? { isReply: true } : _isDm ? { isDm: true } : null;
           // A silent message (app-silent.js) never sounds or pops up.
-          const _quiet = !!data.message.silent || this._notifyBlockedByMutes({ senderId: data.message.user_id, isDm: !!_isDm, isMention: !!_isMention });
+          const _quiet = !!data.message.silent || this._notifyBlockedByMutes({ senderId: data.message.user_id, isDm: !!_isDm, isMention: !!_isMention, isReply: !!_isReplyToMe, channelCode: data.channelCode });
           if (_quiet) {
             // Silent message, or a muted server or member: no sound and no pop-up.
           } else if (_isMention) {
@@ -515,7 +514,7 @@ _listenChannelsAndMessages() {
         this.notifications.speak(`${this._getNickname(data.message.user_id, data.message.username)} says: ${data.message.content}`);
       }
     } else {
-      const _mutedChs2 = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+      const _mutedChs2 = this._mutedChannelList();
       // Muting the server quiets notifications, not the unread counts in your
       // own sidebar; that is decided below (app-server-mute.js).
       const _isMuted2 = _mutedChs2.includes(data.channelCode);
@@ -560,7 +559,7 @@ _listenChannelsAndMessages() {
         const _isDm2 = _notifCh2 && _notifCh2.is_dm;
         const _isMention2 = mentionRegex.test(data.message.content) || everyoneRegex2.test(data.message.content) || this._mentionsMyRole?.(data.message.content);
         const _notifOpts2 = _isMention2 ? { isMention: true } : _isReplyToMe2 ? { isReply: true } : _isDm2 ? { isDm: true } : null;
-        const _quiet2 = !!data.message.silent || this._notifyBlockedByMutes({ senderId: data.message.user_id, isDm: !!_isDm2, isMention: !!_isMention2 });
+        const _quiet2 = !!data.message.silent || this._notifyBlockedByMutes({ senderId: data.message.user_id, isDm: !!_isDm2, isMention: !!_isMention2, isReply: !!_isReplyToMe2, channelCode: data.channelCode });
         if (_quiet2) {
           // Silent message, or a muted server or member: no sound and no pop-up.
         } else if (_isMention2) {
@@ -832,7 +831,7 @@ _listenPresenceAndVoice() {
     // In a channel that is not open it counts as unread, the same as it does
     // after a reload, when the server counts it (#5930).
     if (data.channelCode !== this.currentChannel) {
-      const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]').includes(data.channelCode);
+      const muted = this._mutedChannelList().includes(data.channelCode);
       if (data.message.user_id === this.user.id || muted || !this.channels.some(c => c.code === data.channelCode)) return;
       this.unreadCounts[data.channelCode] = (this.unreadCounts[data.channelCode] || 0) + 1;
       this._updateBadge(data.channelCode);

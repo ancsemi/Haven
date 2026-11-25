@@ -165,8 +165,10 @@ const SETTINGS = [
     key: 'embed_size', scope: 'device', dflt: 'medium',
     label: () => t('settings.embed_display.title'),
     read: (app) => app._embedSize(),
-    apply: (v) => pressPicker('embed-size-picker', 'data-embed-size', v),
-    show: (v) => t(`settings.embed_display.${v}`),
+    // "off" is a default saved before previews got their own Hide switch
+    // (#5961): it still hides them for a new member, through that switch.
+    apply: (v) => (v === 'off' ? setToggle('hide-embeds-toggle', true) : pressPicker('embed-size-picker', 'data-embed-size', v)),
+    show: (v) => (v === 'off' ? t('settings.embed_display.hide') : t(`settings.embed_display.${v}`)),
   },
   {
     key: 'animate_pfp', scope: 'device', dflt: 'hover',
@@ -357,7 +359,8 @@ _maybeApplyMemberDefaults() {
   if (rec && rec.v >= snap.v) return;
   const applied = {};
   const keep = {};
-  const unchanged = (def, cur) => cur === def.dflt || (rec && rec.a[def.key] === cur);
+  const layoutPicked = () => { try { return Object.entries(JSON.parse(lsGet('haven_plugin_data') || '{}')).some(([k, v]) => /Layout$/.test(k) && v?.layoutOn != null); } catch { return true; } };
+  const unchanged = (def, cur) => def.key === 'layout' ? (rec?.a.layout === cur || !layoutPicked()) : (cur === def.dflt || (rec && rec.a[def.key] === cur));
   const tryApply = (def) => {
     const cur = def.read(this);
     if (!unchanged(def, cur)) return;

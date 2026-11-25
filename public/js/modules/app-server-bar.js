@@ -641,7 +641,7 @@ _setupServerBarDrag(list) {
   };
 
   list.addEventListener('dragstart', (e) => {
-    const el = e.target.closest('.server-icon.remote[draggable="true"]');
+    const el = e.target.closest('.server-icon[data-url][draggable="true"]');
     if (!el) return;
     list._serverDragSrc = el;
     el.classList.add('server-dragging');
@@ -653,7 +653,7 @@ _setupServerBarDrag(list) {
     if (!list._serverDragSrc) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    const tgt = e.target.closest('.server-icon.remote');
+    const tgt = e.target.closest('.server-icon[data-url]');
     if (!tgt || tgt === list._serverDragSrc) { indicator.remove(); return; }
     const rect = tgt.getBoundingClientRect();
     const before = (e.clientY - rect.top) < rect.height / 2;
@@ -673,7 +673,7 @@ _setupServerBarDrag(list) {
     indicator.remove();
     src.classList.remove('server-dragging');
     list._serverDragSrc = null;
-    const orderedUrls = Array.from(list.querySelectorAll('.server-icon.remote')).map(el => el.dataset.url);
+    const orderedUrls = Array.from(list.querySelectorAll('.server-icon[data-url]')).map(el => el.dataset.url);
     if (this.serverManager?.reorder) {
       this.serverManager.reorder(orderedUrls);
       this._pushServerListToServer?.();
@@ -682,6 +682,28 @@ _setupServerBarDrag(list) {
   });
 
   list.addEventListener('dragend', cleanup);
+},
+
+// This server's own icon sits at its place in the user's order, among the
+// other servers, so the rail looks the same whichever server is on screen
+// and switching does not move the icons (#5933). When this server is not in
+// the list (a browser tab on a server never added), it stays on top above
+// the separator as before.
+_placeHomeServer(list, home, selfIndex, selfUrl) {
+  const bar = document.getElementById('server-bar');
+  const separator = bar && bar.querySelector('.server-separator');
+  if (!home || !bar || !separator) return;
+  if (selfIndex < 0) {
+    if (home.parentNode !== bar || home.nextElementSibling !== separator) bar.insertBefore(home, separator);
+    separator.hidden = false;
+    home.removeAttribute('data-url');
+    home.removeAttribute('draggable');
+    return;
+  }
+  list.insertBefore(home, list.querySelectorAll('.server-icon.remote')[selfIndex] || null);
+  separator.hidden = true;
+  home.dataset.url = selfUrl;
+  home.draggable = true;
 },
 
 // Tell the desktop main process which server URLs this view recognises
@@ -727,7 +749,11 @@ _withCacheBust(url) {
 _renderServerBar() {
   const list = document.getElementById('server-list');
   // Not this server, and a server reachable at two addresses only once.
-  const servers = this.serverManager.railServers(window.location.origin);
+  const { servers, selfIndex, selfUrl } = this.serverManager.railPlacement(window.location.origin);
+  // This server's own icon may be sitting in the list (see below): take it
+  // out before the list is redrawn, or it would be thrown away with it.
+  const home = document.getElementById('home-server');
+  if (home && home.parentNode === list) list.removeChild(home);
 
   list.innerHTML = servers.map(s => {
     const initial = s.name.charAt(0).toUpperCase();
@@ -796,7 +822,9 @@ _renderServerBar() {
     });
   });
 
-  // Drag-and-drop reordering of remote server icons. Idempotent: handlers
+  this._placeHomeServer(list, home, selfIndex, selfUrl);
+
+  // Drag-and-drop reordering of the server icons. Idempotent: handlers
   // live on the list container so re-rendering doesn't double-bind.
   this._setupServerBarDrag(list);
 

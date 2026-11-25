@@ -7,6 +7,7 @@ export default {
 
 _listenFeatureEvents() {
   this._listenForumVotes?.();
+  this._listenCalendar?.();
   this._listenForumBlog?.();
   // ── Read receipts across this account's devices ─────
   // Another connected device (or this same tab, harmlessly) marked a
@@ -381,6 +382,9 @@ _listenMessageChanges() {
     localStorage.setItem('haven_user', JSON.stringify(this.user));
   });
 
+  this.socket.on('profile-links-updated', (data) => {
+    this.user.profileLinks = this._cleanProfileLinks(data?.links);
+  });
   this.socket.on('banner-color-updated', (data) => {
     this.user.bannerColor = this._safeHexColor(data?.color);
     localStorage.setItem('haven_user', JSON.stringify(this.user));

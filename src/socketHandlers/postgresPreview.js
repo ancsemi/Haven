@@ -7,7 +7,7 @@ const path = require('path');
 const { verifyTokenAsync } = require('../auth');
 const createPermissions = require('./asyncPermissions');
 const createChannelLists = require('./channelList');
-const { parseBorderTransform, utcStamp, toReplyContext } = require('./helpers');
+const { parseBorderTransform, profileLinksFromRow, utcStamp, toReplyContext } = require('./helpers');
 const { REPLY_CONTEXT_SELECT } = require('../db/messagePosting');
 const { listReactions } = require('../db/messageReactions');
 const { createPostgresPosting } = require('./postgresPosting');
@@ -66,7 +66,7 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
         border: row.border || null, borderTransform: parseBorderTransform(row.border_transform),
         animate_profile: row.animate_profile || 'trigger', ...status,
         createdAt: row.created_at, isSso: !!row.oidc_subject, e2ePassphrase: !!row.e2e_passphrase,
-        bio: row.bio || '', birthday: row.birthday || null, birthdaySetAt: row.birthday_set_at || null,
+        bio: row.bio || '', profileLinks: profileLinksFromRow(row.profile_links), birthday: row.birthday || null, birthdaySetAt: row.birthday_set_at || null,
         birthdayHideYear: row.birthday_hide_year !== 0, birthdayHidden: row.birthday_hidden !== 0,
       };
       next();

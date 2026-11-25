@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const THEME_API_VERSION = 1;
-const BUILTIN_THEMES = ['', 'haven', 'discord', 'matrix', 'tron', 'halo', 'lotr', 'cyberpunk', 'nord', 'dracula', 'bloodborne', 'darksouls', 'eldenring', 'ice', 'abyss', 'minecraft', 'ffx', 'zelda', 'fallout', 'scripture', 'chapel', 'gospel', 'midnightpurple', 'crt', 'win95', 'rgb', 'daylight', 'cloudy'];
+const BUILTIN_THEMES = ['', 'haven', 'discord', 'matrix', 'tron', 'halo', 'lotr', 'cyberpunk', 'nord', 'dracula', 'bloodborne', 'darksouls', 'eldenring', 'ice', 'abyss', 'minecraft', 'ffx', 'zelda', 'fallout', 'scripture', 'chapel', 'gospel', 'midnightpurple', 'crt', 'win95', 'rgb', 'daylight', 'cloudy', 'lemonade', 'strawberry'];
 const THEME_FILENAME_PATTERN = /^(?!\.)[a-zA-Z0-9_. -]+\.theme\.css$/;
 
 function metadataBlock(content) {

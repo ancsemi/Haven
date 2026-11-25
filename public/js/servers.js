@@ -375,6 +375,9 @@ class ServerManager {
     }
 
     const entry = { name, url, icon, addedAt: Date.now() };
+    // Added by the user's own hand: this outlasts an earlier removal of the
+    // same server made on another device (see syncWithServer).
+    if (opts.userInitiated) entry.keptAt = Date.now();
     // A name the user typed is theirs: the server's own name does not
     // replace it (a bare address or the default "Haven" still follows it).
     if (opts.customName && String(name || '').trim() !== 'Haven' && !this._isUrlName(entry)) {
@@ -581,6 +584,25 @@ class ServerManager {
     return this.otherServers(currentOrigin).filter(s => !s.duplicateOf);
   }
 
+  /** The rail with this server's own place in it: { servers, selfIndex,
+   *  selfUrl }. servers is railServers(); selfIndex is how many of them come
+   *  before this server in the user's order, or -1 when this server is not
+   *  in the list. The rail draws this server at that place, so the icons
+   *  stay where they are whichever server is on screen (#5933). */
+  railPlacement(currentOrigin) {
+    const servers = [];
+    let selfIndex = -1;
+    let selfUrl = null;
+    for (const s of this.getAll()) {
+      if (this.isSelf(s, currentOrigin)) {
+        if (selfIndex < 0) { selfIndex = servers.length; selfUrl = s.url; }
+        continue;
+      }
+      if (!s.duplicateOf) servers.push(s);
+    }
+    return { servers, selfIndex, selfUrl };
+  }
+
   /** Follow the name a server reports, unless the user chose one. "Haven"
    *  is the default of a server that never set a name and is skipped.
    *  Returns true when the stored name changed. */
@@ -716,60 +738,136 @@ class ServerManager {
       const { blob } = await res.json();
 
       // 2. Decrypt server-side list (if any)
-      let remoteServers = [];
+      let remoteEntries = [];
       if (blob) {
         try {
           const decrypted = await this._decryptBlob(blob, wrappingHex);
-          remoteServers = JSON.parse(decrypted);
-          if (!Array.isArray(remoteServers)) remoteServers = [];
+          remoteEntries = JSON.parse(decrypted);
+          if (!Array.isArray(remoteEntries)) remoteEntries = [];
         } catch {
           // Decryption failed: blob was encrypted with a different password
           // or is corrupted. Start fresh from localStorage.
           console.warn('[ServerSync] Could not decrypt server blob, using local list');
         }
       }
+      const remoteServers = remoteEntries.filter(e => e && e.url);
+      const remoteGone = this._readRemovals(remoteEntries);
 
-      // 3. Load removed-servers set (removals are local-only, never synced)
+      // 3. Removals: this page's own, and the ones the list carries from the
+      //    user's other devices.
       const removed = this._loadRemoved();
-
-      // 4. Merge: union by URL, filtering out locally-removed servers
-      const localUrls = new Set(this.servers.map(s => this._normalizeUrl(s.url)));
-      const remoteUrls = new Set(remoteServers.map(s => this._normalizeUrl(s.url)));
+      const removedAt = this._loadRemovedAt();
+      let removedChanged = false;
       let changed = false;
-
-      // Add remote servers we don't have locally (and haven't removed, here
-      // or in the Desktop app)
-      for (const rs of remoteServers) {
-        if (!rs || !rs.url) continue;
-        const normalizedUrl = this._normalizeUrl(rs.url);
-        if (!localUrls.has(rs.url) && !localUrls.has(normalizedUrl)
-            && !removed.has(rs.url) && !removed.has(normalizedUrl)
-            && !this.desktopRemoved.has(normalizedUrl)) {
-          rs.url = normalizedUrl; // store the normalized form
-          this.servers.push(rs);
-          localUrls.add(normalizedUrl); // prevent duplicate adds within same sync
+      let removedHere = 0;
+      const here = this._normalizeUrl(typeof location !== 'undefined' ? location.origin : '');
+      const held = new Map();
+      for (const [url, at] of remoteGone) {
+        if (url === here) continue;
+        const local = this.servers.find(s => this._normalizeUrl(s.url) === url);
+        // Added again by hand since it was removed: the server stays.
+        if (local && (Number(local.keptAt) || 0) > at) continue;
+        // In the Desktop app its own list decides what is shown; the removal
+        // stays in the synced list for the user's other devices.
+        if (local && this.desktopListed.has(url)) { held.set(url, at); continue; }
+        if (local) {
+          this.servers = this.servers.filter(s => s !== local);
+          this.statusCache.delete(url);
           changed = true;
-          added++;
+          removedHere++;
+        }
+        if (!removed.has(url) || (removedAt[url] || 0) < at) {
+          removed.add(url);
+          removedAt[url] = at;
+          removedChanged = true;
         }
       }
+      this._heldRemovals = held;
 
-      // Check if we have servers the remote doesn't
-      for (const ls of this.servers) {
-        if (!remoteUrls.has(ls.url)) changed = true;
+      // 4. Merge: union by URL, filtering out removed servers
+      const localUrls = new Set(this.servers.map(s => this._normalizeUrl(s.url)));
+      const remoteUrls = new Set(remoteServers.map(s => this._normalizeUrl(s.url)));
+
+      // Add remote servers we don't have locally (and haven't removed, here,
+      // on another device or in the Desktop app)
+      for (const rs of remoteServers) {
+        const normalizedUrl = this._normalizeUrl(rs.url);
+        if (!normalizedUrl || localUrls.has(normalizedUrl) || this.desktopRemoved.has(normalizedUrl)) continue;
+        const kept = Number(rs.keptAt) || 0;
+        if (remoteGone.has(normalizedUrl) && kept <= remoteGone.get(normalizedUrl)) continue;
+        if (removed.has(rs.url) && rs.url !== normalizedUrl) continue;
+        if (removed.has(normalizedUrl)) {
+          // A removal from before removals carried a time stays as it is;
+          // a timed one gives way to the user adding the server again later.
+          const at = Number(removedAt[normalizedUrl]) || 0;
+          if (!at || kept <= at) continue;
+          removed.delete(normalizedUrl);
+          removedChanged = true;
+        }
+        rs.url = normalizedUrl; // store the normalized form
+        this.servers.push(rs);
+        localUrls.add(normalizedUrl); // prevent duplicate adds within same sync
+        changed = true;
+        added++;
       }
 
       // 5. Save merged list locally
+      if (removedChanged) this._saveRemoved(removed, removedAt);
       if (changed) this._save();
 
-      // 6. Push updated encrypted blob back if our list is longer
-      if (changed || !blob) {
+      // 6. Push the merged list back when it differs from the stored one:
+      //    servers the stored list lacks, or other removals
+      let differs = !blob || removedHere > 0;
+      for (const ls of this.servers) {
+        if (!remoteUrls.has(this._normalizeUrl(ls.url))) differs = true;
+      }
+      const outGone = this._removalsToShare();
+      if (outGone.length !== remoteGone.size || outGone.some(g => remoteGone.get(g.removed) !== g.at)) differs = true;
+      if (differs) {
         await this._pushToServer(token, wrappingHex);
       }
-      return { ok: true, added };
+      return { ok: true, added, removed: removedHere };
     } catch (err) {
       console.warn('[ServerSync] Sync failed:', err.message);
       return { ok: false, added };
     }
+  }
+
+  // Removals travel in the synced list as entries without a `url`
+  // ({ removed, at }), which versions from before 4.30 skip. Without them a
+  // new device or a new address for a server brought back every server the
+  // account had ever listed.
+
+  /** The removals a synced list carries: Map of address -> time. */
+  _readRemovals(entries) {
+    const out = new Map();
+    for (const e of entries) {
+      if (!e || e.url || typeof e.removed !== 'string') continue;
+      const url = this._normalizeUrl(e.removed);
+      const at = Number(e.at) || 0;
+      if (url && at > 0 && at > (out.get(url) || 0)) out.set(url, at);
+    }
+    return out;
+  }
+
+  /** The removals to put in the synced list: the ones made on this page
+   *  since removals carry a time, and the ones another device made that
+   *  this page left to the Desktop app. A server that is back in the list
+   *  by the user's hand is not among them. The newest 200 are kept. */
+  _removalsToShare() {
+    const out = new Map(this._heldRemovals || []);
+    const removed = this._loadRemoved();
+    const removedAt = this._loadRemovedAt();
+    for (const url of removed) {
+      const at = Number(removedAt[url]) || 0;
+      if (at > 0 && at > (out.get(url) || 0)) out.set(url, at);
+    }
+    for (const s of this.servers) {
+      const url = this._normalizeUrl(s.url);
+      if (out.has(url) && (Number(s.keptAt) || 0) > out.get(url)) out.delete(url);
+    }
+    return [...out].map(([removed, at]) => ({ removed, at }))
+      .sort((a, b) => b.at - a.at).slice(0, 200);
   }
 
   async _pushToServer(token, wrappingHex) {
@@ -779,8 +877,9 @@ class ServerManager {
         if (s.customName) out.customName = true;
         if (s.customIcon) out.customIcon = true;
         if (s.editedAt) out.editedAt = s.editedAt;
+        if (s.keptAt) out.keptAt = s.keptAt;
         return out;
-      }));
+      }).concat(this._removalsToShare()));
       const blob = await this._encryptBlob(payload, wrappingHex);
       await fetch('/api/auth/user-servers', {
         method: 'PUT',
@@ -864,7 +963,9 @@ class ServerManager {
     }
   }
 
-  // ── Removed-servers tracking (local-only) ─────────────
+  // ── Removed-servers tracking ──────────────────────────
+  // The set is this page's own. A removal the user makes also gets a time,
+  // and those go into the synced list for the account's other devices.
 
   _loadRemoved() {
     try {
@@ -872,14 +973,31 @@ class ServerManager {
     } catch { return new Set(); }
   }
 
-  _saveRemoved(set) {
+  /** When each removal was made: { address: time }. Removals from before
+   *  4.30, and ones taken from the Desktop app's list, have none. */
+  _loadRemovedAt() {
+    try {
+      const raw = JSON.parse(localStorage.getItem('haven_servers_removed_at') || '{}');
+      return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    } catch { return {}; } // unreadable: treat every removal as untimed
+  }
+
+  /** Save the removed set. Times are kept only for addresses still in it. */
+  _saveRemoved(set, times = this._loadRemovedAt()) {
     localStorage.setItem('haven_servers_removed', JSON.stringify([...set]));
+    const kept = {};
+    for (const url of set) if (Number(times[url]) > 0) kept[url] = Number(times[url]);
+    localStorage.setItem('haven_servers_removed_at', JSON.stringify(kept));
   }
 
   markRemoved(url) {
     const normalizedUrl = this._normalizeUrl(url);
     const removed = this._loadRemoved();
-    if (normalizedUrl) removed.add(normalizedUrl);
-    this._saveRemoved(removed);
+    const times = this._loadRemovedAt();
+    if (normalizedUrl) {
+      removed.add(normalizedUrl);
+      times[normalizedUrl] = Date.now();
+    }
+    this._saveRemoved(removed, times);
   }
 }

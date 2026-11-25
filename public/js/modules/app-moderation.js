@@ -29,7 +29,7 @@ _setupAuditLog() {
   // Every action reads as a phrase from the locale file; one with no phrase
   // yet shows its own name with spaces. The icon goes by what was acted on.
   const ICONS = {
-    user_kick: '👢', user_ban: '🚫', user_unban: '✅', user_mute: '🔇', user_unmute: '🔊',
+    user_kick: '👢', user_ban: '🚫', user_sessions_revoke: '🖥️', user_unban: '✅', user_mute: '🔇', user_unmute: '🔊',
     user_warn: '⚠️', user_delete: '🗑️', user_scrub: '🧹', voice_kick: '🎙️', admin_transfer: '👑',
     admin_recover: '👑', roles_reset: '🎭', message_delete: '🗑️', messages_bulk_delete: '🗑️',
     message_pin: '📌', message_unpin: '📌', message_protect: '🛡️', message_unprotect: '🛡️',
@@ -422,7 +422,7 @@ _applyAutomodSettings() {
   bool('voice-force-relay', 'voice_force_relay', 'false');
   bool('media-proxy-enabled', 'media_proxy_enabled', 'true');
   bool('fcm-enabled', 'fcm_enabled', 'true');
-  bool('fcm-hide-content', 'fcm_hide_content', 'false');
+  bool('fcm-hide-content', 'fcm_hide_content', 'true');
 
   num('automod-min-account-hours', 'automod_link_min_account_hours', '0');
   num('automod-new-account-post-minutes', 'automod_new_account_post_minutes', '0');

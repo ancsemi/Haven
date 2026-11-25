@@ -70,10 +70,22 @@ test('a bot post pushes the channel members', async () => {
   B.disconnect();
   await wait(300);
 
+  // This phone's app is an older one with no push key, so by default the
+  // push says only that there is a message.
   let from = relayed.length;
   const posted = await h.post(`/api/webhooks/${hook.token}`, { content: 'disk is full' });
   assert.ok(posted.success, JSON.stringify(posted));
-  assert.equal(await waitForPush(phone, from), true, 'bob\'s phone is pushed');
+  assert.equal(await waitForPush(phone, from), true, 'the phone is pushed');
+  const sealed = JSON.stringify(pushesFor(phone, from)[0]);
+  assert.match(sealed, /New message/);
+  assert.doesNotMatch(sealed, /Watcher|disk is full/, 'no name or text by default');
+
+  // The admin allows the text for older apps.
+  A.emit('update-server-setting', { key: 'fcm_hide_content', value: 'false' });
+  await wait(300);
+  from = relayed.length;
+  await h.post(`/api/webhooks/${hook.token}`, { content: 'disk is full again' });
+  assert.equal(await waitForPush(phone, from), true, 'the phone is pushed again');
   const push = pushesFor(phone, from)[0];
   assert.match(JSON.stringify(push), /Watcher/, 'named after the bot');
 

@@ -5,7 +5,7 @@ const { isString, isInt } = require('./helpers');
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel, getUserHighestRole,
           broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, handleVoiceLeave, touchVoiceActivity,
-          pruneStaleVoiceUsers, getMentionableChannelMembers,
+          pruneStaleVoiceUsers, mentionableMembersFor,
           getActiveMusicSyncState, getMusicQueuePayload, botAudioManager } = ctx;
   const { channelUsers, voiceUsers, voiceLastActivity, activeMusic,
           activeScreenSharers, activeScreenSessions, activeWebcamUsers,
@@ -606,6 +606,16 @@ module.exports = function register(socket, ctx) {
     });
   });
 
+  socket.on('request-video-keyframe', (data) => {
+    if (!data || typeof data !== 'object' || !isString(data.code, 8, 8) || !isInt(data.sharerId)) return;
+    const voiceRoom = voiceUsers.get(data.code);
+    if (!voiceRoom || !voiceRoom.has(socket.user.id)) return;
+    const webcam = data.source === 'webcam';
+    if (!(webcam ? activeWebcamUsers : activeScreenSharers).get(data.code)?.has(data.sharerId)) return;
+    const sharerInfo = voiceRoom.get(data.sharerId);
+    sharerInfo && io.to(sharerInfo.socketId).emit('video-keyframe-request', { targetUserId: socket.user.id, channelCode: data.code, source: webcam ? 'webcam' : 'screen' });
+  });
+
   // ── Webcam ─────────────────────────────────────────────────
   socket.on('webcam-started', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -1184,7 +1194,7 @@ module.exports = function register(socket, ctx) {
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id, role_gate FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, role_gate, is_dm FROM channels WHERE code = ?').get(code);
     if (!channel) return;
     // Through the channel's gate, as reading it is.
     if (!socket.user.isAdmin && ctx.roleGateAllows && !ctx.roleGateAllows(socket.user.id, channel)) return;
@@ -1201,7 +1211,8 @@ module.exports = function register(socket, ctx) {
       if (!(socket.user.isAdmin && chRow && !chRow.is_dm)) return;
     }
 
-    const members = getMentionableChannelMembers(channel.id);
+    // Only themselves for someone who may not see the members (#5931).
+    const members = mentionableMembersFor(socket.user, channel);
 
     socket.emit('channel-members', { channelCode: code, members });
   });

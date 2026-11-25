@@ -13,9 +13,10 @@ const { sendFcm, isFcmEnabled } = require('../fcm');
 const { DATA_DIR } = require('../paths');
 const HAVEN_VERSION = require('../../package.json').version;
 
-const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme, VALID_ROLE_PERMS, filterIdleOnline, maskSpoilers, toReplyContext } = require('./helpers');
+const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme, profileLinksFromRow, VALID_ROLE_PERMS, filterIdleOnline, maskSpoilers, toReplyContext } = require('./helpers');
 const { socketClientIp } = require('../clientIp');
 const automod = require('../automod');
+const { pushBody } = require('../pushBody');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
 const createPermissions = require('./permissions');
 const createChannelLists = require('./channelList');
@@ -80,10 +81,11 @@ const registerNameColor = require('./nameColor');
 const registerModCases = require('./modCases');
 const registerPermExceptions = require('./permExceptions');
 const modCases = require('../modCases');
-const { quietRecipients, pingedRecipients } = require('../pushMutes');
+const { quietRecipients, pingedRecipients, defaultQuietRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
 const registerThreadReadState = require('./threadReadState');
 const registerForumVotes = require('./forumVotes');
+const registerCalendar = require('./calendar');
 const registerForumPictureVotes = require('./forumPictureVotes');
 const registerBadges = require('./badges');
 const registerMoveToThread = require('./moveToThread');
@@ -92,6 +94,7 @@ const registerChannelMerge = require('./channelMerge');
 const registerMessageNsfw = require('./messageNsfw');
 const registerBlockedNames = require('./blockedNames');
 const createLiveAccess = require('./liveAccess');
+const { createMemberView } = require('../memberView');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
 // Some failures would repeat on every timer tick, connection or message.
@@ -146,6 +149,8 @@ function setupSocketHandlers(io, db, opts = {}) {
   const { getEnrichedChannels, getEnrichedChannelsAsync } = createChannelLists({
     db, userHasPermission, roleGateAllows, getUserEffectiveLevel
   });
+  // Who may see the people in a channel (#5931).
+  const memberView = createMemberView({ db, userHasPermission, roleGateAllows });
 
   // Required roles are membership (#5649): settle every gated channel once
   // at start-up, so an update or a migration leaves nobody half in.
@@ -510,6 +515,30 @@ function setupSocketHandlers(io, db, opts = {}) {
     `).all(channelId);
   }
 
+  // That list as one person may see it: all of it, or only themselves when
+  // they may not see the channel's members (#5931). A DM always shows both.
+  function mentionableMembersFor(user, channel) {
+    const members = getMentionableChannelMembers(channel.id);
+    if (channel.is_dm || memberView.canViewChannelMembers(user, channel.id)) return members;
+    return members.filter(m => m.id === user.id);
+  }
+
+  // The list sent to everyone in the channel after it changed, each
+  // connection getting the list it may see.
+  function sendChannelMembers(channel) {
+    const room = io.of('/').adapter.rooms.get(`channel:${channel.code}`);
+    if (!room || !room.size) return;
+    const members = getMentionableChannelMembers(channel.id);
+    const full = [];
+    for (const sid of room) {
+      const s = io.of('/').sockets.get(sid);
+      if (!s || !s.user) continue;
+      if (channel.is_dm || memberView.canViewChannelMembers(s.user, channel.id)) full.push(sid);
+      else s.emit('channel-members', { channelCode: channel.code, members: members.filter(m => m.id === s.user.id) });
+    }
+    if (full.length) io.to(full).emit('channel-members', { channelCode: channel.code, members });
+  }
+
   // ── broadcastChannelLists (debounced, shared timer) ─────
   // Every connected person gets their own channel list rebuilt. That used to
   // happen in one go, so on a big server one new channel froze everything
@@ -755,6 +784,10 @@ function setupSocketHandlers(io, db, opts = {}) {
       : '';
     return platform ? `${browser} on ${platform}` : browser;
   }
+  const listUserSessions = (userId, currentId) => [...io.of('/').sockets.values()]
+    .filter(s2 => s2.user && s2.user.id === userId)
+    .map(s2 => ({ id: s2.id, current: s2.id === currentId, device: _describeUserAgent(s2.handshake?.headers?.['user-agent'] || ''), ip: socketClientIp(s2), since: s2.handshake?.issued || null }))
+    .sort((a, b) => (b.current - a.current) || ((a.since || 0) - (b.since || 0)));
 
   // ── emitOnlineUsers ─────────────────────────────────────
   // A DM room only got a fresh online list while somebody was looking at it,
@@ -816,6 +849,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   // The next update sends this socket the whole list for the channel.
   function resetPresenceSync(socket, code) {
     socket.presenceSynced?.delete(code);
+    socket.memberView?.delete(code);
   }
   // Deltas only make sense while the socket stays in the room: once it
   // leaves (or joins afresh) it has missed changes, so it starts over with
@@ -943,13 +977,16 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     users.sort(byPresence);
 
-    return { users, mode };
+    return { users, mode, channel };
   }
 
   function flushOnlineUsers(code) {
     const room = io.of('/').adapter.rooms.get(`channel:${code}`);
     if (!room || !room.size) { memberListLast.delete(code); return; }
-    const { users, mode } = buildOnlineUsers(code);
+    const { users, mode, channel } = buildOnlineUsers(code);
+    // Someone who may not see the channel's members gets a list of just
+    // themselves (#5931). A DM's two people always see each other.
+    const viewGated = !!channel && !channel.is_dm;
 
     // Everyone else sees an invisible member as offline, or not at all when
     // the list shows online members only. The member themselves sees the
@@ -1002,6 +1039,23 @@ function setupSocketHandlers(io, db, opts = {}) {
       const s = io.of('/').sockets.get(sid);
       if (!s || !s.user) continue;
       const viewer = s.user.id;
+      if (viewGated) {
+        const view = memberView.forSocket(s, code, channel.id);
+        if (!view.allowed) {
+          const me = byId.get(viewer);
+          const list = me ? [me] : [];
+          const json = mode + JSON.stringify(list);
+          if (view.sentOwn !== json) {
+            view.sentOwn = json;
+            if (s.presenceDeltas) s.emit('online-users', { channelCode: code, users: list.map(slim), visibilityMode: mode, slim: 1 });
+            else s.emit('online-users', { channelCode: code, users: list, visibilityMode: mode });
+          }
+          s.presenceSynced?.delete(code);
+          continue;
+        }
+        // Just let in: the whole list, not changes to one they never had.
+        if (view.flipped) s.presenceSynced?.delete(code);
+      }
       const selfHidden = own.has(viewer);
 
       if (!s.presenceDeltas || fresh || !s.presenceSynced?.has(code)) {
@@ -1320,6 +1374,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       let quietFor = new Set();
       try {
         quietFor = quietRecipients(db, { channelId, senderUserId, messageContent, replyToUserId: pushOpts.replyToUserId });
+        for (const id of defaultQuietRecipients(db, { channelId, replyToUserId: pushOpts.replyToUserId, messageContent: pushOpts.pingText != null ? pushOpts.pingText : messageContent })) quietFor.add(id);
       } catch (err) {
         // Pushes still go out, but muted people get them too, so say so.
         throttledWarn('push personal mute lookup failed', err);
@@ -1352,7 +1407,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       } catch { /* not JSON, use as-is */ }
 
       displayContent = maskSpoilers(displayContent);
-      const body = displayContent.length > 120 ? displayContent.slice(0, 117) + '...' : displayContent;
+      const body = pushBody(displayContent);
       const title = `${senderUsername} in #${channelName}`;
       const payload = JSON.stringify({
         title, body, channelCode,
@@ -2061,7 +2116,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
       try {
         // created_at feeds the automod new-account link gate (v3.42.0).
-        let uRow = accountDb.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, is_bot, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio, banner_color, avatar_color, banner, profile_theme_top, profile_theme_bottom FROM users WHERE id = ?').get(user.id);
+        let uRow = accountDb.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, is_bot, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio, banner_color, avatar_color, banner, profile_theme_top, profile_theme_bottom, profile_links FROM users WHERE id = ?').get(user.id);
         if (asyncAccountReads) uRow = await uRow;
         // A bot keeps its token through a rename (src/botAccounts.js), so
         // its name is read from the account rather than the token.
@@ -2094,6 +2149,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         socket.user.avatarColor = uRow.avatar ? cleanHexColor(uRow.avatar_color) : null;
         socket.user.banner = isValidUploadPath(uRow.banner) ? uRow.banner : null;
         socket.user.profileTheme = cleanProfileTheme(uRow.profile_theme_top, uRow.profile_theme_bottom);
+        socket.user.profileLinks = profileLinksFromRow(uRow.profile_links);
         // (#12) The client needs this to ask for the right secret: an SSO
         // account unlocks E2E with its encryption passphrase, not a password.
         socket.user.isSso = !!uRow.oidc_subject;
@@ -2248,24 +2304,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     // this is exactly what it says: sockets attached right now. A token with no
     // tab open does not appear here, which is why the list is paired with a
     // revoke that invalidates every token rather than individual rows.
-    socket.on('get-sessions', () => {
-      const mine = [];
-      for (const [, s2] of io.of('/').sockets) {
-        if (!s2.user || s2.user.id !== socket.user.id) continue;
-        const ua = (s2.handshake?.headers?.['user-agent']) || '';
-        mine.push({
-          id: s2.id,
-          current: s2.id === socket.id,
-          device: _describeUserAgent(ua),
-          ip: socketClientIp(s2),
-          since: s2.handshake?.issued || null
-        });
-      }
-      // Current session first, then oldest to newest so a new arrival appears
-      // at the bottom where it is easy to spot.
-      mine.sort((a, b) => (b.current - a.current) || ((a.since || 0) - (b.since || 0)));
-      socket.emit('sessions-list', { sessions: mine });
-    });
+    socket.on('get-sessions', () => socket.emit('sessions-list', { sessions: listUserSessions(socket.user.id, socket.id) }));
 
     // (#5505) Admins get their own room so server-health warnings can reach
     // them without walking every socket. An admin joining mid-problem is told
@@ -2329,6 +2368,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       avatarColor: socket.user.avatarColor || null,
       banner: socket.user.banner || null,
       profileTheme: socket.user.profileTheme || null,
+      profileLinks: socket.user.profileLinks || [],
       birthday: socket.user.birthday || null,
       birthdaySetAt: socket.user.birthdaySetAt || null,
       birthdayHideYear: socket.user.birthdayHideYear !== false,
@@ -2338,7 +2378,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // official mode on, and what the server supports, for clients that talk
       // to servers of different versions.
       officialMode: highlights.officialMode(db, socket.user.id),
-      features: highlights.FEATURES
+      features: [...highlights.FEATURES, 'member_sessions', 'dm_storage', 'unicode_emoji_names']
     });
 
     // Send current voice counts for sidebar indicators.
@@ -2488,7 +2528,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         if (floodCheck('screenLifecycle')) return acknowledgeFlood('rate_limited');
         return next();
       }
-      if (eventName === 'request-screen-renegotiate') {
+      if (eventName === 'request-screen-renegotiate' || eventName === 'request-video-keyframe') {
         if (floodCheck('screenRecovery')) return;
         return next();
       }
@@ -2813,9 +2853,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       onReferrerPolicyChange,
       settingEffects, roleRefresh,
       // Per-member upload storage totals (#5521)
-      getUploadUsage, botAudioManager,
+      getUploadUsage, botAudioManager, listUserSessions,
       // Ban-filtered channel roster used by @mention autocomplete
-      getMentionableChannelMembers,
+      getMentionableChannelMembers, mentionableMembersFor, sendChannelMembers, memberView,
       // IP-ban cache invalidator (server.js HTTP-side cache)
       invalidateIpBanCache,
       // Constants
@@ -2850,6 +2890,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerForumUnread(socket, ctx);
     registerThreadReadState(socket, ctx);
     registerForumVotes(socket, ctx);
+    registerCalendar(socket, ctx);
     registerForumPictureVotes(socket, ctx);
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);

@@ -273,7 +273,7 @@ class MediasoupRelay {
   }
 
   /** Starts receiving one track. Arrives paused; resume once it is wired up. */
-  async consume(code, peerId, producerId, rtpCapabilities) {
+  async consume(code, peerId, producerId, rtpCapabilities, fresh = false) {
     const { room, peer } = this._peer(code, peerId);
     const describe = (c) => ({
       id: c.id, producerId, kind: c.kind, rtpParameters: c.rtpParameters,
@@ -281,7 +281,12 @@ class MediasoupRelay {
     });
     // The same track asked for again gets the consumer it already has.
     const existing = peer.byProducer.get(producerId);
-    if (existing && !existing.closed) return describe(existing);
+    if (existing && !existing.closed && !fresh) return describe(existing);
+    if (existing && fresh) {
+      peer.consumers.delete(existing.id);
+      peer.byProducer.delete(producerId);
+      existing.close();
+    }
     if (peer.consumers.size >= MAX_CONSUMERS_PER_PEER) throw new Error('Too many tracks');
     if (!room.router.canConsume({ producerId, rtpCapabilities })) return null;
     const t = [...peer.transports.values()].find(x => x.appData.direction === 'recv');
@@ -316,6 +321,16 @@ class MediasoupRelay {
     // Screen video waits until its tile is open (setWatching).
     if (c.appData.source === 'screen' && !peer.watching.has(c.appData.sharerId)) return;
     await c.resume();
+  }
+
+  /** Asks the sender of a received video for a fresh keyframe. */
+  async requestKeyFrame(code, peerId, consumerId) {
+    const { peer } = this._peer(code, peerId);
+    const c = peer.consumers.get(consumerId);
+    if (!c || c.closed || c.kind !== 'video') return { paused: false };
+    if (c.paused || c.producerPaused) return { paused: true };
+    await c.requestKeyFrame();
+    return { paused: false };
   }
 
   /** The person opened (or closed) a sharer's screen: start or stop its video. */

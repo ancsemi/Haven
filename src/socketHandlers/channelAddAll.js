@@ -180,6 +180,9 @@ module.exports = function register(socket, ctx) {
       `).all()
         // A guest only uses the channels the admin opened to guests.
         .filter(u => socket.user.isAdmin || !u.is_guest)
+        // Someone who may only remove sees the people in the channel, not
+        // every account on the server.
+        .filter(u => a.canAdd || members.has(u.id))
         .map(u => {
           const inChannel = members.has(u.id);
           return { id: u.id, username: u.username, displayName: u.display_name || u.username,

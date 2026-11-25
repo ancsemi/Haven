@@ -132,8 +132,7 @@ _renderUserItem(u, scoreLookup) {
     : '';
 
   // Status dot color
-  const statusClass = u.status === 'dnd' ? 'dnd' : u.status === 'away' ? 'away'
-    : u.status === 'invisible' ? 'invisible' : (u.online === false ? 'away' : '');
+  const statusClass = this._statusDotClass(u);
 
   const statusTextHtml = u.statusText
     ? `<span class="user-status-text" title="${this._escapeHtml(u.statusText)}">${this._escapeHtml(u.statusText)}</span>`
@@ -624,14 +623,18 @@ _activityProgressHtml(act) {
     </span>`;
 },
 
-/** Presence dot class (shared by the sidebar and the profile card). */
+/** Presence dot class (shared by the sidebar, the profile card and the
+ *  pop-out DM). Offline comes first: the status someone last chose (Away,
+ *  Do Not Disturb) is kept while they are gone, and showed them as idle. */
 _statusDotClass(u) {
+  if (u.online === false) return 'offline';
   return u.status === 'dnd' ? 'dnd' : u.status === 'away' ? 'away'
-    : u.status === 'invisible' ? 'invisible' : (u.online === false ? 'away' : '');
+    : u.status === 'invisible' ? 'invisible' : '';
 },
 
 /** Human label for the presence dot's tooltip. */
 _statusLabel(u) {
+  if (u.online === false) return t('app.profile.offline');
   return u.status === 'dnd' ? t('app.profile.dnd') : u.status === 'away' ? t('app.profile.away')
     : u.status === 'invisible' ? t('app.profile.invisible')
     : (u.online === false ? t('app.profile.offline') : t('app.profile.online'));
@@ -816,6 +819,10 @@ _setProfileBannerImage(el, url, animate) {
   el.prepend(img);
 },
 
+_profileLinksHtml(list) {
+  const links = this._cleanProfileLinks(list);
+  return links.length ? `<div class="profile-popup-links">${links.map((l) => `<a class="profile-link-btn" href="${this._escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" data-masked-link title="${this._escapeHtml(l.url)}"><span class="profile-link-label">${this._escapeHtml(l.label)}</span><span class="profile-link-host">${this._escapeHtml(new URL(l.url).host)}</span></a>`).join('')}</div>` : '';
+},
 _showProfilePopup(profile) {
   // If this was a hover-triggered popup but the mouse already left, abort
   if (this._isHoverPopup && !this._hoverTarget) return;
@@ -903,6 +910,7 @@ _showProfilePopup(profile) {
       </div>
       <div id="profile-popup-status-slot">${statusTextHtml}</div>
       ${bioHtml}
+      ${this._profileLinksHtml(profile.profileLinks)}
       <div class="profile-popup-divider"></div>
       <div id="profile-popup-activity-slot">${this._profileActivityHtml(profile.activity)}</div>
       ${rolesHtml ? `<div class="profile-popup-section-label">${t('users.profile_roles_label')}</div><div class="profile-popup-roles">${rolesHtml}</div>` : ''}
@@ -1053,6 +1061,7 @@ _bindProfilePopupOutsideClose(popup) {
     this._profilePopupOutsideHandler = (e) => {
       const lightbox = document.getElementById('image-lightbox');
       if (lightbox && lightbox.contains(e.target)) return;
+      if (e.target.closest?.('.risky-download-overlay')) return;
       if (!popup.contains(e.target)) this._closeProfilePopup();
     };
     document.addEventListener('click', this._profilePopupOutsideHandler);

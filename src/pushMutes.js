@@ -69,4 +69,13 @@ function pingedRecipients(db, { channelId, messageContent, replyToUserId, userId
   return pinged;
 }
 
-module.exports = { quietRecipients, pingedRecipients };
+function defaultQuietRecipients(db, { channelId, messageContent, replyToUserId }) {
+  const ch = db.prepare('SELECT code, is_dm, default_notify FROM channels WHERE id = ?').get(channelId) || {};
+  if (ch.is_dm || !['muted', 'mentions'].includes(ch.default_notify)) return new Set();
+  const chosen = new Set(db.prepare('SELECT user_id FROM user_channel_prefs WHERE channel_code = ?').all(ch.code).map(r => r.user_id));
+  const members = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(channelId).map(r => r.user_id).filter(id => !chosen.has(id));
+  const pinged = ch.default_notify === 'mentions' ? pingedRecipients(db, { channelId, messageContent, replyToUserId, userIds: members }) : new Set();
+  return new Set(members.filter(id => !pinged.has(id)));
+}
+
+module.exports = { quietRecipients, pingedRecipients, defaultQuietRecipients };

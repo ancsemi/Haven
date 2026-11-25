@@ -6,6 +6,7 @@ const { clearChannelRuntimeState } = require('../channelRotation');
 const { ipBanRefusal } = require('../ipBanGuard');
 const { deletableSql } = require('../protectedMessages');
 const { scrubUserMessages } = require('../scrubMessages');
+const { revokeSessions } = require('../auth');
 
 // A scrub or purge leaves protected messages, and thread heads holding one,
 // as they are (src/protectedMessages.js).
@@ -14,7 +15,7 @@ const SCRUBBABLE = deletableSql('m');
 module.exports = function register(socket, ctx) {
   const { io, db, state, userHasPermission, getUserEffectiveLevel,
           emitOnlineUsers, broadcastVoiceUsers, getEnrichedChannels, logAudit,
-          invalidateIpBanCache, getMentionableChannelMembers, handleVoiceLeave } = ctx;
+          invalidateIpBanCache, sendChannelMembers, handleVoiceLeave } = ctx;
   const { channelUsers, voiceUsers } = state;
   const _audit = (typeof logAudit === 'function') ? logAudit : () => {};
   const _invalidateIpCache = (typeof invalidateIpBanCache === 'function') ? invalidateIpBanCache : () => {};
@@ -210,13 +211,9 @@ module.exports = function register(socket, ctx) {
 
     if (channelRoom) {
       channelRoom.delete(data.userId);
-      const online = Array.from(channelRoom.values()).map(u => ({
-        id: u.id, username: u.username
-      }));
-      io.to(`channel:${code}`).emit('online-users', {
-        channelCode: code,
-        users: online
-      });
+      // The usual member list update: each viewer gets the list they may
+      // see (#5931), where this used to send everyone a bare list of names.
+      emitOnlineUsers(code);
     }
 
     io.to(`channel:${code}`).emit('new-message', {
@@ -281,6 +278,31 @@ module.exports = function register(socket, ctx) {
     }
   });
 
+  const sessionsTarget = (data) => {
+    if (!data || typeof data !== 'object' || !isInt(data.userId)) return { error: 'Invalid request' };
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'ban_user')) return { error: 'You don\'t have permission to manage sessions' };
+    if (data.userId === socket.user.id) return { error: 'Use Settings > Sessions for your own sessions' };
+    const target = db.prepare('SELECT id, COALESCE(display_name, username) AS name, is_admin, is_bot FROM users WHERE id = ?').get(data.userId);
+    return !target ? { error: 'User not found' }
+      : target.is_bot ? { error: 'Bots have no sessions' }
+      : !socket.user.isAdmin && (target.is_admin || getUserEffectiveLevel(target.id) >= getUserEffectiveLevel(socket.user.id)) ? { error: 'You can\'t do that to someone of equal or higher rank' }
+      : { target };
+  };
+  socket.on('get-member-sessions', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    const r = sessionsTarget(data);
+    cb(r.error ? { error: r.error } : { sessions: ctx.listUserSessions(r.target.id, null).map(({ ip, ...rest }) => rest) });
+  });
+  socket.on('revoke-member-sessions', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    const r = sessionsTarget(data);
+    if (r.error) return cb({ error: r.error });
+    const open = ctx.listUserSessions(r.target.id, null).length;
+    revokeSessions(r.target.id);
+    for (const [, s] of io.sockets.sockets) if (s.user && s.user.id === r.target.id) { s.emit('force-logout', { reason: 'sessions_revoked' }); s.disconnect(true); }
+    _audit({ actor: socket.user, action: 'user_sessions_revoke', target_type: 'user', target_id: r.target.id, target_name: r.target.name, details: { sessions: open } });
+    cb({ ok: true, closed: open });
+  });
   // ── Ban user ────────────────────────────────────────────
   socket.on('ban-user', (data) => {
     if (!data || typeof data !== 'object') return;
@@ -332,20 +354,16 @@ module.exports = function register(socket, ctx) {
 
     // Clients cache the member list per channel and only refetch on a channel
     // switch, so without this push the banned name stayed in @mention
-    // autocomplete for everyone already sitting in the channel. The list is
-    // identical for every viewer, so one query per channel covers the room.
+    // autocomplete for everyone already sitting in the channel. One query
+    // per channel covers the room; someone who may not see the members gets
+    // only themselves (#5931).
     try {
       const affected = db.prepare(`
-        SELECT c.id, c.code FROM channel_members cm
+        SELECT c.id, c.code, c.is_dm FROM channel_members cm
         JOIN channels c ON c.id = cm.channel_id
         WHERE cm.user_id = ? AND c.is_dm = 0
       `).all(data.userId);
-      for (const ch of affected) {
-        io.to(`channel:${ch.code}`).emit('channel-members', {
-          channelCode: ch.code,
-          members: getMentionableChannelMembers(ch.id)
-        });
-      }
+      for (const ch of affected) sendChannelMembers(ch);
     } catch (err) {
       console.warn('[ban] member list refresh failed:', err.message);
     }
