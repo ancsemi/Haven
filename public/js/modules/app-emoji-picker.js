@@ -362,7 +362,7 @@ _toggleEmojiPicker(anchorEl) {
     const btn = document.createElement('button');
     btn.className = 'emoji-item';
     // Check if it's a custom emoji (:name:)
-    const customMatch = typeof emoji === 'string' && emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+    const customMatch = typeof emoji === 'string' && emoji.match(/^:([\p{L}\p{Nd}\p{M}_-]+):$/u);
     // Standard emoji get the current skin tone; custom emoji pass through.
     const value = customMatch ? emoji : self._toneEmoji(emoji);
     if (customMatch) {
@@ -620,7 +620,7 @@ _showReactionPopout(badge) {
   if (!users.length) return;
 
   const emoji = badge.dataset.emoji;
-  const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+  const customMatch = emoji.match(/^:([\p{L}\p{Nd}\p{M}_-]+):$/u);
   let emojiDisplay = this._escapeHtml(emoji);
   if (customMatch && this.customEmojis) {
     const ce = this.customEmojis.find(e => e.name === customMatch[1]);
@@ -660,7 +660,7 @@ _getQuickEmojis() {
   if (saved) {
     try { const arr = JSON.parse(saved); if (Array.isArray(arr) && arr.length === 8) return arr; } catch { /* corrupt saved list: use the defaults below */ }
   }
-  const ok = (e) => !/^:[a-zA-Z0-9_-]+:$/.test(e) || !!this._findNamedEmoji?.(e.slice(1, -1));
+  const ok = (e) => !/^:[\p{L}\p{Nd}\p{M}_-]+:$/u.test(e) || !!this._findNamedEmoji?.(e.slice(1, -1));
   const favorites = this._getEmojiFavorites().filter(ok);
   return [...new Set([...(favorites.length ? favorites : this._reactionUsage().filter(ok)), '👍', '👎', '😂', '❤️', '🔥', '💯', '😮', '😢'])].slice(0, 8);
 },
@@ -710,7 +710,7 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
       const slot = document.createElement('button');
       slot.className = 'reaction-pick-btn quick-emoji-slot' + (activeSlot === i ? ' active' : '');
       // Check for custom emoji
-      const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+      const customMatch = emoji.match(/^:([\p{L}\p{Nd}\p{M}_-]+):$/u);
       if (customMatch && this.customEmojis) {
         const ce = this._findNamedEmoji(customMatch[1]);
         if (ce) {
@@ -754,7 +754,7 @@ _showQuickEmojiEditor(picker, msgEl, msgId) {
       emojis.forEach(emoji => {
         const btn = document.createElement('button');
         btn.className = 'reaction-full-btn';
-        const named = this._findNamedEmoji((typeof emoji === 'string' && (emoji.match(/^:([a-zA-Z0-9_-]+):$/) || [])[1]) || '');
+        const named = this._findNamedEmoji((typeof emoji === 'string' && (emoji.match(/^:([\p{L}\p{Nd}\p{M}_-]+):$/u) || [])[1]) || '');
         if (named) btn.innerHTML = `<img src="${this._escapeHtml(named.url)}" alt="${this._escapeHtml(emoji)}" class="custom-emoji" style="width:22px;height:22px">`;
         else btn.textContent = this._toneEmoji(emoji);
         btn.addEventListener('click', (e) => {
@@ -910,7 +910,7 @@ _showReactionPicker(msgEl, msgId) {
     const btn = document.createElement('button');
     btn.className = 'reaction-pick-btn';
     // Check for custom emoji
-    const customMatch = emoji.match(/^:([a-zA-Z0-9_-]+):$/);
+    const customMatch = emoji.match(/^:([\p{L}\p{Nd}\p{M}_-]+):$/u);
     const value = this._toneEmoji(emoji); // custom emoji pass through unchanged
     if (customMatch && this.customEmojis) {
       const ce = this._findNamedEmoji(customMatch[1]);
@@ -1059,7 +1059,7 @@ _showFullReactionPicker(msgEl, msgId, quickPicker) {
   const emojiBtn = (emoji) => {
     const btn = document.createElement('button');
     btn.className = 'reaction-full-btn';
-    const named = this._findNamedEmoji((typeof emoji === 'string' && (emoji.match(/^:([a-zA-Z0-9_-]+):$/) || [])[1]) || '');
+    const named = this._findNamedEmoji((typeof emoji === 'string' && (emoji.match(/^:([\p{L}\p{Nd}\p{M}_-]+):$/u) || [])[1]) || '');
     const value = this._toneEmoji(emoji); // custom emoji pass through unchanged
     if (named) { btn.innerHTML = `<img src="${this._escapeHtml(named.url)}" alt="${this._escapeHtml(emoji)}" title="${this._escapeHtml(emoji)}" class="custom-emoji">`; }
     else { btn.textContent = value; btn.title = this.emojiNames[emoji] || ''; }

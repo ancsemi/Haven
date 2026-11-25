@@ -145,13 +145,9 @@ _bindChannelMenu() {
     const code = this._ctxMenuChannel;
     if (!code) return;
     this._closeChannelCtxMenu();
-    const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-    const idx = muted.indexOf(code);
-    const willBeMuted = idx < 0;
-    if (idx >= 0) { muted.splice(idx, 1); this._showToast(t('toasts.channel_unmuted'), 'success'); }
-    else { muted.push(code); this._showToast(t('toasts.channel_muted'), 'success'); }
-    localStorage.setItem('haven_muted_channels', JSON.stringify(muted));
-    this._syncChannelMutePref(code, willBeMuted);
+    const willBeMuted = !this._mutedChannelList().includes(code);
+    this._showToast(t(willBeMuted ? 'toasts.channel_muted' : 'toasts.channel_unmuted'), 'success');
+    this._setChannelMuted(code, willBeMuted);
     this._renderChannels();
   });
   // Copy channel link from context menu
@@ -365,6 +361,11 @@ _bindChannelMenu() {
       const newVal = ch && ch.cleanup_exempt === 1 ? 0 : 1;
       optimistic({ cleanup_exempt: newVal });
       this.socket.emit('toggle-cleanup-exempt', { code });
+    } else if (fn === 'default-notify') {
+      const order = ['all', 'mentions', 'muted'];
+      const mode = order[(Math.max(0, order.indexOf(ch?.default_notify)) + 1) % order.length];
+      optimistic({ default_notify: mode });
+      this.socket.emit('set-channel-default-notify', { code, mode });
     } else if (fn === 'welcome') {
       const newVal = ch && ch.show_welcome === 1 ? 0 : 1;
       optimistic({ show_welcome: newVal });

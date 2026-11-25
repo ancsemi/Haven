@@ -382,6 +382,9 @@ _listenMessageChanges() {
     localStorage.setItem('haven_user', JSON.stringify(this.user));
   });
 
+  this.socket.on('profile-links-updated', (data) => {
+    this.user.profileLinks = this._cleanProfileLinks(data?.links);
+  });
   this.socket.on('banner-color-updated', (data) => {
     this.user.bannerColor = this._safeHexColor(data?.color);
     localStorage.setItem('haven_user', JSON.stringify(this.user));

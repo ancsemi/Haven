@@ -421,6 +421,11 @@ _quoteJumpId(target) {
 },
 
 _jumpToMessage(msgId) {
+  // A forum lists its topics as cards: going to a topic opens it.
+  if (this._forumActive && this._forumTopics?.has(Number(msgId))) {
+    this._openThread(Number(msgId));
+    return;
+  }
   const existing = document.querySelector(`#messages [data-msg-id="${msgId}"]`);
   if (existing) {
     this._coupledToBottom = false;
@@ -429,9 +434,61 @@ _jumpToMessage(msgId) {
     setTimeout(() => existing.classList.remove('highlight-flash'), 2000);
     return;
   }
-  // Message not in DOM: fetch messages around it
+  // Message not in DOM: fetch messages around it. _jumpAsked remembers which
+  // jump the reply answers: a re-render of the current page (members
+  // arriving, say) can use up _jumpTargetId before the window comes back.
   this._jumpTargetId = msgId;
+  this._jumpAsked = Number(msgId);
   this.socket.emit('get-messages', { code: this.currentChannel, around: msgId });
+},
+
+// Open a link to a channel or a message on this server (deep link, or a
+// click on one in chat). A message in another channel waits for that
+// channel's history before jumping, so the jump is not overwritten by it.
+_openMessageLink(code, msgId = 0) {
+  const ch = (this.channels || []).find(c => c.code === code || (c.code || '').toLowerCase() === String(code).toLowerCase());
+  if (!ch) {
+    this._showToast?.(t('toasts.channel_link_unavailable'), 'error');
+    return false;
+  }
+  msgId = parseInt(msgId, 10) || 0;
+  if (ch.code !== this.currentChannel) {
+    this._pendingLinkJump = msgId ? { code: ch.code, msgId } : null;
+    this.switchChannel(ch.code);
+  } else if (msgId) {
+    this._jumpToMessage(msgId);
+  }
+  return true;
+},
+
+_runPendingLinkJump(code) {
+  const pending = this._pendingLinkJump;
+  if (!pending || pending.code !== code) return;
+  this._pendingLinkJump = null;
+  this._jumpToMessage(pending.msgId);
+},
+
+// After a jump's history window is drawn: open the thread or forum topic the
+// message lives in, at the reply when it is one (message-links.js jumpPlan).
+_afterJumpHistory(data) {
+  const forum = !!this._forumActive;
+  // A forum view does not read _jumpTargetId, so it must not linger for the
+  // next channel to pick up.
+  if (forum) this._jumpTargetId = null;
+  if (!window.HavenMessageLinks) return;
+  const tr = data.threadReply || null;
+  const plan = HavenMessageLinks.jumpPlan({
+    forum,
+    around: Number(data.around) || 0,
+    threadParent: tr ? Number(tr.parentId) || 0 : 0,
+    threadReply: tr ? Number(tr.messageId) || 0 : 0,
+  });
+  if (!plan.thread) return;
+  // A forum topic that did not come back (deleted, or hidden by a filter)
+  // has nothing to open.
+  if (forum && !this._forumTopics?.has(plan.thread)) return;
+  this._threadJumpTarget = plan.reply || null;
+  this._openThread(plan.thread);
 },
 
 // Opening a channel draws its history before the member list with everyone's

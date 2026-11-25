@@ -208,6 +208,7 @@ CREATE TABLE "channels" (
   "afk_timeout_minutes" BIGINT DEFAULT 0,
   "read_only" BIGINT DEFAULT 0,
   "former_names" TEXT DEFAULT NULL,
+  "default_notify" TEXT DEFAULT 'all',
   "type_id" BIGINT DEFAULT NULL,
   "is_calendar" BIGINT DEFAULT 0,
   PRIMARY KEY ("id")
@@ -830,6 +831,7 @@ CREATE TABLE "users" (
   "banner" TEXT DEFAULT NULL,
   "profile_theme_top" TEXT DEFAULT NULL,
   "profile_theme_bottom" TEXT DEFAULT NULL,
+  "profile_links" TEXT DEFAULT NULL,
   "public_key" TEXT DEFAULT NULL,
   "signing_key" TEXT DEFAULT NULL,
   "signing_backup" TEXT DEFAULT NULL,

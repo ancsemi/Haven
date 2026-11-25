@@ -37,7 +37,7 @@ _renderSubChannelPanel() {
   if (!container) return;
   container.innerHTML = '';
 
-  const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+  const muted = this._mutedChannelList();
   const regularChannels = (this.channels || []).filter(c => !c.is_dm);
   const subChannels = regularChannels.filter(c => c.parent_channel_id);
 
@@ -120,19 +120,8 @@ _createSubPanelTile(ch, isSubbed) {
   const checkbox = tile.querySelector('input[type="checkbox"]');
   checkbox.addEventListener('change', (e) => {
     e.stopPropagation();
-    const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-    const idx = muted.indexOf(ch.code);
-    if (checkbox.checked) {
-      // Subscribe: remove from muted
-      if (idx >= 0) muted.splice(idx, 1);
-      this._showToast(t('channels.subscribed_to', { name: ch.name }), 'success');
-    } else {
-      // Unsubscribe: add to muted
-      if (idx < 0) muted.push(ch.code);
-      this._showToast(t('channels.unsubscribed_from', { name: ch.name }), 'success');
-    }
-    localStorage.setItem('haven_muted_channels', JSON.stringify(muted));
-    this._syncChannelMutePref(ch.code, !checkbox.checked);
+    this._showToast(t(checkbox.checked ? 'channels.subscribed_to' : 'channels.unsubscribed_from', { name: ch.name }), 'success');
+    this._setChannelMuted(ch.code, !checkbox.checked);
     // Re-render the panel and sidebar
     this._renderSubChannelPanel();
     this._renderChannels();

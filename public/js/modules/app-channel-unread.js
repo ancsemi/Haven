@@ -302,6 +302,17 @@ _setupDmDragDrop() {
   dmList.addEventListener('dragend', cleanUp);
 },
 
+// A muted channel's count stays on its own row, but never adds to a dot or
+// count that sums several channels (category, parent channel, tag row).
+_mutedChannels() {
+  try { return new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]')); } catch { return new Set(); }
+},
+
+_countedUnread() {
+  const muted = this._mutedChannels();
+  return (code, fallback = 0) => muted.has(code) ? 0 : ((code in this.unreadCounts ? this.unreadCounts[code] : fallback) || 0);
+},
+
 _updateBadge(code) {
   const el = document.querySelector(`.channel-item[data-code="${code}"]`);
   if (el) {
@@ -334,7 +345,8 @@ _updateBadge(code) {
             const siblingCodes = this.channels
               .filter(c => c.parent_channel_id === parentChannel.id)
               .map(c => c.code);
-            const siblingTotal = siblingCodes.reduce((sum, sc) => sum + (this.unreadCounts[sc] || 0), 0);
+            const counted = this._countedUnread();
+            const siblingTotal = siblingCodes.reduce((sum, sc) => sum + counted(sc), 0);
             let parentBubble = parentEl.querySelector('.channel-badge-bubble');
             if (siblingTotal > 0) {
               if (!parentBubble) {
@@ -378,6 +390,7 @@ _updateNestedIndicators() {
       (subChannelMap[c.parent_channel_id] ||= []).push(c);
     }
   }
+  const counted = this._countedUnread();
   const setDot = (el, on) => {
     if (!el) return;
     let dot = el.querySelector(':scope > .channel-badge-nested-dot');
@@ -407,9 +420,9 @@ _updateNestedIndicators() {
     for (const c of this.channels) {
       if (c.is_dm || c.parent_channel_id) continue;
       if ((c.category || '') !== cat) continue;
-      total += this.unreadCounts[c.code] || 0;
+      total += counted(c.code);
       for (const s of (subChannelMap[c.id] || [])) {
-        total += this.unreadCounts[s.code] || 0;
+        total += counted(s.code);
       }
     }
     let bubble = catEl.querySelector(':scope > .channel-badge-bubble');
@@ -438,7 +451,7 @@ _updateNestedIndicators() {
     if (!parentEl) continue;
     const isCollapsed = localStorage.getItem(`haven_subs_collapsed_${c.code}`) === 'true';
     if (isCollapsed) { setDot(parentEl, false); continue; }
-    const subTotal = subs.reduce((sum, s) => sum + (this.unreadCounts[s.code] || 0), 0);
+    const subTotal = subs.reduce((sum, s) => sum + counted(s.code), 0);
     setDot(parentEl, subTotal > 0);
   }
 
@@ -456,7 +469,7 @@ _updateNestedIndicators() {
     const total = subs.reduce((sum, s) => {
       const subTag = s.category || t('channels.untagged');
       if (subTag !== tagName) return sum;
-      return sum + (this.unreadCounts[s.code] || 0);
+      return sum + counted(s.code);
     }, 0);
     const tagKey = `haven_subtag_collapsed_${parentCode}_${tagName}`;
     const isCollapsed = localStorage.getItem(tagKey) === 'true';
@@ -480,7 +493,7 @@ _updateNestedIndicators() {
 _updateTabTitle() {
   let mutedSet = null;
   try {
-    mutedSet = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+    mutedSet = new Set(this._mutedChannelList());
   } catch { mutedSet = new Set(); }
   const validCodes = new Set((this.channels || []).map(c => c.code));
   const total = Object.entries(this.unreadCounts).reduce((s, [k, v]) => {
@@ -507,7 +520,7 @@ _updateDesktopBadge() {
   // looked like a phantom badge to the user. (#desktop-phantom-badge)
   let mutedSet = null;
   try {
-    mutedSet = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]'));
+    mutedSet = new Set(this._mutedChannelList());
   } catch { mutedSet = new Set(); }
   const validCodes = new Set((this.channels || []).map(c => c.code));
   const dmCodes = _serverMute === 'off' ? null : new Set((this.channels || []).filter(c => c.is_dm).map(c => c.code));
@@ -585,7 +598,7 @@ _fireNativeNotification(message, channelCode, opts) {
   // Per-channel mute: client-side muted channels list (defense-in-depth; callers
   // should also check, but bots / webhooks have user_id=null which can slip through
   // edge cases such as channels-list re-seeding or future notification paths).
-  const _mutedChsNotif = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+  const _mutedChsNotif = this._mutedChannelList();
   if (_mutedChsNotif.includes(channelCode)) return;
   // Check per-type notification toggles
   const n = this.notifications;
@@ -611,6 +624,9 @@ _fireNativeNotification(message, channelCode, opts) {
   try { const p = JSON.parse(rawContent); if (p && p.v && p.ct) rawContent = ''; } catch { /* not JSON */ }
   // Burn-after-read: never reveal the message content in a notification
   if (message.burn_seconds && message.burn_seconds > 0) rawContent = t('notifications_runtime.burn_message');
+  // Plain text: a table reads "a · b" a row, markdown markers go, spoilers
+  // stay hidden; the same text the server pushes (notify-preview.js).
+  else if (window.HavenNotifyPreview) rawContent = HavenNotifyPreview.preview(rawContent, { more: n => t('notifications_runtime.more_rows', { count: n }) });
   const body = rawContent.length > 120
     ? rawContent.slice(0, 117) + '...'
     : (rawContent || t('notifications_runtime.sent_message'));

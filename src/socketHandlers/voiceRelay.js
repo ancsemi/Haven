@@ -13,6 +13,7 @@
  *   relay:producers  -> what everyone else is sending right now
  *   relay:consume    -> start receiving one of those
  *   relay:resume     -> unpause a received track once it is wired up
+ *   relay:keyframe   -> ask for a fresh keyframe of a received video
  *   relay:close-producer -> stop sending a track
  *
  * The server announces relay:new-producer and relay:producer-closed to the
@@ -107,9 +108,9 @@ module.exports = function registerVoiceRelay(socket, ctx) {
     return { producers: voiceRelay.producers(code, peerId()) };
   });
 
-  handle('relay:consume', async ({ code, producerId, rtpCapabilities }) => {
+  handle('relay:consume', async ({ code, producerId, rtpCapabilities, fresh }) => {
     if (!ID.test(String(producerId)) || !rtpCapabilities || typeof rtpCapabilities !== 'object') throw new Error('Bad request');
-    const consumer = await voiceRelay.consume(code, peerId(), producerId, rtpCapabilities);
+    const consumer = await voiceRelay.consume(code, peerId(), producerId, rtpCapabilities, fresh === true);
     if (!consumer) throw new Error('This track cannot be played here');
     return { consumer };
   });
@@ -118,6 +119,11 @@ module.exports = function registerVoiceRelay(socket, ctx) {
     if (!ID.test(String(consumerId))) throw new Error('Bad request');
     await voiceRelay.resumeConsumer(code, peerId(), consumerId);
     return {};
+  });
+
+  handle('relay:keyframe', async ({ code, consumerId }) => {
+    if (!ID.test(String(consumerId))) throw new Error('Bad request');
+    return voiceRelay.requestKeyFrame(code, peerId(), consumerId);
   });
 
   handle('relay:close-producer', async ({ code, producerId, source }) => {
@@ -133,5 +139,5 @@ module.exports = function registerVoiceRelay(socket, ctx) {
 
 module.exports.RELAY_EVENTS = [
   'relay:join', 'relay:connect', 'relay:produce', 'relay:producers',
-  'relay:consume', 'relay:resume', 'relay:close-producer',
+  'relay:consume', 'relay:resume', 'relay:keyframe', 'relay:close-producer',
 ];

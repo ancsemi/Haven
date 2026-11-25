@@ -1824,8 +1824,6 @@
     },
     "embed_display": {
       "title": "链接预览",
-      "off": "关闭",
-      "off_hint": "关闭：隐藏所有链接预览",
       "small": "小",
       "small_hint": "小：带小媒体的紧凑卡片",
       "medium": "中",

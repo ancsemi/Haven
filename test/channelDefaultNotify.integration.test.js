@@ -1,0 +1,41 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert');
+const { createHarness, wait } = require('./socketServerHarness');
+const h = createHarness(3547, 'channel-default-notify');
+test.before(() => h.start());
+test.after(() => h.stop());
+test('an admin sets the default notification level of a channel and everyone sees it; members cannot', async () => {
+  const admin = await h.register('admin');
+  const member = await h.register('member');
+  const A = await h.connect(admin.token);
+  const M = await h.connect(member.token);
+  A.emit('create-channel', { name: 'bots', addAllMembers: true });
+  await wait(900);
+  const general = (await h.channels(A)).find((c) => c.name === 'bots');
+  assert.ok(general && general.code, 'a channel exists');
+  assert.strictEqual(general.default_notify, 'all', 'new channels notify for everything');
+  M.emit('set-channel-default-notify', { code: general.code, mode: 'muted' });
+  await wait(300);
+  assert.strictEqual((await h.channels(A)).find((c) => c.code === general.code).default_notify, 'all', 'a member cannot change it');
+  // Only the admin: a channel manager cannot mute a channel for everyone.
+  const handler = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src/socketHandlers/channels.js'), 'utf8');
+  const body = handler.slice(handler.indexOf("socket.on('set-channel-default-notify'"), handler.indexOf("socket.on('set-channel-default-notify'") + 900);
+  assert.match(body, /if \(!socket\.user\.isAdmin\) return socket\.emit\('error-msg', 'Only the server admin/);
+  assert.doesNotMatch(body, /_canManageSettingsOf/);
+  A.emit('set-channel-default-notify', { code: general.code, mode: 'bogus' });
+  await wait(300);
+  assert.strictEqual((await h.channels(A)).find((c) => c.code === general.code).default_notify, 'all', 'an unknown level is refused');
+  A.emit('set-channel-default-notify', { code: general.code, mode: 'mentions' });
+  await wait(400);
+  assert.strictEqual((await h.channels(A)).find((c) => c.code === general.code).default_notify, 'mentions');
+  assert.strictEqual((await h.channels(M)).find((c) => c.code === general.code).default_notify, 'mentions', 'members receive it');
+  A.disconnect(); M.disconnect();
+});
+test('the channel prefs list tells apart a channel you muted from one you chose to hear', async () => {
+  const user = await h.register('chooser');
+  const call = (path, init) => fetch(`http://127.0.0.1:3547${path}`, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` } }).then((r) => r.json());
+  await call('/api/user/channel-prefs/mute', { method: 'POST', body: JSON.stringify({ code: 'aaaa1111', muted: true }) });
+  await call('/api/user/channel-prefs/mute', { method: 'POST', body: JSON.stringify({ code: 'bbbb2222', muted: false }) });
+  assert.deepStrictEqual(await call('/api/user/channel-prefs'), { muted: ['aaaa1111'], all: ['bbbb2222'] });
+});

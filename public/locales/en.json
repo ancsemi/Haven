@@ -442,6 +442,7 @@
     "muted_reason": "You have been given a {{duration}} min timeout: {{reason}}",
     "unmuted": "Your timeout has ended",
     "bio_updated": "Bio updated",
+    "profile_link_invalid": "Each link needs a label and an address that starts with https://",
     "birthday_updated": "Birthday updated",
     "birthday_hidden": "Birthday hidden from your profile",
     "birthday_shown": "Birthday shown on your profile",
@@ -1212,6 +1213,7 @@
       "role_management": "Role Management",
       "add_to_channel": "Add to Channel",
       "kick": "Kick",
+      "sessions": "Devices and sign-out",
       "mute": "Timeout",
       "unmute": "End timeout",
       "ban": "Ban",
@@ -1375,7 +1377,7 @@
     },
     "emoji": {
       "select_file": "Select an image file",
-      "enter_name": "Enter an emoji name (lowercase, no spaces)",
+      "enter_name": "Enter an emoji name: 2 to 32 letters or digits in any script, _ or -, no spaces",
       "too_large": "Emoji file too large (max {{max}} KB)",
       "uploading": "Uploading emoji…",
       "uploaded": "Emoji :{{name}}: uploaded!",
@@ -1520,7 +1522,8 @@
   "notifications_runtime": {
     "title": "{{sender}} in {{channel}}",
     "burn_message": "🔥 Sent a burn message",
-    "sent_message": "Sent a message"
+    "sent_message": "Sent a message",
+    "more_rows": "+{{count}} more rows"
   },
   "activities_registry": {
     "flappy": "Dodge containers, chase high scores!",
@@ -1615,6 +1618,7 @@
       "user_group": "User",
       "language": "Language",
       "localization": "Localization",
+      "lite_mode": "Lite Mode",
       "layout": "Layout",
       "sounds": "Sounds",
       "call_settings": "Voice & Video",
@@ -1711,6 +1715,11 @@
     },
     "localization_section": {
       "title": "Localization"
+    },
+    "lite_mode": {
+      "title": "Lite Mode",
+      "label": "Lite mode",
+      "hint": "For slow or older devices. Turns on Reduce Motion, keeps GIFs, animated emoji, avatars, banners and stickers on their first frame until you point at them, drops blur effects, shows link previews as text only and loads videos only when you press play. Only changes this device."
     },
     "language_section": {
       "title": "Language",
@@ -1899,7 +1908,7 @@
         "full_hint": "Full: large inline images like Discord"
       },
       "hide_media": "Hide pictures and videos",
-      "hide_media_hint": "Pictures, GIFs and videos in chat show as a small tag you click to see them, and link cards start folded. Handy around other people. Only changes what you see, on this device.",
+      "hide_media_hint": "Pictures, GIFs and videos in chat show as a small tag you click to see them, and link previews with a picture or video start folded. Handy around other people. Only changes what you see, on this device.",
       "media_layout": {
         "title": "Pictures Sent Together",
         "default": "Server default",
@@ -1933,8 +1942,8 @@
     },
     "embed_display": {
       "title": "Link Previews",
-      "off": "Off",
-      "off_hint": "Off: hide all link previews",
+      "hide": "Hide link previews",
+      "hide_hint": "Links stay plain links: no preview cards and no video players, and nothing is fetched for them. Pictures posted in chat still show. Only changes what you see, on this device.",
       "small": "Small",
       "small_hint": "Small: compact card with small media",
       "medium": "Medium",
@@ -3087,6 +3096,15 @@
       "storage_private": "{{size}} in DMs",
       "storage_profile": "{{size}} in avatars",
       "storage_tooltip": "Uploads still on the server: {{files}} files ({{breakdown}}). DM attachments are encrypted, so only their size is known.",
+      "storage_dm_chip": "Direct message attachments: {{size}}. They are encrypted, so only their size is known.",
+      "storage_summary_dm": "{{size}} of that is direct message attachments.",
+      "member_sessions_title": "{{name}}: devices",
+      "member_sessions_hint": "Devices this member has Haven open on right now. Signing them out ends every session of this member, open or not, and they have to log in again.",
+      "member_sessions_none": "No devices connected right now",
+      "member_sessions_revoke": "Sign out everywhere",
+      "member_sessions_confirm": "Sign {{name}} out of every device?",
+      "member_sessions_done": "{{name}} was signed out everywhere.",
+      "member_sessions_failed": "Could not load or end their sessions.",
       "storage_summary": "Uploads on disk: {{total}} across {{files}} files.",
       "storage_summary_unattributed": "{{size}} of that predates per-member tracking and has no owner on record.",
       "already_in_all_channels": "{{name}} is already in all channels",
@@ -3558,6 +3576,13 @@
       "bio_label": "Bio",
       "bio_max": "(max 190 chars)",
       "bio_placeholder": "Tell people about yourself…",
+      "links_label": "Links",
+      "links_hint": "(up to 5, https only)",
+      "links_add": "Add link",
+      "links_label_hint": "Label",
+      "links_up": "Move up",
+      "links_down": "Move down",
+      "links_remove": "Remove link",
       "birthday_label": "Birthday",
       "birthday_hint": "You can only set your birthday once, so double-check it.",
       "birthday_set_note": "Your birthday is set and can't be changed.",
@@ -4173,6 +4198,7 @@
         "user_perms_update": "changed permissions for",
         "user_kick": "kicked",
         "user_ban": "banned",
+        "user_sessions_revoke": "signed out everywhere:",
         "user_unban": "unbanned",
         "user_mute": "gave a timeout to",
         "user_unmute": "ended the timeout of",
@@ -4470,6 +4496,11 @@
     "voice_bitrate": "Voice Bitrate",
     "voice_bitrate_hint": "Cap voice audio bitrate in kbps (0 = auto / no cap)",
     "voice_bitrate_auto": "Auto",
+    "default_notify": "Default Notifications",
+    "default_notify_hint": "What members get for this channel until they choose their own: all messages, only mentions, or muted (click to change)",
+    "default_notify_all": "All messages",
+    "default_notify_mentions": "Mentions only",
+    "default_notify_muted": "Muted",
     "self_destruct": "Self Destruct",
     "self_destruct_hint": "Set a self-destruct timer: channel auto-deletes after the specified hours (0 = off)",
     "announcement": "Announcement",

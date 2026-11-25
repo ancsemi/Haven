@@ -165,8 +165,10 @@ const SETTINGS = [
     key: 'embed_size', scope: 'device', dflt: 'medium',
     label: () => t('settings.embed_display.title'),
     read: (app) => app._embedSize(),
-    apply: (v) => pressPicker('embed-size-picker', 'data-embed-size', v),
-    show: (v) => t(`settings.embed_display.${v}`),
+    // "off" is a default saved before previews got their own Hide switch
+    // (#5961): it still hides them for a new member, through that switch.
+    apply: (v) => (v === 'off' ? setToggle('hide-embeds-toggle', true) : pressPicker('embed-size-picker', 'data-embed-size', v)),
+    show: (v) => (v === 'off' ? t('settings.embed_display.hide') : t(`settings.embed_display.${v}`)),
   },
   {
     key: 'animate_pfp', scope: 'device', dflt: 'hover',

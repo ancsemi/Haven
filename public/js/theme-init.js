@@ -98,7 +98,8 @@
       highContrast: get('haven-contrast') === 'high',
       motion: _a11yPick(get('haven-reduce-motion'), A11Y_CHOICES.motion),
       underlineLinks: get('haven-underline-links') === '1',
-      largeTargets: get('haven-large-targets') === '1'
+      largeTargets: get('haven-large-targets') === '1',
+      lite: get('haven-lite-mode') === '1'
     };
   }
   var _motionQuery = null;
@@ -116,15 +117,22 @@
     root.setAttribute('data-reduce-motion', prefs.motion);
     root.setAttribute('data-underline-links', prefs.underlineLinks ? 'on' : 'off');
     root.setAttribute('data-large-targets', prefs.largeTargets ? 'on' : 'off');
-    var reduce = prefs.motion === 'on' || (prefs.motion === 'system' && !!(_motionQuery && _motionQuery.matches));
+    root.setAttribute('data-lite-mode', prefs.lite ? 'on' : 'off');
+    var reduce = !!prefs.lite || prefs.motion === 'on' || (prefs.motion === 'system' && !!(_motionQuery && _motionQuery.matches));
     var was = _a11yState ? _a11yState.reduce : null;
+    var wasLite = _a11yState ? _a11yState.lite : null;
     if (reduce) root.classList.add('reduce-motion');
     else if (root.classList.remove) root.classList.remove('reduce-motion');
-    _a11yState = { prefs: prefs, reduce: reduce };
+    if (prefs.lite) root.classList.add('lite-mode');
+    else if (root.classList.remove) root.classList.remove('lite-mode');
+    _a11yState = { prefs: prefs, reduce: reduce, lite: !!prefs.lite };
     // Theme effects, animated pictures and the like are JavaScript, so they
     // hear about a change instead of reading the class on their own schedule.
     if (was !== null && was !== reduce && typeof CustomEvent === 'function') {
       document.dispatchEvent(new CustomEvent('haven:reduce-motion-change', { detail: { reduce: reduce } }));
+    }
+    if (wasLite !== null && wasLite !== !!prefs.lite && typeof CustomEvent === 'function') {
+      document.dispatchEvent(new CustomEvent('haven:lite-mode-change', { detail: { lite: !!prefs.lite } }));
     }
     return reduce;
   }
@@ -135,7 +143,8 @@
       return _readA11y(storage);
     },
     apply: _applyA11y,
-    reducedMotion: function() { return !!(_a11yState && _a11yState.reduce); }
+    reducedMotion: function() { return !!(_a11yState && _a11yState.reduce); },
+    lite: function() { return !!(_a11yState && _a11yState.lite); }
   };
   try { _applyA11y(window.HavenA11y.read()); } catch (e) { /* the page still renders with the theme's own settings */ }
   // "Follow system" keeps following it while the page is open.

@@ -167,7 +167,7 @@ _openChannelCtxMenu(code, btnEl) {
   // Update Channel Functions panel with current channel values
   if (canManageSettings) this._updateChannelFunctionsPanel(ch);
   // Update mute label
-  const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+  const muted = this._mutedChannelList();
   const muteBtn = menu.querySelector('[data-action="mute"]');
   if (muteBtn) muteBtn.textContent = muted.includes(code) ? `🔕 ${t('channels.unmute_channel')}` : `🔔 ${t('channels.mute_channel')}`;
   // Show/hide voice options based on current voice state
@@ -419,6 +419,10 @@ _updateChannelFunctionsPanel(ch) {
   const welcomeRow = document.querySelector('.cfn-row[data-fn="welcome"]');
   if (welcomeRow) welcomeRow.style.display = (ch.is_dm || !isAdmin) ? 'none' : '';
   this._setCfnBadge('welcome', ch.show_welcome === 1, t(ch.show_welcome === 1 ? 'channel_functions.on' : 'channel_functions.off'));
+  const notifyRow = document.querySelector('.cfn-row[data-fn="default-notify"]');
+  if (notifyRow) notifyRow.style.display = (ch.is_dm || !isAdmin) ? 'none' : '';
+  const notifyText = ch.default_notify === 'mentions' ? t('channel_functions.default_notify_mentions') : ch.default_notify === 'muted' ? t('channel_functions.default_notify_muted') : t('channel_functions.default_notify_all');
+  this._setCfnBadge('default-notify', !['mentions', 'muted'].includes(ch.default_notify), notifyText);
   // Streams and music greyed when voice is disabled (they depend on voice)
   const streamsRow = document.querySelector('.cfn-row[data-fn="streams"]');
   if (streamsRow) streamsRow.classList.toggle('cfn-disabled', voiceOff);
@@ -539,13 +543,9 @@ _initDmContextMenu() {
     const code = this._dmCtxMenuCode;
     if (!code) return;
     this._closeDmCtxMenu();
-    const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
-    const idx = muted.indexOf(code);
-    const willBeMuted = idx < 0;
-    if (idx >= 0) { muted.splice(idx, 1); this._showToast(t('channels.dm_unmuted'), 'success'); }
-    else { muted.push(code); this._showToast(t('channels.dm_muted'), 'success'); }
-    localStorage.setItem('haven_muted_channels', JSON.stringify(muted));
-    this._syncChannelMutePref(code, willBeMuted);
+    const willBeMuted = !this._mutedChannelList().includes(code);
+    this._showToast(t(willBeMuted ? 'channels.dm_muted' : 'channels.dm_unmuted'), 'success');
+    this._setChannelMuted(code, willBeMuted);
   });
 
   // Pin to top / Unpin (app-dm-pins.js)
@@ -653,7 +653,7 @@ _openDmCtxMenu(code, anchorEl, mouseEvent) {
   if (!menu) return;
 
   // Update mute label
-  const muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+  const muted = this._mutedChannelList();
   const muteBtn = menu.querySelector('[data-action="dm-mute"]');
   if (muteBtn) muteBtn.textContent = muted.includes(code) ? `🔕 ${t('channels.unmute_dm')}` : `🔔 ${t('channels.mute_dm')}`;
   const pinBtn = menu.querySelector('[data-action="dm-pin"]');
