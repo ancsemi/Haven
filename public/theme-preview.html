@@ -1692,11 +1692,12 @@ console.log(haven);</code></pre></div></div>
       <!-- Embed / Link Preview Size -->
       <div class="settings-section" id="section-embed-size" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
         <h5 class="settings-section-title">🔗 <span data-i18n="settings.embed_display.title">Link Previews</span></h5>
+        <label class="toggle-row" style="margin-top:4px">
+          <span data-i18n="settings.embed_display.hide">Hide link previews</span>
+          <input type="checkbox" id="hide-embeds-toggle">
+        </label>
+        <small class="settings-hint" style="display:block;margin-bottom:8px" data-i18n="settings.embed_display.hide_hint">Links stay plain links: no preview cards and no video players, and nothing is fetched for them. Pictures posted in chat still show. Only changes what you see, on this device.</small>
         <div class="density-picker" id="embed-size-picker">
-          <button type="button" class="density-btn" data-embed-size="off" title="Off: hide all link previews" data-i18n-title="settings.embed_display.off_hint">
-            <span class="density-icon">🚫</span>
-            <span class="density-label" data-i18n="settings.embed_display.off">Off</span>
-          </button>
           <button type="button" class="density-btn" data-embed-size="small" title="Small: compact card with small media" data-i18n-title="settings.embed_display.small_hint">
             <span class="density-icon">🔗</span>
             <span class="density-label" data-i18n="settings.embed_display.small">Small</span>

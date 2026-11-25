@@ -228,6 +228,7 @@ _fetchLinkPreviews(containerEl) {
   // - this._linkPreviewInflight: url -> Promise<data>  (dedupe concurrent fetches)
   if (!this._collapsedEmbeds) this._collapsedEmbeds = new Set();
   if (!/\bembed-size-/.test(document.body.className)) this._applyEmbedSize(this._embedSize());
+  if (this._hideEmbedsOn?.()) return;
 
   // Thread replies keep their body in .thread-msg-content, and until now no
   // preview card was ever drawn there (#5620).
@@ -260,7 +261,7 @@ _fetchLinkPreviews(containerEl) {
       const msgContent = link.closest('.message-content, .thread-msg-content');
       if (!msgContent) return;
       if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
-      const ytCollapsed = this._embedFolded(url, slot);
+      const ytCollapsed = this._embedFolded(url, slot, true);
       const wrapper = document.createElement('div');
       wrapper.className = 'link-preview link-preview--yt' + (ytCollapsed ? ' lp-collapsed' : '');
       wrapper.dataset.url = url;
@@ -298,11 +299,11 @@ _fetchLinkPreviews(containerEl) {
         // Unified rich embed card: social posts (Bluesky / X) gain an author
         // row, avatar and engagement stats; everything else renders the same
         // chrome (accent header, size toggle, collapse) with title/text/media.
-        const collapsed = this._embedFolded(url, slot);
         const accent = (typeof data.accentColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(data.accentColor)) ? data.accentColor : null;
         const isSocial = !!(data.author || data.handle);
         const hasGallery = Array.isArray(data.images) && data.images.length >= 2;
         const isInlineVideo = data.video && (data.videoType || /\.(mp4|webm|ogg)(\?[^#]*)?$/i.test(data.video));
+        const collapsed = this._embedFolded(url, slot, !!(hasGallery || isInlineVideo || data.image));
 
         const card = document.createElement('div');
         card.className = 'link-preview link-preview--rich'
@@ -502,8 +503,8 @@ _embedHeaderHtml(siteName, collapsed, playHtml = '', viewHtml = '') {
     + '</span></div>';
 },
 
-_embedFolded(url, slot = 0) {
-  return this._collapsedEmbeds.has(url) || (!this._openedEmbeds?.has(url) && (!!this._hideMediaOn?.() || !!this._previewsStartFolded?.() || slot >= 2));
+_embedFolded(url, slot = 0, media = false) {
+  return this._collapsedEmbeds.has(url) || (!this._openedEmbeds?.has(url) && ((media && !!this._hideMediaOn?.()) || !!this._previewsStartFolded?.() || slot >= 2));
 },
 
 /** Wire the size + collapse buttons on a freshly-built embed card. */

@@ -1613,8 +1613,6 @@
     },
     "embed_display": {
       "title": "Prévias de links",
-      "off": "Desativadas",
-      "off_hint": "Desativadas — oculta todas as prévias de links",
       "small": "Pequenas",
       "small_hint": "Pequenas — cartão compacto com mídia pequena",
       "medium": "Médias",

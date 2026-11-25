@@ -1052,7 +1052,7 @@ img[data-lazy="loaded"] { animation: lazy-media-in 0.15s ease; }
 }
 
 /* Embed / link preview size modes (shared by Settings picker + per-embed ⤢) */
-.embed-size-off .link-preview { display: none !important; }
+.hide-embeds .link-preview { display: none !important; }
 
 .embed-size-full .link-preview--rich .lp-image,
 .embed-size-full .link-preview--rich .lp-video { max-height: 32.5rem; }

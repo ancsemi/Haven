@@ -1839,8 +1839,6 @@
     },
     "embed_display": {
       "title": "Vistas previas de enlaces",
-      "off": "Desactivado",
-      "off_hint": "Desactivado: oculta todas las vistas previas de enlaces",
       "small": "Pequeña",
       "small_hint": "Pequeña: tarjeta compacta con multimedia pequeña",
       "medium": "Mediana",

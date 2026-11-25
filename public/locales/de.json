@@ -2415,8 +2415,6 @@
     },
     "embed_display": {
       "title": "Linkvorschauen",
-      "off": "Aus",
-      "off_hint": "Aus – alle Linkvorschauen ausblenden",
       "small": "Klein",
       "small_hint": "Klein – kompakte Karte mit kleinen Medien",
       "medium": "Mittel",
