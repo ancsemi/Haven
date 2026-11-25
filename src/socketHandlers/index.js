@@ -84,6 +84,7 @@ const { quietRecipients, pingedRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
 const registerThreadReadState = require('./threadReadState');
 const registerForumVotes = require('./forumVotes');
+const registerCalendar = require('./calendar');
 const registerForumPictureVotes = require('./forumPictureVotes');
 const registerBadges = require('./badges');
 const registerMoveToThread = require('./moveToThread');
@@ -2898,6 +2899,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerForumUnread(socket, ctx);
     registerThreadReadState(socket, ctx);
     registerForumVotes(socket, ctx);
+    registerCalendar(socket, ctx);
     registerForumPictureVotes(socket, ctx);
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);

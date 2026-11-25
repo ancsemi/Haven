@@ -366,7 +366,8 @@ _listenChannelsAndMessages() {
 
     this._historyDebounce = 0; // timestamp of last history request
     msgContainer.addEventListener('scroll', () => {
-      if (this._suppressCoupleCheck) return;
+      // A calendar has no message history to page through.
+      if (this._suppressCoupleCheck || this._channelView) return;
       const now = Date.now();
       // A forum feed runs newest first, so its older topics load from the bottom.
       const forumFeed = !!this._isForumFeed?.();

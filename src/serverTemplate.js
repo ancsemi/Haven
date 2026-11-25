@@ -43,7 +43,7 @@ const WEBHOOK_EVENTS = ['message', 'reaction-added', 'member-joined'];
 const FORUM_VIEWS = ['list', 'gallery', 'feed'];
 const FORUM_SHAPES = ['square', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16'];
 const CHANNEL_FIELDS = [
-  ['private', 'is_private', 'flag', null, false], ['forum', 'is_forum', 'flag', null, false], ['readOnly', 'read_only', 'flag', null, false],
+  ['private', 'is_private', 'flag', null, false], ['forum', 'is_forum', 'flag', null, false], ['calendar', 'is_calendar', 'flag', null, false], ['readOnly', 'read_only', 'flag', null, false],
   ['text', 'text_enabled', 'flag', null, true], ['voice', 'voice_enabled', 'flag', null, true], ['media', 'media_enabled', 'flag', null, true],
   ['streams', 'streams_enabled', 'flag', null, true], ['music', 'music_enabled', 'flag', null, true], ['soundboard', 'soundboard_enabled', 'flag', null, true],
   ['reactions', 'reactions_enabled', 'flag', null, true], ['nsfw', 'is_nsfw', 'flag', null, false], ['sortAlphabetical', 'sort_alphabetical', 'flag', null, false],

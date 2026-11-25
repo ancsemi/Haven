@@ -489,6 +489,13 @@ _renderMessages(messages, lastReadMessageId) {
   container.style.removeProperty('--forum-tile');
   delete container.dataset.forumTile;
   this._forumActive = false;
+  container.classList.remove('calendar-view');
+  this._channelView = null;
+  // A calendar channel shows its month of events instead of messages.
+  if (this._isCalendarChannel?.(this.currentChannel)) {
+    this._renderCalendar();
+    return;
+  }
   if (this._isForumChannel && this._isForumChannel(this.currentChannel)) {
     this._renderForum(messages);
     return;
@@ -905,6 +912,7 @@ _forumFeedTopSlot(container, el) {
 
 _appendMessage(message, forceScroll = false) {
   const container = document.getElementById('messages');
+  if (this._channelView) return;
   if (this._forumActive && this._forumInsertTopic) { this._forumInsertTopic(message); return; }
   const lastMsg = container.lastElementChild;
 

@@ -5,15 +5,15 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.29.77';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.101';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.29.71';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.31.2';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.31.2';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.83';
 import ComposerMethods from './modules/app-composer.js?v=4.29.72';
 import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
 import DraftMethods from './modules/app-drafts.js?v=4.29.94';
 import WhatsNewMethods from './modules/app-whats-new.js?v=4.27.25';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
-import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.29.66';
+import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.31.2';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.29.99';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.27.52';
 import MessageActionMethods from './modules/app-message-actions.js?v=4.29.40';
@@ -40,15 +40,15 @@ import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.29.12';
 import EmojiSearchMethods from './modules/app-emoji-search.js?v=4.29.94';
 import BotMethods from './modules/app-bots.js?v=4.27.52';
 import ContextMethods  from './modules/app-context.js?v=4.29.95';
-import ChannelMethods  from './modules/app-channels.js?v=4.29.95';
-import ChannelContextMethods from './modules/app-channel-context.js?v=4.29.69';
+import ChannelMethods  from './modules/app-channels.js?v=4.31.2';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.31.2';
 import ChannelTypeMethods from './modules/app-channel-types.js?v=4.27.42';
 import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.29.65';
 import ChannelMergeMethods from './modules/app-channel-merge.js?v=4.29.60';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.29.99';
 import DmPinMethods from './modules/app-dm-pins.js?v=4.29.30';
 import DmSortMethods from './modules/app-dm-sort.js?v=4.29.65';
-import MessageMethods  from './modules/app-messages.js?v=4.29.95';
+import MessageMethods  from './modules/app-messages.js?v=4.31.2';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.29.57';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.29.61';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.29.40';
@@ -84,6 +84,7 @@ import ForumMethods    from './modules/app-forum.js?v=4.29.94';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
+import CalendarMethods from './modules/app-calendar.js?v=4.31.2';
 import RoleToolMethods from './modules/app-role-tools.js?v=4.29.102';
 import ChannelAddMemberMethods from './modules/app-channel-add-members.js?v=4.29.66';
 import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.29.95';
@@ -687,6 +688,7 @@ Object.assign(HavenApp.prototype,
   ForumVoteMethods,
   ForumBlogMethods,
   ForumPictureVoteMethods,
+  CalendarMethods,
   RoleToolMethods,
   PermMatrixMethods,
   CallMethods,
