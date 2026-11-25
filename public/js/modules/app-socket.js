@@ -42,7 +42,7 @@ _migrateChannelCodeState(oldCode, newCode) {
       localStorage.setItem('haven_voice_channel', newCode);
     }
   } catch { /* storage blocked: the saved voice channel keeps the old code and simply will not auto-rejoin */ }
-  for (const key of ['haven_muted_channels', 'haven_hidden_channels']) {
+  for (const key of ['haven_muted_channels', 'haven_unmuted_channels', 'haven_hidden_channels']) {
     try {
       const values = JSON.parse(localStorage.getItem(key) || '[]');
       if (!Array.isArray(values) || !values.includes(oldCode)) continue;
@@ -249,6 +249,7 @@ _listenSession() {
     if (data.bannerColor !== undefined) this.user.bannerColor = this._safeHexColor(data.bannerColor);
     if (data.avatarColor !== undefined) this.user.avatarColor = this._safeHexColor(data.avatarColor);
     if (data.profileTheme !== undefined) this.user.profileTheme = this._cleanProfileTheme(data.profileTheme);
+    if (Array.isArray(data.profileLinks)) this.user.profileLinks = this._cleanProfileLinks(data.profileLinks);
     if (data.birthdayHidden !== undefined) {
       this.user.birthday = data.birthday || null;
       this.user.birthdaySetAt = data.birthdaySetAt || null;

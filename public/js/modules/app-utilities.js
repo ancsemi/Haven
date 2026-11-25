@@ -37,10 +37,11 @@ async _bootstrapChannelPrefs() {
       headers: { 'Authorization': `Bearer ${tok}` },
     });
     if (!resp.ok) { this._channelPrefsSynced = false; return; }
-    const { muted: serverMuted = [] } = await resp.json();
+    const { muted: serverMuted = [], all: serverAll = [] } = await resp.json();
     const local = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
     const union = Array.from(new Set([...serverMuted, ...local]));
     localStorage.setItem('haven_muted_channels', JSON.stringify(union));
+    localStorage.setItem('haven_unmuted_channels', JSON.stringify(Array.from(new Set([...serverAll, ...this._readChannelList('haven_unmuted_channels')])).filter(c => !union.includes(c))));
     // If local had entries the server didn't know about, push the union
     // back so the next message blast filters correctly.
     const localOnly = local.filter(c => !serverMuted.includes(c));
@@ -943,6 +944,20 @@ _getUserColor(username) {
 // checks it too; this is the last stop before it reaches a style.
 _safeHexColor(value) {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
+},
+_cleanProfileLink(link) {
+  const label = typeof link?.label === 'string' ? link.label.trim() : '', raw = typeof link?.url === 'string' ? link.url.trim() : '';
+  if (!label || label.length > 32 || /[\p{Cc}‪-‮⁦-⁩]/u.test(label)) return null;
+  if (!/^https:\/\//i.test(raw) || raw.length > 300 || /[\s\p{Cc}]/u.test(raw)) return null;
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' && u.hostname && !u.username && !u.password && u.href.length <= 300 ? { label, url: u.href } : null;
+  } catch {
+    return null;
+  }
+},
+_cleanProfileLinks(list) {
+  return Array.isArray(list) ? list.slice(0, 5).map((link) => this._cleanProfileLink(link)).filter(Boolean) : [];
 },
 
 // The color an avatar mostly is, for the default banner. Pixels are binned

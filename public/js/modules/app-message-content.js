@@ -189,7 +189,7 @@ _formatContent(str, opts) {
     if (voiceDur !== null) {
       return `<div class="file-attachment voice-message">
         <div class="file-info"><span class="file-type-icon" aria-hidden="true">🎤</span> <span class="file-name">${t('app.messages.voice_message')}</span> <span class="file-size">(${voiceDur})</span></div>
-        <audio controls preload="metadata" src="${fileUrl}" class="file-audio"></audio>
+        <audio controls preload="${this._liteOn() ? 'none' : 'metadata'}" src="${fileUrl}" class="file-audio"></audio>
       </div>`;
     }
     // Audio/video get inline players. The extension lists are optimistic:

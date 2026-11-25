@@ -278,3 +278,58 @@ test('every Accessibility string the page asks for exists in en.json', () => {
     assert.equal(typeof value, 'string', `${key} is in en.json`);
   }
 });
+test('Lite mode is off on a fresh device and on <html> before first paint when saved', () => {
+  const fresh = runThemeInit();
+  assert.equal(fresh.attributes.get('data-lite-mode'), 'off');
+  assert.equal(fresh.classes.has('lite-mode'), false);
+  assert.equal(fresh.classes.has('reduce-motion'), false);
+  const on = runThemeInit({ 'haven-lite-mode': '1', 'haven-reduce-motion': 'off' });
+  assert.equal(on.attributes.get('data-lite-mode'), 'on');
+  assert.equal(on.classes.has('lite-mode'), true);
+  assert.equal(on.classes.has('reduce-motion'), true, 'Lite mode reuses Reduce Motion, even when that is set to Off');
+  assert.equal(on.window.HavenA11y.lite(), true);
+});
+
+test('switching Lite mode live announces it and releases Reduce Motion again', () => {
+  const page = runThemeInit();
+  page.localStorage.setItem('haven-lite-mode', '1');
+  page.window.HavenA11y.apply(page.window.HavenA11y.read());
+  assert.deepEqual(page.events.map((e) => e.type), ['haven:reduce-motion-change', 'haven:lite-mode-change']);
+  page.localStorage.removeItem('haven-lite-mode');
+  page.window.HavenA11y.apply(page.window.HavenA11y.read());
+  assert.equal(page.classes.has('lite-mode'), false);
+  assert.equal(page.classes.has('reduce-motion'), false);
+  assert.deepEqual(page.events.slice(2).map((e) => [e.type, e.detail.lite ?? e.detail.reduce]), [['haven:reduce-motion-change', false], ['haven:lite-mode-change', false]]);
+});
+
+test('Lite mode keeps its own reduce-motion pick when the OS already asks for calm', () => {
+  const page = runThemeInit({ 'haven-lite-mode': '1' }, { osReduce: true });
+  page.localStorage.removeItem('haven-lite-mode');
+  page.window.HavenA11y.apply(page.window.HavenA11y.read());
+  assert.equal(page.classes.has('reduce-motion'), true);
+  assert.deepEqual(page.events.map((e) => e.type), ['haven:lite-mode-change']);
+});
+
+test('Lite mode drops the blur, hides preview pictures and has its switch and strings', () => {
+  const css = readCoreCss();
+  assert.match(css, /html\.lite-mode \*,[\s\S]*?backdrop-filter: none !important;/);
+  assert.match(css, /html\.lite-mode :is\(\.lp-image, \.lp-avatar, \.lp-play, \.link-preview-gallery\) \{\s*display: none !important;/);
+  const html = read('public/app.html');
+  assert.match(html, /id="section-lite-mode"[\s\S]*?<label class="toggle-row">\s*<span[^>]*>[^<]+<\/span>\s*<input type="checkbox" id="a11y-lite-mode">/);
+  assert.match(html, /data-target="section-lite-mode"/);
+  assert.match(read('public/js/modules/app-accessibility.js'), /\['a11y-lite-mode', 'haven-lite-mode', '1', 'lite'\]/);
+  const en = JSON.parse(read('public/locales/en.json'));
+  for (const key of ['settings.nav.lite_mode', 'settings.lite_mode.title', 'settings.lite_mode.label', 'settings.lite_mode.hint']) {
+    assert.equal(typeof key.split('.').reduce((o, k) => (o ? o[k] : undefined), en), 'string', `${key} is in en.json`);
+  }
+});
+
+test('Lite mode makes chat pictures, stickers, previews and videos load less', () => {
+  const links = read('public/js/modules/app-link-previews.js');
+  assert.match(links, /if \(!src \|\| this\._liteOn\(\)\) return;/);
+  assert.match(links, /const hasGallery = !lite && /);
+  assert.match(links, /data\.image && !lite/);
+  assert.match(links, /this\._liteOn\(\) && !this\._openedEmbeds\?\.has\(url\)/);
+  assert.match(read('public/js/modules/app-appearance.js'), /img:is\(\.chat-image, \.custom-emoji, \.sticker-img\)/);
+  for (const file of ['app-media-grid.js', 'app-media-gallery.js', 'app-message-content.js']) assert.match(read(`public/js/modules/${file}`), /this\._liteOn\(\) \? 'none' : 'metadata'/, file);
+});

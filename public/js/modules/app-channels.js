@@ -635,7 +635,7 @@ _renderChannels() {
       if (ch.slow_mode_interval > 0) _badges.push(`<span title="${t('channels.slow_mode_title', { seconds: ch.slow_mode_interval })}" style="opacity:0.5;font-size:0.65rem">🐢</span>`);
       if (ch.cleanup_exempt === 1) _badges.push(`<span title="${t('channels.cleanup_exempt_title')}" style="opacity:0.5;font-size:0.65rem">🛡️</span>`);
     }
-    const _mutedList = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]');
+    const _mutedList = this._mutedChannelList();
     if (_mutedList.includes(ch.code)) _badges.push(`<span class="ch-disabled-badge" title="${t('channels.muted_unsubscribed')}">🔕</span>`);
     const indicators = _badges.length ? `<span class="channel-indicators" style="margin-left:auto;display:flex;gap:2px;align-items:center;flex-shrink:0">${_badges.join('')}</span>` : '';
 
@@ -660,9 +660,10 @@ _renderChannels() {
         });
         if (collapsed) {
           // Bubble up sub-channel unreads to the parent
+          const counted = this._countedUnread();
           const subTotal = this.channels
             .filter(c => c.parent_channel_id === ch.id)
-            .reduce((sum, c) => sum + (this.unreadCounts[c.code] || 0), 0);
+            .reduce((sum, c) => sum + counted(c.code), 0);
           if (subTotal > 0) {
             let bubble = el.querySelector('.channel-badge-bubble');
             if (!bubble) {
@@ -852,9 +853,10 @@ _renderChannels() {
         if (nowCollapsed) {
           const allChans = categories.get(cat) || [];
           let total = 0;
+          const counted = this._countedUnread();
           allChans.forEach(c => {
-            total += this.unreadCounts[c.code] || 0;
-            (subChannelMap[c.id] || []).forEach(s => { total += this.unreadCounts[s.code] || 0; });
+            total += counted(c.code);
+            (subChannelMap[c.id] || []).forEach(s => { total += counted(s.code); });
           });
           if (total > 0) {
             if (badge) { badge.textContent = total > 99 ? '99+' : total; badge.style.display = ''; }
@@ -930,10 +932,8 @@ _renderChannels() {
 
       // If collapsed and sub-channels have unreads, bubble a badge onto the parent
       if (isSubCollapsed && subs.length) {
-        const subTotal = subs.reduce((sum, s) => {
-          const cnt = (s.code in this.unreadCounts) ? this.unreadCounts[s.code] : (s.unreadCount || 0);
-          return sum + cnt;
-        }, 0);
+        const counted = this._countedUnread();
+        const subTotal = subs.reduce((sum, s) => sum + counted(s.code, s.unreadCount || 0), 0);
         if (subTotal > 0) {
           const parentEl = list.querySelector(`.channel-item[data-code="${ch.code}"]`);
           if (parentEl) {
@@ -950,9 +950,10 @@ _renderChannels() {
     if (cat && catCollapsed) {
       const allChans = categories.get(cat) || [];
       let total = 0;
+      const counted = this._countedUnread();
       allChans.forEach(c => {
-        total += this.unreadCounts[c.code] || 0;
-        (subChannelMap[c.id] || []).forEach(s => { total += this.unreadCounts[s.code] || 0; });
+        total += counted(c.code);
+        (subChannelMap[c.id] || []).forEach(s => { total += counted(s.code); });
       });
       if (total > 0) {
         const catEl = list.querySelector(`[data-category="${CSS.escape(cat)}"]`);

@@ -11,7 +11,7 @@ const load = (name, globals) => {
   return context.module.exports;
 };
 const globals = {
-  document: { createElement: () => ({ className: '', dataset: {}, style: { setProperty() {} }, set innerHTML(v) {}, querySelector: () => null }), body: { className: 'embed-size-medium' } },
+  document: { createElement: () => ({ className: '', dataset: {}, style: { setProperty() {} }, set innerHTML(v) { this.html = v; }, querySelector: () => null }), body: { className: 'embed-size-medium' } },
   window: { location: { origin: 'https://haven.test' } },
   CSS: { escape: s => s },
   t: k => k,
@@ -22,9 +22,10 @@ const view = (over = {}) => Object.assign(Object.create(methods), {
   _collapsedEmbeds: new Set(),
   _openedEmbeds: new Set(),
   _applyEmbedSize() {},
+  _liteOn: () => false,
   _embedSize: () => 'medium',
   _extractYouTubeVideoId: () => null,
-  _linkPreviewData: async url => ({ title: url, siteName: 'Site' }),
+  _linkPreviewData: async url => ({ title: url, siteName: 'Site', image: 'https://img.test/a.png' }),
   _embedHeaderHtml: () => '',
   _wireEmbedControls() {},
   _applyEmbedSpoiler() {},
@@ -60,4 +61,16 @@ test('Start link previews folded folds every card until it is opened', async () 
 test('a card folded by hand stays folded whatever the settings say', () => {
   assert.equal(view({ _collapsedEmbeds: new Set(['u']), _openedEmbeds: new Set(['u']) })._embedFolded('u'), true);
   assert.equal(view()._embedFolded('u'), false);
+});
+test('Lite mode keeps a preview to text only, with no card image', async () => {
+  const m = message(['https://a.test/1']);
+  view({ _liteOn: () => true, _imgSrcAttr: s => 'src="' + s + '"' })._fetchLinkPreviews(m.container);
+  await settle();
+  assert.equal(m.cards.length, 1);
+  assert.ok(!m.cards[0].html.includes('lp-image'));
+  assert.ok(m.cards[0].html.includes('lp-content'));
+  const n = message(['https://a.test/1']);
+  view({ _imgSrcAttr: s => 'src="' + s + '"' })._fetchLinkPreviews(n.container);
+  await settle();
+  assert.ok(n.cards[0].html.includes('lp-image'));
 });

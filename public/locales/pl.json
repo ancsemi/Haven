@@ -1839,8 +1839,6 @@
     },
     "embed_display": {
       "title": "Podglądy linków",
-      "off": "Wyłączone",
-      "off_hint": "Wyłączone: ukryj wszystkie podglądy linków",
       "small": "Małe",
       "small_hint": "Małe: kompaktowa karta z małymi mediami",
       "medium": "Średnie",

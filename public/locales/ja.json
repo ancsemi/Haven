@@ -1314,7 +1314,8 @@
   "notifications_runtime": {
     "title": "{{channel}} の {{sender}}",
     "burn_message": "🔥 自動消滅メッセージを送信しました",
-    "sent_message": "メッセージを送信しました"
+    "sent_message": "メッセージを送信しました",
+    "more_rows": "ほか {{count}} 行"
   },
   "activities_registry": {
     "flappy": "コンテナを避けてハイスコアを目指そう！",

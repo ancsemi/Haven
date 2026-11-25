@@ -169,7 +169,7 @@ test('Custom chosen from the server applies even before a color was ever saved',
 });
 
 test('every theme gets light or dark native controls from its own background', () => {
-  const light = new Set(['gospel', 'win95', 'daylight', 'cloudy', 'amni-scient-light.theme.css', 'braid-light.theme.css']);
+  const light = new Set(['gospel', 'win95', 'daylight', 'cloudy', 'lemonade', 'strawberry', 'amni-scient-light.theme.css', 'braid-light.theme.css']);
   const themes = new Map();
   const core = readCoreCss();
   for (const [, name, color] of core.matchAll(/\[data-theme="([a-z0-9]+)"\]\s*\{[^}]*?--bg-primary:\s*([^;]+);/g)) themes.set(name, color);

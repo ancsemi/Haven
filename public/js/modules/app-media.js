@@ -405,7 +405,8 @@ _isImageHidden(u) {
 
 // ── Hide media (Settings > Chat & media) ──
 // Every picture and video waits behind the same click-to-show tag, and link
-// cards start folded: for reading chat around other people. Per device. What
+// cards that carry a picture or video start folded: for reading chat around
+// other people. Hiding link previews altogether is its own switch. Per device. What
 // you reveal stays shown until the page reloads.
 
 _hideMediaOn() {
@@ -425,9 +426,7 @@ _setupHideMedia() {
     this._hideMedia = toggle.checked;
     try { localStorage.setItem('haven-hide-media', String(toggle.checked)); } catch { /* storage blocked: the choice lasts until reload */ }
     // What is on screen was drawn the other way, so the open channel is drawn again.
-    if (this.currentChannel && this.socket?.connected) {
-      this.socket.emit('get-messages', this._getMessagesParams ? this._getMessagesParams(this.currentChannel) : { code: this.currentChannel });
-    }
+    this._redrawOpenChannel();
   });
 },
 
