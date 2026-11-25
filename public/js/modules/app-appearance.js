@@ -30,6 +30,9 @@ _viewerChatAnimPref() {
 _motionReduced() {
   return document.documentElement.classList.contains('reduce-motion');
 },
+_liteOn() {
+  return document.documentElement.classList.contains('lite-mode');
+},
 
 _setViewerChatAnimPref(pref) {
   const value = (pref === 'hover' || pref === 'never') ? pref : 'always';
@@ -47,7 +50,7 @@ _chatImgRealUrl(img) {
 
 _applyViewerChatAnimPref() {
   const pref = this._viewerChatAnimPref();
-  document.querySelectorAll('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]').forEach((img) => {
+  document.querySelectorAll('img:is(.chat-image, .custom-emoji, .sticker-img)[data-chat-animated-src]').forEach((img) => {
     if (pref === 'always') {
       img.dataset.chatAnimPlaying = '1';
       if (img.getAttribute('src') !== img.dataset.chatAnimatedSrc) img.src = img.dataset.chatAnimatedSrc;
@@ -62,7 +65,7 @@ _applyViewerChatAnimPref() {
   });
   // Nothing is frozen yet on a fresh switch away from 'always', so sweep too.
   if (pref !== 'always') {
-    document.querySelectorAll('img:is(.chat-image, .custom-emoji):not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
+    document.querySelectorAll('img:is(.chat-image, .custom-emoji, .sticker-img):not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
   }
 },
 
@@ -88,14 +91,14 @@ _setupChatAnimHover() {
   this._chatAnimHoverBound = true;
   const over = (e) => {
     const img = e.target;
-    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]')) return;
+    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji, .sticker-img)[data-chat-animated-src]')) return;
     if (this._viewerChatAnimPref() !== 'hover') return;
     img.dataset.chatAnimPlaying = '1';
     img.src = img.dataset.chatAnimatedSrc;   // reassigning restarts from frame 1
   };
   const out = (e) => {
     const img = e.target;
-    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji)[data-chat-animated-src]')) return;
+    if (!img || !img.matches || !img.matches('img:is(.chat-image, .custom-emoji, .sticker-img)[data-chat-animated-src]')) return;
     if (this._viewerChatAnimPref() !== 'hover') return;
     img.dataset.chatAnimPlaying = '';
     this._frozenFrame(img.dataset.chatAnimatedSrc).then((f) => {
@@ -108,7 +111,7 @@ _setupChatAnimHover() {
   // it on load as well as when it is inserted.
   document.addEventListener('load', (e) => {
     const img = e.target;
-    if (img && img.matches && img.matches('img:is(.chat-image, .custom-emoji):not([data-chat-anim-done])')) this._freezeChatImg(img);
+    if (img && img.matches && img.matches('img:is(.chat-image, .custom-emoji, .sticker-img):not([data-chat-anim-done])')) this._freezeChatImg(img);
   }, true);
 },
 

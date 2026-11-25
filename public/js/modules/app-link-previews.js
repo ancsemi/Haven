@@ -151,7 +151,7 @@ _fallbackToDownload(mediaEl) {
 /** Generate a poster thumbnail for a video element by capturing its first visible frame */
 _generateVideoThumbnail(video) {
   const src = video.src || video.querySelector('source')?.src;
-  if (!src) return;
+  if (!src || this._liteOn()) return;
 
   // If we already generated a thumbnail for this URL, reuse it
   if (_thumbCache.has(src)) {
@@ -260,7 +260,7 @@ _fetchLinkPreviews(containerEl) {
       const msgContent = link.closest('.message-content, .thread-msg-content');
       if (!msgContent) return;
       if (msgContent.querySelector(`.link-preview[data-url="${CSS.escape(url)}"]`)) return;
-      const ytCollapsed = this._embedFolded(url, slot);
+      const ytCollapsed = this._embedFolded(url, slot) || (this._liteOn() && !this._openedEmbeds?.has(url));
       const wrapper = document.createElement('div');
       wrapper.className = 'link-preview link-preview--yt' + (ytCollapsed ? ' lp-collapsed' : '');
       wrapper.dataset.url = url;
@@ -301,7 +301,8 @@ _fetchLinkPreviews(containerEl) {
         const collapsed = this._embedFolded(url, slot);
         const accent = (typeof data.accentColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(data.accentColor)) ? data.accentColor : null;
         const isSocial = !!(data.author || data.handle);
-        const hasGallery = Array.isArray(data.images) && data.images.length >= 2;
+        const lite = this._liteOn();
+        const hasGallery = !lite && Array.isArray(data.images) && data.images.length >= 2;
         const isInlineVideo = data.video && (data.videoType || /\.(mp4|webm|ogg)(\?[^#]*)?$/i.test(data.video));
 
         const card = document.createElement('div');
@@ -316,7 +317,7 @@ _fetchLinkPreviews(containerEl) {
         let meta = '';
         if (isSocial) {
           meta += '<div class="lp-author">';
-          if (data.avatar) meta += `<img class="lp-avatar" ${this._imgSrcAttr(data.avatar)} alt="" loading="lazy">`;
+          if (data.avatar && !lite) meta += `<img class="lp-avatar" ${this._imgSrcAttr(data.avatar)} alt="" loading="lazy">`;
           if (data.author) meta += `<span class="lp-author-name">${this._escapeHtml(data.author)}</span>`;
           if (data.handle) meta += `<span class="lp-handle">${this._escapeHtml(data.handle)}</span>`;
           meta += '</div>';
@@ -342,10 +343,10 @@ _fetchLinkPreviews(containerEl) {
           // proxy and preload drops to "none" when proxying is on, so the
           // remote host is contacted only if the viewer actually presses play.
           // That turns a silent leak into a deliberate act.
-          const vidPreload = (this._mediaProxyEnabled === false) ? 'metadata' : 'none';
-          const posterAttr = data.image ? ` poster="${this._escapeHtml(this._proxyMediaUrl(data.image) || '')}"` : '';
+          const vidPreload = (this._mediaProxyEnabled === false && !lite) ? 'metadata' : 'none';
+          const posterAttr = data.image && !lite ? ` poster="${this._escapeHtml(this._proxyMediaUrl(data.image) || '')}"` : '';
           media += `<video class="lp-video" controls preload="${vidPreload}" playsinline${posterAttr}><source src="${this._escapeHtml(data.video)}" type="${this._escapeHtml(data.videoType || 'video/mp4')}"></video>`;
-        } else if (data.image) {
+        } else if (data.image && !lite) {
           media += `<a class="lp-media" href="${this._escapeHtml(url)}" target="_blank" rel="noopener noreferrer nofollow"><img class="lp-image" ${this._imgSrcAttr(data.image)} alt="" loading="lazy">${data.video ? '<span class="lp-play"></span>' : ''}</a>`;
         }
 

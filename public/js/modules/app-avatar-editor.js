@@ -464,8 +464,8 @@ _setupPfpBorderObserver() {
     if (node.matches && node.matches('img[data-animate]:not([data-anim-done])')) this._freezePfpImg(node);
     if (node.querySelectorAll) node.querySelectorAll('img[data-animate]:not([data-anim-done])').forEach((img) => this._freezePfpImg(img));
     // (#5526) chat images ride the same observer
-    if (node.matches && node.matches('img:is(.chat-image, .custom-emoji):not([data-chat-anim-done])')) this._freezeChatImg(node);
-    if (node.querySelectorAll) node.querySelectorAll('img:is(.chat-image, .custom-emoji):not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
+    if (node.matches && node.matches('img:is(.chat-image, .custom-emoji, .sticker-img):not([data-chat-anim-done])')) this._freezeChatImg(node);
+    if (node.querySelectorAll) node.querySelectorAll('img:is(.chat-image, .custom-emoji, .sticker-img):not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
   };
   const obs = new MutationObserver((muts) => {
     for (const m of muts) m.addedNodes.forEach(foldIn);
@@ -475,7 +475,7 @@ _setupPfpBorderObserver() {
   document.querySelectorAll('.pfp-border:not([data-pfp-done])').forEach((el) => this._foldPfpBorder(el));
   document.querySelectorAll('img[data-animate]:not([data-anim-done])').forEach((img) => this._freezePfpImg(img));
   this._setupChatAnimHover();
-  document.querySelectorAll('img:is(.chat-image, .custom-emoji):not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
+  document.querySelectorAll('img:is(.chat-image, .custom-emoji, .sticker-img):not([data-chat-anim-done])').forEach((img) => this._freezeChatImg(img));
 },
 
 // Wrap an avatar's HTML with its owner's border overlay (or return it unchanged).

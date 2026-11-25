@@ -1614,6 +1614,7 @@
       "user_group": "User",
       "language": "Language",
       "localization": "Localization",
+      "lite_mode": "Lite Mode",
       "layout": "Layout",
       "sounds": "Sounds",
       "call_settings": "Voice & Video",
@@ -1710,6 +1711,11 @@
     },
     "localization_section": {
       "title": "Localization"
+    },
+    "lite_mode": {
+      "title": "Lite Mode",
+      "label": "Lite mode",
+      "hint": "For slow or older devices. Turns on Reduce Motion, keeps GIFs, animated emoji, avatars, banners and stickers on their first frame until you point at them, drops blur effects, shows link previews as text only and loads videos only when you press play. Only changes this device."
     },
     "language_section": {
       "title": "Language",

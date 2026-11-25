@@ -152,7 +152,8 @@
 }
 
 .server-icon:hover { border-radius: 0.75rem; background: var(--accent); }
-.server-icon.home { border-radius: 0.75rem; background: var(--accent); }
+.server-icon.home { border-radius: 0.75rem; background: var(--accent); outline: 2px solid var(--accent); outline-offset: 2px; }
+#server-list .server-icon.home { margin: 4px 0; }
 
 .server-icon.home.bounce {
   animation: serverBounce 0.4s ease;
