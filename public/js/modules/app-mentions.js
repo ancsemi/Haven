@@ -44,7 +44,8 @@ _mentionsMerge(channels) {
   const upTo = this._mentionsSeenUpTo();
   const list = this._unseenMentions || (this._unseenMentions = []);
   const viewing = document.visibilityState === 'visible' ? this.currentChannel : null;
-  const fresh = (channels || []).filter(ch => !ch.is_dm && ch.code !== viewing && Array.isArray(ch.unreadMentionIds))
+  const muted = this._mutedChannels();
+  const fresh = (channels || []).filter(ch => !ch.is_dm && ch.code !== viewing && !muted.has(ch.code) && Array.isArray(ch.unreadMentionIds))
     .flatMap(ch => ch.unreadMentionIds.filter(id => id > upTo && !list.some(m => m.id === id)).map(id => ({ c: ch.code, id })));
   if (!fresh.length) return;
   list.push(...fresh);

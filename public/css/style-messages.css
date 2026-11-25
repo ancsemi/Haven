@@ -1344,8 +1344,9 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
 }
 .profile-popup-status-dot.away { background: var(--warning); }
 .profile-popup-status-dot.dnd { background: var(--danger); }
-.profile-popup-status-dot.invisible { background: var(--text-muted); }
-.profile-popup-status-dot.offline { background: var(--text-muted); }
+.profile-popup-status-dot.invisible,
+.profile-popup-status-dot.offline { background: var(--bg-primary); box-shadow: inset 0 0 0 2px var(--text-muted); }
+.has-profile-theme .profile-popup-status-dot:is(.invisible, .offline) { background: transparent; }
 
 .profile-popup-body {
   padding: 0.625rem 1rem 1rem;
