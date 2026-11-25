@@ -1400,6 +1400,7 @@ body.auth-page.auth-has-background { background-image: var(--auth-background); b
   height: 100dvh; /* dynamic viewport height, accounts for mobile browser chrome */
   width: 100vw;
   overflow: hidden;
+  overflow: clip;
 }
 
 #app-body {
