@@ -31,6 +31,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Haven uses [Sema
 - Translation pull requests are no longer merged automatically, and the translation checker refuses markup the English text does not have. A translated command hint such as `<recherche>` is still fine.
 
 ### Fixed
+- Calendar channels follow the rules messages do: someone in a timeout or still in the new-account wait cannot add events, answers are rate limited, and a calendar cannot be merged into another channel (that would have deleted its events without a word).
 - A screen share or camera that froze for a viewer while the call stayed connected now recovers on its own. After 8 seconds without new frames the viewer asks for a fresh keyframe, and after 14 it reconnects that video. A video the relay paused because its tile is hidden is left alone.
 - A message with a table showed up in push and desktop notifications as raw pipes and dashes. Notifications now read a table as rows of text (cells joined with " · ", the header and first three rows, then "+N more rows") and leave out markdown markers, the way the Android and iOS apps already do.
 - A link to a thread reply or a forum post opened the channel without the post. It now opens the thread or topic at that post, links in the apps' `/#CODE/ID` form work, and a link to the same server opens in place instead of in a new tab.

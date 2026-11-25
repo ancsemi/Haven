@@ -17,6 +17,8 @@
 const cal = require('../calendarEvents');
 const { reachableChannel, reachableChannelByCode } = require('./channelAccess');
 const { sanitizeText } = require('./helpers');
+const { getActiveMute, muteNotice } = require('../db/messagePosting');
+const createPostingWait = require('./postingWait');
 
 module.exports = function register(socket, ctx) {
   const { io, db, userHasPermission, enforceAutomod, floodCheck } = ctx;
@@ -36,13 +38,16 @@ module.exports = function register(socket, ctx) {
     return ch && ch.is_calendar && !ch.is_dm ? { row, ch } : null;
   };
 
-  const muted = () => !!db.prepare("SELECT 1 FROM mutes WHERE user_id = ? AND expires_at > datetime('now') LIMIT 1").get(uid());
+  // The same timeout check and wording a message gets.
+  const mutedNotice = () => muteNotice(getActiveMute(db, uid()));
+  // New accounts wait before adding events, as they do before posting.
+  const { youngAccountWait } = createPostingWait(socket, ctx);
   const moderates = (ch) => socket.user.isAdmin || userHasPermission(uid(), 'delete_message', ch.id);
   // Adding an event is posting: a read-only calendar takes the override, as
   // a read-only channel does for messages.
   const mayPost = (ch) => socket.user.isAdmin || !ch.read_only || userHasPermission(uid(), 'read_only_override', ch.id);
   const postRefusal = (ch) => (!mayPost(ch) ? 'Only some members can add events to this calendar'
-    : (muted() && !socket.user.isAdmin ? 'You are muted' : null));
+    : (socket.user.isAdmin ? null : mutedNotice() || youngAccountWait(ch.id)?.message || null));
 
   // Clean the text, then let automod judge it as one message would be judged.
   // automod tells the sender itself when it refuses, so the reply only says
@@ -139,6 +144,7 @@ module.exports = function register(socket, ctx) {
   socket.on('calendar-delete', (data, callback) => {
     const cb = ack(callback);
     try {
+      if (floodCheck('event')) return cb({ error: 'Slow down a moment' });
       const found = eventById(idOf(data));
       if (!found) return cb({ error: 'Event not found' });
       const { row, ch } = found;
@@ -155,6 +161,8 @@ module.exports = function register(socket, ctx) {
   socket.on('calendar-rsvp', (data, callback) => {
     const cb = ack(callback);
     try {
+      // Every answer is sent on to the whole channel, so it is rate limited.
+      if (floodCheck('event')) return cb({ error: 'Slow down a moment' });
       const status = data ? data.status : undefined;
       if (status !== null && !cal.STATUSES.includes(status)) return cb({ error: 'Invalid answer' });
       const found = eventById(idOf(data));
