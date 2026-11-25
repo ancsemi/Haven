@@ -1505,7 +1505,10 @@ module.exports = function register(socket, ctx) {
     if (!['all', 'mentions', 'muted'].includes(mode)) return socket.emit('error-msg', 'Invalid notification level');
     const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
-    if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to change the default notification level');
+    // The admin's alone: set to Muted it also hides the channel's unread
+    // badges from everyone who never chose, which is too much for a channel
+    // manager to decide for other people.
+    if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only the server admin can change the default notification level');
     try {
       db.prepare('UPDATE channels SET default_notify = ? WHERE id = ?').run(mode, channel.id);
       auditChannel(channel.id, 'default_notify', mode);

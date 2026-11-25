@@ -18,6 +18,11 @@ test('an admin sets the default notification level of a channel and everyone see
   M.emit('set-channel-default-notify', { code: general.code, mode: 'muted' });
   await wait(300);
   assert.strictEqual((await h.channels(A)).find((c) => c.code === general.code).default_notify, 'all', 'a member cannot change it');
+  // Only the admin: a channel manager cannot mute a channel for everyone.
+  const handler = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src/socketHandlers/channels.js'), 'utf8');
+  const body = handler.slice(handler.indexOf("socket.on('set-channel-default-notify'"), handler.indexOf("socket.on('set-channel-default-notify'") + 900);
+  assert.match(body, /if \(!socket\.user\.isAdmin\) return socket\.emit\('error-msg', 'Only the server admin/);
+  assert.doesNotMatch(body, /_canManageSettingsOf/);
   A.emit('set-channel-default-notify', { code: general.code, mode: 'bogus' });
   await wait(300);
   assert.strictEqual((await h.channels(A)).find((c) => c.code === general.code).default_notify, 'all', 'an unknown level is refused');

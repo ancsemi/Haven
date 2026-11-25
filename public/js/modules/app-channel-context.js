@@ -418,7 +418,7 @@ _updateChannelFunctionsPanel(ch) {
   if (welcomeRow) welcomeRow.style.display = (ch.is_dm || !isAdmin) ? 'none' : '';
   this._setCfnBadge('welcome', ch.show_welcome === 1, t(ch.show_welcome === 1 ? 'channel_functions.on' : 'channel_functions.off'));
   const notifyRow = document.querySelector('.cfn-row[data-fn="default-notify"]');
-  if (notifyRow) notifyRow.style.display = ch.is_dm ? 'none' : '';
+  if (notifyRow) notifyRow.style.display = (ch.is_dm || !isAdmin) ? 'none' : '';
   const notifyText = ch.default_notify === 'mentions' ? t('channel_functions.default_notify_mentions') : ch.default_notify === 'muted' ? t('channel_functions.default_notify_muted') : t('channel_functions.default_notify_all');
   this._setCfnBadge('default-notify', !['mentions', 'muted'].includes(ch.default_notify), notifyText);
   // Streams and music greyed when voice is disabled (they depend on voice)
