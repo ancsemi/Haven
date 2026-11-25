@@ -366,7 +366,9 @@ _bindAppChrome() {
   // ── Games / Activities system ─────────────────────────────
   // Registry of available games: add new games here
   this._gamesRegistry = [
-    { id: 'flappy', name: 'Shippy Container', icon: '🚢', path: '/games/flappy.html', description: t('activities_registry.flappy') },
+    { id: 'flappy', name: 'Shippy Container', icon: '🚢', path: '/games/arcade/index.html?game=shippy', description: t('activities_registry.flappy') },
+    { id: 'arcade-pool', name: 'Pool', icon: '🎱', path: '/games/arcade/index.html?game=pool', description: t('activities_registry.arcade_pool') },
+    { id: 'arcade-minigolf', name: 'Minigolf', icon: '⛳', path: '/games/arcade/index.html?game=minigolf', description: t('activities_registry.arcade_minigolf') },
     { id: 'flight', name: 'Flight', icon: '✈️', path: '/games/flash.html?swf=/games/roms/flight-759879f9.swf&title=Flight', description: t('activities_registry.flight'), type: 'flash' },
     { id: 'learn-to-fly-3', name: 'Learn to Fly 3', icon: '🐧', path: '/games/flash.html?swf=/games/roms/learn-to-fly-3.swf&title=Learn%20to%20Fly%203', description: t('activities_registry.learn_to_fly'), type: 'flash' },
     { id: 'bubble-tanks-3', name: 'Bubble Tanks 3', icon: '🫧', path: '/games/flash.html?swf=/games/roms/Bubble%20Tanks%203.swf&title=Bubble%20Tanks%203', description: t('activities_registry.bubble_tanks'), type: 'flash' },

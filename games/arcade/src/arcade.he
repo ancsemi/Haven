@@ -1,0 +1,296 @@
+use gfx
+use gfx.scene3d
+use gfx.sdf_ttf
+use os
+use kit
+use sfx
+use pool_play
+use golf_play
+use shippy_play
+use pool_look
+use shippy_look
+use gfx.hud
+SCREEN ~= 0
+PICK ~= 0
+BEST_PATH byte[>..] ~= []
+GAME byte[>..] ~= []
+MODE ~= 0
+LEVEL ~= 1
+CLOTH ~= 0
+SEED ~= 0
+SIZE int2 ~= default<int2>()
+LAST ~= 0.0
+SCORES byte[>..] ~= []
+SHIPPY_BEST ~= 0
+BG := float4{0.03, 0.05, 0.08, 1.0}
+PAGED ~= false
+report(game const byte[:], score int):
+	print("ARCADE_SCORE ", game, " ", score)
+	if SCORES.len > 0:
+		out byte[>..] ~= []
+		format(out, game, " ", score)
+		write_file(SCORES, out);
+card(x real, y real, w real, game int):
+	u := kit::U
+	btn(bx real, by real, bw real, bh real, label const byte[:], kind int) bool:
+		t := kit::button(bx, by, bw, bh, label, kind)
+		if kit::clicked(): sfx::play(sfx::TAP, 0.5, 0.0, 1.0)
+		t
+	begin(mode int):
+		if game == 0:
+			pool_play::start(mode, LEVEL, CLOTH, SEED)
+			SCREEN = 1
+		else:
+			golf_play::start(mode, LEVEL, SEED, -1)
+			SCREEN = 2
+		SEED += 1
+	kit::ring(x, y, w, 345.0 * u, kit::PANEL, kit::LINE, 1.0 * u, 20.0 * u)
+	bx := x + 24.0 * u
+	bw := w - 48.0 * u
+	by := y + 157.0 * u
+	if game == 0:
+		kit::text(x, y + 27.0 * u, w, 28.0 * u, "Pool", kit::TITLE, kit::INK, 1)
+		kit::text(x, y + 59.0 * u, w, 20.0 * u, "Eight-ball on a felt table", kit::SMALL, kit::MUTED, 1)
+	else if game == 1:
+		kit::text(x, y + 27.0 * u, w, 28.0 * u, "Minigolf", kit::TITLE, kit::INK, 1)
+		kit::text(x, y + 59.0 * u, w, 20.0 * u, "A fresh nine-hole course every round", kit::SMALL, kit::MUTED, 1)
+	else:
+		kit::text(x, y + 27.0 * u, w, 28.0 * u, "Shippy Container", kit::TITLE, kit::INK, 1)
+		kit::text(x, y + 59.0 * u, w, 20.0 * u, "Fly between the container stacks", kit::SMALL, kit::MUTED, 1)
+	if game == 2:
+		kit::text(x, y + 100.0 * u, w, 40.0 * u, "One button. How far can you get?", kit::BODY, kit::INK, 1)
+		if btn(bx, by, bw, 48.0 * u, "Play", 1):
+			shippy_play::start(SEED, BEST_PATH)
+			SEED += 1
+			SCREEN = 3
+		kit::text(x, y + 227.0 * u, w, 17.0 * u, "Your best", kit::CAPTION, kit::MUTED, 1)
+		kit::text(x, y + 251.0 * u, w, 40.0 * u, str(SHIPPY_BEST), kit::HEAD, kit::ACCENT, 1)
+		return
+	gap := 8.0 * u
+	lw := (bw - 2.0 * gap) / 3.0
+	ry := y + 100.0 * u
+	lvl(i int, name const byte[:]):
+		kind := if LEVEL == i { 2 } else { 0 }
+		if btn(bx + i * (lw + gap), ry, lw, 40.0 * u, name, kind): LEVEL = i
+	lvl(0, "Easy")
+	lvl(1, "Normal")
+	lvl(2, "Hard")
+	m0 := if game == 0 { 0 } else { 1 }
+	m1 := if game == 0 { 1 } else { 2 }
+	m2 := if game == 0 { 2 } else { 0 }
+	if btn(bx, by, bw, 48.0 * u, "Play the computer", 1): begin(m0)
+	if btn(bx, by + 58.0 * u, bw, 48.0 * u, "Two players", 0): begin(m1)
+	last := if game == 0 { "Practice" } else { "Solo round" }
+	if btn(bx, by + 116.0 * u, bw, 48.0 * u, last, 0): begin(m2);
+menu(target gfx::Texture, now real):
+	u := kit::U
+	w := kit::W
+	h := kit::H
+	narrow := w < 470.0 * u
+	wide := w >= 1220.0 * u
+	cw := if narrow { 0.92 * w } else { 440.0 * u }
+	gh ~= 439.0 * u
+	if !wide:
+		gh = 500.0 * u
+		if narrow: gh = 561.0 * u
+	top := max(24.0 * u, (h - gh) / 2.0)
+	btn(x real, y real, bw real, bh real, label const byte[:], kind int) bool:
+		t := kit::button(x, y, bw, bh, label, kind)
+		if kit::clicked(): sfx::play(sfx::TAP, 0.5, 0.0, 1.0)
+		t
+	sound(x real, y real, bw real, bh real):
+		label := if sfx::MUTED { "Sound off" } else { "Sound on" }
+		if btn(x, y, bw, bh, label, 0): sfx::MUTED = !sfx::MUTED
+	kit::box(0.0, 0.0, w, h, BG, 0.0)
+	kit::text(0.0, top, w, 40.0 * u, "Arcade", kit::HEAD, kit::ACCENT, 1)
+	kit::text(0.0, top + 50.0 * u, w, 20.0 * u, "Pick a game", kit::BODY, kit::MUTED, 1)
+	if wide:
+		total := 3.0 * 380.0 * u + 2.0 * 24.0 * u
+		x0 := (w - total) / 2.0
+		for i 3: card(x0 + i * (404.0 * u), top + 94.0 * u, 380.0 * u, i)
+		sound(w - 134.0 * u, 14.0 * u, 120.0 * u, 40.0 * u)
+	else:
+		tw := min(124.0 * u, (0.92 * w - 20.0 * u) / 3.0)
+		tx := (w - (3.0 * tw + 20.0 * u)) / 2.0
+		ty := top + 94.0 * u
+		tab(i int, name const byte[:]):
+			kind := if PICK == i { 2 } else { 0 }
+			if btn(tx + i * (tw + 10.0 * u), ty, tw, 44.0 * u, name, kind): PICK = i
+		tab(0, "Pool")
+		tab(1, "Minigolf")
+		tab(2, "Shippy")
+		cy := ty + 44.0 * u + 17.0 * u
+		card((w - cw) / 2.0, cy, cw, PICK)
+		if narrow:
+			sound((w - 180.0 * u) / 2.0, cy + 345.0 * u + 17.0 * u, 180.0 * u, 44.0 * u)
+		else:
+			sound(w - 134.0 * u, 14.0 * u, 120.0 * u, 40.0 * u)
+	kit::draw(target);
+frame(target gfx::Texture, w int, h int, dt real, now real):
+	if (SIZE.x as int) != w || (SIZE.y as int) != h:
+		s3d::init(w, h)
+		SIZE = int2{w, h}
+	kit::begin(w, h, now)
+	sfx::tick(now)
+	if SCREEN == 0:
+		menu(target, now)
+	else if SCREEN == 1:
+		pool_play::frame(target, dt, now)
+		if pool_play::RESULT > 0 && !pool_play::REPORTED:
+			report("pool", pool_play::RESULT)
+			pool_play::REPORTED = true
+		if pool_play::QUIT:
+			s3d::clear_scene()
+			pool_look::BUILT = false
+			SCREEN = 0
+			CLOTH = pool_play::CLOTH
+	else if SCREEN == 2:
+		golf_play::frame(target, dt, now)
+		if golf_play::RESULT > 0 && !golf_play::REPORTED:
+			report("minigolf", golf_play::RESULT)
+			golf_play::REPORTED = true
+		if golf_play::QUIT:
+			s3d::clear_scene()
+			SCREEN = 0
+	else if SCREEN == 3:
+		shippy_play::frame(target, dt, now)
+		if shippy_play::RESULT > 0 && !shippy_play::REPORTED:
+			report("shippy", shippy_play::RESULT)
+			shippy_play::REPORTED = true
+		if shippy_play::QUIT:
+			s3d::clear_scene()
+			shippy_look::BUILT = false
+			SHIPPY_BEST = shippy_play::load_best(BEST_PATH)
+			SCREEN = 0;
+go(game const byte[:]):
+	if game == "pool":
+		pool_play::start(0, LEVEL, CLOTH, SEED)
+		SCREEN = 1
+	else if game == "minigolf":
+		golf_play::start(1, LEVEL, SEED, -1)
+		SCREEN = 2
+	else if game == "shippy":
+		shippy_play::start(SEED, BEST_PATH)
+		SCREEN = 3
+demo(prefix const byte[:], w int, h int):
+	gfx::open_headless(w, h)
+	font()
+	s3d::init(w, h)
+	SIZE = int2{w, h}
+	target := gfx::texture2d(w, h, gfx::RGBA8, gfx::SAMPLED | gfx::COLOR_TARGET)
+	t ~= 0.0
+	shot(name const byte[:]):
+		for i 4:
+			t += 0.05
+			frame(target, w, h, 0.05, t)
+		gfx::flush()
+		path byte[>..] ~= []
+		format(path, prefix, "_", name, ".png")
+		gfx::save_png(target, path)
+		print("shot ", name)
+	pool_run(name const byte[:], k int):
+		SCREEN = 1
+		pool_play::start(0, 2, k % 5, 7)
+		pool_play::demo_set(name)
+		full byte[>..] ~= []
+		format(full, "pool_", name)
+		shot(full)
+	golf_run(name const byte[:]):
+		SCREEN = 2
+		golf_play::demo_set(name)
+		full byte[>..] ~= []
+		format(full, "golf_")
+		for c name: if c != ' ': full.push(c)
+		shot(full)
+	shippy_run(name const byte[:], first bool):
+		SCREEN = 3
+		if first: shippy_look::BUILT = false
+		shippy_play::demo_set(name)
+		full byte[>..] ~= []
+		format(full, "shippy_", name)
+		shot(full)
+	shot("menu")
+	pool_run("aim", 0)
+	pool_run("top", 1)
+	pool_run("pull", 2)
+	pool_run("hand", 3)
+	pool_run("low", 4)
+	pool_run("spin", 5)
+	pool_run("menu", 6)
+	pool_run("play", 7)
+	pool_run("over", 8)
+	s3d::clear_scene()
+	golf_run("aim")
+	golf_run("roll")
+	golf_run("view")
+	golf_run("look")
+	golf_run("card")
+	golf_run("menu")
+	golf_run("over")
+	golf_run("hole 3")
+	golf_run("hole 5")
+	golf_run("hole 7")
+	golf_run("hole 9")
+	golf_run("gen 2")
+	golf_run("gen 5")
+	golf_run("gen 8")
+	s3d::clear_scene()
+	shippy_run("wait", true)
+	shippy_run("play", false)
+	shippy_run("dead", false)
+	shippy_run("menu", false);
+font():
+	if sdf_use_ttf_file("../assets/fonts/Nunito-Bold.ttf"): return
+	if sdf_use_ttf_file("assets/fonts/Nunito-Bold.ttf"): return
+	if sdf_use_ttf_file("Nunito-Bold.ttf"): return
+	print("arcade: using the built-in font");
+main():
+	a := args()
+	if a.len > 1 && a[1] == "--demo":
+		prefix const byte[:] ~= "../../arcade-scratch/pics/a"
+		if a.len > 2: prefix = a[2]
+		w ~= 1280
+		h ~= 720
+		if a.len > 3:
+			n, ok := parse_int(a[3], 10)
+			if ok: w = n
+		if a.len > 4:
+			n, ok := parse_int(a[4], 10)
+			if ok: h = n
+		demo(prefix, w, h)
+		return
+	i ~= 1
+	while i < a.len:
+		if a[i] == "--game" && i + 1 < a.len:
+			GAME.clear()
+			GAME.append(a[i + 1])
+			i += 1
+		else if a[i] == "--scores" && i + 1 < a.len:
+			SCORES.clear()
+			SCORES.append(a[i + 1])
+			i += 1
+		else if a[i] == "--frames":
+			PAGED = true
+		i += 1
+	SEED = (time_ns() / 1000000) % 100000
+	gfx::open("Arcade", 1280, 800)
+	folder := gfx::pref_path("Amni", "Arcade")
+	if folder.len > 0:
+		BEST_PATH.clear()
+		format(BEST_PATH, folder, "shippy_best.txt")
+	SHIPPY_BEST = shippy_play::load_best(BEST_PATH)
+	font()
+	sfx::init()
+	sz := gfx::screen_size()
+	s3d::init(sz.x as int, sz.y as int)
+	SIZE = sz
+	if GAME.len > 0: go(GAME)
+	if PAGED: return
+	while gfx::frame(): step();
+step():
+	if gfx::backgrounded(): return
+	sz := gfx::screen_size()
+	frame(gfx::screen(), sz.x as int, sz.y as int, min(gfx::delta_time(), 0.1), gfx::time())
+	gfx::flush();
+export he_frame(t real):
+	if gfx::frame(): step();

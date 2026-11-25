@@ -978,6 +978,7 @@ async _openActivitiesModal() {
   if (!modal || !grid) return;
 
   grid.innerHTML = '';
+  const birchCheck = this._birchStatus();
 
   // Check flash ROM installation status
   let flashStatus = {};
@@ -1048,6 +1049,7 @@ async _openActivitiesModal() {
     });
   }
 
+  this._gamesRegistry = this._withBirchCard(this._gamesRegistry, await birchCheck);
   for (const game of this._gamesRegistry) {
     // For flash games, check if ROM is installed
     const isFlash = game.type === 'flash';

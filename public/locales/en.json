@@ -1522,12 +1522,15 @@
   },
   "activities_registry": {
     "flappy": "Dodge containers, chase high scores!",
+    "arcade_pool": "Eight-ball against a friend or the computer",
+    "arcade_minigolf": "Nine holes from meadow to volcano",
     "flight": "Throw a paper plane as far as you can!",
     "learn_to_fly": "Help a penguin learn to fly!",
     "bubble_tanks": "Bubble-based arena shooter",
     "tanks": "Classic Armor Games tank combat",
     "super_smash": "Fan-made Smash Bros platform fighter",
-    "io_games": "Browse popular .io multiplayer games"
+    "io_games": "Browse popular .io multiplayer games",
+    "willowmere": "Birch, a lakeside town you play with everyone on this server"
   },
   "status_bar": {
     "server": "Server",

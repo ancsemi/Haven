@@ -26,6 +26,7 @@ services:
     environment:
       - PORT=${PORT:-3000}
       - HOST=0.0.0.0
+      - BIRCH_PROXY_URL=${BIRCH_PROXY_URL:-}   # Optional: http://birch:3002 once the birch service below is running
       # - SERVER_NAME=My Haven           # Name shown in the UI
       # - ADMIN_USERNAME=admin            # First account to register becomes admin
       # - GIPHY_API_KEY=                  # Optional: enable GIF search (GIPHY)
@@ -66,6 +67,20 @@ services:
     # Uncomment to load settings from a .env file:
     # env_file: .env
     restart: unless-stopped
+  # ── Birch (optional town game) ──
+  # Unpack the Birch bot bundle into ./birch-bot, then:  docker compose --profile birch up -d
+  # and set BIRCH_PROXY_URL=http://birch:3002 for haven. See docs/birch.md.
+  birch:
+    profiles: ["birch"]
+    build: ./birch-bot
+    container_name: birch
+    environment:
+      - HAVEN_ENV_FILE=/haven-data/.env
+    volumes:
+      - haven_data:/haven-data:ro
+      - birch_data:/data
+    restart: unless-stopped
 
 volumes:
   haven_data:
+  birch_data:

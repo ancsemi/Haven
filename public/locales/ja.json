@@ -1318,6 +1318,8 @@
   },
   "activities_registry": {
     "flappy": "コンテナを避けてハイスコアを目指そう！",
+    "arcade_pool": "友だちやコンピューターと8ボール対戦",
+    "arcade_minigolf": "草原から火山まで9ホール",
     "flight": "紙飛行機をできるだけ遠くへ飛ばそう！",
     "learn_to_fly": "ペンギンが空を飛べるように手伝おう！",
     "bubble_tanks": "泡がテーマのアリーナシューティング",

@@ -649,6 +649,8 @@ app.use((req, res, next) => {
 
 // Disable Express version disclosure
 app.disable('x-powered-by');
+const birch = require('./src/birch').createBirch({ url: process.env.BIRCH_PROXY_URL, secret: process.env.JWT_SECRET });
+app.use('/birch', birch.proxy);
 
 // ── Body Parsing with size limits ────────────────────────
 // Global limit bumped to 128kb so legit large-but-bounded payloads like the
@@ -1606,8 +1608,19 @@ require('./src/routes/link-preview')({ app });
 
 // ── Release notes for the "What's new" popup: src/routes/changelog.js ──
 require('./src/routes/changelog')({ app, verifyToken });
+require('./src/routes/birch')({ app, verifyToken, birch });
 
 // ── Games list endpoint: discover available games ──
+app.get('/api/birch-presence', (req, res) => {
+  try {
+    const { getDb } = require('./src/database');
+    const row = getDb().prepare("SELECT value FROM server_settings WHERE key = 'birch_cross_server_presence'").get();
+    res.json({ enabled: row?.value === 'true', name: 'Birch cross-server presence' });
+  } catch {
+    res.json({ enabled: false, name: 'Birch cross-server presence' });
+  }
+});
+
 app.get('/api/games', (req, res) => {
   const gamesDir = path.join(__dirname, 'public', 'games');
   const fs2 = require('fs');

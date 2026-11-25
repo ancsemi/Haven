@@ -6,12 +6,15 @@
 const DEFAULT_MAX_SCORE = 1_000_000_000;
 const MAX_SCORE_BY_GAME = {
   flappy: 100_000,
+  'arcade-pool': 4_000,
+  'arcade-minigolf': 1_000,
 };
 
 // The games that report scores: the Activities games (src/activity.js,
 // HAVEN_GAMES). Any other id would only add rows nobody can see.
 const KNOWN_GAMES = new Set([
   'flappy', 'flight', 'learn-to-fly-3', 'bubble-tanks-3', 'tanks', 'super-smash-flash-2', 'io-games',
+  'arcade-pool', 'arcade-minigolf',
 ]);
 function isKnownGame(game) {
   return typeof game === 'string' && KNOWN_GAMES.has(game);

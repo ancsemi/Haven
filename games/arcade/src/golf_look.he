@@ -1,0 +1,1362 @@
+namespace golf_look
+use math
+use gfx
+use gfx.gltf
+use gfx.shapes
+use gfx.scene3d
+use gfx.linalg
+use golf
+use pool
+use pool_look
+var HOLE golf::Hole
+var ST Style
+var GZ real = 0.0
+var BALL int = -1
+var BALLQ = linalg::quat_identity()
+var LASTX real = 0.0
+var LASTY real = 0.0
+var ROLLED = false
+var DOTS int[30] = [-1; 30]
+var ARROW int = -1
+var PUTTER int = -1
+var FLAG int[4] = [-1; 4]
+var FLAG_X real = 0.0
+var FLAG_Y real = 0.0
+var FLAG_Z real = 0.0
+var MVI int[>..] = []
+var LAVA_IT int = -1
+var BOUNCE_IT int = -1
+var GLOW_IT int = -1
+var NEON_IT int = -1
+var M_TURF gltf::Material
+var M_SAND gltf::Material
+var M_ICE gltf::Material
+var M_BOUNCE gltf::Material
+var M_CONV gltf::Material
+var M_LAVA gltf::Material
+var M_WATER gltf::Material
+var M_BED gltf::Material
+var M_RAIL gltf::Material
+var M_STONE gltf::Material
+var M_GROUND gltf::Material
+var M_PAINT gltf::Material
+var M_MATTE gltf::Material
+var M_METAL gltf::Material
+var M_GLASS gltf::Material
+var M_GLOW gltf::Material
+var M_NEON gltf::Material
+var M_BALL gltf::Material
+struct Style { turf int, turf2 int, sand int, ice int, rail int, trim int, stone int, earth int, ground int, ground2 int, accent int, accent2 int, water int, lava int, neon int, zenith int, horizon int, skyground int, suncolor int, sun_el real, sun_az real, sun_pow real, ambient real, exposure real, bloom real, saturation real, warmth real, vignette real, rail_glow real, stripe int, gkind int, d0 int, d1 int, d2 int, dn int }
+styles() Style[>..]:
+	r Style[>..] ~= []
+	r.push(Style{0x42C23F, 0x37AD38, 0xEBD493, 0xC4E8F7, 0xF4EBD6, 0xEE6A3A, 0xA39D90, 0x8E6140, 0x62B34D, 0x509E41, 0xFF8A2B, 0xFFD23F, 0x3AB8EA, 0xFF6A1A, 0xFFFFFF, 0x3E8FE6, 0xC4E5F8, 0x82BC6D, 0xFFF2D4, 0.95, 0.7, 3.4, 1.0, 1.0, 0.1, 1.15, 0.03, 0.2, 0, 0, 0, 8, 1, 0, 40})
+	r.push(Style{0x74B24C, 0x66A043, 0xEDB972, 0xBFE4F2, 0xC9633D, 0xF3D7A5, 0xB96C43, 0xA25A38, 0xDB9D5E, 0xC98649, 0x2BB0A6, 0xFFC94D, 0x3AB8CC, 0xFF5A1E, 0xFFE0A0, 0x4A85D8, 0xF7DDB4, 0xDCA76B, 0xFFE0AA, 0.75, 2.4, 3.9, 0.9, 1.0, 0.12, 1.2, 0.07, 0.22, 0, 0, 1, 2, 0, 0, 34})
+	r.push(Style{0x55CBAA, 0x47B997, 0xE8EFF3, 0xA3DFF8, 0x58AEE0, 0xF5FCFF, 0x8CA8BB, 0x6F8DA6, 0xCBDDEA, 0xB8D0E2, 0xFF5A7B, 0xFFC94D, 0x2EA5E5, 0xFF7A2E, 0xBFF1FF, 0x5AA6EA, 0xE8F4FC, 0xC4D8E6, 0xFFF8EE, 0.55, 0.3, 3.0, 1.05, 1.0, 0.14, 1.15, -0.04, 0.2, 0, 0, 2, 3, 0, 8, 37})
+	r.push(Style{0x5E9A3A, 0x528A33, 0xB09A82, 0xA8D0E2, 0x3B3539, 0xFF7A1A, 0x6E6068, 0x4A3A3E, 0x4A3D42, 0x5C4B50, 0xFF5A1F, 0xFFC03A, 0x2A90C2, 0xFF5E10, 0xFF6A1A, 0x3A1A1E, 0xD65A30, 0x4A2A24, 0xFFB878, 0.55, 3.8, 3.7, 1.1, 1.25, 0.3, 1.2, 0.1, 0.3, 2.2, 2, 3, 4, 0, 4, 30})
+	r.push(Style{0x4CCB4A, 0x3FB840, 0xDAC28B, 0xB7E5DF, 0x8D6C3E, 0xE0B95E, 0x7D8B6B, 0x5B4229, 0x17533A, 0x1F6444, 0xFFC72E, 0xFF4F6D, 0x20A68F, 0xFF6A1A, 0x8CFFB0, 0x2D909F, 0xBAE9C3, 0x1F5A3A, 0xFFF6C9, 0.85, 1.2, 3.2, 0.95, 1.0, 0.1, 1.25, 0.05, 0.3, 0, 0, 4, 5, 1, 0, 47})
+	r.push(Style{0x82D44B, 0x71BF3F, 0xF4DEA4, 0xC9EFF7, 0x2E7CD7, 0xFFFFFF, 0xCAB89B, 0xB99B6D, 0xF1E0A9, 0xE3CD91, 0xFF6B4A, 0x3CD2D2, 0x2EC5E8, 0xFF6A1A, 0x7FFFF0, 0x73BDEE, 0xD0F2FB, 0xEFDEA9, 0xFFF3D2, 0.9, 0.9, 3.7, 1.05, 1.0, 0.12, 1.25, 0.04, 0.15, 0, 1, 5, 5, 0, 1, 34})
+	r.push(Style{0x3A2A8A, 0x2E2072, 0x5A4A9A, 0x6EA8FF, 0x14122E, 0x20E8FF, 0x2B2658, 0x1E1A42, 0x0B0A1E, 0x15123A, 0xFF2DB4, 0xB6FF3A, 0x2A5CFF, 0xFF2D8A, 0x20E8FF, 0x090420, 0x2B1062, 0x07040F, 0x9FB2FF, 0.8, 0.5, 1.1, 0.55, 1.15, 0.55, 1.3, -0.05, 0.4, 3.0, 2, 6, 6, 3, 6, 37})
+	r.push(Style{0x7FE88F, 0x6FD87F, 0xFFD9A0, 0xCDEBFF, 0xFF4F6D, 0xFFFFFF, 0xE8A2C8, 0xC26C9C, 0xF9B3D7, 0xF0A0CC, 0xFFE14D, 0x7AD7FF, 0x6EA8FF, 0xFF4D8D, 0xFFFFFF, 0xB48CFF, 0xFFD7ED, 0xF0A5CF, 0xFFF1F8, 0.9, 0.4, 3.0, 1.05, 1.0, 0.18, 1.25, 0.02, 0.15, 0, 1, 7, 7, 0, 7, 34})
+	r
+biome_style(biome int) Style:
+	s := styles()
+	s[clamp(biome, 0, 7)]
+c3(r real, g real, b real) float3: pool_look::p3(r, g, b)
+hexb(c int, k int) real:
+	v real := (c >> (16 - 8 * k)) & 255
+	v
+lin(hex int) float3: pool_look::srgb_to_linear(c3(hexb(hex, 0) / 255.0, hexb(hex, 1) / 255.0, hexb(hex, 2) / 255.0))
+new_px(w int, h int) byte[>..]:
+	px byte[>..] ~= []
+	px.resize(w * h * 4, 0)
+	px
+cbyte(v real) byte: round(clamp(v, 0.0, 255.0)) as byte
+fr(x real) real: x - floor(x)
+mixr(a real, b real, t real) real: a + (b - a) * t
+put_px(px byte[>..]&, i int, j int, w int, r real, g real, b real):
+	o := (j * w + i) * 4
+	px[o] = cbyte(r)
+	px[o + 1] = cbyte(g)
+	px[o + 2] = cbyte(b)
+	px[o + 3] = 255
+vbase(v0 int) int: gltf::verts.len / gltf::VERTEX_FLOATS - v0
+tri(a int, b int, c int):
+	gltf::indices.push(a as u32)
+	gltf::indices.push(b as u32)
+	gltf::indices.push(c as u32);
+vtx(p float3, n float3, u real, v real, c float3):
+	shapes::vertex(p, n, u as f32, v as f32, pool_look::tan_of(n))
+	o := gltf::verts.len - gltf::VERTEX_FLOATS + gltf::AT_COL
+	gltf::verts[o] = c.x
+	gltf::verts[o + 1] = c.y
+	gltf::verts[o + 2] = c.z
+	gltf::verts[o + 3] = 1.0
+grid_idx(base int, rows int, cols int, flip bool):
+	for r rows - 1:
+		for c cols - 1:
+			a := base + r * cols + c
+			b := a + 1
+			d := a + cols
+			e := d + 1
+			if flip:
+				tri(a, d, e)
+				tri(a, e, b)
+			else:
+				tri(a, b, e)
+				tri(a, e, d)
+ctri(a float3, b float3, c float3, n float3, ua real, va real, ub real, vb real, uc real, vc real, ca float3, cb float3, cc float3, v0 int):
+	cr := linalg::cross3(b - a, c - a)
+	if linalg::length3(cr) < 0.000000001: return
+	k := vbase(v0)
+	vtx(a, n, ua, va, ca)
+	if linalg::dot3(cr, n) < 0.0:
+		vtx(c, n, uc, vc, cc)
+		vtx(b, n, ub, vb, cb)
+	else:
+		vtx(b, n, ub, vb, cb)
+		vtx(c, n, uc, vc, cc)
+	tri(k, k + 1, k + 2);
+cquad(a float3, b float3, c float3, d float3, n float3, ua real, va real, ub real, vb real, ca float3, cb float3, cc float3, cd float3, v0 int):
+	k := vbase(v0)
+	vtx(a, n, ua, va, ca)
+	vtx(b, n, ub, va, cb)
+	vtx(c, n, ub, vb, cc)
+	vtx(d, n, ua, vb, cd)
+	if linalg::dot3(linalg::cross3(b - a, d - a), n) < 0.0:
+		tri(k, k + 2, k + 1)
+		tri(k, k + 3, k + 2)
+	else:
+		tri(k, k + 1, k + 2)
+		tri(k, k + 2, k + 3);
+lface(c float3, n float3, s float3, t float3, hn real, hs real, ht real, col float3, v0 int):
+	m := c + pool_look::sc3(n, hn as f32)
+	ss := pool_look::sc3(s, hs as f32)
+	tt := pool_look::sc3(t, ht as f32)
+	cquad(m - ss - tt, m + ss - tt, m + ss + tt, m - ss + tt, n, 0.0, 0.0, 2.0 * hs, 2.0 * ht, col, col, col, col, v0);
+lbox(c float3, ax float3, ay float3, az float3, hx real, hy real, hz real, ctop float3, cside float3, cbot float3, v0 int):
+	nx := pool_look::sc3(ax, -1.0)
+	ny := pool_look::sc3(ay, -1.0)
+	nz := pool_look::sc3(az, -1.0)
+	lface(c, ax, ay, az, hx, hy, hz, cside, v0)
+	lface(c, nx, ay, az, hx, hy, hz, cside, v0)
+	lface(c, ay, az, ax, hy, hz, hx, ctop, v0)
+	lface(c, ny, az, ax, hy, hz, hx, cbot, v0)
+	lface(c, az, ax, ay, hz, hx, hy, cside, v0)
+	lface(c, nz, ax, ay, hz, hx, hy, cside, v0);
+frustum(x real, y real, z real, r0 real, r1 real, h real, sides int, c0 float3, c1 float3, cap bool, v0 int):
+	base := vbase(v0)
+	for ring 2:
+		rr ~= r0
+		ch ~= c0
+		yy ~= y
+		if ring == 1:
+			rr = r1
+			ch = c1
+			yy = y + h
+		for s sides + 1:
+			a := 2.0 * PI * s / sides
+			n := linalg::unit3(c3(cos(a), (r0 - r1) / h, sin(a)))
+			vtx(c3(x + rr * cos(a), yy, z + rr * sin(a)), n, 1.0 * s / sides, ring * 1.0, ch)
+	grid_idx(base, 2, sides + 1, true)
+	if cap && r1 > 0.0005:
+		ctr := c3(x, y + h, z)
+		up := c3(0.0, 1.0, 0.0)
+		for s sides:
+			a0 := 2.0 * PI * s / sides
+			a1 := 2.0 * PI * (s + 1) / sides
+			ctri(ctr, c3(x + r1 * cos(a0), y + h, z + r1 * sin(a0)), c3(x + r1 * cos(a1), y + h, z + r1 * sin(a1)), up, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, c1, c1, c1, v0)
+blob_pt(cx real, cy real, cz real, rx real, ry real, rz real, seed int, rings int, segs int, r int, s0 int) float3:
+	s := s0 % segs
+	th := PI * r / rings
+	ph := 2.0 * PI * s / segs
+	k ~= 1.0
+	if r != 0 && r != rings: k = 0.78 + 0.44 * pool_look::hash2(r, s, seed)
+	y ~= cy + ry * k * cos(th)
+	lo := cy - 0.3 * ry
+	if y < lo: y = lo
+	c3(cx + rx * k * sin(th) * cos(ph), y, cz + rz * k * sin(th) * sin(ph))
+blob_tri(a float3, b float3, c float3, ctr float3, r int, s int, seed int, c0 float3, c1 float3, v0 int):
+	cr := linalg::cross3(b - a, c - a)
+	if linalg::length3(cr) < 0.000000001: return
+	n ~= linalg::unit3(cr)
+	if linalg::dot3(n, a + b + c - pool_look::sc3(ctr, 3.0)) < 0.0: n = pool_look::sc3(n, -1.0)
+	ny real := n.y
+	t real := clamp(0.5 + 0.55 * ny + 0.25 * (pool_look::hash2(r, s, seed + 9) - 0.5), 0.0, 1.0)
+	col := linalg::mix3(c0, c1, t as f32)
+	ctri(a, b, c, n, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, col, col, col, v0);
+blob(cx real, cy real, cz real, rx real, ry real, rz real, seed int, rings int, segs int, c0 float3, c1 float3, v0 int):
+	ctr := c3(cx, cy, cz)
+	for r rings:
+		for s segs:
+			a := blob_pt(cx, cy, cz, rx, ry, rz, seed, rings, segs, r, s)
+			b := blob_pt(cx, cy, cz, rx, ry, rz, seed, rings, segs, r, s + 1)
+			c := blob_pt(cx, cy, cz, rx, ry, rz, seed, rings, segs, r + 1, s + 1)
+			d := blob_pt(cx, cy, cz, rx, ry, rz, seed, rings, segs, r + 1, s)
+			blob_tri(a, b, c, ctr, r, s, seed, c0, c1, v0)
+			blob_tri(a, c, d, ctr, r, s, seed, c0, c1, v0)
+seal(v0 int, i0 int, m gltf::Material) int:
+	n := gltf::verts.len / gltf::VERTEX_FLOATS
+	if n <= v0: return -1
+	o0 := v0 * gltf::VERTEX_FLOATS
+	lx ~= gltf::verts[o0]
+	ly ~= gltf::verts[o0 + 1]
+	lz ~= gltf::verts[o0 + 2]
+	hx ~= lx
+	hy ~= ly
+	hz ~= lz
+	for i v0..n:
+		o := i * gltf::VERTEX_FLOATS
+		x := gltf::verts[o]
+		y := gltf::verts[o + 1]
+		z := gltf::verts[o + 2]
+		lx = min(lx, x)
+		ly = min(ly, y)
+		lz = min(lz, z)
+		hx = max(hx, x)
+		hy = max(hy, y)
+		hz = max(hz, z)
+	shapes::finish(v0, i0, linalg::v3(lx, ly, lz), linalg::v3(hx, hy, hz), m)
+put(asset int, p float3) int:
+	if asset < 0: return -1
+	item := s3d::add(asset)
+	s3d::place(item, linalg::compose(p, linalg::quat_identity(), linalg::v3(1.0, 1.0, 1.0)))
+	item
+turf_tex(c1 int, c2 int) int:
+	px ~= new_px(512, 512)
+	for j 512:
+		s := fr(j / 512.0 * 2.0)
+		m := pool_look::sstep(0.0, 0.1, s) - pool_look::sstep(0.5, 0.57, s)
+		for i 512:
+			k := 1.0 + 0.14 * (pool_look::vnoise(i / 8.0, j / 8.0, 64, 3) - 0.5) + 0.1 * (pool_look::vnoise(i / 2.0, j / 2.0, 256, 7) - 0.5) + 0.08 * (pool_look::vnoise(i / 16.0, j / 2.0, 32, 5) - 0.5) + 0.1 * (pool_look::hash2(i, j, 9) - 0.5)
+			put_px(px, i, j, 512, mixr(hexb(c2, 0), hexb(c1, 0), m) * k, mixr(hexb(c2, 1), hexb(c1, 1), m) * k, mixr(hexb(c2, 2), hexb(c1, 2), m) * k)
+	gltf::add_texture_rgba(px, 512, 512, 10497)
+sand_tex(c int) int:
+	px ~= new_px(512, 512)
+	for j 512:
+		for i 512:
+			k ~= 1.0 + 0.1 * (pool_look::vnoise(i / 8.0, j / 8.0, 64, 3) - 0.5) + 0.17 * (pool_look::hash2(i, j, 11) - 0.5) + 0.035 * sin(2.0 * PI * (j / 512.0 * 10.0 + 1.5 * pool_look::vnoise(i / 16.0, j / 16.0, 32, 4)))
+			if pool_look::hash2(i / 2, j / 2, 13) > 0.985: k = k * 0.8
+			put_px(px, i, j, 512, hexb(c, 0) * k, hexb(c, 1) * k, hexb(c, 2) * k)
+	gltf::add_texture_rgba(px, 512, 512, 10497)
+ice_tex(c int) int:
+	px ~= new_px(512, 512)
+	for j 512:
+		for i 512:
+			k := 1.0 + 0.17 * (pool_look::vnoise(i / 16.0, j / 16.0, 32, 9) - 0.5)
+			cr := clamp(1.0 - pool_look::sstep(0.0, 0.018, abs(pool_look::vnoise(i / 8.0, j / 8.0, 64, 4) - 0.5)) + 0.5 * (1.0 - pool_look::sstep(0.0, 0.018, abs(pool_look::vnoise(i / 16.0, j / 16.0, 32, 5) - 0.5))), 0.0, 1.0)
+			put_px(px, i, j, 512, mixr(hexb(c, 0) * k, 255.0, 0.45 * cr), mixr(hexb(c, 1) * k, 255.0, 0.45 * cr), mixr(hexb(c, 2) * k, 255.0, 0.45 * cr))
+	gltf::add_texture_rgba(px, 512, 512, 10497)
+chevron_tex(c1 int, c2 int, glow bool) int:
+	px ~= new_px(256, 256)
+	for j 256:
+		y := (j + 0.5) / 256.0
+		for i 256:
+			x := (i + 0.5) / 256.0
+			t := fr(x + 2.2 * abs(y - 0.5))
+			m := pool_look::sstep(0.0, 0.08, t) - pool_look::sstep(0.47, 0.55, t)
+			if glow:
+				v := 255.0 * (0.12 + 0.88 * m)
+				put_px(px, i, j, 256, v, v, v)
+			else:
+				k := 1.0 + 0.05 * (pool_look::hash2(i, j, 5) - 0.5)
+				put_px(px, i, j, 256, mixr(hexb(c2, 0), hexb(c1, 0), m) * k, mixr(hexb(c2, 1), hexb(c1, 1), m) * k, mixr(hexb(c2, 2), hexb(c1, 2), m) * k)
+	gltf::add_texture_rgba(px, 256, 256, 10497)
+lava_tex(glow bool) int:
+	px ~= new_px(512, 512)
+	for j 512:
+		for i 512:
+			ridge := max(1.0 - pool_look::sstep(0.0, 0.05, abs(pool_look::vnoise(i / 16.0, j / 16.0, 32, 41) - 0.5)), 0.7 * (1.0 - pool_look::sstep(0.0, 0.05, abs(pool_look::vnoise(i / 8.0, j / 8.0, 64, 42) - 0.5))))
+			n := pool_look::vnoise(i / 4.0, j / 4.0, 128, 43)
+			if glow:
+				put_px(px, i, j, 512, 255.0 * ridge * (0.8 + 0.4 * n) + 20.0, 95.0 * ridge * (0.8 + 0.4 * n) + 6.0, 18.0 * ridge * (0.8 + 0.4 * n) + 1.0)
+			else:
+				cf := 0.75 + 0.5 * n
+				put_px(px, i, j, 512, mixr(46.0 * cf, 150.0, 0.5 * ridge), mixr(34.0 * cf, 70.0, 0.5 * ridge), mixr(32.0 * cf, 24.0, 0.5 * ridge))
+	gltf::add_texture_rgba(px, 512, 512, 10497)
+stone_tex() int:
+	px ~= new_px(512, 512)
+	for j 512:
+		for i 512:
+			k := (0.8 + 0.22 * (pool_look::vnoise(i / 32.0, j / 32.0, 16, 21) - 0.5) + 0.12 * (pool_look::vnoise(i / 8.0, j / 8.0, 64, 22) - 0.5) + 0.08 * (pool_look::hash2(i, j, 23) - 0.5)) * (1.0 - 0.35 * (1.0 - pool_look::sstep(0.0, 0.03, abs(pool_look::vnoise(i / 16.0, j / 16.0, 32, 24) - 0.5))))
+			v := 255.0 * k
+			put_px(px, i, j, 512, v, v, v)
+	gltf::add_texture_rgba(px, 512, 512, 10497)
+ground_px(kind int, c1 int, c2 int, c3c int, glow bool, i int, j int) real, real, real:
+	n1 := pool_look::vnoise(i / 32.0, j / 32.0, 16, 31)
+	n2 := pool_look::vnoise(i / 8.0, j / 8.0, 64, 32)
+	g := pool_look::hash2(i, j, 33)
+	out real[3] ~= [0.0; 3]
+	for k 3:
+		a := hexb(c1, k)
+		b := hexb(c2, k)
+		c := hexb(c3c, k)
+		v ~= a
+		if kind == 0:
+			v = mixr(a, b, n1) * (1.0 + 0.17 * (n2 - 0.5) + 0.1 * (g - 0.5))
+			if g > 0.995: v = c
+		else if kind == 1:
+			m := 0.5 + 0.5 * sin(2.0 * PI * (i / 512.0 * 2.0 + j / 512.0 * 3.0 + 0.25 * n1))
+			v = mixr(a, b, 0.55 * m) * (1.0 + 0.1 * (g - 0.5))
+		else if kind == 2:
+			v = mixr(a * (1.0 + 0.07 * (n2 - 0.5)), b, 0.5 * n1)
+			if g > 0.997: v = 255.0
+		else if kind == 3:
+			v = a * (1.0 + 0.3 * (n2 - 0.5) + 0.1 * (g - 0.5))
+			if abs(n1 - 0.5) < 0.02: v = b
+		else if kind == 4:
+			v = mixr(a, b, n2) * (0.8 + 0.4 * n1)
+			if g > 0.997: v = c
+		else if kind == 5:
+			v = mixr(a, b, 0.5 * n1) * (1.0 + 0.1 * (g - 0.5) + 0.03 * sin(2.0 * PI * (j / 512.0 * 12.0 + 2.0 * n1)))
+		else if kind == 6:
+			v = a * (1.0 + 0.5 * (n2 - 0.5))
+			line := (i + 32) % 64 < 2 || (j + 32) % 64 < 2
+			if line: v = c
+			if glow:
+				v = 0.0
+				if line: v = c
+		else:
+			d := fr((i + j) / 128.0)
+			base ~= a
+			if d < 0.5: base = b
+			v = base * (1.0 + 0.04 * (g - 0.5))
+		out[k] = v
+	return out[0], out[1], out[2]
+ground_tex(kind int, c1 int, c2 int, c3c int, glow bool) int:
+	px ~= new_px(512, 512)
+	for j 512:
+		for i 512:
+			r, g, b := ground_px(kind, c1, c2, c3c, glow, i, j)
+			put_px(px, i, j, 512, r, g, b)
+	gltf::add_texture_rgba(px, 512, 512, 10497)
+ball_tex(c1 int, c2 int) int:
+	px ~= new_px(512, 256)
+	bc real[3] := [247.0, 247.0, 243.0]
+	for j 256:
+		v := (j + 0.5) / 256.0
+		yy := cos(PI * v)
+		cv := v * 24.0
+		fv := fr(cv)
+		odd := (floor(cv) as int) % 2
+		wb := 1.0 - pool_look::sstep(0.125, 0.155, abs(yy))
+		wc := pool_look::sstep(0.885, 0.915, abs(yy))
+		for i 512:
+			u := (i + 0.5) / 512.0
+			fu := fr(u * 48.0 + 0.5 * odd)
+			d := hypot(fu - 0.5, fv - 0.5)
+			dimple := 1.0 - pool_look::sstep(0.28, 0.42, d)
+			shade := 1.0 - 0.09 * dimple
+			out real[3] ~= [0.0; 3]
+			for k 3:
+				out[k] = mixr(mixr(bc[k], hexb(c1, k), wb), hexb(c2, k), wc) * shade
+			put_px(px, i, j, 512, out[0], out[1], out[2])
+	gltf::add_texture_rgba(px, 512, 256, 10497)
+rail_tex(c1 int, c2 int) int:
+	px ~= new_px(256, 8)
+	for j 8:
+		for i 256:
+			t ~= 0.0
+			if i >= 248:
+				t = 1.0 - (i - 247.5) / 8.0
+			else if i >= 128:
+				t = 1.0
+			else if i >= 120:
+				t = (i - 119.5) / 8.0
+			f := 1.0 + 0.03 * (pool_look::hash2(i, j, 17) - 0.5)
+			put_px(px, i, j, 256, mixr(hexb(c1, 0), hexb(c2, 0), t) * f, mixr(hexb(c1, 1), hexb(c2, 1), t) * f, mixr(hexb(c1, 2), hexb(c2, 2), t) * f)
+	gltf::add_texture_rgba(px, 256, 8, 10497)
+mat(rough f32) gltf::Material:
+	m ~= shapes::material(linalg::v3(1.0, 1.0, 1.0), 0.0, rough)
+	m.base = linalg::col(1.0, 1.0, 1.0, 1.0)
+	m
+tref(t int) gltf::TexRef: gltf::TexRef{texture: t, uv: 0}
+floor_materials(st Style):
+	M_TURF = mat(0.92)
+	M_TURF.base_tex = tref(turf_tex(st.turf, st.turf2))
+	M_TURF.sheen = pool_look::sc3(lin(st.turf), 0.35)
+	M_TURF.sheen_rough = 0.5
+	M_TURF.metallic = 0.0
+	M_SAND = mat(0.97)
+	M_SAND.base_tex = tref(sand_tex(st.sand))
+	M_ICE = mat(0.1)
+	M_ICE.base_tex = tref(ice_tex(st.ice))
+	M_ICE.coat = 1.0
+	M_ICE.coat_r = 0.03
+	M_BOUNCE = mat(0.35)
+	M_BOUNCE.base_tex = tref(chevron_tex(st.accent, 0x20242C, false))
+	M_BOUNCE.emissive_tex = tref(chevron_tex(st.accent, 0x20242C, true))
+	M_BOUNCE.emissive = pool_look::sc3(lin(st.accent), 1.4)
+	M_BOUNCE.coat = 0.7
+	M_BOUNCE.coat_r = 0.1
+	M_CONV = mat(0.7)
+	M_CONV.base_tex = tref(chevron_tex(0x9CA2AD, 0x2B2F36, false))
+	M_LAVA = mat(0.75)
+	M_LAVA.base_tex = tref(lava_tex(false))
+	M_LAVA.emissive_tex = tref(lava_tex(true))
+	M_LAVA.emissive = linalg::v3(2.2, 2.2, 2.2)
+	M_WATER = shapes::water_material(0.0)
+	sa := M_WATER.shade_a
+	M_WATER.shade_a = linalg::col((2.2 * (1.0 - hexb(st.water, 0) / 255.0)) as f32, (2.2 * (1.0 - hexb(st.water, 1) / 255.0)) as f32, (2.2 * (1.0 - hexb(st.water, 2) / 255.0)) as f32, sa.w)
+	M_BED = mat(0.95)
+	M_BED.base_tex = M_SAND.base_tex
+	M_BED.base = linalg::col(0.55, 0.7, 0.78, 1.0);
+solid_materials(st Style):
+	M_RAIL = mat(0.4)
+	if st.stripe == 1: M_RAIL.base_tex = tref(rail_tex(st.rail, st.trim))
+	M_RAIL.coat = 0.9
+	M_RAIL.coat_r = 0.07
+	M_RAIL.double_sided = true
+	M_STONE = mat(0.88)
+	M_STONE.base_tex = tref(stone_tex())
+	M_STONE.tri = 0.9
+	M_GROUND = mat(0.95)
+	M_GROUND.base_tex = tref(ground_tex(st.gkind, st.ground, st.ground2, st.neon, false))
+	if st.gkind == 6:
+		M_GROUND.emissive_tex = tref(ground_tex(6, st.ground, st.ground2, st.neon, true))
+		M_GROUND.emissive = linalg::v3(0.7, 0.7, 0.7)
+	M_PAINT = mat(0.45)
+	M_PAINT.coat = 0.7
+	M_PAINT.coat_r = 0.08
+	M_PAINT.double_sided = true
+	M_MATTE = mat(0.85)
+	M_MATTE.double_sided = true
+	M_METAL = mat(0.3)
+	M_METAL.metallic = 0.55
+	M_GLASS = mat(0.05)
+	M_GLASS.base = linalg::col(0.8, 0.95, 1.0, 0.14)
+	M_GLASS.alpha_mode = gltf::ALPHA_BLEND
+	M_GLASS.double_sided = true
+	M_GLASS.no_shadow = true
+	M_GLOW = mat(0.5)
+	M_GLOW.base = linalg::col(0.02, 0.02, 0.02, 1.0)
+	M_GLOW.emissive = pool_look::sc3(lin(st.accent2), 2.2)
+	M_NEON = mat(0.5)
+	M_NEON.base = linalg::col(0.02, 0.02, 0.02, 1.0)
+	M_NEON.emissive = pool_look::sc3(lin(st.neon), max(0.8, st.rail_glow) as f32)
+	M_BALL = mat(0.18)
+	M_BALL.base_tex = tref(ball_tex(st.accent, st.accent2))
+	M_BALL.coat = 1.0
+	M_BALL.coat_r = 0.03;
+class_of(p golf::Piece) int:
+	if p.kind == golf::WATER: return 6
+	if p.kind == golf::LAVA: return 5
+	if p.kind == golf::VOID || p.kind >= 4: return -1
+	if hypot(p.pushx, p.pushy) > 0.01: return 4
+	if p.kind == golf::BOUNCE: return 3
+	if p.kind == golf::SAND: return 1
+	if p.kind == golf::ICE: return 2
+	0
+lane_dir(p golf::Piece) real, real:
+	l := hypot(p.pushx, p.pushy)
+	if l > 0.01: return p.pushx / l, p.pushy / l
+	if p.n == 4:
+		ex := (p.vx[1] + p.vx[2]) / 2.0 - (p.vx[0] + p.vx[3]) / 2.0
+		ey := (p.vy[1] + p.vy[2]) / 2.0 - (p.vy[0] + p.vy[3]) / 2.0
+		d := hypot(ex, ey)
+		if d > 0.000000001: return ex / d, ey / d
+	return 1.0, 0.0
+floor_z(x real, y real) real:
+	k := golf::piece_at(HOLE, x, y)
+	if k < 0: return 0.0
+	golf::floor_h(HOLE.pieces[k], x, y)
+fl_pos(p golf::Piece, k int, cls int) float3:
+	x := p.vx[k]
+	y := p.vy[k]
+	z ~= p.a + p.b * x + p.c * y
+	if cls == 7: z -= 0.1
+	pool_look::rpt(x, y, z)
+fl_uv(p golf::Piece, k int, cls int, lo real, hi real) real, real:
+	x := p.vx[k]
+	y := p.vy[k]
+	dx, dy := lane_dir(p)
+	al := x * dx + y * dy
+	ac := y * dx - x * dy
+	if cls == 0: return al, ac
+	if cls == 1 || cls == 2: return al / 1.5, ac / 1.5
+	if cls == 3 || cls == 4: return al / 0.5, (ac - lo) / (hi - lo)
+	if cls == 5 || cls == 7: return x / 1.5, y / 1.5
+	return 0.0, 0.0
+floor_mesh(cls int, m gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	want ~= cls
+	if cls == 7: want = 6
+	w := linalg::v3(1.0, 1.0, 1.0)
+	for pi HOLE.pieces.len:
+		p := HOLE.pieces[pi]
+		if class_of(p) != want: continue
+		dx, dy := lane_dir(p)
+		lo ~= 1000000.0
+		hi ~= -1000000.0
+		for k p.n:
+			ac := p.vy[k] * dx - p.vx[k] * dy
+			lo = min(lo, ac)
+			hi = max(hi, ac)
+		if hi - lo < 0.2: hi = lo + 0.2
+		nrm ~= linalg::unit3(c3(-p.b, 1.0, p.c))
+		if cls == 7: nrm = c3(0.0, 1.0, 0.0)
+		for k 1..(p.n - 1):
+			ua, va := fl_uv(p, 0, cls, lo, hi)
+			ub, vb := fl_uv(p, k, cls, lo, hi)
+			uc, vc := fl_uv(p, k + 1, cls, lo, hi)
+			ctri(fl_pos(p, 0, cls), fl_pos(p, k, cls), fl_pos(p, k + 1, cls), nrm, ua, va, ub, vb, uc, vc, w, w, w, v0)
+	seal(v0, i0, m)
+wall_dir(w golf::Wall) real, real:
+	dx := w.x1 - w.x0
+	dy := w.y1 - w.y0
+	l := hypot(dx, dy)
+	if l < 0.000000001: return 1.0, 0.0
+	return dx / l, dy / l
+wall_side(w golf::Wall) real, real, real, real:
+	dx := w.x1 - w.x0
+	dy := w.y1 - w.y0
+	l := max(hypot(dx, dy), 0.000000001)
+	return (w.x0 + w.x1) / 2.0, (w.y0 + w.y1) / 2.0, -dy / l, dx / l
+rail_floor(w golf::Wall) int:
+	mx, my, nx, ny := wall_side(w)
+	golf::floor_at(HOLE, mx + nx * 0.03, my + ny * 0.03, w.zhi)
+wall_h(w golf::Wall, pk int, x real, y real) real:
+	if pk < 0: return w.zlo + 0.05
+	golf::floor_h(HOLE.pieces[pk], x, y)
+rail_corner(wi int, x real, y real) bool:
+	a := HOLE.walls[wi]
+	adx, ady := wall_dir(a)
+	for j HOLE.walls.len:
+		if j == wi: continue
+		w := HOLE.walls[j]
+		if w.kind != 0: continue
+		if hypot(w.x0 - x, w.y0 - y) < 0.03 || hypot(w.x1 - x, w.y1 - y) < 0.03:
+			bdx, bdy := wall_dir(w)
+			if abs(adx * bdy - ady * bdx) > 0.3: return true
+	false
+rail_span(wi int) real, real, real, real:
+	w := HOLE.walls[wi]
+	l := max(hypot(w.x1 - w.x0, w.y1 - w.y0), 0.000000001)
+	pk := rail_floor(w)
+	s0 ~= 0.0
+	if rail_corner(wi, w.x0, w.y0): s0 = -0.14 / l
+	s1 ~= 1.0
+	if rail_corner(wi, w.x1, w.y1): s1 = 1.0 + 0.14 / l
+	return s0, s1, wall_h(w, pk, w.x0, w.y0), wall_h(w, pk, w.x1, w.y1)
+rail_row(k int, top real, fl real) real, real, real, real, real, real:
+	rt := 0.14
+	rr := 0.035
+	ph real[5] := [0.0, 25.0, 50.0, 75.0, 90.0]
+	if k == 0: return 0.0, fl - 0.01, -1.0, 0.0, 0.0, 0.78
+	if k == 11: return rt, GZ, 1.0, 0.0, 0.0, 0.55
+	if k <= 5:
+		phi := ph[k - 1] * PI / 180.0
+		tone ~= 1.0
+		if k == 1: tone = 0.0
+		return rr - rr * cos(phi), top - rr + rr * sin(phi), -cos(phi), sin(phi), tone, 1.0
+	phi := ph[10 - k] * PI / 180.0
+	tone ~= 1.0
+	if k == 10: tone = 0.0
+	return rt - rr + rr * cos(phi), top - rr + rr * sin(phi), cos(phi), sin(phi), tone, 1.0
+rail_mesh(m gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	up := c3(0.0, 1.0, 0.0)
+	white := c3(1.0, 1.0, 1.0)
+	for wi HOLE.walls.len:
+		w := HOLE.walls[wi]
+		if w.kind != 0: continue
+		l := hypot(w.x1 - w.x0, w.y1 - w.y0)
+		if l < 0.02: continue
+		dx := (w.x1 - w.x0) / l
+		dy := (w.y1 - w.y0) / l
+		s0, s1, fp, fq := rail_span(wi)
+		outv := c3(dy, 0.0, dx)
+		base := vbase(v0)
+		for k 12:
+			for e 2:
+				s ~= s0
+				if e == 1: s = s1
+				px := w.x0 + (w.x1 - w.x0) * s
+				py := w.y0 + (w.y1 - w.y0) * s
+				fl := fp + (fq - fp) * s
+				top := fl + golf::RAIL_H
+				o, y, nx, ny, tone, shade := rail_row(k, top, fl)
+				pos := pool_look::rpt(px, py, 0.0) + pool_look::sc3(outv, o as f32) + pool_look::sc3(up, y as f32)
+				nrm := pool_look::sc3(outv, nx as f32) + pool_look::sc3(up, ny as f32)
+				bc ~= lin(ST.rail)
+				if ST.stripe == 1:
+					bc = white
+				else if tone > 0.5:
+					bc = lin(ST.trim)
+				vtx(pos, nrm, s * l / 0.5, k / 11.0, pool_look::sc3(bc, shade as f32))
+		grid_idx(base, 12, 2, true)
+	seal(v0, i0, m)
+rail_top(w golf::Wall, s real, fp real, fq real, off real, outv float3) float3:
+	px := w.x0 + (w.x1 - w.x0) * s
+	py := w.y0 + (w.y1 - w.y0) * s
+	fl := fp + (fq - fp) * s
+	pool_look::rpt(px, py, fl + golf::RAIL_H + 0.002) + pool_look::sc3(outv, off as f32)
+rail_glow_mesh(m gltf::Material) int:
+	if ST.rail_glow <= 0.0: return -1
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	up := c3(0.0, 1.0, 0.0)
+	white := c3(1.0, 1.0, 1.0)
+	for wi HOLE.walls.len:
+		w := HOLE.walls[wi]
+		if w.kind != 0: continue
+		l := hypot(w.x1 - w.x0, w.y1 - w.y0)
+		if l < 0.02: continue
+		dx := (w.x1 - w.x0) / l
+		dy := (w.y1 - w.y0) / l
+		s0, s1, fp, fq := rail_span(wi)
+		outv := c3(dy, 0.0, dx)
+		cquad(rail_top(w, s0, fp, fq, 0.057, outv), rail_top(w, s1, fp, fq, 0.057, outv), rail_top(w, s1, fp, fq, 0.083, outv), rail_top(w, s0, fp, fq, 0.083, outv), up, 0.0, 0.0, 1.0, 1.0, white, white, white, white, v0)
+	seal(v0, i0, m)
+class_color(cls int) float3:
+	if cls == 0: return lin(ST.turf)
+	if cls == 1: return lin(ST.sand)
+	if cls == 2: return lin(ST.ice)
+	if cls == 3: return lin(ST.accent)
+	lin(ST.rail)
+cliff_mesh(m gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	for wi HOLE.walls.len:
+		w := HOLE.walls[wi]
+		if w.kind != 1: continue
+		l := hypot(w.x1 - w.x0, w.y1 - w.y0)
+		if l < 0.02: continue
+		dx := (w.x1 - w.x0) / l
+		dy := (w.y1 - w.y0) / l
+		mx, my, nx, ny := wall_side(w)
+		pk := rail_floor(w)
+		nb := golf::floor_at(HOLE, mx - nx * 0.03, my - ny * 0.03, 1000.0)
+		bp := wall_h(w, pk, w.x0, w.y0)
+		bq := wall_h(w, pk, w.x1, w.y1)
+		tp ~= w.zhi
+		tq ~= w.zhi
+		cls ~= 0
+		if nb >= 0:
+			tp = golf::floor_h(HOLE.pieces[nb], w.x0, w.y0)
+			tq = golf::floor_h(HOLE.pieces[nb], w.x1, w.y1)
+			cls = class_of(HOLE.pieces[nb])
+		tp = max(tp, bp + 0.02)
+		tq = max(tq, bq + 0.02)
+		nrm := c3(-dy, 0.0, -dx)
+		base := vbase(v0)
+		for r 4:
+			for e 2:
+				px ~= w.x0
+				py ~= w.y0
+				z ~= bp
+				if e == 1:
+					px = w.x1
+					py = w.y1
+					z = bq
+				if r >= 1:
+					z = tp
+					if e == 1: z = tq
+					if r == 1: z -= 0.05
+					if r == 2: z -= 0.045
+				col ~= class_color(cls)
+				if r == 0: col = pool_look::sc3(lin(ST.stone), 0.55)
+				if r == 1: col = lin(ST.stone)
+				vtx(pool_look::rpt(px, py, z), nrm, e * l, r * 1.0, col)
+		grid_idx(base, 4, 2, true)
+	seal(v0, i0, m)
+is_block(i int) bool:
+	for k 4:
+		w := HOLE.walls[i + k]
+		if w.kind != 2: return false
+		nw := HOLE.walls[i + (k + 1) % 4]
+		if hypot(w.x1 - nw.x0, w.y1 - nw.y0) > 0.01: return false
+	true
+block_mesh(m gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	up := c3(0.0, 1.0, 0.0)
+	n := HOLE.walls.len
+	i ~= 0
+	while i < n:
+		w := HOLE.walls[i]
+		if w.kind != 2:
+			i += 1
+			continue
+		if i + 3 < n && is_block(i):
+			zb := w.zlo + 0.05
+			zt := w.zhi
+			col := pool_look::sc3(lin(ST.stone), 0.9)
+			for k 4:
+				q := HOLE.walls[i + k]
+				l := max(hypot(q.x1 - q.x0, q.y1 - q.y0), 0.000000001)
+				nrm := c3((q.y1 - q.y0) / l, 0.0, (q.x1 - q.x0) / l)
+				cquad(pool_look::rpt(q.x0, q.y0, zb), pool_look::rpt(q.x1, q.y1, zb), pool_look::rpt(q.x1, q.y1, zt), pool_look::rpt(q.x0, q.y0, zt), nrm, 0.0, 0.0, 1.0, 1.0, col, col, col, col, v0)
+			wa := HOLE.walls[i]
+			wb := HOLE.walls[i + 1]
+			wc := HOLE.walls[i + 2]
+			wd := HOLE.walls[i + 3]
+			ac := lin(ST.accent)
+			cquad(pool_look::rpt(wa.x0, wa.y0, zt), pool_look::rpt(wb.x0, wb.y0, zt), pool_look::rpt(wc.x0, wc.y0, zt), pool_look::rpt(wd.x0, wd.y0, zt), up, 0.0, 0.0, 1.0, 1.0, ac, ac, ac, ac, v0)
+			i += 4
+		else:
+			l := hypot(w.x1 - w.x0, w.y1 - w.y0)
+			if l >= 0.000000001:
+				dx := (w.x1 - w.x0) / l
+				dy := (w.y1 - w.y0) / l
+				zb := w.zlo + 0.05
+				mx := (w.x0 + w.x1) / 2.0
+				my := (w.y0 + w.y1) / 2.0
+				lbox(pool_look::rpt(mx, my, (zb + w.zhi) / 2.0), c3(dx, 0.0, -dy), up, c3(dy, 0.0, dx), l / 2.0, (w.zhi - zb) / 2.0, 0.014, lin(ST.trim), lin(ST.accent), lin(ST.accent), v0)
+			i += 1
+	seal(v0, i0, m)
+post_mesh(m gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	for p HOLE.posts:
+		z0 := p.zlo + 0.05
+		z1 := p.zhi
+		r := p.r
+		x := p.x
+		z := -p.y
+		if p.kind == 0:
+			c0 := pool_look::sc3(lin(ST.stone), 0.7)
+			frustum(x, z0, z, r * 1.2, r * 1.1, 0.03, 24, c0, c0, false, v0)
+			cb := pool_look::sc3(lin(ST.stone), 1.1)
+			frustum(x, z0 + 0.03, z, r, r * 0.97, z1 - 0.03 - (z0 + 0.03), 24, cb, cb, false, v0)
+			ct := lin(ST.trim)
+			frustum(x, z1 - 0.03, z, r * 1.12, r * 1.12, 0.03, 24, ct, ct, true, v0)
+		else if p.kind == 1:
+			ac := lin(ST.accent)
+			cf := pool_look::sc3(ac, 0.4)
+			frustum(x, z0, z, r * 1.15, r * 1.05, 0.025, 24, cf, cf, false, v0)
+			bh := 0.8 * (z1 - z0) - 0.025
+			frustum(x, z0 + 0.025, z, r, r * 0.9, bh, 24, pool_look::sc3(ac, 0.8), pool_look::sc3(ac, 1.15), false, v0)
+			cd := pool_look::sc3(ac, 1.2)
+			frustum(x, z0 + 0.025 + bh, z, r * 0.9, r * 0.55, 0.04, 24, cd, cd, true, v0)
+	seal(v0, i0, m)
+glow_mesh(m gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	white := c3(1.0, 1.0, 1.0)
+	for p HOLE.posts:
+		if p.kind == 1:
+			z0 := p.zlo + 0.05
+			frustum(p.x, z0 + 0.55 * (p.zhi - z0), -p.y, p.r * 1.03, p.r * 1.03, 0.02, 24, white, white, false, v0)
+	gray := c3(0.7, 0.7, 0.7)
+	for l HOLE.lifts:
+		frustum(l.x, floor_z(l.x, l.y) + 0.002, -l.y, l.r, l.r * 0.97, 0.008, 32, white, white, true, v0)
+		frustum(l.ex, l.ez + 0.002, -l.ey, 0.12, 0.11, 0.007, 32, gray, gray, true, v0)
+	seal(v0, i0, m)
+seg_col(j int) float3:
+	if j % 2 == 0: return lin(ST.accent)
+	c3(0.95, 0.95, 0.95)
+arms_asset(mv golf::Mover) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	ht := mv.zhi - mv.zlo - 0.05 - 0.007
+	up := c3(0.0, 1.0, 0.0)
+	for k mv.arms:
+		th := 2.0 * PI * k / mv.arms
+		axis := c3(cos(th), 0.0, -sin(th))
+		across := c3(sin(th), 0.0, cos(th))
+		nseg := max(round(mv.len / 0.1) as int, 2)
+		for j nseg:
+			c := pool_look::sc3(axis, ((j + 0.5) * mv.len / nseg) as f32) + c3(0.0, 0.007 + ht / 2.0, 0.0)
+			cs := seg_col(j)
+			lbox(c, axis, up, across, mv.len / (2.0 * nseg), ht / 2.0, mv.thick, pool_look::sc3(cs, 1.1), cs, pool_look::sc3(cs, 0.7), v0)
+	seal(v0, i0, M_PAINT)
+hub_asset() int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	cf := pool_look::sc3(lin(ST.accent), 0.5)
+	frustum(0.0, 0.0, 0.0, 0.085, 0.07, 0.03, 18, cf, cf, true, v0)
+	cp := c3(0.9, 0.9, 0.92)
+	frustum(0.0, 0.03, 0.0, 0.045, 0.04, 0.29, 18, cp, cp, false, v0)
+	cn := lin(ST.accent2)
+	frustum(0.0, 0.32, 0.0, 0.075, 0.0, 0.07, 18, cn, cn, false, v0)
+	seal(v0, i0, M_PAINT)
+slider_asset(mv golf::Mover) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	ht := mv.zhi - mv.zlo - 0.05 - 0.007
+	nseg := max(round(2.0 * mv.len / 0.12) as int, 2)
+	ex := c3(1.0, 0.0, 0.0)
+	ey := c3(0.0, 1.0, 0.0)
+	ez := c3(0.0, 0.0, 1.0)
+	for j nseg:
+		c := c3(-mv.len + (j + 0.5) * 2.0 * mv.len / nseg, 0.007 + ht / 2.0, 0.0)
+		cs := seg_col(j)
+		lbox(c, ex, ey, ez, mv.len / nseg, ht / 2.0, mv.thick, pool_look::sc3(cs, 1.1), cs, pool_look::sc3(cs, 0.7), v0)
+	seal(v0, i0, M_PAINT)
+mover_items():
+	MVI.clear()
+	for mv HOLE.movers:
+		at := pool_look::rpt(mv.x, mv.y, mv.zlo + 0.05)
+		if mv.kind == 0:
+			ai := put(arms_asset(mv), at)
+			put(hub_asset(), at)
+			MVI.push(ai)
+		else:
+			MVI.push(put(slider_asset(mv), at));
+decor_mesh(mt gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	up := c3(0.0, 1.0, 0.0)
+	cx := HOLE.cup_x
+	cy := HOLE.cup_y
+	cz := floor_z(cx, cy)
+	dk := linalg::v3(0.004, 0.004, 0.004)
+	rc := linalg::v3(0.03, 0.025, 0.02)
+	lp := linalg::v3(0.9, 0.9, 0.85)
+	cr := golf::CUP_R
+	co := cr + 0.012
+	for s 24:
+		a0 := 2.0 * PI * s / 24
+		a1 := 2.0 * PI * (s + 1) / 24
+		ctri(pool_look::rpt(cx, cy, cz + 0.0015), pool_look::rpt(cx + cr * cos(a0), cy + cr * sin(a0), cz + 0.0015), pool_look::rpt(cx + cr * cos(a1), cy + cr * sin(a1), cz + 0.0015), up, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, dk, rc, rc, v0)
+		cquad(pool_look::rpt(cx + cr * cos(a0), cy + cr * sin(a0), cz + 0.003), pool_look::rpt(cx + co * cos(a0), cy + co * sin(a0), cz + 0.003), pool_look::rpt(cx + co * cos(a1), cy + co * sin(a1), cz + 0.003), pool_look::rpt(cx + cr * cos(a1), cy + cr * sin(a1), cz + 0.003), up, 0.0, 0.0, 1.0, 1.0, lp, lp, lp, lp, v0)
+	stick := linalg::v3(0.92, 0.92, 0.95)
+	frustum(cx, cz, -cy, 0.0048, 0.0038, 0.72, 8, stick, stick, true, v0)
+	dx ~= 1.0
+	dy ~= 0.0
+	if HOLE.rx.len >= 2:
+		ex := HOLE.rx[1] - HOLE.rx[0]
+		ey := HOLE.ry[1] - HOLE.ry[0]
+		ln := hypot(ex, ey)
+		if ln > 0.000000001:
+			dx = ex / ln
+			dy = ey / ln
+	tz := floor_z(HOLE.tee_x, HOLE.tee_y)
+	tc := pool_look::rpt(HOLE.tee_x, HOLE.tee_y, tz)
+	pt := golf::piece_at(HOLE, HOLE.tee_x, HOLE.tee_y)
+	pb ~= 0.0
+	pc ~= 0.0
+	if pt >= 0:
+		pb = HOLE.pieces[pt].b
+		pc = HOLE.pieces[pt].c
+	ay := linalg::unit3(c3(-pb, 1.0, pc))
+	dv := c3(dx, 0.0, -dy)
+	ax := linalg::unit3(dv - pool_look::sc3(ay, linalg::dot3(dv, ay)))
+	az := linalg::cross3(ax, ay)
+	ac := lin(ST.accent)
+	lbox(tc + pool_look::sc3(ay, 0.0025), ax, ay, az, 0.17, 0.0025, 0.11, pool_look::sc3(ac, 1.1), ac, ac, v0)
+	mc := linalg::v3(0.13, 0.14, 0.16)
+	lbox(tc + pool_look::sc3(ay, 0.0032), ax, ay, az, 0.15, 0.0032, 0.09, mc, mc, mc, v0)
+	for mv HOLE.movers:
+		if mv.kind == 1:
+			gax := c3(mv.dx, 0.0, -mv.dy)
+			gc := linalg::v3(0.02, 0.02, 0.025)
+			lbox(pool_look::rpt(mv.x, mv.y, floor_z(mv.x, mv.y) + 0.002), gax, up, linalg::cross3(gax, up), mv.amp + mv.len, 0.002, mv.thick * 0.7, gc, gc, gc, v0)
+	seal(v0, i0, mt)
+flag_seg(h0 real, h1 real, len real, c0 float3, c1 float3) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	cquad(c3(0.0, 0.0, 0.0), c3(len, 0.0, 0.0), c3(len, -h1, 0.0), c3(0.0, -h0, 0.0), c3(0.0, 0.0, 1.0), 0.0, 0.0, 1.0, 1.0, c0, c1, c1, c0, v0)
+	seal(v0, i0, M_PAINT)
+flag_items():
+	h0 real[4] := [0.1, 0.09, 0.077, 0.055]
+	h1 real[4] := [0.09, 0.077, 0.055, 0.03]
+	ac := lin(ST.accent)
+	for k 4:
+		f0 := 1.05 - 0.1 * k / 4.0
+		f1 := 1.05 - 0.1 * (k + 1) / 4.0
+		FLAG[k] = put(flag_seg(h0[k], h1[k], 0.055, pool_look::sc3(ac, f0), pool_look::sc3(ac, f1)), c3(0.0, 0.0, 0.0))
+	FLAG_X = HOLE.cup_x
+	FLAG_Y = HOLE.cup_y
+	FLAG_Z = floor_z(HOLE.cup_x, HOLE.cup_y) + 0.72
+box_face(a float3, b float3, c float3, d float3, n float3, v0 int):
+	w := linalg::v3(1.0, 1.0, 1.0)
+	cquad(a, b, c, d, n, 0.0, 0.0, 1.0, 1.0, w, w, w, w, v0);
+prop_items():
+	for pr HOLE.props:
+		if pr.kind != 0: continue
+		pos := pool_look::rpt(pr.x, pr.y, pr.z)
+		q := pool_look::yaw_q(pr.rot)
+		hx := pr.d / 2.0
+		hz := pr.w / 2.0
+		h := pr.h
+		v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+		i0 := gltf::indices.len
+		p000 := c3(-hx, 0.0, -hz)
+		p100 := c3(hx, 0.0, -hz)
+		p110 := c3(hx, h, -hz)
+		p010 := c3(-hx, h, -hz)
+		p001 := c3(-hx, 0.0, hz)
+		p101 := c3(hx, 0.0, hz)
+		p111 := c3(hx, h, hz)
+		p011 := c3(-hx, h, hz)
+		box_face(p100, p101, p111, p110, c3(1.0, 0.0, 0.0), v0)
+		box_face(p000, p001, p011, p010, c3(-1.0, 0.0, 0.0), v0)
+		box_face(p001, p101, p111, p011, c3(0.0, 0.0, 1.0), v0)
+		box_face(p000, p100, p110, p010, c3(0.0, 0.0, -1.0), v0)
+		box_face(p010, p110, p111, p011, c3(0.0, 1.0, 0.0), v0)
+		ga := seal(v0, i0, M_GLASS)
+		if ga >= 0:
+			gi := s3d::add(ga)
+			s3d::place(gi, linalg::compose(pos, q, linalg::v3(1.0, 1.0, 1.0)))
+		f0 := gltf::verts.len / gltf::VERTEX_FLOATS
+		j0 := gltf::indices.len
+		ex := c3(1.0, 0.0, 0.0)
+		ey := c3(0.0, 1.0, 0.0)
+		ez := c3(0.0, 0.0, 1.0)
+		tr := lin(ST.trim)
+		for a 2:
+			for b 2:
+				sa := -1.0 + 2.0 * a
+				sb := -1.0 + 2.0 * b
+				lbox(c3(0.0, h * a, sb * hz), ex, ey, ez, hx, 0.015, 0.015, tr, tr, tr, f0)
+				lbox(c3(sa * hx, h / 2.0, sb * hz), ex, ey, ez, 0.015, h / 2.0, 0.015, tr, tr, tr, f0)
+				lbox(c3(sa * hx, h * b, 0.0), ex, ey, ez, 0.015, 0.015, hz, tr, tr, tr, f0)
+		fa := seal(f0, j0, M_PAINT)
+		if fa >= 0:
+			fi := s3d::add(fa)
+			s3d::place(fi, linalg::compose(pos, q, linalg::v3(1.0, 1.0, 1.0)))
+dress_mesh(kind int, mt gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	s := lin(ST.stone)
+	g := lin(ST.turf)
+	ex := c3(1.0, 0.0, 0.0)
+	ey := c3(0.0, 1.0, 0.0)
+	ez := c3(0.0, 0.0, 1.0)
+	if kind == 0:
+		c0 := pool_look::sc3(s, 0.7)
+		c1 := pool_look::sc3(s, 1.2)
+		blob(0.0, 0.1, 0.0, 0.32, 0.24, 0.28, 3, 5, 8, c0, c1, v0)
+		blob(0.28, 0.07, 0.12, 0.18, 0.13, 0.17, 4, 5, 7, c0, c1, v0)
+	else if kind == 1:
+		c0 := pool_look::sc3(g, 0.5)
+		c1 := pool_look::sc3(g, 1.1)
+		blob(0.0, 0.2, 0.0, 0.3, 0.24, 0.3, 5, 5, 8, c0, c1, v0)
+		blob(0.22, 0.14, 0.1, 0.2, 0.17, 0.2, 7, 5, 8, c0, c1, v0)
+		blob(-0.18, 0.15, -0.12, 0.2, 0.18, 0.2, 8, 5, 8, c0, c1, v0)
+	else if kind == 2:
+		c0 := pool_look::sc3(g, 0.8)
+		c1 := pool_look::sc3(g, 1.1)
+		ca := pool_look::sc3(g, 0.9)
+		frustum(0.0, 0.0, 0.0, 0.09, 0.075, 0.85, 10, c0, c1, true, v0)
+		lbox(c3(0.12, 0.38, 0.0), ex, ey, ez, 0.1, 0.045, 0.045, ca, ca, ca, v0)
+		lbox(c3(-0.11, 0.55, 0.0), ex, ey, ez, 0.09, 0.04, 0.04, ca, ca, ca, v0)
+		frustum(0.21, 0.38, 0.0, 0.055, 0.045, 0.3, 10, c0, c1, true, v0)
+		frustum(-0.19, 0.55, 0.0, 0.05, 0.04, 0.25, 10, c0, c1, true, v0)
+	else if kind == 3:
+		c0 := pool_look::sc3(lin(ST.ice), 0.8)
+		c1 := linalg::v3(1.1, 1.1, 1.15)
+		frustum(0.0, 0.0, 0.0, 0.11, 0.0, 0.8, 7, c0, c1, false, v0)
+		frustum(0.17, 0.0, 0.05, 0.08, 0.0, 0.55, 7, c0, c1, false, v0)
+		frustum(-0.15, 0.0, 0.1, 0.075, 0.0, 0.5, 7, c0, c1, false, v0)
+		frustum(0.05, 0.0, -0.17, 0.07, 0.0, 0.42, 7, c0, c1, false, v0)
+		frustum(-0.08, 0.0, -0.12, 0.07, 0.0, 0.35, 7, c0, c1, false, v0)
+	else if kind == 4:
+		frustum(0.0, 0.0, 0.0, 0.28, 0.07, 1.0, 9, pool_look::sc3(s, 0.5), pool_look::sc3(s, 1.1), true, v0)
+		blob(0.25, 0.08, 0.1, 0.2, 0.15, 0.18, 7, 5, 7, pool_look::sc3(s, 0.7), s, v0)
+	else if kind == 5:
+		frustum(0.0, 0.0, 0.0, 0.075, 0.045, 1.3, 7, c3(0.35, 0.22, 0.12), c3(0.5, 0.33, 0.18), false, v0)
+		for k 7:
+			ph := 2.0 * PI * k / 7
+			axv := linalg::unit3(c3(cos(ph), -0.35, sin(ph)))
+			azv := c3(-sin(ph), 0.0, cos(ph))
+			ayv := linalg::cross3(axv, azv)
+			lbox(c3(0.0, 1.3, 0.0) + pool_look::sc3(axv, 0.3), axv, ayv, azv, 0.32, 0.012, 0.09, pool_look::sc3(g, 1.1), g, pool_look::sc3(g, 0.7), v0)
+	else if kind == 6:
+		cf := pool_look::sc3(lin(ST.ground2), 0.5)
+		frustum(0.0, 0.0, 0.0, 0.12, 0.1, 0.1, 8, cf, cf, true, v0)
+		cs := pool_look::sc3(lin(ST.stone), 2.5)
+		lbox(c3(0.0, 0.7, 0.0), ex, ey, ez, 0.05, 0.55, 0.05, cs, cs, cs, v0)
+	else if kind == 7:
+		cw := c3(0.95, 0.95, 0.95)
+		cst := c3(0.92, 0.92, 0.92)
+		frustum(0.0, 0.0, 0.0, 0.025, 0.025, 0.75, 8, cst, cst, true, v0)
+		ac := lin(ST.accent)
+		cr := lin(ST.rail)
+		frustum(0.0, 0.75, 0.0, 0.27, 0.27, 0.055, 18, cr, cr, true, v0)
+		frustum(0.0, 0.805, 0.0, 0.2, 0.2, 0.07, 18, cw, cw, true, v0)
+		frustum(0.0, 0.875, 0.0, 0.13, 0.13, 0.07, 18, ac, ac, true, v0)
+		frustum(0.0, 0.945, 0.0, 0.07, 0.07, 0.07, 18, cw, cw, true, v0)
+	else if kind == 9:
+		w := c3(1.0, 1.0, 1.0)
+		lbox(c3(0.0, 0.3, 0.0), ex, ey, ez, 0.055, 0.02, 0.055, w, w, w, v0)
+		lbox(c3(0.0, 0.7, 0.0), ex, ey, ez, 0.055, 0.02, 0.055, w, w, w, v0)
+		lbox(c3(0.0, 1.1, 0.0), ex, ey, ez, 0.055, 0.02, 0.055, w, w, w, v0)
+		frustum(0.0, 1.25, 0.0, 0.05, 0.0, 0.1, 7, w, w, false, v0)
+	else if kind == 10:
+		w := c3(1.0, 1.0, 1.0)
+		frustum(0.0, 1.0, 0.0, 0.07, 0.0, 0.14, 9, w, w, false, v0)
+	else:
+		ct := c3(0.35, 0.22, 0.12)
+		frustum(0.0, 0.0, 0.0, 0.05, 0.05, 0.25, 7, ct, ct, true, v0)
+		c0 := pool_look::sc3(g, 0.35)
+		c1 := pool_look::sc3(g, 0.75)
+		frustum(0.0, 0.2, 0.0, 0.37, 0.0, 0.55, 9, c0, c1, true, v0)
+		frustum(0.0, 0.5, 0.0, 0.28, 0.0, 0.5, 9, c0, c1, true, v0)
+		frustum(0.0, 0.75, 0.0, 0.2, 0.0, 0.45, 9, c0, c1, true, v0)
+	seal(v0, i0, mt)
+clearance(x real, y real) real:
+	if golf::piece_at(HOLE, x, y) >= 0: return 0.0
+	best ~= 1000000.0
+	for p HOLE.pieces:
+		for e p.n:
+			f := (e + 1) % p.n
+			qx, qy := golf::near_seg(p.vx[e], p.vy[e], p.vx[f], p.vy[f], x, y)
+			d := hypot(x - qx, y - qy)
+			if d < best: best = d
+	best
+dressing():
+	state ~= 12345 + 31 * HOLE.number
+	ks int[>..] ~= []
+	ms gfx::mat4[>..] ~= []
+	tries ~= 0
+	while tries < 400 && ks.len < ST.dn:
+		tries += 1
+		x := HOLE.minx - 7.0 + pool::rng(state) * (HOLE.maxx - HOLE.minx + 14.0)
+		y := HOLE.miny - 7.0 + pool::rng(state) * (HOLE.maxy - HOLE.miny + 14.0)
+		cl := clearance(x, y)
+		if cl < 1.4 || cl > 8.5: continue
+		r := pool::rng(state)
+		kind ~= ST.d2
+		if r < 0.45:
+			kind = ST.d0
+		else if r < 0.8:
+			kind = ST.d1
+		sc := (0.75 + 0.75 * pool::rng(state)) * clamp(1.0 + 0.5 * (HOLE.tee_z - GZ - 0.5), 1.0, 2.2)
+		q := pool_look::yaw_q(2.0 * PI * pool::rng(state))
+		sf := sc as f32
+		ks.push(kind)
+		ms.push(linalg::compose(pool_look::rpt(x, y, GZ), q, linalg::v3(sf, sf, sf)))
+	for kd 9:
+		sel gfx::mat4[>..] ~= []
+		for ii ks.len:
+			if ks[ii] == kd: sel.push(ms[ii])
+		if sel.len > 0:
+			s3d::add_instances(dress_mesh(kd, M_MATTE), sel)
+			if kd == 6: s3d::add_instances(dress_mesh(9, M_NEON), sel)
+			if kd == 4: s3d::add_instances(dress_mesh(10, M_NEON), sel);
+ground_mesh(m gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	w := linalg::v3(1.0, 1.0, 1.0)
+	cquad(c3(-70.0, 0.0, -70.0), c3(70.0, 0.0, -70.0), c3(70.0, 0.0, 70.0), c3(-70.0, 0.0, 70.0), c3(0.0, 1.0, 0.0), 0.0, 0.0, 35.0, 35.0, w, w, w, w, v0)
+	seal(v0, i0, m)
+lights(st Style):
+	el := st.sun_el
+	az := st.sun_az
+	s3d::sun.to_sun = linalg::unit3(c3(cos(el) * cos(az), sin(el), -cos(el) * sin(az)))
+	s3d::sun.rgb = pool_look::sc3(lin(st.suncolor), st.sun_pow as f32)
+	s3d::sun.shadows = true
+	s3d::sun.shadow_far = 40.0
+	s3d::sun.map_size = 2048
+	s3d::sun.soft = 1.0
+	s3d::sun.angle = 0.3
+	s3d::sun.reach = 1.5
+	s3d::sun.fit = true
+	s3d::sun.contact = 0.03
+	s3d::sky.zenith = lin(st.zenith)
+	s3d::sky.horizon = lin(st.horizon)
+	s3d::sky.ground = lin(st.skyground)
+	s3d::sky.ambient = st.ambient as f32
+	s3d::sky.draw = true
+	s3d::look.exposure = st.exposure as f32
+	s3d::look.bloom = st.bloom as f32
+	s3d::look.bloom_cut = 1.2
+	s3d::look.ssao = true
+	s3d::look.ao_radius = 0.12
+	s3d::look.vignette = st.vignette as f32
+	s3d::look.curve = 1
+	s3d::look.saturation = st.saturation as f32
+	s3d::look.contrast = 1.05
+	s3d::look.warmth = st.warmth as f32
+	cnt ~= 0
+	for p HOLE.pieces:
+		if p.kind == golf::LAVA && cnt < 4:
+			ax ~= 0.0
+			ay ~= 0.0
+			for k p.n:
+				ax += p.vx[k]
+				ay += p.vy[k]
+			ax = ax / p.n
+			ay = ay / p.n
+			z := golf::floor_h(p, ax, ay) + 0.35
+			s3d::add_light(pool_look::rpt(ax, ay, z), pool_look::sc3(lin(st.lava), 2.5), 3.5)
+			cnt += 1
+	if st.gkind == 6:
+		s3d::add_light(pool_look::rpt(HOLE.tee_x, HOLE.tee_y, HOLE.tee_z + 1.2), pool_look::sc3(lin(st.neon), 3.0), 5.0)
+		s3d::add_light(pool_look::rpt(HOLE.cup_x, HOLE.cup_y, HOLE.cup_z + 1.2), pool_look::sc3(lin(st.accent), 3.0), 5.0);
+ball_item() int:
+	item := put(shapes::sphere(golf::BR as f32, 40, 28, M_BALL), c3(0.0, 0.0, 0.0))
+	pool_look::hide(item)
+	item
+heat(t real) float3:
+	u := clamp(t, 0.0, 1.0)
+	if u < 0.5: return linalg::mix3(linalg::v3(0.25, 1.0, 0.35), linalg::v3(1.0, 0.9, 0.2), (u / 0.5) as f32)
+	linalg::mix3(linalg::v3(1.0, 0.9, 0.2), linalg::v3(1.0, 0.25, 0.2), ((u - 0.5) / 0.5) as f32)
+arrow_mat() gltf::Material:
+	am ~= shapes::material(linalg::v3(0.02, 0.02, 0.02), 0.0, 1.0)
+	am.base = linalg::col(0.02, 0.02, 0.02, 1.0)
+	am.emissive = linalg::v3(1.5, 1.5, 1.5)
+	am.no_shadow = true
+	am.double_sided = true
+	am
+dots_items():
+	m ~= shapes::material(linalg::v3(0.02, 0.02, 0.02), 0.0, 0.5)
+	m.base = linalg::col(0.02, 0.02, 0.02, 1.0)
+	m.emissive = linalg::v3(1.0, 1.0, 1.0)
+	asset := shapes::sphere(0.013, 10, 8, m)
+	for k 30:
+		item := put(asset, c3(0.0, 0.0, 0.0))
+		pool_look::hide(item)
+		cp ~= m
+		cp.emissive = pool_look::sc3(heat(k / 29.0), 1.1)
+		cp.no_shadow = true
+		s3d::recolor(item, 0, cp)
+		DOTS[k] = item
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	up := c3(0.0, 1.0, 0.0)
+	w := linalg::v3(1.0, 1.0, 1.0)
+	tip := c3(0.09, 0.0, 0.0)
+	notch := c3(0.01, 0.0, 0.0)
+	ctri(tip, c3(-0.02, 0.0, -0.055), notch, up, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, w, w, w, v0)
+	ctri(tip, notch, c3(-0.02, 0.0, 0.055), up, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, w, w, w, v0)
+	ARROW = put(seal(v0, i0, arrow_mat()), c3(0.0, 0.0, 0.0))
+	pool_look::hide(ARROW);
+putter_asset() int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	ex := c3(1.0, 0.0, 0.0)
+	ey := c3(0.0, 1.0, 0.0)
+	ez := c3(0.0, 0.0, 1.0)
+	lbox(c3(0.0, 0.019, 0.0), ex, ey, ez, 0.017, 0.019, 0.055, linalg::v3(0.78, 0.8, 0.84), linalg::v3(0.35, 0.36, 0.4), linalg::v3(0.1, 0.1, 0.12), v0)
+	fc := lin(ST.accent)
+	lbox(c3(0.0175, 0.019, 0.0), ex, ey, ez, 0.002, 0.012, 0.04, fc, fc, fc, v0)
+	dv := linalg::unit3(c3(-0.17, 0.95, 0.28))
+	hp := c3(-0.005, 0.04, 0.04)
+	ax := linalg::unit3(linalg::cross3(dv, ez))
+	az := linalg::cross3(ax, dv)
+	sc := linalg::v3(0.8, 0.82, 0.86)
+	lbox(hp + pool_look::sc3(dv, 0.425), ax, dv, az, 0.0055, 0.425, 0.0055, sc, sc, sc, v0)
+	gc := linalg::v3(0.1, 0.11, 0.13)
+	lbox(hp + pool_look::sc3(dv, 0.71), ax, dv, az, 0.01, 0.14, 0.01, gc, gc, gc, v0)
+	seal(v0, i0, M_METAL)
+pulse_one(item int, mt gltf::Material, k real):
+	if item < 0: return
+	cp ~= mt
+	cp.emissive = pool_look::sc3(mt.emissive, k as f32)
+	s3d::recolor(item, 0, cp);
+pulse(now real):
+	pulse_one(LAVA_IT, M_LAVA, 0.85 + 0.25 * sin(now * 2.4))
+	pulse_one(BOUNCE_IT, M_BOUNCE, 0.8 + 0.4 * sin(now * 3.0))
+	pulse_one(GLOW_IT, M_GLOW, 0.85 + 0.25 * sin(now * 2.4))
+	pulse_one(NEON_IT, M_NEON, 0.92 + 0.12 * sin(now * 1.7));
+flag_wave(now real):
+	if FLAG[0] < 0: return
+	hp ~= c3(FLAG_X, FLAG_Z - 0.005, -FLAG_Y)
+	for k 4:
+		hd := 0.7 + 0.35 * sin(now * 3.2) - k * 0.9 * (k + 1) / 4.0
+		s3d::place(FLAG[k], linalg::compose(hp, pool_look::yaw_q(hd), linalg::v3(1.0, 1.0, 1.0)))
+		hp = hp + c3(0.055 * cos(hd), 0.0, -0.055 * sin(hd))
+floor_mat(c int) gltf::Material:
+	if c == 0: return M_TURF
+	if c == 1: return M_SAND
+	if c == 2: return M_ICE
+	if c == 3: return M_BOUNCE
+	if c == 4: return M_CONV
+	if c == 5: return M_LAVA
+	if c == 6: return M_WATER
+	M_BED
+build(h golf::Hole&):
+	HOLE = copy(h)
+	ST = biome_style(h.biome)
+	GZ = h.zkill + 1.5
+	s3d::clear_scene()
+	s3d::forget()
+	gltf::reset()
+	s3d::clear_instances()
+	floor_materials(ST)
+	solid_materials(ST)
+	org := c3(0.0, 0.0, 0.0)
+	BOUNCE_IT = -1
+	LAVA_IT = -1
+	NEON_IT = -1
+	GLOW_IT = -1
+	put(ground_mesh(M_GROUND), c3(0.0, GZ - 0.002, 0.0))
+	for c 8:
+		item := put(floor_mesh(c, floor_mat(c)), org)
+		if c == 3: BOUNCE_IT = item
+		if c == 5: LAVA_IT = item
+	put(rail_mesh(M_RAIL), org)
+	NEON_IT = put(rail_glow_mesh(M_NEON), org)
+	put(cliff_mesh(M_STONE), org)
+	put(block_mesh(M_STONE), org)
+	put(post_mesh(M_PAINT), org)
+	GLOW_IT = put(glow_mesh(M_GLOW), org)
+	put(decor_mesh(M_PAINT), org)
+	mover_items()
+	flag_items()
+	prop_items()
+	BALL = ball_item()
+	dots_items()
+	PUTTER = put(putter_asset(), org)
+	pool_look::hide(PUTTER)
+	dressing()
+	lights(ST)
+	BALLQ = linalg::quat_identity()
+	ROLLED = false
+sync(h golf::Hole&, b golf::Ball&, now real):
+	s3d::world_time = now as f32
+	pulse(now)
+	flag_wave(now)
+	if ROLLED:
+		dx := b.x - LASTX
+		dy := b.y - LASTY
+		d := hypot(dx, dy)
+		if d > 0.00001 && d < 0.4:
+			axis := linalg::unit3(linalg::cross3(c3(0.0, 1.0, 0.0), c3(dx, 0.0, -dy)))
+			ang := (d / golf::BR) as f32
+			BALLQ = linalg::qnorm(linalg::qmul(linalg::qaxis(axis, ang), BALLQ))
+	LASTX = b.x
+	LASTY = b.y
+	ROLLED = true
+	s3d::place(BALL, linalg::compose(pool_look::rpt(b.x, b.y, b.z), BALLQ, linalg::v3(1.0, 1.0, 1.0)))
+	pool_look::show(BALL)
+	if b.mode == 1: pool_look::hide(BALL)
+	if MVI.len == h.movers.len:
+		for k h.movers.len:
+			mv := h.movers[k]
+			x0, y0, x1, y1 := golf::mover_arm(mv, b.t, 0)
+			if mv.kind == 0:
+				s3d::place(MVI[k], linalg::compose(pool_look::rpt(mv.x, mv.y, mv.zlo + 0.05), pool_look::yaw_q(atan2(y1 - y0, x1 - x0)), linalg::v3(1.0, 1.0, 1.0)))
+			else:
+				s3d::place(MVI[k], linalg::compose(pool_look::rpt((x0 + x1) / 2.0, (y0 + y1) / 2.0, mv.zlo + 0.05), pool_look::yaw_q(atan2(mv.dy, mv.dx)), linalg::v3(1.0, 1.0, 1.0)))
+seg_cross(px real, py real, qx real, qy real, ax real, ay real, bx real, by real) bool:
+	d1 := (qx - px) * (ay - py) - (qy - py) * (ax - px)
+	d2 := (qx - px) * (by - py) - (qy - py) * (bx - px)
+	d3 := (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+	d4 := (bx - ax) * (qy - ay) - (by - ay) * (qx - ax)
+	d1 * d2 < 0.0 && d3 * d4 < 0.0
+seg_blocked(px real, py real, qx real, qy real, zp real) bool:
+	for w HOLE.walls:
+		if w.zlo < zp + 0.043 && w.zhi > zp + 0.01:
+			if seg_cross(px, py, qx, qy, w.x0, w.y0, w.x1, w.y1): return true
+	false
+aim(b golf::Ball&, ang real, power real, on bool):
+	if !on:
+		for k 30:
+			pool_look::hide(DOTS[k])
+		pool_look::hide(ARROW)
+		return
+	len := max(0.3, golf::roll_len(power))
+	step := max(0.09, len / 29.0)
+	cx := cos(ang)
+	cy := sin(ang)
+	zprev ~= b.z - golf::BR
+	prx ~= b.x
+	pry ~= b.y
+	dead ~= false
+	any ~= false
+	lx ~= 0.0
+	ly ~= 0.0
+	lz ~= 0.0
+	for k 30:
+		if dead:
+			pool_look::hide(DOTS[k])
+			continue
+		s := 0.07 + step * k
+		px := b.x + cx * s
+		py := b.y + cy * s
+		fk := golf::floor_at(HOLE, px, py, zprev + 0.12)
+		if s > len || fk < 0 || seg_blocked(prx, pry, px, py, zprev):
+			dead = true
+			pool_look::hide(DOTS[k])
+			continue
+		z := golf::floor_h(HOLE.pieces[fk], px, py)
+		zprev = z
+		f := (1.2 - 0.4 * k / 29.0) as f32
+		s3d::place(DOTS[k], linalg::compose(pool_look::rpt(px, py, z + 0.007), linalg::quat_identity(), linalg::v3(f, 0.45, f)))
+		pool_look::show(DOTS[k])
+		prx = px
+		pry = py
+		lx = px
+		ly = py
+		lz = z + 0.007
+		any = true
+	if !any:
+		pool_look::hide(ARROW)
+		return
+	s3d::place(ARROW, linalg::compose(pool_look::rpt(lx + cx * 0.075, ly + cy * 0.075, lz), pool_look::yaw_q(ang), linalg::v3(1.0, 1.0, 1.0)))
+	am ~= arrow_mat()
+	am.emissive = pool_look::sc3(heat(power), 1.5)
+	s3d::recolor(ARROW, 0, am)
+	pool_look::show(ARROW)
+putter(b golf::Ball&, ang real, pull real, on bool):
+	if !on:
+		pool_look::hide(PUTTER)
+		return
+	cx := cos(ang)
+	cy := sin(ang)
+	back := golf::BR + 0.004 + pull + 0.017
+	slope ~= 0.0
+	if b.piece >= 0:
+		p := HOLE.pieces[b.piece]
+		slope = p.b * cx + p.c * cy
+	q := linalg::qmul(pool_look::yaw_q(ang), linalg::qaxis(linalg::v3(0.0, 0.0, 1.0), atan(slope) as f32))
+	s3d::place(PUTTER, linalg::compose(pool_look::rpt(b.x - cx * back, b.y - cy * back, b.z - golf::BR), q, linalg::v3(1.0, 1.0, 1.0)))
+	pool_look::show(PUTTER)
+focus_for(h golf::Hole&, aspect real) float3, float3:
+	ux ~= h.cup_x - h.tee_x
+	uy ~= h.cup_y - h.tee_y
+	ln := hypot(ux, uy)
+	if ln < 0.5:
+		ux = 1.0
+		uy = 0.0
+	else:
+		ux = ux / ln
+		uy = uy / ln
+	pitch := 0.85
+	fv := linalg::unit3(c3(ux * cos(pitch), -sin(pitch), -uy * cos(pitch)))
+	up := c3(0.0, 1.0, 0.0)
+	rv := linalg::unit3(linalg::cross3(fv, up))
+	uv := linalg::cross3(rv, fv)
+	zlow ~= 1000000.0
+	ztop ~= -1000000.0
+	for p h.pieces:
+		for k p.n:
+			z := p.a + p.b * p.vx[k] + p.c * p.vy[k]
+			zlow = min(zlow, z)
+			ztop = max(ztop, z)
+	ztop += 0.5
+	cs float3[>..] ~= []
+	for a 2:
+		for b 2:
+			for c 2:
+				x ~= h.minx
+				y ~= h.miny
+				z ~= zlow
+				if a == 1: x = h.maxx
+				if b == 1: y = h.maxy
+				if c == 1: z = ztop
+				cs.push(pool_look::rpt(x, y, z))
+	c0 := pool_look::rpt((h.minx + h.maxx) / 2.0, (h.miny + h.maxy) / 2.0, (zlow + ztop) / 2.0)
+	rlo ~= 1000000.0
+	rhi ~= -1000000.0
+	ulo ~= 1000000.0
+	uhi ~= -1000000.0
+	for q cs:
+		d := q - c0
+		pr real := linalg::dot3(d, rv)
+		pu real := linalg::dot3(d, uv)
+		rlo = min(rlo, pr)
+		rhi = max(rhi, pr)
+		ulo = min(ulo, pu)
+		uhi = max(uhi, pu)
+	c := c0 + pool_look::sc3(rv, ((rlo + rhi) / 2.0) as f32) + pool_look::sc3(uv, ((ulo + uhi) / 2.0) as f32)
+	ty := tan(0.45)
+	tx := ty * aspect
+	dist ~= 0.0
+	for q cs:
+		d := q - c
+		fd real := linalg::dot3(d, fv)
+		a1 real := abs(linalg::dot3(d, rv)) / tx - fd
+		a2 real := abs(linalg::dot3(d, uv)) / ty - fd
+		dist = max(dist, max(a1, a2))
+	dist = max(dist * 1.05, 2.0)
+	return c - pool_look::sc3(fv, dist as f32), c
+focus(h golf::Hole&) float3, float3:
+	e, t := focus_for(h, 0.9)
+	return e, t

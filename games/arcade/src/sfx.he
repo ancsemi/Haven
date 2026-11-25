@@ -1,0 +1,131 @@
+namespace sfx
+use audio
+use math
+CLICK := 0
+THUD := 1
+DROP := 2
+STRIKE := 3
+PUTT := 4
+CUP := 5
+BUMP := 6
+SPLASH := 7
+TAP := 8
+WIN := 9
+LOSE := 10
+WHOOSH := 11
+var ON bool = false
+var MUTED bool = false
+var VOLUME real = 0.8
+var SOUNDS audio::Sound[>..] = []
+var SEED int = 7
+var LAST real[12] = [-100.0; 12]
+var NOW real = 0.0
+noise() real:
+	x uint ~= SEED as! uint
+	x ^= x << 13
+	x ^= x >> 7
+	x ^= x << 17
+	SEED = x as! int
+	((x >> 11) as real) / 4503599627370496.0 - 1.0
+env(t real, attack real, decay real) real:
+	if t < attack: t / attack else: exp(-(t - attack) / decay)
+tone(t real, f real) real: sin(TAU * f * t)
+duration(id int) real:
+	if id == CLICK: return 0.07
+	if id == THUD: return 0.12
+	if id == DROP: return 0.5
+	if id == STRIKE: return 0.07
+	if id == PUTT: return 0.08
+	if id == CUP: return 0.7
+	if id == BUMP: return 0.1
+	if id == SPLASH: return 0.7
+	if id == TAP: return 0.04
+	if id == WIN: return 0.9
+	if id == LOSE: return 0.7
+	0.35
+click(t real, pitch real, amp real) real:
+	if t < 0.0: return 0.0
+	amp * ((0.55 * tone(t, 3150.0 * pitch) + 0.3 * tone(t, 4730.0 * pitch) + 0.12 * tone(t, 7080.0 * pitch)) * env(t, 0.0004, 0.017) + 0.35 * noise() * env(t, 0.0002, 0.0018))
+make(id int) f32[>..]:
+	n := (duration(id) * 48000.0 + 0.5) as int
+	tmp real[>..] ~= []
+	lp real ~= 0.0
+	for i n:
+		t := (i as real) / 48000.0
+		v real ~= 0.0
+		if id == CLICK:
+			v = click(t, 1.0, 1.0)
+		if id == THUD:
+			v = 0.8 * tone(t, 105.0 * (1.0 - 0.35 * t)) * env(t, 0.002, 0.035) + 0.25 * noise() * env(t, 0.0005, 0.007)
+		if id == DROP:
+			v = click(t, 0.57, 0.7) + click(t - 0.05, 0.57, 0.5) + click(t - 0.09, 0.57, 0.35)
+			if t >= 0.13:
+				u := t - 0.13
+				lp += 0.08 * (0.12 * noise() * env(u, 0.05, 0.12) - lp)
+				v += 0.7 * tone(u, 92.0) * env(u, 0.003, 0.08) + lp
+		if id == STRIKE:
+			v = (0.5 * tone(t, 1850.0) + 0.3 * tone(t, 2720.0)) * env(t, 0.0003, 0.011) + 0.45 * noise() * env(t, 0.0002, 0.0025)
+		if id == PUTT:
+			v = (0.5 * tone(t, 1250.0) + 0.25 * tone(t, 2480.0)) * env(t, 0.0005, 0.02) + 0.3 * noise() * env(t, 0.0003, 0.003)
+		if id == CUP:
+			v = click(t, 0.85, 0.7) + click(t - 0.07, 0.85, 0.5) + click(t - 0.1, 0.85, 0.35)
+			if t >= 0.12:
+				u := t - 0.12
+				v += 0.7 * tone(u, 225.0) * env(u, 0.004, 0.14)
+		if id == BUMP:
+			v = 0.7 * tone(t, 380.0) * env(t, 0.001, 0.025) + 0.2 * noise() * env(t, 0.0003, 0.004)
+		if id == SPLASH:
+			lp += 0.25 * (noise() - lp)
+			v = lp * env(t, 0.02, 0.18) * 0.8 + 0.15 * tone(t, 700.0 + 900.0 * t) * env(t, 0.1, 0.1)
+		if id == TAP:
+			v = 0.4 * tone(t, 1900.0) * env(t, 0.001, 0.009)
+		if id == WIN:
+			freqs := [523.25, 659.25, 783.99, 1046.5]
+			for k 4:
+				s := (k as real) * 0.11
+				if t >= s:
+					u := t - s
+					f := freqs[k]
+					v += 0.35 * (tone(u, f) + 0.25 * tone(u, 2.0 * f)) * env(u, 0.007, 0.18)
+		if id == LOSE:
+			lf := [392.0, 311.13]
+			for k 2:
+				s := (k as real) * 0.22
+				if t >= s:
+					u := t - s
+					v += 0.35 * tone(u, lf[k]) * env(u, 0.01, 0.2)
+		if id == WHOOSH:
+			lp += 0.05 * (noise() - lp)
+			s := sin(PI * t / 0.35)
+			v = (lp + 0.2 * s) * s * 0.7
+		tmp.push(v)
+	peak real ~= 0.0
+	for v tmp: peak = max(peak, abs(v))
+	k real ~= 1.0
+	if peak > 0.85: k = 0.85 / peak
+	out f32[>..] ~= []
+	for v tmp: out.push((v * k) as f32)
+	out
+var INITED bool = false
+init():
+	if INITED: return
+	INITED = true
+	ON = audio::open(48000)
+	if !ON:
+		print("sfx: no audio")
+		return
+	for id 12:
+		samples := make(id)
+		SOUNDS.push(audio::create_sound(samples, 48000, 1))
+	;
+tick(now real): NOW = now;
+play(id int, vol real, pan real, pitch real):
+	if !ON || MUTED || vol <= 0.01: return
+	if id < 0 || id >= SOUNDS.len: return
+	if NOW - LAST[id] < 0.03: return
+	LAST[id] = NOW
+	v := clamp(vol * VOLUME, 0.0, 1.0)
+	audio::play_raw(SOUNDS[id], v as f32, clamp(pan, -1.0, 1.0) as f32, clamp(pitch, 0.5, 2.0) as f32, false);
+hit(id int, speed real, full real, x real):
+	k := clamp(speed / full, 0.0, 1.0)
+	play(id, k * k, clamp(x, -1.0, 1.0), 0.94 + 0.12 * (noise() + 1.0) / 2.0);

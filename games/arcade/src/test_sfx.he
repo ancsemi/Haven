@@ -1,0 +1,24 @@
+use sfx
+use os
+main():
+	good ~= true
+	for id 12:
+		s := sfx::make(id)
+		n := s.len
+		p real ~= 0.0
+		bad ~= 0
+		for x s:
+			v := x as real
+			if v != v || abs(v) > 10.0:
+				bad += 1
+			if abs(v) > p:
+				p = abs(v)
+		out byte[>..] ~= []
+		format_flt(out, p, 3)
+		print("sound ", id, " samples ", n, " peak ", out, " bad ", bad)
+		if !(n > 0 && p > 0.05 && p <= 0.851 && bad == 0):
+			good = false
+	if good:
+		print("ok")
+	else:
+		print("FAIL");

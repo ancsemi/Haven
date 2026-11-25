@@ -1,0 +1,862 @@
+namespace pool_look
+use math
+use vec
+use pool
+use gfx.gltf
+use gfx.shapes
+use gfx.scene3d
+use gfx.linalg
+use gfx
+var BALLS int[16] = [-1; 16]
+var CUE int = -1
+var GUIDE int[4] = [-1; 4]
+var GHOST int = -1
+var HAND int = -1
+var BAD int = -1
+var CLOTH int = -1
+var LAMP int[4] = [-1; 4]
+var BUILT = false
+srgb_to_linear(c float3) float3: linalg::v3(pow(c.x as real, 2.2) as f32, pow(c.y as real, 2.2) as f32, pow(c.z as real, 2.2) as f32)
+cloth_rgb(k int) float3:
+	r ~= 28.0
+	g ~= 112.0
+	b ~= 72.0
+	if k == 1:
+		r = 28.0
+		g = 84.0
+		b = 158.0
+	else if k == 2:
+		r = 122.0
+		g = 28.0
+		b = 40.0
+	else if k == 3:
+		r = 58.0
+		g = 62.0
+		b = 68.0
+	else if k == 4:
+		r = 84.0
+		g = 44.0
+		b = 128.0
+	srgb_to_linear(linalg::v3((r / 255.0) as f32, (g / 255.0) as f32, (b / 255.0) as f32))
+cloth_name(k int) const byte[:]:
+	match k:
+		0 => "Green"
+		1 => "Blue"
+		2 => "Wine"
+		3 => "Charcoal"
+		_ => "Purple"
+ball_srgb(n int) int, int, int:
+	if n == 0: return 246, 242, 230
+	m := if n > 8 { n - 8 } else { n }
+	if m == 1: return 250, 196, 18
+	if m == 2: return 22, 62, 186
+	if m == 3: return 212, 30, 34
+	if m == 4: return 92, 34, 142
+	if m == 5: return 248, 112, 22
+	if m == 6: return 18, 122, 64
+	if m == 8: return 16, 16, 18
+	return 124, 26, 32
+hash2(i int, j int, seed int) real:
+	h uint ~= (i as! uint) * 374761393 + (j as! uint) * 668265263 + (seed as! uint) * 1274126177
+	h = (h ^ (h >> 13)) * 1274126177
+	h = h ^ (h >> 16)
+	h = (h ^ (h >> 11)) * 2246822519
+	h = h ^ (h >> 15)
+	((h & 16777215) as real) / 16777216.0
+sstep(a real, b real, x real) real:
+	t := clamp((x - a) / (b - a), 0.0, 1.0)
+	t * t * (3.0 - 2.0 * t)
+vnoise(x real, y real, period int, seed int) real:
+	fx0 := floor(x)
+	fy0 := floor(y)
+	ix := fx0 as int
+	iy := fy0 as int
+	tx := sstep(0.0, 1.0, x - fx0)
+	ty := sstep(0.0, 1.0, y - fy0)
+	x0 := ix % period
+	x1 := (ix + 1) % period
+	y0 := iy % period
+	y1 := (iy + 1) % period
+	a := hash2(x0, y0, seed)
+	b := hash2(x1, y0, seed)
+	c := hash2(x0, y1, seed)
+	d := hash2(x1, y1, seed)
+	top := a + (b - a) * tx
+	bot := c + (d - c) * tx
+	top + (bot - top) * ty
+strokes() Stroke[>..]:
+	r Stroke[>..] ~= []
+	r.push(Stroke{0, "A", 0.3, 0.5, 0.25, 0.43, 0, 360})
+	r.push(Stroke{1, "L", 0.34, 0.07, 0.34, 0.93, 0, 0})
+	r.push(Stroke{1, "L", 0.34, 0.93, 0.15, 0.78, 0, 0})
+	r.push(Stroke{1, "L", 0.14, 0.07, 0.52, 0.07, 0, 0})
+	r.push(Stroke{2, "A", 0.3, 0.7, 0.24, 0.23, 165, -35})
+	r.push(Stroke{2, "L", 0.497, 0.568, 0.06, 0.07, 0, 0})
+	r.push(Stroke{2, "L", 0.06, 0.07, 0.56, 0.07, 0, 0})
+	r.push(Stroke{3, "A", 0.3, 0.73, 0.22, 0.2, 155, -90})
+	r.push(Stroke{3, "A", 0.3, 0.3, 0.25, 0.23, 90, -155})
+	r.push(Stroke{4, "L", 0.42, 0.07, 0.42, 0.93, 0, 0})
+	r.push(Stroke{4, "L", 0.42, 0.93, 0.05, 0.33, 0, 0})
+	r.push(Stroke{4, "L", 0.05, 0.33, 0.57, 0.33, 0, 0})
+	r.push(Stroke{5, "L", 0.53, 0.93, 0.11, 0.93, 0, 0})
+	r.push(Stroke{5, "L", 0.11, 0.93, 0.08, 0.53, 0, 0})
+	r.push(Stroke{5, "A", 0.3, 0.32, 0.25, 0.26, 140, -145})
+	r.push(Stroke{6, "A", 0.3, 0.3, 0.25, 0.24, 0, 360})
+	r.push(Stroke{6, "A", 0.56, 0.3, 0.51, 0.62, 180, 102})
+	r.push(Stroke{7, "L", 0.05, 0.93, 0.56, 0.93, 0, 0})
+	r.push(Stroke{7, "L", 0.56, 0.93, 0.22, 0.07, 0, 0})
+	r.push(Stroke{8, "A", 0.3, 0.74, 0.2, 0.19, 0, 360})
+	r.push(Stroke{8, "A", 0.3, 0.28, 0.25, 0.23, 0, 360})
+	r.push(Stroke{9, "A", 0.3, 0.7, 0.25, 0.24, 0, 360})
+	r.push(Stroke{9, "A", 0.04, 0.7, 0.51, 0.62, 0, -78})
+	r
+struct Stroke { digit int, kind byte[..2], a real, b real, c real, d real, e real, f real }
+digit_segments(d int, ox real, out float4[>..]&):
+	ss := strokes()
+	for s ss:
+		if s.digit != d: continue
+		if s.kind == "L":
+			out.push(linalg::col(linalg::f(s.a + ox), linalg::f(s.b), linalg::f(s.c + ox), linalg::f(s.d)))
+		else:
+			px ~= 0.0
+			py ~= 0.0
+			for k 17:
+				t := (s.e + (s.f - s.e) * k / 16) * PI / 180.0
+				x := s.a + s.c * cos(t) + ox
+				y := s.b + s.d * sin(t)
+				if k > 0: out.push(linalg::col(linalg::f(px), linalg::f(py), linalg::f(x), linalg::f(y)))
+				px = x
+				py = y
+number_segments(n int, out float4[>..]&):
+	out.clear()
+	if n < 10:
+		digit_segments(n, -0.3, out)
+	else:
+		digit_segments(n / 10, -0.67, out)
+		digit_segments(n % 10, 0.07, out)
+seg_dist(px real, py real, s float4) real:
+	ax := s.x as real
+	ay := s.y as real
+	dx := (s.z as real) - ax
+	dy := (s.w as real) - ay
+	l2 := dx * dx + dy * dy
+	t ~= 0.0
+	if l2 > 0.0: t = clamp(((px - ax) * dx + (py - ay) * dy) / l2, 0.0, 1.0)
+	cx := ax + dx * t
+	cy := ay + dy * t
+	sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy))
+ball_color(n int, x real, y real, z real, segs float4[:]) int, int, int:
+	if n == 0:
+		k := 0.5773502691896258
+		if (abs(x) + abs(y) + abs(z)) * k > cos(0.07): return 196, 30, 36
+		return 246, 242, 230
+	for sg [1.0, -1.0]:
+		dt := sg * x
+		if dt > cos(0.37):
+			gx := (-sg * (z / dt)) / 0.42
+			gy := (y / dt) / 0.42 + 0.5
+			dm ~= 1000.0
+			for s segs:
+				dm = min(dm, seg_dist(gx, gy, s))
+			if dm < 0.075: return 20, 20, 22
+			return 246, 242, 230
+	r0, g0, b0 := ball_srgb(n)
+	if n <= 8 || abs(y) < 0.5: return r0, g0, b0
+	return 246, 242, 230
+ball_texture(n int) int:
+	w := 768
+	h := 384
+	segs float4[>..] ~= []
+	if n > 0: number_segments(n, segs)
+	px byte[>..] ~= []
+	px.resize(w * h * 4, 0)
+	for j h:
+		for i w:
+			rs ~= 0
+			gs ~= 0
+			bs ~= 0
+			for q 4:
+				ox := if q % 2 == 0 { -0.25 } else { 0.25 }
+				oy := if q / 2 == 0 { -0.25 } else { 0.25 }
+				u := (i + 0.5 + ox) / w
+				v := (j + 0.5 + oy) / h
+				phi := u * 2.0 * PI
+				th := v * PI
+				st := sin(th)
+				r, g, b := ball_color(n, st * cos(phi), cos(th), -st * sin(phi), segs)
+				rs += r
+				gs += g
+				bs += b
+			o := (j * w + i) * 4
+			px[o] = (rs / 4) as! byte
+			px[o + 1] = (gs / 4) as! byte
+			px[o + 2] = (bs / 4) as! byte
+			px[o + 3] = 255
+	gltf::add_texture_rgba(px, w, h, 33071)
+cloth_texture() int:
+	px byte[>..] ~= []
+	px.resize(256 * 256 * 4, 0)
+	for j 256:
+		for i 256:
+			v := 0.9 + 0.07 * (vnoise(i / 4.0, j / 4.0, 64, 1) - 0.5) + 0.05 * (vnoise(i / 2.0, j / 2.0, 128, 2) - 0.5) + 0.025 * (hash2(i, j, 7) - 0.5)
+			c := clamp(v * 255.0, 0.0, 255.0) as! byte
+			o := (j * 256 + i) * 4
+			px[o] = c
+			px[o + 1] = c
+			px[o + 2] = c
+			px[o + 3] = 255
+	gltf::add_texture_rgba(px, 256, 256, 10497)
+wood_texture() int:
+	px byte[>..] ~= []
+	px.resize(512 * 128 * 4, 0)
+	for j 128:
+		for i 512:
+			wv := vnoise(i / 32.0, j / 8.0, 16, 21)
+			t := j / 128.0 * 7.0 + 1.7 * wv + 0.35 * vnoise(i / 8.0, j / 8.0, 64, 22)
+			r := t - floor(t)
+			k := 0.55 + 0.45 * sstep(0.15, 0.55, r) * (1.0 - sstep(0.7, 0.95, r))
+			f := 0.92 + 0.17 * hash2(i, j, 3)
+			o := (j * 512 + i) * 4
+			px[o] = clamp((112.0 + (58.0 - 112.0) * k) * f, 0.0, 255.0) as! byte
+			px[o + 1] = clamp((66.0 + (31.0 - 66.0) * k) * f, 0.0, 255.0) as! byte
+			px[o + 2] = clamp((38.0 + (18.0 - 38.0) * k) * f, 0.0, 255.0) as! byte
+			px[o + 3] = 255
+	gltf::add_texture_rgba(px, 512, 128, 10497)
+p3(x real, y real, z real) float3: linalg::v3(x as f32, y as f32, z as f32)
+rpt(x real, y real, h real) float3: linalg::v3(x as f32, h as f32, (-y) as f32)
+sc3(a float3, s f32) float3: a * linalg::v3(s, s, s)
+tan_of(n float3) float4:
+	if abs(n.x) > 0.9: return linalg::col(0.0, 0.0, 1.0, 1.0)
+	linalg::col(1.0, 0.0, 0.0, 1.0)
+push_quad(a float3, b float3, c float3, d float3, n float3, ua f32, va f32, ub f32, vb f32, uc f32, vc f32, ud f32, vd f32, vfirst int):
+	base := gltf::verts.len / gltf::VERTEX_FLOATS - vfirst
+	t := tan_of(n)
+	shapes::vertex(a, n, ua, va, t)
+	shapes::vertex(b, n, ub, vb, t)
+	shapes::vertex(c, n, uc, vc, t)
+	shapes::vertex(d, n, ud, vd, t)
+	for k [0, 1, 2, 0, 2, 3]:
+		gltf::indices.push((base + k) as u32)
+push_tri(a float3, b float3, c float3, n float3, vfirst int):
+	base := gltf::verts.len / gltf::VERTEX_FLOATS - vfirst
+	t := tan_of(n)
+	g := linalg::cross3(b - a, c - a)
+	shapes::vertex(a, n, 0.0, 0.0, t)
+	if linalg::dot3(g, n) < 0.0:
+		shapes::vertex(c, n, 0.0, 1.0, t)
+		shapes::vertex(b, n, 1.0, 0.0, t)
+	else:
+		shapes::vertex(b, n, 1.0, 0.0, t)
+		shapes::vertex(c, n, 0.0, 1.0, t)
+	for k [0, 1, 2]:
+		gltf::indices.push((base + k) as u32)
+quad_oriented(a float3, b float3, c float3, d float3, n float3, ua f32, va f32, ub f32, vb f32, uc f32, vc f32, ud f32, vd f32, vfirst int):
+	g := linalg::cross3(b - a, d - a)
+	if linalg::dot3(g, n) < 0.0:
+		push_quad(a, d, c, b, n, ua, va, ud, vd, uc, vc, ub, vb, vfirst)
+	else:
+		push_quad(a, b, c, d, n, ua, va, ub, vb, uc, vc, ud, vd, vfirst)
+quad_uv(a float3, b float3, c float3, d float3, n float3, vfirst int):
+	quad_oriented(a, b, c, d, n, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, vfirst)
+bed_hole(gx real[:], gy real[:], a int, b int, c int) bool:
+	cx := (gx[a] + gx[b] + gx[c]) / 3.0
+	cy := (gy[a] + gy[b] + gy[c]) / 3.0
+	for pk pool::POCKETS:
+		if (cx - pk.x) * (cx - pk.x) + (cy - pk.y) * (cy - pk.y) < pk.r * pk.r: return true
+	return false
+bed(m gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	x0 := -(pool::HL + 0.1)
+	y0 := -(pool::HW + 0.1)
+	nx := 244
+	ny := 132
+	sx := 2.0 * (pool::HL + 0.1) / nx
+	sy := 2.0 * (pool::HW + 0.1) / ny
+	gx real[>..] ~= []
+	gy real[>..] ~= []
+	for j ny + 1:
+		for i nx + 1:
+			ox := x0 + sx * i
+			oy := y0 + sy * j
+			x ~= ox
+			y ~= oy
+			for pk pool::POCKETS:
+				d := sqrt((ox - pk.x) * (ox - pk.x) + (oy - pk.y) * (oy - pk.y))
+				if d > 0.0 && abs(d - pk.r) < 0.007:
+					x = pk.x + (ox - pk.x) / d * pk.r
+					y = pk.y + (oy - pk.y) / d * pk.r
+					break
+			gx.push(x)
+			gy.push(y)
+	up := p3(0.0, 1.0, 0.0)
+	tan := linalg::col(1.0, 0.0, 0.0, 1.0)
+	for k gx.len:
+		shapes::vertex(rpt(gx[k], gy[k], 0.0), up, linalg::f(gx[k] * 7.0), linalg::f(gy[k] * 7.0), tan)
+	w := nx + 1
+	for j ny:
+		for i nx:
+			a := j * w + i
+			b := a + 1
+			c := a + 1 + w
+			d := a + w
+			if !bed_hole(gx, gy, a, b, c):
+				gltf::indices.push(a as u32)
+				gltf::indices.push(b as u32)
+				gltf::indices.push(c as u32)
+			if !bed_hole(gx, gy, a, c, d):
+				gltf::indices.push(a as u32)
+				gltf::indices.push(c as u32)
+				gltf::indices.push(d as u32)
+	shapes::finish(v0, i0, p3(-(pool::HL + 0.1), -0.001, -(pool::HW + 0.1)), p3(pool::HL + 0.1, 0.001, pool::HW + 0.1), m)
+seg_out(s pool::Seg) real, real:
+	dx := s.x1 - s.x0
+	dy := s.y1 - s.y0
+	l := sqrt(dx * dx + dy * dy)
+	nx ~= -dy / l
+	ny ~= dx / l
+	mx := (s.x0 + s.x1) / 2.0
+	my := (s.y0 + s.y1) / 2.0
+	cx ~= 0.0
+	cy ~= 0.0
+	if s.e == pool::E_JAW:
+		best ~= 1000000000.0
+		for pk pool::POCKETS:
+			d := (pk.x - mx) * (pk.x - mx) + (pk.y - my) * (pk.y - my)
+			if d < best:
+				best = d
+				cx = pk.x
+				cy = pk.y
+	if (mx - cx) * nx + (my - cy) * ny < 0.0:
+		nx = -nx
+		ny = -ny
+	return nx, ny
+cushions(m gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	offs := [0.007, 0.0, 0.05]
+	hs := [0.0, 0.0363, 0.0405]
+	for s pool::SEGS:
+		dx0 := s.x1 - s.x0
+		dy0 := s.y1 - s.y0
+		l := sqrt(dx0 * dx0 + dy0 * dy0)
+		dx := dx0 / l
+		dy := dy0 / l
+		ox, oy := seg_out(s)
+		dn := p3(dx, 0.0, -dy)
+		for k 2:
+			a := rpt(s.x0 + ox * offs[k], s.y0 + oy * offs[k], hs[k])
+			b := rpt(s.x1 + ox * offs[k], s.y1 + oy * offs[k], hs[k])
+			c := rpt(s.x1 + ox * offs[k + 1], s.y1 + oy * offs[k + 1], hs[k + 1])
+			d := rpt(s.x0 + ox * offs[k + 1], s.y0 + oy * offs[k + 1], hs[k + 1])
+			want := if k == 0 { p3(-ox, 0.0, oy) } else { p3(0.0, 1.0, 0.0) }
+			g := linalg::unit3(linalg::cross3(b - a, d - a))
+			n := if linalg::dot3(g, want) < 0.0 { sc3(g, -1.0) } else { g }
+			quad_uv(a, b, c, d, n, v0)
+		a0 := rpt(s.x0 + ox * offs[0], s.y0 + oy * offs[0], hs[0])
+		a1 := rpt(s.x0 + ox * offs[1], s.y0 + oy * offs[1], hs[1])
+		a2 := rpt(s.x0 + ox * offs[2], s.y0 + oy * offs[2], hs[2])
+		b0 := rpt(s.x1 + ox * offs[0], s.y1 + oy * offs[0], hs[0])
+		b1 := rpt(s.x1 + ox * offs[1], s.y1 + oy * offs[1], hs[1])
+		b2 := rpt(s.x1 + ox * offs[2], s.y1 + oy * offs[2], hs[2])
+		push_tri(a0, a1, a2, sc3(dn, -1.0), v0)
+		push_tri(b0, b1, b2, dn, v0)
+	shapes::finish(v0, i0, p3(-(pool::HL + 0.1), -0.001, -(pool::HW + 0.1)), p3(pool::HL + 0.1, 0.05, pool::HW + 0.1), m)
+struct RP { o real, h real }
+rail_profile() RP[>..]:
+	r RP[>..] ~= []
+	r.push(RP{0.045, 0.0405})
+	r.push(RP{0.05, 0.0445})
+	for k 25:
+		r.push(RP{0.054 + 0.004 * k, 0.0445})
+	r.push(RP{0.156, 0.0435})
+	r.push(RP{0.161, 0.0405})
+	r.push(RP{0.165, 0.035})
+	r.push(RP{0.168, 0.027})
+	r.push(RP{0.17, 0.016})
+	r.push(RP{0.17, 0.0})
+	r.push(RP{0.17, -0.17})
+	r
+rail_cut(line real, mid real, pk int, o real, horiz bool) real, bool:
+	p := pool::POCKETS[pk]
+	side := abs(p.x) < 0.1
+	rc := if side { 0.066 } else { 0.083 }
+	sg := if line < 0.0 { -1.0 } else { 1.0 }
+	lc := line + sg * o
+	pc := if horiz { p.y } else { p.x }
+	ac := if horiz { p.x } else { p.y }
+	dp := lc - pc
+	if abs(dp) < rc:
+		h := sqrt(rc * rc - dp * dp)
+		c1 := ac - h
+		c2 := ac + h
+		if abs(c1 - mid) < abs(c2 - mid): return c1, true
+		return c2, true
+	if side: return 0.0, false
+	cs := if horiz { p.x } else { p.y }
+	hl := if horiz { pool::HL } else { pool::HW }
+	w := if cs < 0.0 { -1.0 } else { 1.0 }
+	return w * (hl + o), false
+rail_ends(line real, along_a real, along_b real, pa int, pb int, o real) real, real, bool, bool:
+	horiz := abs(abs(line) - pool::HW) < 0.000001
+	mid := (along_a + along_b) / 2.0
+	a, ca := rail_cut(line, mid, pa, o, horiz)
+	b, cb := rail_cut(line, mid, pb, o, horiz)
+	return a, b, ca, cb
+struct Piece { line real, horiz bool, a real, b real, pa int, pb int }
+pocket_at(x real, y real) int:
+	best ~= 0
+	bd ~= 1000000000.0
+	for i pool::POCKETS.len:
+		p := pool::POCKETS[i]
+		d := (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y)
+		if d < bd:
+			bd = d
+			best = i
+	best
+rail_pieces() Piece[>..]:
+	r Piece[>..] ~= []
+	hl := pool::HL
+	hw := pool::HW
+	for sg [-1.0, 1.0]:
+		ln := sg * hw
+		r.push(Piece{line: ln, horiz: true, a: -hl, b: 0.0, pa: pocket_at(-hl, ln), pb: pocket_at(0.0, ln)})
+		r.push(Piece{line: ln, horiz: true, a: 0.0, b: hl, pa: pocket_at(0.0, ln), pb: pocket_at(hl, ln)})
+	for sg [-1.0, 1.0]:
+		ln := sg * hl
+		r.push(Piece{line: ln, horiz: false, a: -hw, b: hw, pa: pocket_at(ln, -hw), pb: pocket_at(ln, hw)})
+	r
+rail_xy(pc Piece, a real, o real, h real) float3:
+	p := pc.line + (if pc.line < 0.0 { -o } else { o })
+	if pc.horiz { rpt(a, p, h) } else { rpt(p, a, h) }
+leather_quad(pc Piece, pk int, a0 real, a1 real, o0 real, o1 real, h0 real, h1 real, vfirst int):
+	p0 := rail_xy(pc, a0, o0, h0)
+	p1 := rail_xy(pc, a1, o1, h1)
+	p2 := rail_xy(pc, a1, o1, 0.0)
+	p3b := rail_xy(pc, a0, o0, 0.0)
+	pp := pool::POCKETS[pk]
+	mid := sc3(p0 + p1, 0.5)
+	dv := rpt(pp.x, pp.y, 0.0) - mid
+	n := linalg::unit3(linalg::v3(dv.x, 0.0, dv.z))
+	quad_uv(p0, p1, p2, p3b, n, vfirst);
+rails(m_wood gltf::Material, m_leather gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	rp := rail_profile()
+	ps := rail_pieces()
+	up := p3(0.0, 1.0, 0.0)
+	for pc ps:
+		sg := if pc.line < 0.0 { -1.0 } else { 1.0 }
+		ov := if pc.horiz { p3(0.0, 0.0, -sg) } else { p3(sg, 0.0, 0.0) }
+		for k rp.len - 1:
+			o0 := rp[k].o
+			o1 := rp[k + 1].o
+			h0 := rp[k].h
+			h1 := rp[k + 1].h
+			a0, b0, ca0, cb0 := rail_ends(pc.line, pc.a, pc.b, pc.pa, pc.pb, o0)
+			a1, b1, ca1, cb1 := rail_ends(pc.line, pc.a, pc.b, pc.pa, pc.pb, o1)
+			so := o1 - o0
+			sh := h1 - h0
+			nl := sqrt(so * so + sh * sh)
+			if nl < 0.000000001: continue
+			n := sc3(ov, linalg::f(-sh / nl)) + sc3(up, linalg::f(so / nl))
+			qa := rail_xy(pc, a0, o0, h0)
+			qb := rail_xy(pc, b0, o0, h0)
+			qc := rail_xy(pc, b1, o1, h1)
+			qd := rail_xy(pc, a1, o1, h1)
+			quad_oriented(qa, qb, qc, qd, n, linalg::f(a0 / 0.7), linalg::f(o0 / 0.2), linalg::f(b0 / 0.7), linalg::f(o0 / 0.2), linalg::f(b1 / 0.7), linalg::f(o1 / 0.2), linalg::f(a1 / 0.7), linalg::f(o1 / 0.2), v0)
+	w := gltf::indices.len - i0
+	for pc ps:
+		for k rp.len - 1:
+			o0 := rp[k].o
+			o1 := rp[k + 1].o
+			h0 := rp[k].h
+			h1 := rp[k + 1].h
+			if h0 == 0.0 && h1 == 0.0: continue
+			a0, b0, ca0, cb0 := rail_ends(pc.line, pc.a, pc.b, pc.pa, pc.pb, o0)
+			a1, b1, ca1, cb1 := rail_ends(pc.line, pc.a, pc.b, pc.pa, pc.pb, o1)
+			if ca0 && ca1: leather_quad(pc, pc.pa, a0, a1, o0, o1, h0, h1, v0)
+			if cb0 && cb1: leather_quad(pc, pc.pb, b0, b1, o0, o1, h0, h1, v0)
+	l := gltf::indices.len - i0 - w
+	ms := [m_wood, m_leather]
+	counts := [w, l]
+	lo := p3(-(pool::HL + 0.17), -0.17, -(pool::HW + 0.17))
+	hi := p3(pool::HL + 0.17, 0.05, pool::HW + 0.17)
+	shapes::finish_groups(v0, i0, lo, hi, ms, counts)
+pockets(m gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	up := p3(0.0, 1.0, 0.0)
+	for pk pool::POCKETS:
+		for s 32:
+			t0 := 2.0 * PI * s / 32
+			t1 := 2.0 * PI * (s + 1) / 32
+			tm := (t0 + t1) / 2.0
+			a := rpt(pk.x + pk.r * cos(t0), pk.y + pk.r * sin(t0), 0.0)
+			b := rpt(pk.x + pk.r * cos(t1), pk.y + pk.r * sin(t1), 0.0)
+			c := rpt(pk.x + pk.r * cos(t1), pk.y + pk.r * sin(t1), -0.09)
+			d := rpt(pk.x + pk.r * cos(t0), pk.y + pk.r * sin(t0), -0.09)
+			n := p3(-cos(tm), 0.0, sin(tm))
+			quad_oriented(a, b, c, d, n, linalg::f(s / 32.0), 0.0, linalg::f((s + 1) / 32.0), 0.0, linalg::f((s + 1) / 32.0), 1.0, linalg::f(s / 32.0), 1.0, v0)
+			push_tri(rpt(pk.x, pk.y, -0.09), d, c, up, v0)
+	shapes::finish(v0, i0, p3(-(pool::HL + 0.1), -0.09, -(pool::HW + 0.1)), p3(pool::HL + 0.1, 0.0, pool::HW + 0.1), m)
+diamond(cx real, cy real, cz real, ax real, ay real, az real, v0 int):
+	base := gltf::verts.len / gltf::VERTEX_FLOATS - v0
+	for i 9:
+		th := PI * i / 8
+		for j 17:
+			ph := 2.0 * PI * j / 16
+			ux := sin(th) * cos(ph)
+			uy := cos(th)
+			uz := -sin(th) * sin(ph)
+			p := p3(cx + ux * ax, cy + uy * ay, cz + uz * az)
+			n := linalg::unit3(p3(ux / ax, uy / ay, uz / az))
+			t := tan_of(n)
+			shapes::vertex(p, n, linalg::f(j / 16.0), linalg::f(i / 8.0), t)
+	for i 8:
+		for j 16:
+			a := base + i * 17 + j
+			for k [a, a + 17, a + 18, a, a + 18, a + 1]:
+				gltf::indices.push(k as u32)
+diamonds(m gltf::Material) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	hl := pool::HL
+	hw := pool::HW
+	for sg [-1.0, 1.0]:
+		for k [1.0, 2.0, 3.0]:
+			for sx [-1.0, 1.0]:
+				diamond(sx * hl * k / 4.0, 0.0445, -(sg * (hw + 0.1)), 0.0085, 0.0017, 0.0055, v0)
+		for k [-1.0, 0.0, 1.0]:
+			diamond(sg * (hl + 0.1), 0.0445, k * hw / 2.0, 0.0055, 0.0017, 0.0085, v0)
+	shapes::finish(v0, i0, p3(-(hl + 0.11), 0.04, -(hw + 0.11)), p3(hl + 0.11, 0.047, hw + 0.11), m)
+lathe(steps float4[:], sides int, ms gltf::Material[:]) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	counts int[>..] ~= []
+	xmin ~= 1000000000.0
+	xmax ~= -1000000000.0
+	rmax ~= 0.0
+	last := steps.len - 1
+	for si steps.len:
+		st := steps[si]
+		c0 := gltf::indices.len
+		x0 := st.x as real
+		r0 := st.y as real
+		x1 := st.z as real
+		r1 := st.w as real
+		xmin = min(xmin, x0)
+		xmax = max(xmax, x1)
+		rmax = max(rmax, max(r0, r1))
+		for j sides:
+			t0 := 2.0 * PI * j / sides
+			t1 := 2.0 * PI * (j + 1) / sides
+			tm := (t0 + t1) / 2.0
+			a := p3(x0, r0 * cos(t0), r0 * sin(t0))
+			b := p3(x0, r0 * cos(t1), r0 * sin(t1))
+			c := p3(x1, r1 * cos(t1), r1 * sin(t1))
+			d := p3(x1, r1 * cos(t0), r1 * sin(t0))
+			dxs := x1 - x0
+			dr := r1 - r0
+			n := linalg::unit3(p3(-dr, dxs * cos(tm), dxs * sin(tm)))
+			quad_oriented(a, b, c, d, n, linalg::f(t0 / (2.0 * PI)), linalg::f(x0 / 1.47), linalg::f(t1 / (2.0 * PI)), linalg::f(x0 / 1.47), linalg::f(t1 / (2.0 * PI)), linalg::f(x1 / 1.47), linalg::f(t0 / (2.0 * PI)), linalg::f(x1 / 1.47), v0)
+		if si == 0:
+			for j sides:
+				t0 := 2.0 * PI * j / sides
+				t1 := 2.0 * PI * (j + 1) / sides
+				push_tri(p3(x0, 0.0, 0.0), p3(x0, r0 * cos(t0), r0 * sin(t0)), p3(x0, r0 * cos(t1), r0 * sin(t1)), p3(-1.0, 0.0, 0.0), v0)
+		if si == last:
+			for j sides:
+				t0 := 2.0 * PI * j / sides
+				t1 := 2.0 * PI * (j + 1) / sides
+				push_tri(p3(x1, 0.0, 0.0), p3(x1, r1 * cos(t0), r1 * sin(t0)), p3(x1, r1 * cos(t1), r1 * sin(t1)), p3(1.0, 0.0, 0.0), v0)
+		counts.push(gltf::indices.len - c0)
+	shapes::finish_groups(v0, i0, p3(xmin, -rmax, -rmax), p3(xmax, rmax, rmax), ms, counts)
+cue_mat(r f32, g f32, b f32, metal f32, rough f32, coat f32) gltf::Material:
+	m ~= shapes::material(linalg::v3(r, g, b), metal, rough)
+	m.coat = coat
+	m
+cue_stick() int:
+	steps float4[>..] ~= []
+	ms gltf::Material[>..] ~= []
+	steps.push(linalg::col(0.0, 0.0062, 0.012, 0.0064))
+	ms.push(cue_mat(0.05, 0.16, 0.42, 0.0, 0.9, 0.0))
+	steps.push(linalg::col(0.012, 0.0064, 0.03, 0.0065))
+	ms.push(cue_mat(0.85, 0.83, 0.78, 0.0, 0.3, 0.0))
+	steps.push(linalg::col(0.03, 0.0065, 0.74, 0.0098))
+	ms.push(cue_mat(0.62, 0.45, 0.27, 0.0, 0.35, 0.7))
+	steps.push(linalg::col(0.74, 0.0104, 0.762, 0.0106))
+	ms.push(cue_mat(0.8, 0.8, 0.82, 1.0, 0.2, 0.0))
+	steps.push(linalg::col(0.762, 0.0106, 1.06, 0.0124))
+	ms.push(cue_mat(0.06, 0.035, 0.022, 0.0, 0.3, 0.9))
+	steps.push(linalg::col(1.06, 0.0128, 1.31, 0.0132))
+	ms.push(cue_mat(0.02, 0.02, 0.022, 0.0, 0.85, 0.0))
+	steps.push(linalg::col(1.31, 0.0134, 1.45, 0.0145))
+	ms.push(cue_mat(0.06, 0.035, 0.022, 0.0, 0.3, 0.9))
+	steps.push(linalg::col(1.45, 0.0145, 1.47, 0.0122))
+	ms.push(cue_mat(0.015, 0.015, 0.015, 0.0, 0.9, 0.0))
+	lathe(steps, 24, ms)
+ring_asset(rgb float3, radius real, width real) int:
+	v0 := gltf::verts.len / gltf::VERTEX_FLOATS
+	i0 := gltf::indices.len
+	ri := radius - width / 2.0
+	ro := radius + width / 2.0
+	up := p3(0.0, 1.0, 0.0)
+	for s 64:
+		t0 := 2.0 * PI * s / 64
+		t1 := 2.0 * PI * (s + 1) / 64
+		a := p3(ri * cos(t0), 0.0, -ri * sin(t0))
+		b := p3(ro * cos(t0), 0.0, -ro * sin(t0))
+		c := p3(ro * cos(t1), 0.0, -ro * sin(t1))
+		d := p3(ri * cos(t1), 0.0, -ri * sin(t1))
+		quad_uv(a, b, c, d, up, v0)
+	m ~= shapes::material(linalg::v3(0.0, 0.0, 0.0), 0.0, 1.0)
+	m.emissive = rgb
+	m.unlit = true
+	m.no_shadow = true
+	m.double_sided = true
+	shapes::finish(v0, i0, p3(-ro, -0.001, -ro), p3(ro, 0.001, ro), m)
+bar_asset(rgb float3) int:
+	m ~= shapes::material(linalg::v3(0.0, 0.0, 0.0), 0.0, 1.0)
+	m.emissive = rgb
+	m.unlit = true
+	m.no_shadow = true
+	shapes::cube(linalg::v3(0.5, 0.0006, 0.0008), m)
+box_item(half float3, m gltf::Material, x real, y real, z real) int:
+	it := s3d::add(shapes::cube(half, m))
+	s3d::place(it, linalg::compose(p3(x, y, z), linalg::quat_identity(), linalg::v3(1.0, 1.0, 1.0)))
+	it
+room():
+	one := linalg::v3(1.0, 1.0, 1.0)
+	oak := shapes::material(linalg::v3(0.09, 0.055, 0.035), 0.0, 0.55)
+	ebony := shapes::material(linalg::v3(0.06, 0.035, 0.022), 0.0, 0.3)
+	metal := shapes::material(linalg::v3(0.02, 0.07, 0.04), 0.6, 0.35)
+	glow ~= shapes::material(linalg::v3(0.0, 0.0, 0.0), 0.0, 0.5)
+	glow.emissive = linalg::v3(5.5, 5.0, 4.3)
+	fl := s3d::add(shapes::plane(7.0, oak))
+	s3d::place(fl, linalg::compose(p3(0.0, -0.79, 0.0), linalg::quat_identity(), one))
+	box_item(p3(pool::HL + 0.17, 0.05, pool::HW + 0.17), ebony, 0.0, -0.22, 0.0)
+	for sx [-1.0, 1.0]:
+		for sy [-1.0, 1.0]:
+			box_item(p3(0.075, 0.26, 0.075), ebony, sx * (pool::HL - 0.15), -0.53, sy * (pool::HW - 0.07))
+	LAMP[0] = box_item(p3(0.78, 0.07, 0.17), metal, 0.0, 0.97, 0.0)
+	LAMP[1] = box_item(p3(0.74, 0.004, 0.14), glow, 0.0, 0.897, 0.0)
+	LAMP[2] = box_item(p3(0.007, 0.8, 0.007), metal, -0.55, 1.84, 0.0)
+	LAMP[3] = box_item(p3(0.007, 0.8, 0.007), metal, 0.55, 1.84, 0.0);
+lamp_show(on bool):
+	if !BUILT: return
+	for k 4:
+		s3d::items[LAMP[k]].visible = on;
+lights():
+	s3d::sun.to_sun = linalg::unit3(linalg::v3(0.04, 1.0, 0.1))
+	s3d::sun.rgb = linalg::v3(1.4, 1.33, 1.22)
+	s3d::sun.shadows = true
+	s3d::sun.shadow_far = 7.0
+	s3d::sun.map_size = 2048
+	s3d::sun.soft = 1.0
+	s3d::sun.angle = 0.32
+	s3d::sun.reach = 1.5
+	s3d::sun.fit = true
+	s3d::sun.contact = 0.03
+	s3d::add_rect(linalg::v3(0.0, 0.89, 0.0), linalg::v3(0.0, 0.0, 0.0), linalg::v3(1.0, 0.0, 0.0), 1.46, 0.27, linalg::v3(7.0, 6.5, 5.7), 3.5, false)
+	s3d::add_light(linalg::v3(-2.2, 1.4, 1.7), linalg::v3(0.35, 0.33, 0.32), 7.0)
+	s3d::add_light(linalg::v3(2.2, 1.2, -1.7), linalg::v3(0.35, 0.33, 0.32), 7.0)
+	s3d::sky.zenith = linalg::v3(0.012, 0.012, 0.014)
+	s3d::sky.horizon = linalg::v3(0.02, 0.019, 0.018)
+	s3d::sky.ground = linalg::v3(0.01, 0.009, 0.008)
+	s3d::sky.ambient = 0.55
+	s3d::sky.draw = true
+	s3d::look.exposure = 1.0
+	s3d::look.bloom = 0.12
+	s3d::look.bloom_cut = 1.7
+	s3d::look.ssao = true
+	s3d::look.ao_radius = 0.05
+	s3d::look.vignette = 0.35
+	s3d::look.curve = 1
+	s3d::look.saturation = 1.05
+	s3d::look.contrast = 1.05
+	s3d::look.warmth = 0.04;
+build(cloth int):
+	if BUILT && CLOTH == cloth: return
+	s3d::clear_scene()
+	s3d::forget()
+	gltf::reset()
+	pool::table()
+	ct := cloth_texture()
+	wt := wood_texture()
+	bt int[16] ~= [0; 16]
+	for n 16:
+		bt[n] = ball_texture(n)
+	cc := cloth_rgb(cloth)
+	mc ~= shapes::material(cc, 0.0, 0.92)
+	mc.base = linalg::col(cc.x, cc.y, cc.z, 1.0)
+	mc.base_tex = gltf::TexRef{texture: ct, uv: 0}
+	mc.sheen = linalg::v3(cc.x * 0.35 + 0.04, cc.y * 0.35 + 0.04, cc.z * 0.35 + 0.04)
+	mc.sheen_rough = 0.5
+	mw ~= shapes::material(linalg::v3(1.0, 1.0, 1.0), 0.0, 0.38)
+	mw.base = linalg::col(1.0, 1.0, 1.0, 1.0)
+	mw.base_tex = gltf::TexRef{texture: wt, uv: 0}
+	mw.coat = 0.85
+	mw.coat_r = 0.08
+	ml ~= shapes::material(linalg::v3(0.02, 0.02, 0.02), 0.0, 0.72)
+	ml.double_sided = true
+	mp ~= shapes::material(linalg::v3(0.92, 0.9, 0.86), 0.0, 0.25)
+	mp.irid = 0.7
+	s3d::add(bed(mc))
+	s3d::add(cushions(mc))
+	s3d::add(rails(mw, ml))
+	s3d::add(pockets(ml))
+	s3d::add(diamonds(mp))
+	room()
+	lights()
+	for n 16:
+		mb ~= shapes::material(linalg::v3(1.0, 1.0, 1.0), 0.0, 0.14)
+		mb.base = linalg::col(1.0, 1.0, 1.0, 1.0)
+		mb.base_tex = gltf::TexRef{texture: bt[n], uv: 0}
+		mb.coat = 1.0
+		mb.coat_r = 0.025
+		BALLS[n] = s3d::add(shapes::sphere(pool::R as f32, 48, 32, mb))
+	CUE = s3d::add(cue_stick())
+	GHOST = s3d::add(ring_asset(linalg::v3(1.2, 1.2, 1.2), pool::R, 0.0017))
+	HAND = s3d::add(ring_asset(linalg::v3(0.3, 2.2, 0.6), pool::R + 0.007, 0.0025))
+	BAD = s3d::add(ring_asset(linalg::v3(2.4, 0.25, 0.2), pool::R + 0.007, 0.0025))
+	GUIDE[0] = s3d::add(bar_asset(linalg::v3(1.1, 1.1, 1.1)))
+	GUIDE[1] = s3d::add(bar_asset(linalg::v3(1.6, 1.3, 0.3)))
+	GUIDE[2] = s3d::add(bar_asset(linalg::v3(0.5, 0.9, 1.6)))
+	GUIDE[3] = s3d::add(bar_asset(linalg::v3(1.1, 1.1, 1.1)))
+	s3d::items[CUE].visible = false
+	s3d::items[GHOST].visible = false
+	s3d::items[HAND].visible = false
+	s3d::items[BAD].visible = false
+	for k 4:
+		s3d::items[GUIDE[k]].visible = false
+	CLOTH = cloth
+	BUILT = true
+hide(item int):
+	s3d::items[item].visible = false
+show(item int):
+	s3d::items[item].visible = true
+yaw_q(a real) linalg::Quat: linalg::qaxis(linalg::v3(0.0, 1.0, 0.0), a as f32)
+sync(g pool::Game&, now real):
+	one := linalg::v3(1.0, 1.0, 1.0)
+	for i g.balls.len:
+		b := g.balls[i]
+		item := BALLS[b.num]
+		q := linalg::Quat{b.q.x, b.q.y, b.q.z, b.q.w}
+		if b.on:
+			s3d::place(item, linalg::compose(rpt(b.x, b.y, pool::R), q, one))
+			show(item)
+		else if b.fall < 0.45:
+			pk := pool::POCKETS[b.pocket]
+			s := sstep(0.0, 0.18, b.fall)
+			x := b.x + (pk.x - b.x) * s
+			y := b.y + (pk.y - b.y) * s
+			f := b.fall / 0.45
+			h := pool::R - 0.13 * f * f
+			s3d::place(item, linalg::compose(rpt(x, y, h), q, one))
+			show(item)
+		else:
+			hide(item)
+trace(g pool::Game&, ax real, ay real, ang real) int, int, real, real, real:
+	dx := cos(ang)
+	dy := sin(ang)
+	bt ~= 3.0
+	bj ~= -1
+	for j 1..g.balls.len:
+		b := g.balls[j]
+		if !b.on: continue
+		rx := b.x - ax
+		ry := b.y - ay
+		pr := rx * dx + ry * dy
+		c2 := rx * rx + ry * ry - 4.0 * pool::R * pool::R
+		disc := pr * pr - c2
+		if disc < 0.0: continue
+		t := pr - sqrt(disc)
+		if t > 0.0 && t < bt:
+			bt = t
+			bj = j
+	s ~= 0.0
+	while s <= bt:
+		px := ax + dx * s
+		py := ay + dy * s
+		for sg pool::SEGS:
+			if seg_dist(px, py, linalg::col(linalg::f(sg.x0), linalg::f(sg.y0), linalg::f(sg.x1), linalg::f(sg.y1))) < pool::R: return 2, -1, s, 0.0, 0.0
+		s += 0.002
+	if bj >= 0:
+		o := g.balls[bj]
+		cx := ax + dx * bt
+		cy := ay + dy * bt
+		vx := o.x - cx
+		vy := o.y - cy
+		l := sqrt(vx * vx + vy * vy)
+		return 1, bj, bt, vx / l, vy / l
+	return 0, -1, 3.0, 0.0, 0.0
+bar(item int, ax real, ay real, bx real, by real, h real):
+	dx := bx - ax
+	dy := by - ay
+	l := sqrt(dx * dx + dy * dy)
+	if l < 0.002:
+		hide(item)
+		return
+	q := yaw_q(atan2(dy, dx))
+	s3d::place(item, linalg::compose(rpt((ax + bx) / 2.0, (ay + by) / 2.0, h), q, linalg::v3(l as f32, 1.0, 1.0)))
+	show(item)
+guide(g pool::Game&, ang real, level int, on bool):
+	if !on:
+		for k 4:
+			hide(GUIDE[k])
+		hide(GHOST)
+		return
+	c := g.balls[0]
+	kind, bi, dist, ox, oy := trace(g, c.x, c.y, ang)
+	dx := cos(ang)
+	dy := sin(ang)
+	ex := c.x + dx * dist
+	ey := c.y + dy * dist
+	bar(GUIDE[0], c.x, c.y, ex, ey, 0.0009)
+	if kind == 0:
+		hide(GHOST)
+		for k 1..4:
+			hide(GUIDE[k])
+		return
+	s3d::place(GHOST, linalg::compose(rpt(ex, ey, 0.0012), linalg::quat_identity(), linalg::v3(1.0, 1.0, 1.0)))
+	show(GHOST)
+	if kind == 1:
+		cut := dx * ox + dy * oy
+		len0 := if level == 0 { 0.22 } else if level == 1 { 0.14 } else { 0.07 }
+		ln := len0 * cut
+		o := g.balls[bi]
+		bar(GUIDE[1], o.x, o.y, o.x + ox * ln, o.y + oy * ln, 0.0009)
+		tx := dx - cut * ox
+		ty := dy - cut * oy
+		tl := sqrt(tx * tx + ty * ty)
+		if tl < 0.02:
+			hide(GUIDE[2])
+		else:
+			cl := 0.1 * (1.0 - cut) + 0.02
+			bar(GUIDE[2], ex, ey, ex + tx / tl * cl, ey + ty / tl * cl, 0.0009)
+		hide(GUIDE[3])
+	else:
+		for k 1..4:
+			hide(GUIDE[k])
+hand(g pool::Game&, x real, y real, on bool):
+	hide(HAND)
+	hide(BAD)
+	if !on: return
+	item := if pool::can_place(g, x, y) { HAND } else { BAD }
+	s3d::place(item, linalg::compose(rpt(x, y, 0.0012), linalg::quat_identity(), linalg::v3(1.0, 1.0, 1.0)))
+	show(item)
+cue(g pool::Game&, ang real, pull real, sx real, sy real, on bool):
+	if !on:
+		hide(CUE)
+		return
+	c := g.balls[0]
+	d := linalg::v3(cos(ang) as f32, 0.0, (-sin(ang)) as f32)
+	up := linalg::v3(0.0, 1.0, 0.0)
+	right := linalg::cross3(d, up)
+	k := sqrt(max(0.05, 1.0 - sx * sx - sy * sy))
+	contact := rpt(c.x, c.y, pool::R) + sc3(right, linalg::f(sx * pool::R)) + sc3(up, linalg::f(sy * pool::R)) - sc3(d, linalg::f(pool::R * k))
+	tip := contact - sc3(d, linalg::f(pull + 0.004))
+	q := linalg::qmul(linalg::qaxis(up, linalg::f(ang + PI)), linalg::qaxis(linalg::v3(0.0, 0.0, 1.0), 0.07))
+	s3d::place(CUE, linalg::compose(tip, q, linalg::v3(1.0, 1.0, 1.0)))
+	show(CUE)

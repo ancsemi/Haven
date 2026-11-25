@@ -1,0 +1,714 @@
+namespace pool_play
+use math
+use vec
+use gfx
+use gfx.linalg
+use gfx.scene3d
+use kit
+use pool
+use pool_ai
+use pool_look
+use sfx
+AIM := 0
+STRIKE := 1
+ROLL := 2
+THINK := 3
+CPU_AIM := 4
+OVER := 5
+VS_CPU := 0
+TWO := 1
+PRACTICE := 2
+var G = pool::new_game(1)
+var MODE = 0
+var LEVEL = 1
+var CLOTH = 0
+var SEED = 1
+var STATE = 0
+var T_STATE = 0.0
+var ANG = 0.0
+var POWER = 0.0
+var KPOWER = 0.7
+var SPX = 0.0
+var SPY = 0.0
+var PULL = 0.03
+var VIEW = 0
+var DIST = 0.85
+var PITCH = 0.3
+var CE = linalg::v3(0.0, 1.0, 0.0)
+var CT = linalg::v3(0.0, 0.0, 0.0)
+var CU = linalg::v3(0.0, 1.0, 0.0)
+var READY = false
+var DRAG = 0
+var BX = 0.0
+var BY = 1.0
+var SPAN = 0.0
+var HX = 0.0
+var HY = 0.0
+var AUTO_TOP = false
+var PICK_VIEW = false
+var SPIN_OPEN = false
+var MENU_OPEN = false
+var GUIDE_ON = true
+var SHOT = pool::Shot{first: -1, ..}
+var ACC = 0.0
+var STEPS = 0
+var START_X = 0.0
+var START_Y = 0.0
+var SR = pool_ai::Search{best: -1, ..}
+var PLAN = pool_ai::Plan{angle: 0.0, ..}
+var FROM = 0.0
+var SHOTS int[2] = [0; 2]
+var MSG byte[>..] = []
+var MSG_T = 0.0
+var QUIT = false
+var RESULT = 0
+var REPORTED = false
+var OVER_TITLE byte[>..] = []
+var OVER_SUB byte[>..] = []
+var NOW = 0.0
+var NAME0 byte[>..] = []
+var NAME1 byte[>..] = []
+setstr(d byte[>..]&, s const byte[:]):
+	d.clear()
+	d.append(s);
+name(p int) const byte[:]:
+	if p == 0: return NAME0
+	return NAME1
+human(p int) bool: MODE != VS_CPU || p == 0
+cue_x() real: G.balls[0].x
+cue_y() real: G.balls[0].y
+say(s const byte[:]):
+	setstr(MSG, s)
+	MSG_T = 3.2;
+start(mode int, level int, cloth int, seed int):
+	MODE = mode
+	LEVEL = level
+	CLOTH = cloth
+	SEED = seed
+	G = pool::new_game(seed)
+	pool_look::build(cloth)
+	if mode == VS_CPU:
+		setstr(NAME0, "You")
+		setstr(NAME1, "Computer")
+	else if mode == TWO:
+		setstr(NAME0, "Player 1")
+		setstr(NAME1, "Player 2")
+	else:
+		setstr(NAME0, "You")
+		setstr(NAME1, "You")
+	ANG = 0.0
+	KPOWER = 0.7
+	SPX = 0.0
+	SPY = 0.0
+	POWER = 0.0
+	PULL = 0.03
+	PICK_VIEW = true
+	DIST = 0.85
+	PITCH = 0.3
+	READY = false
+	DRAG = 0
+	AUTO_TOP = false
+	SPIN_OPEN = false
+	MENU_OPEN = false
+	SHOTS[0] = 0
+	SHOTS[1] = 0
+	QUIT = false
+	RESULT = 0
+	REPORTED = false
+	MSG_T = 0.0
+	if human(G.turn):
+		enter(AIM)
+		say("Your break")
+	else:
+		enter(THINK)
+enter(s int):
+	STATE = s
+	T_STATE = 0.0
+	if s == THINK: SR = pool_ai::start(G, LEVEL, SEED * 31 + SHOTS[0] + 7 * SHOTS[1])
+fall(dt real):
+	for &b G.balls: if !b.on: b.fall += dt
+tween(a float3, b float3, k real) float3:
+	kf := k as f32
+	linalg::v3(a.x + (b.x - a.x) * kf, a.y + (b.y - a.y) * kf, a.z + (b.z - a.z) * kf)
+wrap(a0 real) real:
+	a ~= a0
+	while a > PI: a -= TAU
+	while a < -PI: a += TAU
+	a
+rp(x real, h real, y real) float3: linalg::v3(linalg::f(x), linalg::f(h), linalg::f(-y))
+sub3(a float3, b float3) float3: linalg::v3(a.x - b.x, a.y - b.y, a.z - b.z)
+add3(a float3, b float3) float3: linalg::v3(a.x + b.x, a.y + b.y, a.z + b.z)
+mul3(a float3, k f32) float3: linalg::v3(a.x * k, a.y * k, a.z * k)
+rgba(r real, g real, b real, a real) float4: linalg::col(r as f32, g as f32, b as f32, a as f32)
+mixc(a float4, b float4, t real) float4:
+	tf := t as f32
+	linalg::col(a.x + (b.x - a.x) * tf, a.y + (b.y - a.y) * tf, a.z + (b.z - a.z) * tf, a.w + (b.w - a.w) * tf)
+camera(dt real):
+	k ~= 1.0 - exp(-dt * 7.0)
+	if STATE == ROLL && VIEW == 0: k = 1.0 - exp(-dt * 7.0 * 2.5)
+	eye ~= linalg::v3(0.0, 1.0, 0.0)
+	tg ~= linalg::v3(0.0, 0.0, 0.0)
+	up ~= linalg::v3(0.0, 1.0, 0.0)
+	fov ~= 0.8
+	cx := cue_x()
+	cy := cue_y()
+	if VIEW == 1 || (STATE == THINK && !human(G.turn)):
+		a := kit::W / kit::H
+		t := tan(0.31)
+		fov = 0.7
+		h ~= 0.0
+		if a >= 1.0:
+			up = linalg::v3(0.0, 0.0, -1.0)
+			h = max((pool::HL + 0.24) / (t * a), (pool::HW + 0.3) / t)
+		else:
+			up = linalg::v3(1.0, 0.0, 0.0)
+			h = max((pool::HW + 0.24) / (t * a), (pool::HL + 0.3) / tan(0.35))
+		eye = rp(0.0, h, 0.0)
+		tg = rp(0.0, 0.0, 0.0)
+	else if STATE == ROLL || STATE == OVER:
+		dx := cos(ANG)
+		dy := sin(ANG)
+		eye = rp(START_X - dx * 1.15, 1.25, START_Y - dy * 1.15)
+		tx := clamp(START_X + dx * 0.55, -pool::HL, pool::HL)
+		ty := clamp(START_Y + dy * 0.55, -pool::HW, pool::HW)
+		tg = rp(tx, 0.0, ty)
+	else:
+		dx := cos(ANG)
+		dy := sin(ANG)
+		ox := if DRAG == 4 { HX } else { cx }
+		oy := if DRAG == 4 { HY } else { cy }
+		ex := ox - dx * DIST * cos(PITCH)
+		ey := oy - dy * DIST * cos(PITCH)
+		eh ~= pool::R + DIST * sin(PITCH)
+		if ex < -pool::HL || ex > pool::HL || ey < -pool::HW || ey > pool::HW: eh = max(eh, 0.27)
+		eye = rp(ex, eh, ey)
+		tg = rp(ox + dx * 0.28, pool::R * 0.7, oy + dy * 0.28)
+	if !READY:
+		CE = eye
+		CT = tg
+		CU = up
+		READY = true
+	else:
+		CE = tween(CE, eye, k)
+		CT = tween(CT, tg, k)
+		CU = linalg::unit3(tween(CU, up, k))
+	s3d::view.eye = CE
+	s3d::view.target = CT
+	s3d::view.up = CU
+	s3d::view.fov_y = linalg::f(fov)
+	s3d::view.near = 0.02
+	s3d::view.far = 30.0
+	pool_look::lamp_show(CE.y < 0.87)
+pick(sx real, sy real) real, real, bool:
+	cam := s3d::view
+	f := linalg::unit3(sub3(cam.target, cam.eye))
+	r := linalg::unit3(linalg::cross3(f, cam.up))
+	u := linalg::cross3(r, f)
+	x := 2.0 * sx / kit::W - 1.0
+	y := 1.0 - 2.0 * sy / kit::H
+	t := tan((cam.fov_y as real) / 2.0)
+	asp := kit::W / kit::H
+	kr := (x * t * asp) as f32
+	ku := (y * t) as f32
+	d := add3(add3(f, mul3(r, kr)), mul3(u, ku))
+	if d.y >= -0.0001: return 0.0, 0.0, false
+	s := (pool::R as f32 - cam.eye.y) / d.y
+	px := cam.eye.x + d.x * s
+	pz := cam.eye.z + d.z * s
+	return px as real, -(pz as real), true
+to_screen(p float3) real, real, bool:
+	cam := s3d::view
+	f := linalg::unit3(sub3(cam.target, cam.eye))
+	r := linalg::unit3(linalg::cross3(f, cam.up))
+	u := linalg::cross3(r, f)
+	q := sub3(p, cam.eye)
+	z := linalg::dot3(q, f) as real
+	if z < 0.01: return 0.0, 0.0, false
+	t := tan((cam.fov_y as real) / 2.0)
+	asp := kit::W / kit::H
+	x := (linalg::dot3(q, r) as real) / (z * t * asp)
+	y := (linalg::dot3(q, u) as real) / (z * t)
+	return (1.0 + x) * kit::W / 2.0, (1.0 - y) * kit::H / 2.0, true
+cue_line() real, real, real, real, bool:
+	cx := cue_x()
+	cy := cue_y()
+	ax, ay, aok := to_screen(rp(cx, pool::R, cy))
+	ex, ey, eok := to_screen(rp(cx - 0.3 * cos(ANG), pool::R, cy - 0.3 * sin(ANG)))
+	dx := ex - ax
+	dy := ey - ay
+	l := sqrt(dx * dx + dy * dy)
+	if !eok || l < 1.0: return ax, ay, 0.0, 1.0, aok
+	return ax, ay, dx / l, dy / l, aok
+fresh_shot() pool::Shot: pool::Shot{first: -1, ..}
+shoot(power real, sx real, sy real):
+	pool::begin_shot(G)
+	SHOT = fresh_shot()
+	pool::strike(G.balls, ANG, power, sx, sy)
+	sfx::play(sfx::STRIKE, 0.3 + 0.7 * power, 0.0, 1.0)
+	START_X = cue_x()
+	START_Y = cue_y()
+	ACC = 0.0
+	STEPS = 0
+	SHOTS[G.turn] += 1
+	if AUTO_TOP:
+		VIEW = 0
+		AUTO_TOP = false
+	enter(ROLL)
+roll(dt real):
+	ACC = min(ACC + dt, 0.05)
+	n ~= 0
+	while ACC >= pool::DT && n < 240:
+		pool::step(G.balls, SHOT)
+		STEPS += 1
+		n += 1
+		ACC -= pool::DT
+		if SHOT.click > 0.05: sfx::hit(sfx::CLICK, SHOT.click, 3.0, 0.0)
+		if SHOT.thud > 0.05: sfx::hit(sfx::THUD, SHOT.thud, 3.5, 0.0)
+		if SHOT.drop > 0.0: sfx::play(sfx::DROP, 0.8, 0.0, 1.0)
+	if !pool::moving(G.balls) || STEPS >= 11520: done()
+level_name(l int) const byte[:]:
+	if l == 0: return "Easy"
+	if l == 1: return "Normal"
+	return "Hard"
+done():
+	pool::end_shot(G, SHOT, NAME0, NAME1)
+	say(G.msg)
+	if MODE == PRACTICE:
+		G.turn = 0
+		if G.over:
+			SEED += 1
+			G = pool::new_game(SEED)
+			say("Table cleared! New rack")
+	if G.over:
+		w := clamp(G.winner, 0, 1)
+		OVER_TITLE.clear()
+		if MODE == VS_CPU:
+			if w == 0:
+				OVER_TITLE.append("You win!")
+			else:
+				OVER_TITLE.append("Computer wins")
+		else:
+			format(OVER_TITLE, name(w), " wins!")
+		OVER_SUB.clear()
+		format(OVER_SUB, SHOTS[w], " shots")
+		if MODE == VS_CPU: format(OVER_SUB, " · ", level_name(LEVEL))
+		if MODE == VS_CPU && w == 0:
+			og := G.group[1]
+			left ~= 0
+			for b G.balls: if b.on && b.num != 0 && b.num != 8 && ((og == 1 && pool::is_solid(b.num)) || (og == 2 && pool::is_stripe(b.num))): left += 1
+			RESULT = 1000 * (LEVEL + 1) + 70 * left + max(0, 300 - 15 * SHOTS[0])
+			sfx::play(sfx::WIN, 0.8, 0.0, 1.0)
+		else if MODE == VS_CPU:
+			sfx::play(sfx::LOSE, 0.7, 0.0, 1.0)
+		enter(OVER)
+		return
+	if human(G.turn):
+		SPX = 0.0
+		SPY = 0.0
+		if G.in_hand && G.broke && VIEW == 0:
+			VIEW = 1
+			AUTO_TOP = true
+		enter(AIM)
+	else:
+		enter(THINK)
+think(dt real):
+	t0 := gfx::time()
+	fin ~= false
+	while !fin && gfx::time() - t0 < 0.007:
+		fin = pool_ai::work(SR, G, 1)
+	if fin && T_STATE >= 0.7:
+		PLAN = pool_ai::finish(SR, LEVEL, SEED + STEPS)
+		if PLAN.place: pool::place_cue(G, PLAN.px, PLAN.py)
+		FROM = ANG
+		enter(CPU_AIM)
+cpu_aim(dt real):
+	k := clamp(T_STATE / 0.9, 0.0, 1.0)
+	s := k * k * (3.0 - 2.0 * k)
+	ANG = FROM + wrap(PLAN.angle - FROM) * s
+	PULL = 0.03 + 0.22 * PLAN.power * clamp((T_STATE - 0.45) / 0.45, 0.0, 1.0)
+	if T_STATE >= 0.9:
+		SPX = PLAN.sx
+		SPY = PLAN.sy
+		POWER = PLAN.power
+		enter(STRIKE)
+strike(dt real):
+	rem := 0.07 - (T_STATE - dt)
+	if rem <= dt:
+		PULL = -0.004
+		shoot(POWER, SPX, SPY)
+	else:
+		PULL -= (PULL + 0.004) * dt / rem
+meter() real, real, real, real:
+	u := kit::U
+	w := min(220.0 * u, 0.62 * kit::W)
+	return (kit::W - w) / 2.0, kit::H - 154.0 * u, w, 50.0 * u
+spin() real, real, real:
+	u := kit::U
+	return kit::W - 54.0 * u, kit::H - 58.0 * u, 34.0 * u
+view_btn() real, real, real, real:
+	u := kit::U
+	return 18.0 * u, kit::H - 70.0 * u, 118.0 * u, 52.0 * u
+menu_btn() real, real, real, real:
+	u := kit::U
+	return 14.0 * u, 14.0 * u, 52.0 * u, 52.0 * u
+aim_at(px real, py real):
+	dx := px - cue_x()
+	dy := py - cue_y()
+	if sqrt(dx * dx + dy * dy) > 1.5 * pool::R: ANG = atan2(dy, dx)
+aim_input(dt real):
+	u := kit::U
+	if gfx::key_pressed("Escape"):
+		MENU_OPEN = true
+		return
+	rate ~= dt * 0.55
+	if gfx::key_down("Left Shift"): rate *= 0.08
+	if gfx::key_down("Left"): ANG += rate
+	if gfx::key_down("Right"): ANG -= rate
+	if gfx::key_down("Up"): KPOWER = clamp(KPOWER + dt * 0.7, 0.02, 1.0)
+	if gfx::key_down("Down"): KPOWER = clamp(KPOWER - dt * 0.7, 0.02, 1.0)
+	if gfx::key_pressed("T"):
+		VIEW = 1 - VIEW
+		AUTO_TOP = false
+	if gfx::key_pressed("Space"):
+		POWER = KPOWER
+		PULL = 0.03 + 0.22 * KPOWER
+		enter(STRIKE)
+		return
+	DIST = clamp(DIST * (1.0 - 0.1 * kit::WHEEL) / kit::PINCH, 0.35, 2.4)
+	scx, scy, srad := spin()
+	mx, my, mw, mh := menu_btn()
+	vx, vy, vw, vh := view_btn()
+	if kit::PRESSED && !kit::TAKEN && !kit::inside(mx, my, mw, mh) && !kit::inside(vx, vy, vw, vh):
+		ax, ay, dirx, diry, lok := cue_line()
+		rx := kit::SX - ax
+		ry := kit::SY - ay
+		t := rx * dirx + ry * diry
+		c := abs(dirx * ry - diry * rx)
+		sdx := kit::SX - scx
+		sdy := kit::SY - scy
+		px, py, ok := pick(kit::SX, kit::SY)
+		cdx := px - cue_x()
+		cdy := py - cue_y()
+		near := lok && sqrt(rx * rx + ry * ry) <= 44.0 * u
+		tmin := if G.in_hand { 44.0 * u } else { -30.0 * u }
+		if sqrt(sdx * sdx + sdy * sdy) <= srad + 10.0 * u:
+			DRAG = 3
+		else if G.in_hand && (near || (ok && sqrt(cdx * cdx + cdy * cdy) < 2.7 * pool::R)):
+			DRAG = 4
+			HX = cue_x()
+			HY = cue_y()
+		else if lok && c <= 44.0 * u && t >= tmin:
+			DRAG = 2
+			POWER = 0.0
+			BX = dirx
+			BY = diry
+			d ~= 1000000.0
+			if BX > 0.0001: d = min(d, (kit::W - kit::SX) / BX)
+			if BX < -0.0001: d = min(d, kit::SX / -BX)
+			if BY > 0.0001: d = min(d, (kit::H - kit::SY) / BY)
+			if BY < -0.0001: d = min(d, kit::SY / -BY)
+			SPAN = clamp(d - 12.0 * u, 90.0 * u, 200.0 * u)
+		else:
+			DRAG = 1
+	if kit::DOWN:
+		if DRAG == 1:
+			if VIEW == 1:
+				px, py, ok := pick(kit::PX, kit::PY)
+				if ok: aim_at(px, py)
+			else:
+				s ~= 2.4
+				if gfx::key_down("Left Shift"): s *= 0.25
+				ANG -= kit::DX / kit::W * s
+				PITCH = clamp(PITCH + kit::DY / kit::H * 1.7, 0.17, 1.35)
+		else if DRAG == 2:
+			p := (kit::PX - kit::SX) * BX + (kit::PY - kit::SY) * BY
+			POWER = clamp((p - 8.0 * u) / SPAN, 0.0, 1.0)
+			PULL = 0.03 + 0.22 * POWER
+		else if DRAG == 3:
+			if abs(kit::PX - kit::SX) + abs(kit::PY - kit::SY) > 12.0 * u: DRAG = 5
+		else if DRAG == 4:
+			px, py, ok := pick(kit::PX, kit::PY)
+			if ok && pool::can_place(G, px, py): pool::place_cue(G, px, py)
+	if kit::RELEASED:
+		if DRAG == 2:
+			if POWER >= 0.03:
+				enter(STRIKE)
+			else:
+				POWER = 0.0
+				PULL = 0.03
+		else if DRAG == 3:
+			SPIN_OPEN = true
+			kit::TAKEN = true
+		else if DRAG == 1 && VIEW == 0 && kit::TAPPED:
+			px, py, ok := pick(kit::PX, kit::PY)
+			if ok: aim_at(px, py)
+		DRAG = 0
+spin_panel():
+	if !SPIN_OPEN: return
+	u := kit::U
+	pw := min(340.0 * u, 0.92 * kit::W)
+	kit::dim(1.0)
+	left, top := kit::panel(pw, 450.0 * u)
+	if kit::TAPPED && !kit::TAKEN && !kit::inside(left, top, pw, 450.0 * u):
+		SPIN_OPEN = false
+		return
+	cx := left + pw / 2.0
+	cy := top + 197.0 * u
+	kit::text(left, top + 24.0 * u, pw, 32.0 * u, "Spin", kit::TITLE, kit::INK, 1)
+	kit::box(cx - 120.0 * u, cy - 120.0 * u, 240.0 * u, 240.0 * u, rgba(0.96, 0.95, 0.9, 1.0), 120.0 * u)
+	kit::box(cx - 0.75 * u, cy - 120.0 * u, 1.5 * u, 240.0 * u, rgba(0.0, 0.0, 0.0, 0.15), 0.0)
+	kit::box(cx - 120.0 * u, cy - 0.75 * u, 240.0 * u, 1.5 * u, rgba(0.0, 0.0, 0.0, 0.15), 0.0)
+	ddx := kit::PX - cx
+	ddy := kit::PY - cy
+	inc := sqrt(ddx * ddx + ddy * ddy) <= 120.0 * u
+	if kit::PRESSED && inc: kit::TAKEN = true
+	if kit::DOWN && inc:
+		ox ~= ddx / (120.0 * u)
+		oy ~= -ddy / (120.0 * u)
+		l := sqrt(ox * ox + oy * oy)
+		if l > 0.5:
+			ox *= 0.5 / l
+			oy *= 0.5 / l
+		SPX = ox
+		SPY = oy
+	kit::dot(cx + SPX * 120.0 * u, cy - SPY * 120.0 * u, 15.0 * u, rgba(0.85, 0.12, 0.14, 1.0))
+	kit::text(left, top + 325.0 * u, pw, 20.0 * u, "Top follows, bottom draws back", kit::SMALL, kit::MUTED, 1)
+	kit::text(left, top + 347.0 * u, pw, 20.0 * u, "Sides change rail angles", kit::SMALL, kit::MUTED, 1)
+	bw := (pw - 48.0 * u - 12.0 * u) / 2.0
+	by := top + 450.0 * u - 24.0 * u - 48.0 * u
+	if kit::button(left + 24.0 * u, by, bw, 48.0 * u, "Center", 0):
+		SPX = 0.0
+		SPY = 0.0
+	if kit::button(left + 24.0 * u + bw + 12.0 * u, by, bw, 48.0 * u, "Done", 1): SPIN_OPEN = false
+var MENU_WAS = false
+menu_panel():
+	if !MENU_OPEN: return
+	u := kit::U
+	if gfx::key_pressed("Escape") && MENU_WAS:
+		MENU_OPEN = false
+		return
+	x, y0, w := kit::sheet("Paused", 6)
+	y ~= y0
+	h := 48.0 * u
+	step := 58.0 * u
+	lab byte[>..] ~= []
+	if kit::button(x, y, w, h, "Resume", 1): MENU_OPEN = false
+	y += step
+	if kit::button(x, y, w, h, "Restart", 0):
+		start(MODE, LEVEL, CLOTH, SEED + 1)
+		return
+	y += step
+	format(lab, "Cloth: ", pool_look::cloth_name(CLOTH))
+	if kit::button(x, y, w, h, lab, 0):
+		CLOTH = (CLOTH + 1) % 5
+		pool_look::build(CLOTH)
+	y += step
+	lab.clear()
+	if sfx::MUTED:
+		lab.append("Sound: Off")
+	else:
+		lab.append("Sound: On")
+	if kit::button(x, y, w, h, lab, 0): sfx::MUTED = !sfx::MUTED
+	y += step
+	lab.clear()
+	if GUIDE_ON:
+		lab.append("Aim guide: On")
+	else:
+		lab.append("Aim guide: Off")
+	if kit::button(x, y, w, h, lab, 0): GUIDE_ON = !GUIDE_ON
+	y += step
+	if kit::button(x, y, w, h, "Leave", 0): QUIT = true
+over_panel():
+	if STATE != OVER || T_STATE < 1.2: return
+	u := kit::U
+	pw := min(380.0 * u, 0.92 * kit::W)
+	kit::dim(1.0)
+	left, top := kit::panel(pw, 200.0 * u)
+	kit::text(left, top + 27.0 * u, pw, 40.0 * u, OVER_TITLE, kit::HEAD, kit::INK, 1)
+	kit::text(left, top + 77.0 * u, pw, 20.0 * u, OVER_SUB, kit::SMALL, kit::MUTED, 1)
+	bw := (pw - 48.0 * u - 12.0 * u) / 2.0
+	by := top + 200.0 * u - 24.0 * u - 48.0 * u
+	if kit::button(left + 24.0 * u, by, bw, 48.0 * u, "Play again", 1):
+		start(MODE, LEVEL, CLOTH, SEED + 1)
+		return
+	if kit::button(left + 24.0 * u + bw + 12.0 * u, by, bw, 48.0 * u, "Leave", 0): QUIT = true
+ball_col(n int) float4:
+	r, g, b := pool_look::ball_srgb(n)
+	return rgba(r as real / 255.0, g as real / 255.0, b as real / 255.0, 1.0)
+chip(x real, y real, p int):
+	u := kit::U
+	w := if kit::W < 570.0 * u { 0.47 * kit::W } else { 220.0 * u }
+	active := p == G.turn && !G.over
+	bc := if active { kit::ACCENT } else { kit::LINE }
+	bw := if active { 2.0 * u } else { 1.0 * u }
+	kit::ring(x, y, w, 58.0 * u, kit::GLASS, bc, bw, 14.0 * u)
+	kit::text(x, y + 8.0 * u, w, 20.0 * u, name(p), kit::BODY, kit::INK, 1)
+	grp := G.group[p]
+	if grp == 0:
+		kit::text(x, y + 31.0 * u, w, 20.0 * u, "Open table", kit::CAPTION, kit::MUTED, 1)
+		return
+	label := if grp == 1 { "Solids" } else { "Stripes" }
+	n ~= 0
+	eight ~= false
+	for b G.balls:
+		if b.on && b.num == 8: eight = true
+		if b.on && b.num != 0 && b.num != 8 && ((grp == 1 && pool::is_solid(b.num)) || (grp == 2 && pool::is_stripe(b.num))): n += 1
+	m := if n > 0 { n } else if eight { 1 } else { 0 }
+	tw := kit::text_w(label, kit::CAPTION)
+	dw := if m > 0 { 8.0 * u + (m as real - 1.0) * 13.0 * u + 10.0 * u } else { 0.0 }
+	x0 := x + (w - (tw + dw)) / 2.0
+	kit::text(x0, y + 31.0 * u, tw, 20.0 * u, label, kit::CAPTION, kit::MUTED, 0)
+	dy := y + 41.0 * u
+	i ~= 0
+	for b G.balls:
+		if b.on && b.num != 0 && b.num != 8 && ((grp == 1 && pool::is_solid(b.num)) || (grp == 2 && pool::is_stripe(b.num))):
+			dx := x0 + tw + 13.0 * u + (i as real) * 13.0 * u
+			kit::dot(dx, dy, 5.0 * u, ball_col(b.num))
+			if grp == 2: kit::dot(dx, dy, 3.0 * u, rgba(1.0, 1.0, 1.0, 1.0))
+			i += 1
+	if n == 0 && eight:
+		ex := x0 + tw + 13.0 * u
+		kit::dot(ex, dy, 6.0 * u, kit::LINE)
+		kit::dot(ex, dy, 5.0 * u, ball_col(8))
+hud():
+	u := kit::U
+	sw := kit::W
+	cw := if sw < 570.0 * u { 0.47 * sw } else { 220.0 * u }
+	cy := if sw < 570.0 * u { 70.0 * u } else { 14.0 * u }
+	x0 := (sw - 2.0 * cw - 12.0 * u) / 2.0
+	if STATE != OVER:
+		chip(x0, cy, 0)
+		chip(x0 + cw + 12.0 * u, cy, 1)
+	py ~= cy + 58.0 * u + 10.0 * u
+	if MSG_T > 0.0:
+		py += kit::pill(sw / 2.0, py, MSG, clamp(MSG_T / 0.5, 0.0, 1.0)) + 8.0 * u
+	if STATE == THINK:
+		py += kit::pill(sw / 2.0, py, "Computer is thinking...", 1.0) + 8.0 * u
+	if STATE == AIM && human(G.turn) && G.in_hand && !G.over:
+		hint byte[>..] ~= []
+		if G.kitchen:
+			hint.append("Drag the cue ball behind the line")
+		else:
+			hint.append("Drag the cue ball anywhere")
+		if SHOTS[G.turn] < 2: hint.append(" · then pull the cue back")
+		py += kit::pill(sw / 2.0, py, hint, 1.0) + 8.0 * u
+	else if STATE == AIM && human(G.turn) && SHOTS[G.turn] < 2 && !G.over:
+		py += kit::pill(sw / 2.0, py, "Pull the cue back to shoot · drag to aim", 1.0) + 8.0 * u
+	vl := if VIEW == 0 { "Top view" } else { "3D view" }
+	if kit::button(14.0 * u, kit::H - 14.0 * u - 44.0 * u, 104.0 * u, 44.0 * u, vl, 0) && !MENU_OPEN && !SPIN_OPEN && STATE != OVER: VIEW = 1 - VIEW
+	if STATE == AIM && human(G.turn) && !G.over:
+		if DRAG == 2 || gfx::key_down("Up") || gfx::key_down("Down"):
+			bx, by, bw, bh := meter()
+			shown := if DRAG == 2 { POWER } else { KPOWER }
+			kit::ring(bx, by, bw, bh, kit::GLASS, kit::LINE, 1.0 * u, 14.0 * u)
+			kit::text(bx + 14.0 * u, by + 8.0 * u, bw - 28.0 * u, 20.0 * u, "Power", kit::CAPTION, kit::MUTED, 0)
+			pct byte[>..] ~= []
+			format(pct, round(shown * 100.0) as int, "%")
+			kit::text(bx + 14.0 * u, by + 8.0 * u, bw - 28.0 * u, 20.0 * u, pct, kit::BODY, kit::INK, 2)
+			kit::box(bx + 14.0 * u, by + 32.0 * u, bw - 28.0 * u, 8.0 * u, rgba(1.0, 1.0, 1.0, 0.12), 4.0 * u)
+			kit::box(bx + 14.0 * u, by + 32.0 * u, (bw - 28.0 * u) * shown, 8.0 * u, kit::heat(shown), 4.0 * u)
+		scx, scy, srad := spin()
+		kit::dot(scx, scy, srad, kit::LINE)
+		kit::dot(scx, scy, srad - 1.0 * u, rgba(0.96, 0.95, 0.9, 1.0))
+		kit::dot(scx + SPX * srad, scy - SPY * srad, 7.0 * u, rgba(0.85, 0.12, 0.14, 1.0))
+	spin_panel()
+	menu_panel()
+	over_panel()
+frame(target gfx::Texture, dt real, now real):
+	if PICK_VIEW:
+		VIEW = if kit::W > kit::H { 0 } else { 1 }
+		PICK_VIEW = false
+	NOW = now
+	MSG_T -= dt
+	T_STATE += dt
+	MENU_WAS = MENU_OPEN
+	if STATE != ROLL: fall(dt)
+	if kit::menu_button() && !MENU_OPEN && !SPIN_OPEN: MENU_OPEN = true
+	if STATE == AIM:
+		if human(G.turn) && !MENU_OPEN && !SPIN_OPEN: aim_input(dt)
+	else if STATE == STRIKE:
+		strike(dt)
+	else if STATE == ROLL:
+		roll(dt)
+	else if STATE == THINK:
+		think(dt)
+	else if STATE == CPU_AIM:
+		cpu_aim(dt)
+	camera(dt)
+	pool_look::sync(G, now)
+	lvl := if MODE == VS_CPU { LEVEL } else { 0 }
+	pool_look::guide(G, ANG, lvl, STATE == AIM && human(G.turn) && GUIDE_ON)
+	pool_look::hand(G, cue_x(), cue_y(), STATE == AIM && human(G.turn) && G.in_hand)
+	pool_look::cue(G, ANG, PULL, SPX, SPY, STATE == AIM || STATE == STRIKE || STATE == CPU_AIM || (STATE == ROLL && T_STATE < 0.25))
+	s3d::render(target)
+	hud()
+	kit::draw(target)
+demo_set(state_name const byte[:]):
+	start(VS_CPU, 2, 0, 1)
+	PICK_VIEW = false
+	ANG = 0.0
+	VIEW = 0
+	PULL = 0.12
+	enter(AIM)
+	if state_name == "top": VIEW = 1
+	if state_name == "pull":
+		DRAG = 2
+		POWER = 0.7
+		PULL = 0.03 + 0.22 * 0.7
+	if state_name == "hand":
+		G.broke = true
+		G.kitchen = false
+		G.in_hand = true
+		VIEW = 1
+		AUTO_TOP = true
+	if state_name == "low": PITCH = 0.17
+	if state_name == "spin":
+		SPIN_OPEN = true
+		SPX = 0.2
+		SPY = -0.3
+	if state_name == "menu": MENU_OPEN = true
+	if state_name == "over":
+		G.over = true
+		G.winner = 0
+		setstr(OVER_TITLE, "You win!")
+		setstr(OVER_SUB, "23 shots · Hard")
+		enter(OVER)
+		T_STATE = 2.0
+		return
+	if state_name == "play":
+		for i 5:
+			sr := pool_ai::start(G, 2, SEED + i)
+			fin ~= false
+			while !fin: fin = pool_ai::work(sr, G, 64)
+			plan := pool_ai::finish(sr, 2, SEED + i)
+			if plan.place: pool::place_cue(G, plan.px, plan.py)
+			pool::begin_shot(G)
+			SHOT = fresh_shot()
+			pool::strike(G.balls, plan.angle, plan.power, plan.sx, plan.sy)
+			SHOTS[G.turn] += 1
+			n ~= 0
+			while pool::moving(G.balls) && n < 11520:
+				pool::step(G.balls, SHOT)
+				n += 1
+			STEPS = n
+			done()
+			if G.over: break
+		if !G.over:
+			G.turn = 0
+			cx := cue_x()
+			cy := cue_y()
+			bd ~= 1000000.0
+			ba ~= 0.0
+			for b G.balls:
+				if b.on && b.num != 0:
+					d := sqrt((b.x - cx) * (b.x - cx) + (b.y - cy) * (b.y - cy))
+					if d < bd:
+						bd = d
+						ba = atan2(b.y - cy, b.x - cx)
+			ANG = ba
+			VIEW = 0
+			SPX = 0.0
+			SPY = 0.0
+			PULL = 0.03
+			READY = false
+			enter(AIM)

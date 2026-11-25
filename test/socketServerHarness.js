@@ -13,7 +13,7 @@ const { io } = require('socket.io-client');
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function createHarness(port, name) {
+function createHarness(port, name, extraEnv = {}) {
   const BASE = `http://localhost:${port}`;
   const DATA = path.join(os.tmpdir(), `haven-${name}-${Date.now()}`);
   const sockets = [];
@@ -31,7 +31,7 @@ function createHarness(port, name) {
     fs.mkdirSync(DATA, { recursive: true });
     server = spawn(process.execPath, ['server.js'], {
       cwd: path.join(__dirname, '..'),
-      env: { ...process.env, PORT: String(port), HAVEN_DATA_DIR: DATA, ADMIN_USERNAME: 'admin', FORCE_HTTP: 'true' },
+      env: { ...process.env, PORT: String(port), HAVEN_DATA_DIR: DATA, ADMIN_USERNAME: 'admin', FORCE_HTTP: 'true', ...extraEnv },
       stdio: 'ignore',
     });
     for (let i = 0; i < 60; i++) {

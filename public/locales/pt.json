@@ -1305,6 +1305,8 @@
   },
   "activities_registry": {
     "flappy": "Desvie dos contêineres e bata recordes!",
+    "arcade_pool": "Bola 8 contra um amigo ou o computador",
+    "arcade_minigolf": "Nove buracos do campo ao vulcão",
     "flight": "Arremesse um avião de papel o mais longe possível!",
     "learn_to_fly": "Ajude um pinguim a aprender a voar!",
     "bubble_tanks": "Tiro em arena com tanques de bolhas",

@@ -1438,6 +1438,8 @@
   },
   "activities_registry": {
     "flappy": "躲避集装箱，冲击高分！",
+    "arcade_pool": "与好友或电脑对战八球",
+    "arcade_minigolf": "从草地到火山的九洞迷你高尔夫",
     "flight": "把纸飞机扔得尽可能远！",
     "learn_to_fly": "帮企鹅学会飞行！",
     "bubble_tanks": "泡泡主题竞技场射击",
