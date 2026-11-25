@@ -145,15 +145,18 @@
       return run;
     }
 
-    async _consume({ producerId }) {
-      if (this.closed || this.consumers.has(producerId)) return;
-      const { consumer: c } = await this._request('relay:consume', { producerId, rtpCapabilities: this.device.rtpCapabilities });
+    async _consume({ producerId }, fresh = false) {
+      if (this.closed || (!fresh && this.consumers.has(producerId))) return;
+      const { consumer: c } = await this._request('relay:consume', { producerId, rtpCapabilities: this.device.rtpCapabilities, ...(fresh && { fresh: true }) });
       if (this.closed) return;
+      const previous = this.consumers.get(producerId);
+      previous && (this.consumers.delete(producerId), (() => { try { previous.consumer.close(); } catch { /* already closed */ } })());
       const consumer = await this.recvTransport.consume({ id: c.id, producerId: c.producerId, kind: c.kind, rtpParameters: c.rtpParameters });
       const entry = { consumer, userId: c.userId, source: c.source };
       this.consumers.set(producerId, entry);
-      consumer.on('trackended', () => this._dropConsumer(producerId));
-      consumer.on('transportclose', () => this._dropConsumer(producerId));
+      const gone = () => this.consumers.get(producerId) === entry && this._dropConsumer(producerId);
+      consumer.on('trackended', gone);
+      consumer.on('transportclose', gone);
       this.opts.onTrack?.({ userId: c.userId, source: c.source, track: consumer.track, producerId });
       try {
         await this._request('relay:resume', { consumerId: c.id });
@@ -163,6 +166,22 @@
         this._dropConsumer(producerId);
         throw err;
       }
+    }
+
+    stallTargets() {
+      return [...this.consumers].filter(([, e]) => e.consumer.kind === 'video' && !e.consumer.closed).map(([producerId, e]) => ({
+        key: `relay:${e.source}:${e.userId}`, track: e.consumer.track, stats: () => e.consumer.getStats(), producerId, userId: e.userId, source: e.source,
+      }));
+    }
+
+    async requestKeyFrame(producerId) {
+      const entry = this.consumers.get(producerId);
+      const res = entry && await this._request('relay:keyframe', { consumerId: entry.consumer.id });
+      return res && res.paused ? 'hold' : null;
+    }
+
+    async resubscribe(producerId) {
+      return this.consumers.has(producerId) ? this._consume({ producerId }, true) : null;
     }
 
     _dropConsumer(producerId) {

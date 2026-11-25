@@ -93,7 +93,7 @@ test('session-info tells clients what the server supports and the sender\'s mode
   assert.deepEqual(highlights.FEATURES, ['highlight_messages', 'official_mode']);
   const src = read('src/socketHandlers/index.js');
   assert.match(src, /officialMode: highlights\.officialMode\(db, socket\.user\.id\),/);
-  assert.match(src, /features: highlights\.FEATURES/);
+  assert.match(src, /features: \[\.\.\.highlights\.FEATURES, 'member_sessions', 'dm_storage', 'unicode_emoji_names'\]/);
 });
 
 let M;

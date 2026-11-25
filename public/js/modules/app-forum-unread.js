@@ -75,7 +75,7 @@ _updateForumDot(code, el = null) {
   if (!el) return;
   let muted = false;
   try {
-    muted = JSON.parse(localStorage.getItem('haven_muted_channels') || '[]').includes(code);
+    muted = this._mutedChannelList().includes(code);
   } catch (err) {
     console.warn('[Forum] could not read muted channels', err);
   }

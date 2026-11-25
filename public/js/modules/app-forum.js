@@ -155,7 +155,7 @@ _forumThumbOf(msg) {
   }
   // No picture in the post: a post that opens with a link shows the link's
   // own picture, such as a video's thumbnail (#5745).
-  const lead = this._forumLeadLinkOf(msg);
+  const lead = this._hideEmbedsOn?.() ? null : this._forumLeadLinkOf(msg);
   const lp = lead ? this._forumLinkPreviewOf(lead) : null;
   return lp && typeof lp.image === 'string' && /^https?:\/\//i.test(lp.image) ? lp.image : null;
 },
@@ -176,7 +176,7 @@ _forumLinkPreviewOf(url) {
 // its title and picture (#5745).
 _forumLoadLinkPreview(msg) {
   const lead = this._forumLeadLinkOf(msg);
-  if (!lead || !this._linkPreviewData) return;
+  if (!lead || !this._linkPreviewData || this._hideEmbedsOn?.()) return;
   if (!this._forumLinkMeta) this._forumLinkMeta = new Map();
   if (!this._forumLinkAsked) this._forumLinkAsked = new Set();
   if (this._forumLinkMeta.has(lead) || this._forumLinkAsked.has(lead)) return;

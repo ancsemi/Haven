@@ -1301,7 +1301,8 @@
   "notifications_runtime": {
     "title": "{{sender}} em {{channel}}",
     "burn_message": "🔥 Enviou uma mensagem efêmera",
-    "sent_message": "Enviou uma mensagem"
+    "sent_message": "Enviou uma mensagem",
+    "more_rows": "+{{count}} linhas a mais"
   },
   "activities_registry": {
     "flappy": "Desvie dos contêineres e bata recordes!",
@@ -1613,8 +1614,6 @@
     },
     "embed_display": {
       "title": "Prévias de links",
-      "off": "Desativadas",
-      "off_hint": "Desativadas — oculta todas as prévias de links",
       "small": "Pequenas",
       "small_hint": "Pequenas — cartão compacto com mídia pequena",
       "medium": "Médias",

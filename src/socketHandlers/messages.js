@@ -285,9 +285,23 @@ module.exports = function register(socket, ctx) {
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, channel)) return socket.emit('error-msg', 'This channel needs a role you do not hold');
 
     const floor = groupHistoryFloor(db, channel, socket.user.id);
+    // A link can point at a thread reply (or a reply in a forum topic), which
+    // never shows in the channel itself. Centre the window on the reply's
+    // parent instead and say which reply was asked for, so the client can
+    // open the thread at it rather than drawing the reply as a channel message.
+    let threadReply = null;
+    let center = around;
+    if (around) {
+      const row = db.prepare('SELECT thread_id FROM messages WHERE id = ? AND channel_id = ? AND id > ?').get(around, channel.id, floor);
+      if (row && row.thread_id) {
+        threadReply = { parentId: row.thread_id, messageId: around };
+        center = row.thread_id;
+      }
+    }
+
     let messages;
     if (channel.is_forum) {
-      messages = forumHistory(channel.id, { before, after, around, limit, sort, tags, tagMode });
+      messages = forumHistory(channel.id, { before, after, around: center, limit, sort, tags, tagMode });
     } else if (before) {
       messages = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
@@ -315,14 +329,14 @@ module.exports = function register(socket, ctx) {
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id < ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at DESC, m.id DESC LIMIT ?
-      `).all(channel.id, around, floor, half);
+      `).all(channel.id, center, floor, half);
       const targetMsg = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
                COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, u.avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id = ? AND m.id > ?
-      `).all(channel.id, around, floor);
+      `).all(channel.id, center, floor);
       const afterMsgs = db.prepare(`
         SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.poll_data, m.burn_seconds, m.burning_started_at, m.destruct_at, m.persona_id, m.persona_username, m.persona_avatar, m.break_chain, m.ferry_target, m.type, m.silent, m.nsfw,
                COALESCE(u.display_name, u.username, '[Deleted User]') as real_username,
@@ -330,7 +344,7 @@ module.exports = function register(socket, ctx) {
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.id > ? AND m.thread_id IS NULL
         ORDER BY m.created_at ASC, m.id ASC LIMIT ?
-      `).all(channel.id, Math.max(around, floor), half);
+      `).all(channel.id, Math.max(center, floor), half);
       // Combine: beforeMsgs is DESC so reverse it, target, then afterMsgs ASC
       messages = [...beforeMsgs.reverse(), ...targetMsg, ...afterMsgs];
     } else {
@@ -543,7 +557,8 @@ module.exports = function register(socket, ctx) {
       messages: (after || around) ? enriched : enriched.reverse(),
       lastReadMessageId,
       pinnedCount: db.prepare('SELECT COUNT(*) as cnt FROM pinned_messages WHERE channel_id = ? AND message_id > ?').get(channel.id, floor).cnt,
-      ...(around ? { around } : {})
+      ...(around ? { around: center } : {}),
+      ...(threadReply ? { threadReply } : {})
     });
   });
 
@@ -2545,7 +2560,7 @@ module.exports = function register(socket, ctx) {
   socket.on('add-reaction', (data) => {
     try {
       if (!data || typeof data !== 'object') return;
-      if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
+      if (!isInt(data.messageId) || !isString(data.emoji, 1, 70)) return;
       const reactMute = activeMuteNotice(socket.user.id);
       if (reactMute) return socket.emit('error-msg', reactMute);
 
@@ -2605,7 +2620,7 @@ module.exports = function register(socket, ctx) {
   socket.on('remove-reaction', (data) => {
     try {
       if (!data || typeof data !== 'object') return;
-      if (!isInt(data.messageId) || !isString(data.emoji, 1, 32)) return;
+      if (!isInt(data.messageId) || !isString(data.emoji, 1, 70)) return;
 
       // Look up the channel from the message (see add-reaction comment).
       const msgRow = db.prepare(

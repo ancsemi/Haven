@@ -42,3 +42,9 @@ test('the header, the reloaded header and the Threads list all use it', () => {
   assert.match(read('public/js/modules/app-socket-events.js'), /preview\.textContent = this\._threadRootPreview\(data\.parentContent\);/);
   assert.match(read('public/js/modules/app-media-gallery.js'), /const preview = this\._threadRootPreview\(th\.content, 300\);/);
 });
+
+test('the threads list titles a row with the topic and puts the starter under it', () => {
+  const row = read('public/js/modules/app-media-gallery.js').split('class="thread-list-row"')[1].split('</div>')[0];
+  assert.ok(row.indexOf('thread-list-preview') < row.indexOf('thread-list-author'));
+  assert.match(read('public/css/style-gallery-ferry-forums.css'), /\.thread-list-preview \{\s*color: var\(--text-primary\);\s*font-size: 0\.9rem;\s*font-weight: 600;/);
+});

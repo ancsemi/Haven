@@ -312,7 +312,7 @@ function recordUploadOwnership(userId, relPath, bytes, scope = 'channel') {
 // else, and the total (the number that matters here) is unaffected.
 function uploadScopeFromRequest(req, fallback = 'channel') {
   const raw = typeof req.body?.scope === 'string' ? req.body.scope.trim().toLowerCase() : '';
-  return ['channel', 'dm', 'profile'].includes(raw) ? raw : fallback;
+  return ['channel', 'dm', 'profile'].includes(raw) ? raw : /\.enc$/i.test(req.file?.originalname || '') ? 'dm' : fallback;
 }
 
 // Total the live uploads per owner. Sizes come from the media index that
@@ -336,6 +336,7 @@ function getUploadUsage() {
 
   const byUser = new Map();  // userId → { total, channel, dm, profile, files }
   let attributedBytes = 0;
+  let dmBytes = 0;
   try {
     const { getDb } = require('./src/database');
     const rows = getDb().prepare('SELECT rel_path, user_id, scope FROM upload_ownership').all();
@@ -349,6 +350,7 @@ function getUploadUsage() {
       entry[['channel', 'dm', 'profile'].includes(row.scope) ? row.scope : 'channel'] += bytes;
       entry.files++;
       attributedBytes += bytes;
+      if (row.scope === 'dm') dmBytes += bytes;
     }
   } catch (err) {
     // Every file then shows as unattributed, so the report is wrong; say why.
@@ -364,6 +366,7 @@ function getUploadUsage() {
     byUser,
     liveBytes,
     attributedBytes,
+    dmBytes,
     unattributedBytes: Math.max(0, liveBytes - attributedBytes),
     fileCount: sizes.size
   };

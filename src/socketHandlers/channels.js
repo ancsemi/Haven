@@ -248,10 +248,14 @@ module.exports = function register(socket, ctx) {
       }
     }
 
+    // A channel is a calendar or a forum, not both; the calendar wins.
+    const isCalendar = data.isCalendar ? 1 : 0;
+    const isForum = data.isForum && !isCalendar ? 1 : 0;
+
     try {
       const result = db.prepare(
-        'INSERT INTO channels (name, code, created_by, is_private, expires_at, is_forum) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(name.trim(), code, socket.user.id, isPrivate, expiresAt, data.isForum ? 1 : 0);
+        'INSERT INTO channels (name, code, created_by, is_private, expires_at, is_forum, is_calendar) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(name.trim(), code, socket.user.id, isPrivate, expiresAt, isForum, isCalendar);
 
       // Channel templates send the rest of the setup along with the name, so
       // an "Announcements" channel comes out read-only and in announcement
@@ -316,7 +320,8 @@ module.exports = function register(socket, ctx) {
         expires_at: expiresAt,
         // The creator's sidebar renders from this stub until the enriched
         // list lands, so a forum has to say so here or it shows up as #.
-        is_forum: data.isForum ? 1 : 0
+        is_forum: isForum,
+        is_calendar: isCalendar
       };
 
       socket.join(`channel:${code}`);
@@ -1124,14 +1129,14 @@ module.exports = function register(socket, ctx) {
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
     const permission = typeof data.permission === 'string' ? data.permission.trim() : '';
-    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'private', 'nsfw', 'reactions', 'forum_blog', 'forum_blog_pics_only'];
+    const validPerms = ['streams', 'music', 'media', 'voice', 'text', 'read_only', 'soundboard', 'forum', 'calendar', 'private', 'nsfw', 'reactions', 'forum_blog', 'forum_blog_pics_only'];
     if (!validPerms.includes(permission)) return socket.emit('error-msg', 'Invalid permission');
 
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 0').get(code);
     if (!channel) return socket.emit('error-msg', 'Channel not found');
     if (!_canManageSettingsOf(channel.id)) return socket.emit('error-msg', 'You don\'t have permission to toggle channel permissions');
 
-    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', private: 'is_private', nsfw: 'is_nsfw', reactions: 'reactions_enabled', forum_blog: 'forum_blog', forum_blog_pics_only: 'forum_blog_pics_only' };
+    const colMap = { streams: 'streams_enabled', music: 'music_enabled', media: 'media_enabled', voice: 'voice_enabled', text: 'text_enabled', read_only: 'read_only', soundboard: 'soundboard_enabled', forum: 'is_forum', calendar: 'is_calendar', private: 'is_private', nsfw: 'is_nsfw', reactions: 'reactions_enabled', forum_blog: 'forum_blog', forum_blog_pics_only: 'forum_blog_pics_only' };
     const colName = colMap[permission];
     const current = channel[colName];
     const newVal = current ? 0 : 1;
@@ -1142,6 +1147,11 @@ module.exports = function register(socket, ctx) {
 
     try {
       db.prepare(`UPDATE channels SET ${colName} = ? WHERE id = ?`).run(newVal, channel.id);
+      // A channel is a forum or a calendar, not both: turning one on turns
+      // the other off.
+      if (newVal === 1 && (permission === 'forum' || permission === 'calendar')) {
+        db.prepare(`UPDATE channels SET ${permission === 'forum' ? 'is_calendar' : 'is_forum'} = 0 WHERE id = ?`).run(channel.id);
+      }
       // Changing a function by hand takes the channel out of its type
       // (src/channelTypes.js), so the type's icon stops showing for it.
       if (channel.type_id && channelTypes.FUNCTIONS.includes(permission)) {
@@ -1495,6 +1505,28 @@ module.exports = function register(socket, ctx) {
     _audit({ actor: socket.user, action: 'channel_role_gate',
       target_type: 'channel', target_id: channel.id, target_name: code,
       details: { roleGate: stored ? JSON.parse(stored) : null } });
+  });
+
+  socket.on('set-channel-default-notify', (data) => {
+    if (!data || typeof data !== 'object') return;
+    const code = typeof data.code === 'string' ? data.code.trim() : '';
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
+    const mode = typeof data.mode === 'string' ? data.mode : '';
+    if (!['all', 'mentions', 'muted'].includes(mode)) return socket.emit('error-msg', 'Invalid notification level');
+    const channel = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(code);
+    if (!channel) return socket.emit('error-msg', 'Channel not found');
+    // The admin's alone: set to Muted it also hides the channel's unread
+    // badges from everyone who never chose, which is too much for a channel
+    // manager to decide for other people.
+    if (!socket.user.isAdmin) return socket.emit('error-msg', 'Only the server admin can change the default notification level');
+    try {
+      db.prepare('UPDATE channels SET default_notify = ? WHERE id = ?').run(mode, channel.id);
+      auditChannel(channel.id, 'default_notify', mode);
+      broadcastChannelLists();
+    } catch (err) {
+      console.error('Set default notify error:', err);
+      socket.emit('error-msg', 'Failed to set the default notification level');
+    }
   });
 
   socket.on('set-notification-type', (data) => {

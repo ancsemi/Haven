@@ -53,7 +53,7 @@ test('Do Not Disturb also holds back the desktop pop-up, and the other statuses 
   global.window = { havenDesktop: { notify: (title) => shown.push(title) } };
   global.localStorage = { getItem: () => null };
   global.t = (key) => key;
-  const ctx = (userStatus) => ({ userStatus, channels: [], user: { id: 1 }, _mutedUserIds: () => new Set(), _notifyBlockedByMutes: () => false, _getNickname: (id, name) => name, _maskSpoilers: (t) => t, notifications: { mentionsEnabled: true, repliesEnabled: true, dmEnabled: true, enabled: true, popupAllowed: () => true } });
+  const ctx = (userStatus) => ({ userStatus, channels: [], user: { id: 1 }, _mutedUserIds: () => new Set(), _mutedChannelList: () => [], _notifyBlockedByMutes: () => false, _getNickname: (id, name) => name, _maskSpoilers: (t) => t, notifications: { mentionsEnabled: true, repliesEnabled: true, dmEnabled: true, enabled: true, popupAllowed: () => true } });
   for (const status of ['dnd', 'online']) mod._fireNativeNotification.call(ctx(status), { user_id: 2, username: 'bob', content: 'hi' }, 'abc', {});
   assert.equal(shown.length, 1);
   delete global.window;
