@@ -61,6 +61,7 @@ _setupAccessibility() {
     ['a11y-high-contrast', 'haven-contrast', 'high', 'highContrast'],
     ['a11y-underline-links', 'haven-underline-links', '1', 'underlineLinks'],
     ['a11y-large-targets', 'haven-large-targets', '1', 'largeTargets'],
+    ['a11y-lite-mode', 'haven-lite-mode', '1', 'lite'],
   ].forEach(([id, key, onValue, field]) => {
     const box = document.getElementById(id);
     if (!box) return;

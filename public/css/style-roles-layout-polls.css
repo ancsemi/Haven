@@ -697,7 +697,7 @@ html.haven-background .main::before { animation-play-state: paused; }
   flex-shrink: 0;
 }
 .online-overlay-status-dot.online { background: #43b581; }
-.online-overlay-status-dot.offline { background: #72767d; }
+.online-overlay-status-dot.offline { background: transparent; box-shadow: inset 0 0 0 2px #72767d; }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    MOD MODE: Layout customisation drag & drop

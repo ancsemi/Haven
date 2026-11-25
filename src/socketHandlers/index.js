@@ -13,9 +13,10 @@ const { sendFcm, isFcmEnabled } = require('../fcm');
 const { DATA_DIR } = require('../paths');
 const HAVEN_VERSION = require('../../package.json').version;
 
-const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme, VALID_ROLE_PERMS, filterIdleOnline, maskSpoilers, toReplyContext } = require('./helpers');
+const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, cleanHexColor, cleanProfileTheme, profileLinksFromRow, VALID_ROLE_PERMS, filterIdleOnline, maskSpoilers, toReplyContext } = require('./helpers');
 const { socketClientIp } = require('../clientIp');
 const automod = require('../automod');
+const { pushBody } = require('../pushBody');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
 const createPermissions = require('./permissions');
 const createChannelLists = require('./channelList');
@@ -1400,7 +1401,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       } catch { /* not JSON, use as-is */ }
 
       displayContent = maskSpoilers(displayContent);
-      const body = displayContent.length > 120 ? displayContent.slice(0, 117) + '...' : displayContent;
+      const body = pushBody(displayContent);
       const title = `${senderUsername} in #${channelName}`;
       const payload = JSON.stringify({
         title, body, channelCode,
@@ -2109,7 +2110,7 @@ function setupSocketHandlers(io, db, opts = {}) {
 
       try {
         // created_at feeds the automod new-account link gate (v3.42.0).
-        let uRow = accountDb.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, is_bot, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio, banner_color, avatar_color, banner, profile_theme_top, profile_theme_bottom FROM users WHERE id = ?').get(user.id);
+        let uRow = accountDb.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, is_bot, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio, banner_color, avatar_color, banner, profile_theme_top, profile_theme_bottom, profile_links FROM users WHERE id = ?').get(user.id);
         if (asyncAccountReads) uRow = await uRow;
         // A bot keeps its token through a rename (src/botAccounts.js), so
         // its name is read from the account rather than the token.
@@ -2142,6 +2143,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         socket.user.avatarColor = uRow.avatar ? cleanHexColor(uRow.avatar_color) : null;
         socket.user.banner = isValidUploadPath(uRow.banner) ? uRow.banner : null;
         socket.user.profileTheme = cleanProfileTheme(uRow.profile_theme_top, uRow.profile_theme_bottom);
+        socket.user.profileLinks = profileLinksFromRow(uRow.profile_links);
         // (#12) The client needs this to ask for the right secret: an SSO
         // account unlocks E2E with its encryption passphrase, not a password.
         socket.user.isSso = !!uRow.oidc_subject;
@@ -2377,6 +2379,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       avatarColor: socket.user.avatarColor || null,
       banner: socket.user.banner || null,
       profileTheme: socket.user.profileTheme || null,
+      profileLinks: socket.user.profileLinks || [],
       birthday: socket.user.birthday || null,
       birthdaySetAt: socket.user.birthdaySetAt || null,
       birthdayHideYear: socket.user.birthdayHideYear !== false,

@@ -819,6 +819,10 @@ _setProfileBannerImage(el, url, animate) {
   el.prepend(img);
 },
 
+_profileLinksHtml(list) {
+  const links = this._cleanProfileLinks(list);
+  return links.length ? `<div class="profile-popup-links">${links.map((l) => `<a class="profile-link-btn" href="${this._escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" data-masked-link title="${this._escapeHtml(l.url)}"><span class="profile-link-label">${this._escapeHtml(l.label)}</span><span class="profile-link-host">${this._escapeHtml(new URL(l.url).host)}</span></a>`).join('')}</div>` : '';
+},
 _showProfilePopup(profile) {
   // If this was a hover-triggered popup but the mouse already left, abort
   if (this._isHoverPopup && !this._hoverTarget) return;
@@ -906,6 +910,7 @@ _showProfilePopup(profile) {
       </div>
       <div id="profile-popup-status-slot">${statusTextHtml}</div>
       ${bioHtml}
+      ${this._profileLinksHtml(profile.profileLinks)}
       <div class="profile-popup-divider"></div>
       <div id="profile-popup-activity-slot">${this._profileActivityHtml(profile.activity)}</div>
       ${rolesHtml ? `<div class="profile-popup-section-label">${t('users.profile_roles_label')}</div><div class="profile-popup-roles">${rolesHtml}</div>` : ''}
@@ -1056,6 +1061,7 @@ _bindProfilePopupOutsideClose(popup) {
     this._profilePopupOutsideHandler = (e) => {
       const lightbox = document.getElementById('image-lightbox');
       if (lightbox && lightbox.contains(e.target)) return;
+      if (e.target.closest?.('.risky-download-overlay')) return;
       if (!popup.contains(e.target)) this._closeProfilePopup();
     };
     document.addEventListener('click', this._profilePopupOutsideHandler);

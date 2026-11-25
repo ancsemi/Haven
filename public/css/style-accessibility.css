@@ -204,6 +204,25 @@ html.reduce-motion *::after {
   scroll-behavior: auto !important;
 }
 
+html.lite-mode,
+html.lite-mode *,
+html.lite-mode *::before,
+html.lite-mode *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html.lite-mode :is(.sidebar-header, .chat-header, .channel-header, #channel-header, .message-input-area, .message-input-container, .profile-popup) {
+  background: var(--bg-secondary) !important;
+}
+html.lite-mode .main[class*="banner-mode-"] :is(.channel-info, .header-actions-box, .btn-voice, .voice-active-indicator) {
+  background: rgba(0,0,0,0.6);
+}
+html.lite-mode .main.banner-mode-minimal .channel-topic-bar {
+  background: rgba(0,0,0,0.6) !important;
+}
+html.lite-mode :is(.lp-image, .lp-avatar, .lp-play, .link-preview-gallery) {
+  display: none !important;
+}
 /* ── Larger click targets ────────────────────────────────
    Taller rows in the sidebars and settings, and bigger buttons in the
    message box, the channel header and the message action bars. */

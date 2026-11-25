@@ -944,6 +944,20 @@ _getUserColor(username) {
 _safeHexColor(value) {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
 },
+_cleanProfileLink(link) {
+  const label = typeof link?.label === 'string' ? link.label.trim() : '', raw = typeof link?.url === 'string' ? link.url.trim() : '';
+  if (!label || label.length > 32 || /[\p{Cc}‪-‮⁦-⁩]/u.test(label)) return null;
+  if (!/^https:\/\//i.test(raw) || raw.length > 300 || /[\s\p{Cc}]/u.test(raw)) return null;
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' && u.hostname && !u.username && !u.password && u.href.length <= 300 ? { label, url: u.href } : null;
+  } catch {
+    return null;
+  }
+},
+_cleanProfileLinks(list) {
+  return Array.isArray(list) ? list.slice(0, 5).map((link) => this._cleanProfileLink(link)).filter(Boolean) : [];
+},
 
 // The color an avatar mostly is, for the default banner. Pixels are binned
 // coarsely and the fullest bin wins, then averaged, so a photo gives its main

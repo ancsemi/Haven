@@ -611,6 +611,90 @@
 [data-theme="cloudy"] .screen-share-tile { background: #dde1ea; }
 [data-theme="cloudy"] .toast { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); }
 
+/* ─── THEME: Lemonade (Light yellow, pink outlines) ────── */
+[data-theme="lemonade"] {
+  --bg-primary:    #fffbe6;
+  --bg-secondary:  #fff4c4;
+  --bg-tertiary:   #ffedab;
+  --bg-hover:      #fff0b7;
+  --bg-active:     #ffe591;
+  --bg-input:      #fffef5;
+  --bg-card:       #fff7d2;
+
+  --accent:        #c82a74;
+  --accent-hover:  #da3f87;
+  --accent-dim:    #a51f5e;
+  --accent-text:   #ffffff;
+  --accent-glow:   rgba(200, 42, 116, 0.18);
+
+  --text-primary:  #3a2d10;
+  --text-secondary:#6d5a27;
+  --text-muted:    #947f45;
+  --text-link:     #a8215f;
+
+  --border:        #f08fbb;
+  --border-light:  #f6b5d1;
+
+  --success:       #37823a;
+  --danger:        #c0392b;
+  --warning:       #a86a0c;
+
+  --led-on:        #37823a;
+  --led-off:       #e0d3a0;
+  --led-glow:      rgba(55, 130, 58, 0.4);
+
+  --theme-logo:    "✿";
+  --scanline:      none;
+}
+/* ─── THEME: Strawberry (Pink, red outlines) ───────────── */
+[data-theme="strawberry"] {
+  --bg-primary:    #fff0f4;
+  --bg-secondary:  #ffdfe8;
+  --bg-tertiary:   #ffd1dd;
+  --bg-hover:      #ffd9e3;
+  --bg-active:     #ffc2d2;
+  --bg-input:      #fff9fb;
+  --bg-card:       #ffe7ee;
+
+  --accent:        #c3102f;
+  --accent-hover:  #da2643;
+  --accent-dim:    #9d0d26;
+  --accent-text:   #ffffff;
+  --accent-glow:   rgba(195, 16, 47, 0.18);
+
+  --text-primary:  #3c121d;
+  --text-secondary:#753647;
+  --text-muted:    #9d5f70;
+  --text-link:     #a90e2a;
+
+  --border:        #e25c72;
+  --border-light:  #ee94a3;
+
+  --success:       #2f7a4c;
+  --danger:        #b00020;
+  --warning:       #a45f00;
+
+  --led-on:        #2f7a4c;
+  --led-off:       #e7b9c4;
+  --led-glow:      rgba(47, 122, 76, 0.4);
+
+  --theme-logo:    "♥";
+  --scanline:      none;
+}
+:is([data-theme="lemonade"], [data-theme="strawberry"]) :is(.sidebar, .right-sidebar) { background: var(--bg-secondary); }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) .channel-header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) .message-row:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) .message-input-container { background: var(--bg-input); border: 1px solid var(--border); }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) :is(.sidebar-bottom-bar, .server-bar) { background: var(--bg-tertiary); }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) .modal { background: var(--bg-primary); border: 1px solid var(--border); }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) ::-webkit-scrollbar-thumb { background: var(--border-light) !important; }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) ::-webkit-scrollbar-thumb:hover { background: var(--border) !important; }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) ::selection { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) .inline-code { color: var(--accent-dim); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) .code-block { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) :is(.webcam-tile, .screen-share-tile) { background: var(--bg-tertiary); }
+:is([data-theme="lemonade"], [data-theme="strawberry"]) .toast { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); }
+
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    RESET

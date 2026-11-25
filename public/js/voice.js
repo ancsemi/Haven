@@ -2170,12 +2170,7 @@ class VoiceManager {
     }
     // Also mute all audio elements as fallback
     document.querySelectorAll('#audio-container audio').forEach(el => {
-      if (this.isDeafened) {
-        el.dataset.prevVolume = el.volume;
-        el.volume = 0;
-      } else {
-        el.volume = parseFloat(el.dataset.prevVolume || 1);
-      }
+      this.isDeafened ? (el.dataset.prevVolume = el.volume, el.volume = 0) : (el.dataset.prevVolume !== undefined && (el.volume = parseFloat(el.dataset.prevVolume)), delete el.dataset.prevVolume);
     });
     if (this._botAudio) this._botAudio.audio.volume = this.isDeafened ? 0 : 1;
     return this.isDeafened;

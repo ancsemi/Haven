@@ -10,9 +10,9 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.31.1">
+  <link rel="stylesheet" href="/css/style.css?v=4.31.780">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
-  <script src="/js/theme-init.js?v=4.27.20"></script>
+  <script src="/js/theme-init.js?v=4.27.771"></script>
 </head>
 <body data-haven-page="app">
 
@@ -227,6 +227,8 @@
               <button class="theme-btn" data-theme="rgb" title="RGB"><span class="theme-icon">🌈</span></button>
               <button class="theme-btn" data-theme="daylight" title="Daylight (Light)"><span class="theme-icon">☀️</span></button>
               <button class="theme-btn" data-theme="cloudy" title="Cloudy (Light)"><span class="theme-icon">☁️</span></button>
+              <button class="theme-btn" data-theme="lemonade" title="Lemonade (Light)"><span class="theme-icon">🍋</span></button>
+              <button class="theme-btn" data-theme="strawberry" title="Strawberry (Light)"><span class="theme-icon">🍓</span></button>
               </div>
             </div>
             <!-- Pinned under the themes, so effects never need a scroll to the end -->
@@ -1290,6 +1292,11 @@
         <textarea id="edit-profile-bio" class="edit-profile-textarea" maxlength="190" data-i18n-placeholder="modals.edit_profile.bio_placeholder" placeholder="Tell people about yourself…" rows="2"></textarea>
       </div>
 
+      <div class="form-group" id="edit-profile-links-group" style="margin-top:8px">
+        <label data-i18n="modals.edit_profile.links_label">Links</label> <span class="muted-text" data-i18n="modals.edit_profile.links_hint">(up to 5, https only)</span>
+        <div id="edit-profile-links" class="profile-link-rows"></div>
+        <button type="button" class="btn-sm" id="edit-profile-link-add" data-i18n="modals.edit_profile.links_add">Add link</button>
+      </div>
       <!-- Birthday: set once and never changed; hiding it keeps the date -->
       <div class="form-group" style="margin-top:8px">
         <label for="edit-profile-birthday" data-i18n="modals.edit_profile.birthday_label">Birthday</label>
@@ -1526,6 +1533,7 @@
           <div class="settings-nav-user">
           <div class="settings-nav-group-label" data-i18n="settings.nav.group_appearance">Appearance</div>
           <div class="settings-nav-item active" data-target="section-language">🗣️ <span data-i18n="settings.nav.localization">Localization</span></div>
+          <div class="settings-nav-item" data-target="section-lite-mode">🪶 <span data-i18n="settings.nav.lite_mode">Lite Mode</span></div>
           <div class="settings-nav-item" data-target="section-layout">📐 <span data-i18n="settings.nav.layout">Layout &amp; Density</span></div>
           <div class="settings-nav-item" data-target="section-zoom">♿ <span data-i18n="settings.nav.accessibility">Accessibility</span></div>
           <div class="settings-nav-item" data-target="section-reaction-size">😀 <span data-i18n="settings.nav.reaction_size">Reaction Size</span></div>
@@ -1640,6 +1648,15 @@
           </div>
           <small class="settings-hint" data-i18n="settings.timezone_section.hint">Saved to your account and used on every device</small>
         </div>
+      </div>
+
+      <div class="settings-section" id="section-lite-mode" style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 8px;">
+        <h5 class="settings-section-title">🪶 <span data-i18n="settings.lite_mode.title">Lite Mode</span></h5>
+        <label class="toggle-row">
+          <span data-i18n="settings.lite_mode.label">Lite mode</span>
+          <input type="checkbox" id="a11y-lite-mode">
+        </label>
+        <small class="settings-hint" style="display:block" data-i18n="settings.lite_mode.hint">For slow or older devices. Turns on Reduce Motion, keeps GIFs, animated emoji, avatars, banners and stickers on their first frame until you point at them, drops blur effects, shows link previews as text only and loads videos only when you press play. Only changes this device.</small>
       </div>
 
       <div class="settings-section" id="section-layout">
@@ -3007,6 +3024,8 @@
                 <option value="rgb">RGB</option>
                 <option value="daylight">Daylight (Light)</option>
                 <option value="cloudy">Cloudy (Light)</option>
+                <option value="lemonade">Lemonade (Light)</option>
+                <option value="strawberry">Strawberry (Light)</option>
               </select>
             </label>
             <small class="settings-hint" data-i18n="settings.admin.default_theme_hint">New users see this theme on first visit. They can still pick their own. A theme shared under Defaults for New Members is this same setting: changing one changes the other.</small>
@@ -5665,7 +5684,10 @@
   <!-- Shared with the server (src/automod.js requires the same file) so both
        sides reach identical verdicts on a link. Must load before app.js. -->
   <script src="/js/automod-rules.js?v=4.29.8"></script>
-  <script type="module" src="/js/app.js?v=4.31.1"></script>
+  <!-- Shared with the server (push bodies use the same flattening). -->
+  <script src="/js/notify-preview.js?v=4.31.0"></script>
+  <script src="/js/message-links.js?v=4.31.0"></script>
+  <script type="module" src="/js/app.js?v=4.31.781"></script>
   <script src="/js/plugin-loader.js?v=4.29.63"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>
