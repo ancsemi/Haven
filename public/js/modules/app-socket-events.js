@@ -488,6 +488,13 @@ _listenMessageChanges() {
           contentEl.appendChild(editedTag);
         }
         this._restoreSilentTag?.(msgEl, contentEl);
+        const isResult = msgEl.classList.contains('search-result-item');
+        isResult ? this._searchDeferEmbeds(msgEl) : this._fetchLinkPreviews(msgEl);
+        this._setupVideos(msgEl);
+        if (isResult) return;
+        this._decryptE2EImages(msgEl);
+        this._decryptE2EFiles(msgEl);
+        if (this._isDmContainer(msgEl)) this._enforceDmLinkPolicy(msgEl);
       });
     }
   });
