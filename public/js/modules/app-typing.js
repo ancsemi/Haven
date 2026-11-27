@@ -55,7 +55,7 @@ _typingAdd(code, userId, username) {
 },
 
 _typingNames(code) {
-  const typers = code && this._typers.get(code);
+  const typers = code && this._typers?.get(code);
   if (!typers) return [];
   const now = Date.now();
   const names = [];
@@ -84,7 +84,7 @@ _typingRender() {
   const pip = document.getElementById('dm-pip-typing');
   if (pip) pip.textContent = this._typingText(this._typingNames(this._activeDMPip));
   let next = Infinity;
-  for (const typers of this._typers.values()) for (const ty of typers.values()) next = Math.min(next, ty.until);
+  for (const typers of this._typers?.values() ?? []) for (const ty of typers.values()) next = Math.min(next, ty.until);
   if (next !== Infinity) this._typingTimer = setTimeout(() => this._typingRender(), Math.max(50, next - Date.now()));
 },
 
