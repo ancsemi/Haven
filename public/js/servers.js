@@ -318,6 +318,7 @@ class ServerManager {
         const normalizedUrl = this._normalizeUrl(s?.url || '');
         if (!normalizedUrl || seen.has(normalizedUrl)) continue;
         s.url = normalizedUrl;
+        s.name = String(s.name || '').trim() || normalizedUrl;
         seen.add(normalizedUrl);
         deduped.push(s);
       }
@@ -805,6 +806,7 @@ class ServerManager {
           removedChanged = true;
         }
         rs.url = normalizedUrl; // store the normalized form
+        rs.name = String(rs.name || '').trim() || normalizedUrl;
         this.servers.push(rs);
         localUrls.add(normalizedUrl); // prevent duplicate adds within same sync
         changed = true;

@@ -108,7 +108,7 @@ import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.3';
 import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.31.2';
 import ThreadDockMethods from './modules/app-thread-dock.js?v=4.25.7';
 import NavHistoryMethods from './modules/app-nav-history.js?v=4.29.59';
-import TypingMethods from './modules/app-typing.js?v=4.25.8';
+import TypingMethods from './modules/app-typing.js?v=4.31.7437';
 import MessageNsfwMethods from './modules/app-message-nsfw.js?v=4.25.10';
 import MediaPlaybackMethods from './modules/app-media-playback.js?v=4.27.49';
 import PermDraftMethods from './modules/app-perm-draft.js?v=4.26.1';
@@ -737,6 +737,13 @@ Object.assign(HavenApp.prototype,
   ChannelTypeMethods,
   MentionsMethods,
 );
+for (const name of Object.keys(HavenApp.prototype).filter((key) => /^_(setup|init)[A-Z]/.test(key))) {
+  const step = HavenApp.prototype[name];
+  HavenApp.prototype[name] = function (...args) {
+    try { return step.apply(this, args); }
+    catch (err) { console.error(`[Haven] ${name} failed, the rest of the page carries on`, err); }
+  };
+}
 
 // ── Boot ───────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
