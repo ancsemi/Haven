@@ -149,8 +149,6 @@
       }
     },
     "eula": {
-      "age_confirm": "我确认我<strong>年满 18 周岁</strong>（或我所在司法管辖区的法定成年年龄）",
-      "tos_confirm": "我已阅读并同意<a href=\"#\" id=\"eula-link\">《服务条款与责任豁免协议》</a>",
       "modal_title": "📜 服务条款与责任豁免协议",
       "decline": "拒绝",
       "accept": "我接受",
@@ -173,8 +171,6 @@
       "passwords_no_match": "两次输入的密码不一致",
       "password_too_short": "密码至少 8 个字符",
       "captcha_incomplete": "请完成验证码。",
-      "must_be_18": "你必须确认自己年满 18 周岁",
-      "must_accept_tos": "你必须接受服务条款与责任豁免协议",
       "enter_admin_credentials": "请先在上方输入管理员用户名和密码",
       "enter_auth_code": "请输入验证码",
       "session_expired": "会话已过期。请重新登录",

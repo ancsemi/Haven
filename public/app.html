@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title>Haven</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.31.7430">
+  <link rel="stylesheet" href="/css/style.css?v=4.31.7440">
   <script src="/js/theme-compat.js?v=4.24.18"></script>
   <script src="/js/theme-init.js?v=4.27.771"></script>
 </head>
@@ -3057,7 +3057,12 @@
               <span data-i18n="settings.admin.welcome_message">Welcome Message</span>
               <input type="text" id="welcome-message-input" maxlength="500" class="settings-text-input" style="max-width:280px" data-i18n-placeholder="settings.admin.welcome_message_placeholder" placeholder="e.g. Welcome {user}!">
             </label>
-            <small class="settings-hint" data-i18n-html="settings.admin.welcome_message_hint">Shown when a new user joins a channel. Use <code>{user}</code> for the username. Leave blank to disable.</small>
+            <small class="settings-hint" data-i18n-html="settings.admin.welcome_message_hint">Shown when a new user joins a channel. Use <code>{user}</code> for the username. <code>{total}</code> for the total number of members in your server. Leave blank to disable.</small>
+            <label class="toggle-row" style="margin-top:8px">
+              <span data-i18n="settings.admin.welcome_attach_avatar">Attach profile picture</span>
+              <input type="checkbox" id="welcome-attach-avatar">
+            </label>
+            <small class="settings-hint" data-i18n="settings.admin.welcome_attach_avatar_hint">If the user uploaded a profile picture during sign up, the welcome message will embed the user's profile picture using a direct link. The picture is never re-uploaded twice.</small>
           </div>
 
           <!-- Defaults for new members (#5739): app-member-defaults.js -->
@@ -5700,7 +5705,7 @@
   <!-- Shared with the server (push bodies use the same flattening). -->
   <script src="/js/notify-preview.js?v=4.31.0"></script>
   <script src="/js/message-links.js?v=4.31.0"></script>
-  <script type="module" src="/js/app.js?v=4.31.7430"></script>
+  <script type="module" src="/js/app.js?v=4.31.7440"></script>
   <script src="/js/plugin-loader.js?v=4.31.2"></script>
   <script src="/js/modules/stream-debug.js?v=4.21.0"></script>
   <script src="/js/password-eye.js?v=4.21.0"></script>

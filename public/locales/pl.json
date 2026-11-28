@@ -158,8 +158,6 @@
       }
     },
     "eula": {
-      "age_confirm": "Potwierdzam, że mam <strong>18 lat lub więcej</strong> (lub wiek pełnoletności w mojej jurysdykcji)",
-      "tos_confirm": "Przeczytałem(-am) i akceptuję <a href=\"#\" id=\"eula-link\">Warunki korzystania z usługi i zwolnienie z odpowiedzialności</a>",
       "modal_title": "⚖️ Warunki korzystania z usługi i zwolnienie z odpowiedzialności",
       "decline": "Odrzuć",
       "accept": "Akceptuję",
@@ -182,8 +180,6 @@
       "passwords_no_match": "Hasła nie są zgodne",
       "password_too_short": "Hasło musi mieć co najmniej 8 znaków",
       "captcha_incomplete": "Rozwiąż CAPTCHA.",
-      "must_be_18": "Musisz potwierdzić, że masz 18 lat lub więcej",
-      "must_accept_tos": "Musisz zaakceptować Warunki korzystania z usługi i zwolnienie z odpowiedzialności",
       "enter_admin_credentials": "Najpierw wprowadź swoją nazwę użytkownika i hasło administratora powyżej",
       "enter_auth_code": "Wprowadź kod uwierzytelniający",
       "session_expired": "Sesja wygasła — zaloguj się ponownie",

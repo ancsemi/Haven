@@ -149,8 +149,6 @@
       }
     },
     "eula": {
-      "age_confirm": "본인은 <strong>만 18세 이상</strong>(또는 거주 지역의 법적 성년 연령 이상)임을 확인합니다",
-      "tos_confirm": "<a href=\"#\" id=\"eula-link\">서비스 약관 및 책임 면제 동의서</a>를 읽었으며 이에 동의합니다",
       "modal_title": "⚖️ 서비스 약관 및 책임 면제 동의서",
       "decline": "거부",
       "accept": "동의합니다",
@@ -172,8 +170,6 @@
       "passwords_no_match": "비밀번호가 일치하지 않습니다",
       "password_too_short": "비밀번호는 최소 8자 이상이어야 합니다",
       "captcha_incomplete": "CAPTCHA를 완료하세요.",
-      "must_be_18": "만 18세 이상임을 확인해야 합니다",
-      "must_accept_tos": "서비스 약관 및 책임 면제 동의서에 동의해야 합니다",
       "enter_admin_credentials": "먼저 위에 관리자 사용자 이름과 비밀번호를 입력하세요",
       "enter_auth_code": "인증 코드를 입력하세요",
       "session_expired": "세션이 만료되었습니다. 다시 로그인하세요",

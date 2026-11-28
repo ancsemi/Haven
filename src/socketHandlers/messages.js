@@ -463,9 +463,17 @@ module.exports = function register(socket, ctx) {
     // Blog mode: each card counts only the comments, not the author's own
     // follow-ups (#5742).
     const blogComments = channel.is_forum && Number(channel.forum_blog) === 1 ? forumBlog.commentCounts(db, msgIds) : null;
+    // The login name a welcome message greets, so the client can link it to
+    // the member's profile. Login names never change, so it still matches the
+    // text; a deleted account has no user_id and stays plain text.
+    const welcomeIds = [...new Set(messages.filter(m => m.type === 'welcome' && m.user_id).map(m => m.user_id))];
+    const welcomeNames = new Map(welcomeIds.length
+      ? db.prepare(`SELECT id, username FROM users WHERE id IN (${welcomeIds.map(() => '?').join(',')})`).all(...welcomeIds).map(u => [u.id, u.username])
+      : []);
 
     const enriched = messages.map(m => {
       const obj = { ...m };
+      if (m.type === 'welcome' && welcomeNames.has(m.user_id)) obj.welcomeName = welcomeNames.get(m.user_id);
       // Border fit travels with the message (like avatar) so it renders even when
       // the author is offline. Parse the stored JSON into the op array the client folds.
       obj.borderTransform = parseBorderTransform(m.border_transform);

@@ -68,7 +68,7 @@ const thresholdsOf = (v) => {
 };
 const B = { t: 'bool' }, N = (lo, hi) => ({ t: 'int', lo, hi }), E = (...v) => ({ t: 'enum', v }), T = (max) => ({ t: 'text', max }), F = (fn) => ({ t: 'fn', fn });
 const SETTINGS = {
-  server_name: T(32), server_title: T(40), welcome_message: T(500), custom_tos: T(50000), default_locale: E('', 'en', 'fr', 'de', 'es', 'pl', 'ru', 'uk', 'zh', 'pt', 'fa', 'ja', 'ko'),
+  server_name: T(32), server_title: T(40), welcome_message: T(500), welcome_attach_avatar: B, custom_tos: T(50000), default_locale: E('', 'en', 'fr', 'de', 'es', 'pl', 'ru', 'uk', 'zh', 'pt', 'fa', 'ja', 'ko'),
   member_visibility: E('all', 'online', 'none'), allow_self_purge: B, hide_disabled_channel_badges: B, guests_enabled: B, guests_allow_voice: B,
   media_group_layout: E(...MEDIA_GROUP_LAYOUTS),
   max_upload_mb: N(1, 102400), max_attachments: N(1, 50), max_poll_options: N(2, 25), max_message_chars: N(200, 100000), max_tags_per_attachment: N(1, 20),

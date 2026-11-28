@@ -310,7 +310,13 @@ router.get('/registration-info', async (req, res) => {
     const siteKeyRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'turnstile_site_key'").get();
     const turnstileSiteKey = (siteKeyRow && typeof siteKeyRow.value === 'string') ? siteKeyRow.value.trim() : '';
     const captchaEnabled = !!(capEnabledRow && capEnabledRow.value === 'true' && turnstileSiteKey);
-    res.json({ requiresToken, invitesBypassToken, captchaEnabled, turnstileSiteKey: captchaEnabled ? turnstileSiteKey : '' });
+    // The profile picture limit (1 to 10 MB, 2 by default), for the optional
+    // picture on the form. The Postgres preview cannot take uploads yet, so
+    // it offers no picture.
+    const avatarRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'max_avatar_mb'").get();
+    const avatarMb = parseInt(avatarRow?.value, 10);
+    const maxAvatarMb = db.kind === 'postgres' ? null : (avatarMb >= 1 && avatarMb <= 10 ? avatarMb : 2);
+    res.json({ requiresToken, invitesBypassToken, captchaEnabled, turnstileSiteKey: captchaEnabled ? turnstileSiteKey : '', maxAvatarMb });
   } catch (err) {
     res.json({ requiresToken: false, captchaEnabled: false, turnstileSiteKey: '' });
   }
@@ -486,16 +492,25 @@ function provisionNewUser(db, userId, username, io, { welcome = true } = {}) {
     const wmRow = db.prepare("SELECT value FROM server_settings WHERE key = 'welcome_message'").get();
     const template = wmRow && typeof wmRow.value === 'string' ? wmRow.value.trim() : '';
     if (template) {
-      const welcomeText = template.replace(/\{user\}/gi, username).slice(0, 500);
+      // {total} counts the members with the newcomer, leaving out bots and guests.
+      const total = /\{total\}/i.test(template)
+        ? db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_bot = 0 AND COALESCE(is_guest, 0) = 0').get().n : 0;
+      const welcomeText = template.replace(/\{user\}/gi, username).replace(/\{total\}/gi, String(total)).slice(0, 500);
+      // When the admin asks for it, a picture the member already has (one
+      // brought over from another Haven server) goes on the message. One
+      // picked on the sign up form arrives just after (src/routes/profile.js).
+      const attachRow = db.prepare("SELECT value FROM server_settings WHERE key = 'welcome_attach_avatar'").get();
+      const picture = attachRow?.value === 'true'
+        ? db.prepare('SELECT avatar FROM users WHERE id = ?').get(userId)?.avatar || null : null;
       const welcomeChannels = db.prepare(
         'SELECT id, code FROM channels WHERE is_dm = 0 AND show_welcome = 1'
       ).all();
       if (welcomeChannels.length) {
         const insertWelcome = db.prepare(
-          "INSERT INTO messages (channel_id, user_id, content, type) VALUES (?, ?, ?, 'welcome')"
+          "INSERT INTO messages (channel_id, user_id, content, type, persona_avatar) VALUES (?, ?, ?, 'welcome', ?)"
         );
         for (const ch of welcomeChannels) {
-          const info = insertWelcome.run(ch.id, userId, welcomeText);
+          const info = insertWelcome.run(ch.id, userId, welcomeText, picture);
           if (io) {
             io.to(`channel:${ch.code}`).emit('welcome-message', {
               channelCode: ch.code,
@@ -504,6 +519,8 @@ function provisionNewUser(db, userId, username, io, { welcome = true } = {}) {
                 user_id: userId,
                 content: welcomeText,
                 type: 'welcome',
+                persona_avatar: picture,
+                welcomeName: username,
                 created_at: new Date().toISOString()
               }
             });

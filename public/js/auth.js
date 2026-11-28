@@ -192,7 +192,6 @@
   }).catch((err) => { console.warn('[Auth] could not load the public config', err); });
 
   // ── EULA ─────────────────────────────────────────────
-  const ageCheckbox  = document.getElementById('age-checkbox');
   const eulaCheckbox = document.getElementById('eula-checkbox');
   const eulaModal = document.getElementById('eula-modal');
   const eulaLink = document.getElementById('eula-link');
@@ -203,7 +202,6 @@
   // Restore EULA acceptance from localStorage (v2.0 requires re-acceptance)
   if (localStorage.getItem('haven_eula_accepted') === '2.0') {
     eulaCheckbox.checked = true;
-    ageCheckbox.checked  = true;
   }
 
   eulaLink.addEventListener('click', (e) => {
@@ -223,14 +221,12 @@
 
   eulaAcceptBtn.addEventListener('click', () => {
     eulaCheckbox.checked = true;
-    ageCheckbox.checked  = true;
     localStorage.setItem('haven_eula_accepted', '2.0');
     eulaModal.style.display = 'none';
   });
 
   eulaDeclineBtn.addEventListener('click', () => {
     eulaCheckbox.checked = false;
-    ageCheckbox.checked  = false;
     localStorage.removeItem('haven_eula_accepted');
     eulaModal.style.display = 'none';
   });
@@ -239,13 +235,10 @@
     if (e.target === e.currentTarget) eulaModal.style.display = 'none';
   });
 
+  // One box confirms both the age and the Terms of Service.
   function checkEula() {
-    if (!ageCheckbox.checked) {
-      showError(t('auth.errors.must_be_18'));
-      return false;
-    }
     if (!eulaCheckbox.checked) {
-      showError(t('auth.errors.must_accept_tos'));
+      showError(t('auth.errors.must_confirm_consent'));
       return false;
     }
     return true;
@@ -1035,6 +1028,8 @@
   // token field. Best-effort fetch: if it fails we just leave the
   // field hidden and the server will reject without the token.
   // field is also hidden if an invite link is used and is allowed to override the token requirement.
+  // The optional profile picture shows with the server's size limit under it.
+  let _regAvatarMaxMb = 0;
   async function _initRegistrationForm() {
     try {
       const r = await fetch('/api/auth/registration-info');
@@ -1048,6 +1043,11 @@
       }
       if (info && info.captchaEnabled && info.turnstileSiteKey) {
         _initRegistrationCaptcha(info.turnstileSiteKey);
+      }
+      if (info && info.maxAvatarMb) {
+        _regAvatarMaxMb = info.maxAvatarMb;
+        document.getElementById('reg-avatar-hint').textContent = t('auth.register.avatar_hint', { max: info.maxAvatarMb });
+        document.getElementById('reg-avatar-group').style.display = '';
       }
     } catch (err) { console.warn('[Auth] could not load registration info', err); }
   }
@@ -1067,6 +1067,14 @@
     if (!username || !password || !confirm) return showError(t('auth.errors.fill_all_fields'));
     if (password !== confirm) return showError(t('auth.errors.passwords_no_match'));
     if (password.length < 8) return showError(t('auth.errors.password_too_short'));
+
+    // The picture is checked before the account exists, since it is only
+    // uploaded once the account has a token.
+    const avatarFile = _regAvatarMaxMb ? document.getElementById('reg-avatar').files[0] : null;
+    if (avatarFile) {
+      if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(avatarFile.type)) return showError(t('toasts.not_an_image'));
+      if (avatarFile.size > _regAvatarMaxMb * 1024 * 1024) return showError(t('toasts.image_too_large', { max: _regAvatarMaxMb }));
+    }
 
     const captchaToken = _captchaTokenFor('main');
     if (captchaToken === '') return showError(t('auth.errors.captcha_incomplete'));
@@ -1105,6 +1113,20 @@
       // Derive E2E wrapping key from password (client-side only, never sent to server)
       const e2eWrap = await deriveE2EWrappingKey(password);
       sessionStorage.setItem('haven_e2e_wrap', e2eWrap);
+
+      // The account exists by now, so a refused picture only leaves it
+      // without one, and Edit Profile can still add it.
+      if (avatarFile) {
+        try {
+          const form = new FormData();
+          // Lets the server put it on the welcome message too, when that is on.
+          form.append('signup', '1');
+          form.append('avatar', avatarFile);
+          const up = await fetch('/api/upload-avatar', { method: 'POST', headers: { Authorization: `Bearer ${data.token}` }, body: form });
+          if (up.ok) data.user.avatar = (await up.json()).url;
+          else console.warn('[Auth] profile picture upload failed', up.status);
+        } catch (err) { console.warn('[Auth] profile picture upload failed', err); }
+      }
 
       localStorage.setItem('haven_token', data.token);
       localStorage.setItem('haven_user', JSON.stringify(data.user));

@@ -404,6 +404,8 @@ _applyServerSettings() {
     if (welcomeInput) {
       welcomeInput.value = this.serverSettings.welcome_message || '';
     }
+    const welcomeAvatar = document.getElementById('welcome-attach-avatar');
+    if (welcomeAvatar) welcomeAvatar.checked = this.serverSettings.welcome_attach_avatar === 'true';
     this._fillLoginBranding?.();
     const cleanupEnabled = document.getElementById('cleanup-enabled');
     if (cleanupEnabled) {
@@ -921,6 +923,7 @@ _snapshotAdminSettings() {
     server_name: this.serverSettings.server_name || '',
     server_title: this.serverSettings.server_title || '',
     welcome_message: this.serverSettings.welcome_message || '',
+    welcome_attach_avatar: this.serverSettings.welcome_attach_avatar || 'false',
     member_visibility: this.serverSettings.member_visibility || 'online',
     referrer_policy: this.serverSettings.referrer_policy || 'same-origin', // must match DEFAULT_REFERRER_POLICY in server.js
     cleanup_enabled: this.serverSettings.cleanup_enabled || 'false',
@@ -1017,6 +1020,11 @@ _saveAdminSettings() {
   const welcomeMsg = document.getElementById('welcome-message-input')?.value.trim() || '';
   if (welcomeMsg !== (snap.welcome_message || '')) {
     this.socket.emit('update-server-setting', { key: 'welcome_message', value: welcomeMsg });
+    changed = true;
+  }
+  const welcomeAvatar = document.getElementById('welcome-attach-avatar')?.checked ? 'true' : 'false';
+  if (welcomeAvatar !== (snap.welcome_attach_avatar || 'false')) {
+    this.socket.emit('update-server-setting', { key: 'welcome_attach_avatar', value: welcomeAvatar });
     changed = true;
   }
 

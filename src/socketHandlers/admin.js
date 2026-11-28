@@ -145,7 +145,7 @@ module.exports = function register(socket, ctx) {
       'media_group_layout', // (#5799) pictures sent together: 'grid' or 'stacked'
       'allow_self_purge', // (#5686) members may delete every message they wrote
       'default_theme', 'published_themes', 'channel_sort_mode', 'channel_cat_order', 'channel_cat_sort',
-      'channel_tag_sorts', 'custom_tos', 'welcome_message', 'vanity_code', 'default_locale',
+      'channel_tag_sorts', 'custom_tos', 'welcome_message', 'welcome_attach_avatar', 'vanity_code', 'default_locale',
       'login_show_icon', 'login_show_banner', 'login_message', 'login_css', // (#5819) the login page's look
       'role_icon_sidebar', 'role_icon_chat', 'role_icon_after_name',
       'auto_backup_enabled', 'auto_backup_interval_hours', 'auto_backup_retention', 'auto_backup_sections',
@@ -424,6 +424,7 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'custom_tos') { if (value.length > 50000) return; }
     if (key === 'welcome_message') { if (value.length > 500) return; }
+    if (key === 'welcome_attach_avatar' && !['true', 'false'].includes(value)) return;
     // The login page's look (#5819). Custom CSS reaches every visitor before
     // they sign in, so it is the admin's alone.
     if ((key === 'login_show_icon' || key === 'login_show_banner') && !['true', 'false'].includes(value)) return;

@@ -848,6 +848,14 @@ _listenPresenceAndVoice() {
     }
   });
 
+  // The picture a new member picked on the sign up form, which reaches their
+  // welcome message just after it was posted (src/routes/profile.js).
+  this.socket.on('welcome-avatar', (data) => {
+    if (!data || data.channelCode !== this.currentChannel || !Number.isInteger(data.messageId)) return;
+    const el = document.querySelector(`#messages .welcome-message[data-msg-id="${data.messageId}"]`);
+    if (el && !el.querySelector('.welcome-avatar')) this._addWelcomeAvatar(el, data.avatar);
+  });
+
   this.socket.on('channel-deleted', (data) => {
     this._removeChannelLocally(data.code);
     // Disconnect from voice if the user is in the deleted channel's voice

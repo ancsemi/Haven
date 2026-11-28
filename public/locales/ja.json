@@ -149,8 +149,6 @@
       }
     },
     "eula": {
-      "age_confirm": "私は<strong>18歳以上</strong>（または居住地域の成年年齢以上）であることを確認します",
-      "tos_confirm": "<a href=\"#\" id=\"eula-link\">利用規約および免責同意書</a>を読み、同意します",
       "modal_title": "⚖️ 利用規約および免責同意書",
       "decline": "同意しない",
       "accept": "同意する",
@@ -172,8 +170,6 @@
       "passwords_no_match": "パスワードが一致しません",
       "password_too_short": "パスワードは8文字以上にしてください",
       "captcha_incomplete": "CAPTCHA を完了してください。",
-      "must_be_18": "18歳以上であることを確認する必要があります",
-      "must_accept_tos": "利用規約および免責同意書に同意する必要があります",
       "enter_admin_credentials": "先に上で管理者のユーザー名とパスワードを入力してください",
       "enter_auth_code": "認証コードを入力してください",
       "session_expired": "セッションの有効期限が切れました。もう一度ログインしてください",
