@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import SocketMethods   from './modules/app-socket.js?v=4.31.717';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.31.3';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.31.7440';
 import SocketEventMethods from './modules/app-socket-events.js?v=4.31.717';
 import UIBindMethods   from './modules/app-ui.js?v=4.29.83';
 import ComposerMethods from './modules/app-composer.js?v=4.29.72';
@@ -48,7 +48,7 @@ import ChannelMergeMethods from './modules/app-channel-merge.js?v=4.29.60';
 import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.31.780';
 import DmPinMethods from './modules/app-dm-pins.js?v=4.29.30';
 import DmSortMethods from './modules/app-dm-sort.js?v=4.29.65';
-import MessageMethods  from './modules/app-messages.js?v=4.31.3';
+import MessageMethods  from './modules/app-messages.js?v=4.31.7440';
 import LinkPreviewMethods from './modules/app-link-previews.js?v=4.31.790';
 import MessageToolMethods from './modules/app-message-tools.js?v=4.29.61';
 import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.29.40';
@@ -68,7 +68,7 @@ import MessageContentMethods from './modules/app-message-content.js?v=4.31.7430'
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.31.7316';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
 import ThreadMethods from './modules/app-threads.js?v=4.31.3';
-import AdminMethods    from './modules/app-admin.js?v=4.29.107';
+import AdminMethods    from './modules/app-admin.js?v=4.31.7440';
 import BrandingMethods from './modules/app-branding.js?v=4.29.19';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.31.7401';
 import AutocompleteMethods from './modules/app-autocomplete.js?v=4.29.14';

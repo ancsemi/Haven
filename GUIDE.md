@@ -341,11 +341,13 @@ The first start after updating also goes through files uploaded before this exis
 
 1. Click the **⚙️ Settings** button in the sidebar
 2. In the **Avatar** section, click **Upload**
-3. Choose an image (max 2 MB; JPEG, PNG, GIF, or WebP)
+3. Choose an image (JPEG, PNG, GIF, or WebP; 2 MB at most unless the admin changed the limit in **Settings → Uploads & Limits**)
 4. Pick a shape: ⚪ Circle, ⬜ Square, ⬡ Hexagon, or ◇ Diamond
 5. Click **Save**
 
 Your avatar and shape are visible to everyone in messages and the member list. Each user's shape is stored independently.
+
+You can also pick a picture when you create your account: the **Register** form has an optional **Profile Picture** field, with the server's size limit shown under it. It is uploaded as soon as the account exists. If the server refuses it, the account is still created and you can add a picture here instead.
 
 ### Removing Your Avatar
 
@@ -1489,6 +1491,13 @@ be handed to others through the role system, one permission at a time.
 - **Guests**: an optional "Join as Guest" button on the login page. Guests pick a
   username, get a temporary account with no password, see only the channels you
   whitelist, cannot DM, and are deleted when they disconnect
+- **Welcome message**: posted in every channel you turned welcome messages on
+  for when someone creates an account. `{user}` is their username, which links
+  to their profile card while the account exists, and `{total}` is how many
+  members the server has with them (bots and guests not counted). Tick
+  **Attach profile picture** to show the picture they picked on the sign up
+  form above it; the message links that same upload and keeps it if they
+  change pictures later
 - **Uploads & limits**: max upload size (25 MB by default, raise it as far as your
   disk allows), attachments per message (10 by default), max message length,
   per-member storage usage

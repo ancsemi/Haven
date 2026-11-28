@@ -334,7 +334,8 @@ function setupPostgresPreview(io, db, { isIpBanned = () => false } = {}) {
       const after = Number.isInteger(data.after) ? data.after : null;
       const messages = await db.prepare(`SELECT m.*, COALESCE(u.display_name, u.username, '[Deleted User]') AS real_username,
         COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') AS username,
-        u.avatar, COALESCE(u.avatar_shape, 'circle') AS avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') AS animate_profile
+        u.avatar, COALESCE(u.avatar_shape, 'circle') AS avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') AS animate_profile,
+        CASE WHEN m.type = 'welcome' THEN u.username END AS "welcomeName"
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.channel_id = ? AND m.thread_id IS NULL
           AND m.destruct_at IS NULL AND COALESCE(m.burn_seconds, 0) = 0

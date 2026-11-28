@@ -48,12 +48,15 @@ const registrationSettings = {
   registration_token: 'private-registration-token',
   registration_captcha_enabled: 'true',
   turnstile_site_key: '  public-site-key  ',
+  max_avatar_mb: '5',
 };
 const setSetting = db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)');
 for (const [key, value] of Object.entries(registrationSettings)) setSetting.run(key, value);
-const registrationInfo = {
-  requiresToken: true, invitesBypassToken: true, captchaEnabled: true, turnstileSiteKey: 'public-site-key',
-};
+// The Postgres preview takes no uploads, so it offers no profile picture.
+const avatarMb = (mb) => (db.async.kind === 'postgres' ? null : mb);
+const registrationInfo = () => ({
+  requiresToken: true, invitesBypassToken: true, captchaEnabled: true, turnstileSiteKey: 'public-site-key', maxAvatarMb: avatarMb(5),
+});
 const registrationFallback = { requiresToken: false, captchaEnabled: false, turnstileSiteKey: '' };
 const token = jwt.sign({ id: alice, username: 'alice', pwv: 1 }, process.env.JWT_SECRET);
 
@@ -74,6 +77,7 @@ const SQL = {
   registrationToken: "SELECT value FROM server_settings WHERE key = 'registration_token'",
   registrationCaptcha: "SELECT value FROM server_settings WHERE key = 'registration_captcha_enabled'",
   registrationSiteKey: "SELECT value FROM server_settings WHERE key = 'turnstile_site_key'",
+  registrationAvatar: "SELECT value FROM server_settings WHERE key = 'max_avatar_mb'",
   login: 'SELECT * FROM users WHERE LOWER(username) = LOWER(?)',
   ban: 'SELECT reason FROM bans WHERE user_id = ?',
   admin: 'SELECT id FROM users WHERE is_admin = 1 LIMIT 1',
@@ -125,7 +129,7 @@ const login = (username = 'aLiCe', password = PASSWORD, eulaVersion = '2.0') => 
 
 async function flows() {
   const registration = await call('GET', '/registration-info', null, '');
-  assert.deepEqual(registration, { status: 200, body: registrationInfo });
+  assert.deepEqual(registration, { status: 200, body: registrationInfo() });
   assert.ok(!JSON.stringify(registration).includes(registrationSettings.registration_token), 'the registration token stays private');
   const signedIn = await login();
   assert.equal(signedIn.status, 200);
@@ -190,8 +194,9 @@ for (const backend of ['sqlite', 'postgres']) {
         for (const key of ['registration_token_enabled', 'invites_bypass_registration_token', 'registration_captcha_enabled']) {
           await update.run('false', key);
         }
+        await update.run('99', 'max_avatar_mb');
         assert.deepEqual(await call('GET', '/registration-info', null, ''), { status: 200, body: {
-          requiresToken: false, invitesBypassToken: false, captchaEnabled: false, turnstileSiteKey: '',
+          requiresToken: false, invitesBypassToken: false, captchaEnabled: false, turnstileSiteKey: '', maxAvatarMb: avatarMb(2),
         } });
 
         await update.run('true', 'registration_token_enabled');
@@ -200,12 +205,12 @@ for (const backend of ['sqlite', 'postgres']) {
         await update.run('true', 'registration_captcha_enabled');
         await update.run('   ', 'turnstile_site_key');
         assert.deepEqual(await call('GET', '/registration-info', null, ''), { status: 200, body: {
-          requiresToken: false, invitesBypassToken: true, captchaEnabled: false, turnstileSiteKey: '',
+          requiresToken: false, invitesBypassToken: true, captchaEnabled: false, turnstileSiteKey: '', maxAvatarMb: avatarMb(2),
         } });
 
         for (const key of Object.keys(registrationSettings)) await remove.run(key);
         assert.deepEqual(await call('GET', '/registration-info', null, ''), { status: 200, body: {
-          requiresToken: false, invitesBypassToken: false, captchaEnabled: false, turnstileSiteKey: '',
+          requiresToken: false, invitesBypassToken: false, captchaEnabled: false, turnstileSiteKey: '', maxAvatarMb: avatarMb(2),
         } });
       } finally {
         for (const [key, value] of Object.entries(registrationSettings)) {
@@ -254,7 +259,7 @@ for (const backend of ['sqlite', 'postgres']) {
 
     await t.test('a rejected query fails closed in every route', async (t) => {
       const cases = [
-        ...[SQL.registrationFlags, SQL.registrationToken, SQL.registrationCaptcha, SQL.registrationSiteKey].map(sql =>
+        ...[SQL.registrationFlags, SQL.registrationToken, SQL.registrationCaptcha, SQL.registrationSiteKey, SQL.registrationAvatar].map(sql =>
           [sql, () => call('GET', '/registration-info', null, ''), 200, registrationFallback]),
         [SQL.login, () => login(), 500, { error: 'Server error' }],
         [SQL.ban, () => login(), 500, { error: 'Server error' }],
@@ -435,7 +440,7 @@ for (const backend of ['sqlite', 'postgres']) {
     if (fixture) {
       await t.test('registration bootstrap completes without any legacy SQLite calls', async (t) => {
         t.mock.method(db, 'prepare', () => { throw new Error('Unconverted SQLite call'); });
-        assert.deepEqual(await call('GET', '/registration-info', null, ''), { status: 200, body: registrationInfo });
+        assert.deepEqual(await call('GET', '/registration-info', null, ''), { status: 200, body: registrationInfo() });
       });
       await t.test('login and every converted auth route complete without legacy SQLite reads or a warmed token cache', async (t) => {
         t.mock.method(db, 'prepare', () => { throw new Error('Unconverted SQLite call'); });

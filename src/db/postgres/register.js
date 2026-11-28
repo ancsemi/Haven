@@ -73,11 +73,17 @@ async function provision(tx, userId, username) {
   const template = row && typeof row.value === 'string' ? row.value.trim() : '';
   const events = [];
   if (template) {
-    const text = template.replace(/\{user\}/gi, username).slice(0, 500);
+    // The same as provisionNewUser in src/auth.js.
+    const total = /\{total\}/i.test(template)
+      ? (await tx.prepare('SELECT COUNT(*) AS n FROM users WHERE is_bot = 0 AND COALESCE(is_guest, 0) = 0').get()).n : 0;
+    const text = template.replace(/\{user\}/gi, username).replace(/\{total\}/gi, String(total)).slice(0, 500);
+    const attach = await tx.prepare("SELECT value FROM server_settings WHERE key = 'welcome_attach_avatar'").get();
+    const picture = attach?.value === 'true'
+      ? (await tx.prepare('SELECT avatar FROM users WHERE id = ?').get(userId))?.avatar || null : null;
     const channels = await tx.prepare('SELECT id, code FROM channels WHERE is_dm = 0 AND show_welcome = 1').all();
     for (const ch of channels) {
-      const message = await tx.prepare("INSERT INTO messages (channel_id, user_id, content, type) VALUES (?, ?, ?, 'welcome') RETURNING id, created_at").get(ch.id, userId, text);
-      events.push({ channelCode: ch.code, message: { ...message, user_id: userId, content: text, type: 'welcome' } });
+      const message = await tx.prepare("INSERT INTO messages (channel_id, user_id, content, type, persona_avatar) VALUES (?, ?, ?, 'welcome', ?) RETURNING id, created_at").get(ch.id, userId, text, picture);
+      events.push({ channelCode: ch.code, message: { ...message, user_id: userId, content: text, type: 'welcome', persona_avatar: picture, welcomeName: username } });
     }
   }
   return events;

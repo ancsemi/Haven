@@ -6,7 +6,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <title data-i18n="auth.page_title">Haven | Login</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cG9seWdvbiBwb2ludHM9IjUwLDMgOTMsMjggOTMsNzIgNTAsOTcgNyw3MiA3LDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjRmZGIiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI2MyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIzOCIgZmlsbD0iIzZiNGZkYiIgb3BhY2l0eT0iMC45NSI+SDwvdGV4dD48L3N2Zz4=">
-  <link rel="stylesheet" href="/css/style.css?v=4.31.7430">
+  <link rel="stylesheet" href="/css/style.css?v=4.31.7440">
   <script src="/js/theme-compat.js"></script>
   <script src="/js/theme-init.js"></script>
 </head>
@@ -119,6 +119,12 @@
         <div class="form-group">
           <label for="reg-confirm" data-i18n="auth.register.confirm_label">Confirm Password</label>
           <input type="password" id="reg-confirm" autocomplete="new-password" required>
+        </div>
+        <!-- Optional profile picture: shown by auth.js when the server can take one -->
+        <div class="form-group" id="reg-avatar-group" style="display:none">
+          <label for="reg-avatar" data-i18n="auth.register.avatar_label">Profile Picture (optional)</label>
+          <input type="file" id="reg-avatar" accept="image/jpeg,image/png,image/gif,image/webp">
+          <small id="reg-avatar-hint"></small>
         </div>
         <!-- (#5344) Registration token field: shown by auth.js only when the server requires it -->
         <div class="form-group" id="reg-token-group" style="display:none">
@@ -291,12 +297,8 @@
            re-affirmed by the note under the Login button. Toggled in auth.js. -->
       <div class="eula-notice" id="eula-notice" style="display:none">
         <label class="eula-check-row">
-          <input type="checkbox" id="age-checkbox">
-          <span data-i18n-html="auth.eula.age_confirm">I confirm that I am <strong>18 years of age or older</strong> (or the age of legal majority in my jurisdiction)</span>
-        </label>
-        <label class="eula-check-row">
           <input type="checkbox" id="eula-checkbox">
-          <span data-i18n-html="auth.eula.tos_confirm">I have read and agree to the <a href="#" id="eula-link">Terms of Service &amp; Release of Liability Agreement</a></span>
+          <span data-i18n-html="auth.eula.consent_confirm">I confirm that I am <strong>18 years of age or older</strong>, and understand the current <a href="#" id="eula-link">Terms of Service</a></span>
         </label>
       </div>
 

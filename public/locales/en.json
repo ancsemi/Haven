@@ -42,7 +42,9 @@
       "submit": "Create Account",
       "token_label": "Invite Token",
       "token_placeholder": "Paste the token your admin shared",
-      "token_hint": "Required by this server. Ask the admin if you don't have one."
+      "token_hint": "Required by this server. Ask the admin if you don't have one.",
+      "avatar_label": "Profile Picture (optional)",
+      "avatar_hint": "JPG, PNG, GIF or WebP, up to {{max}} MB"
     },
     "sso": {
       "instruction": "Register using your account from another Haven server. Your username and profile picture will be imported.",
@@ -158,8 +160,7 @@
       }
     },
     "eula": {
-      "age_confirm": "I confirm that I am <strong>18 years of age or older</strong> (or the age of legal majority in my jurisdiction)",
-      "tos_confirm": "I have read and agree to the <a href=\"#\" id=\"eula-link\">Terms of Service &amp; Release of Liability Agreement</a>",
+      "consent_confirm": "I confirm that I am <strong>18 years of age or older</strong>, and understand the current <a href=\"#\" id=\"eula-link\">Terms of Service</a>",
       "modal_title": "⚖️ Terms of Service &amp; Release of Liability Agreement",
       "decline": "Decline",
       "accept": "I Accept",
@@ -182,8 +183,7 @@
       "passwords_no_match": "Passwords do not match",
       "password_too_short": "Password must be at least 8 characters",
       "captcha_incomplete": "Please complete the CAPTCHA.",
-      "must_be_18": "You must confirm that you are 18 years of age or older",
-      "must_accept_tos": "You must accept the Terms of Service & Release of Liability Agreement",
+      "must_confirm_consent": "You must confirm that you are 18 or older and understand the Terms of Service",
       "enter_admin_credentials": "Enter your admin username and password above first",
       "enter_auth_code": "Enter your authentication code",
       "session_expired": "Session expired. Please log in again",
@@ -2592,7 +2592,9 @@
       "appearance_welcome": "Appearance & Welcome",
       "welcome_message": "Welcome Message",
       "welcome_message_placeholder": "e.g. Welcome {user}!",
-      "welcome_message_hint": "Shown when a new user joins a channel. Use <code>{user}</code> for the username. Leave blank to disable.",
+      "welcome_message_hint": "Shown when a new user joins a channel. Use <code>{user}</code> for the username. <code>{total}</code> for the total number of members in your server. Leave blank to disable.",
+      "welcome_attach_avatar": "Attach profile picture",
+      "welcome_attach_avatar_hint": "If the user uploaded a profile picture during sign up, the welcome message will embed the user's profile picture using a direct link. The picture is never re-uploaded twice.",
       "custom_themes_title": "Custom Themes",
       "custom_themes_hint": "Drop <code>.theme.css</code> files into the <code>themes/</code> folder, then check the ones you want to appear in the theme picker for all users.",
       "members_title": "Members",

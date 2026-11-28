@@ -120,10 +120,35 @@ module.exports = function registerProfile(deps) {
         return res.status(500).json({ error: 'Failed to save avatar' });
       }
       await releaseOld(oldAvatar, ownerId, 'Avatar');
+      if (req.body?.signup === '1' && !oldAvatar && ownerId === user.id) attachWelcomeAvatar(user.id, avatarUrl, req.app.get('io'));
 
       res.json({ url: avatarUrl });
     });
   });
+
+  // A picture picked on the sign up form also goes on the new member's
+  // welcome messages, when the admin turned that on. The message links the
+  // same upload rather than a copy, and keeps it once the member changes
+  // pictures (releaseOwnUploads). Only a first picture, within minutes of
+  // joining, and only once, so a later picture never lands there.
+  const attachWelcomeAvatar = (userId, avatarUrl, io) => {
+    try {
+      const { getDb } = require('../database');
+      const db = getDb();
+      if (db.prepare("SELECT value FROM server_settings WHERE key = 'welcome_attach_avatar'").get()?.value !== 'true') return;
+      const rows = db.prepare(`
+        SELECT m.id, c.code FROM messages m JOIN channels c ON c.id = m.channel_id
+        WHERE m.user_id = ? AND m.type = 'welcome' AND m.persona_avatar IS NULL AND m.created_at >= datetime('now', '-10 minutes')
+      `).all(userId);
+      const attach = db.prepare('UPDATE messages SET persona_avatar = ? WHERE id = ?');
+      for (const row of rows) {
+        attach.run(avatarUrl, row.id);
+        io?.to(`channel:${row.code}`).emit('welcome-avatar', { channelCode: row.code, messageId: row.id, avatar: avatarUrl });
+      }
+    } catch (err) {
+      console.warn('[welcome] Could not attach the picture:', err.message);
+    }
+  };
 
   // ── Avatar remove endpoint ──
   app.post('/api/remove-avatar', express.json(), async (req, res) => {

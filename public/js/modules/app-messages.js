@@ -1065,17 +1065,39 @@ _renderAttachmentTags(tags) {
   return `<div class="message-tags">${icon}<span class="message-tags-label">${t('tags.attachment_tags')}</span>${chips}</div>`;
 },
 
+// The picture on a welcome message, in the member's avatar shape, holding
+// still in Lite mode like every other avatar.
+_addWelcomeAvatar(el, url, msg = {}) {
+  const shape = ['circle', 'rounded', 'squircle', 'hex', 'diamond'].includes(msg.avatar_shape) ? msg.avatar_shape : 'circle';
+  el.insertAdjacentHTML('afterbegin', `<img class="welcome-avatar avatar-${shape}"${this._animAttr(msg.animateProfile)} ${this._imgSrcAttr(url)} alt="">`);
+  this._freezePfpImg(el.querySelector('.welcome-avatar'));
+},
+
 _createMessageEl(msg, prevMsg) {
-  // Persisted welcome message (new-member greeting). Rendered as a simple,
-  // non-interactive system line reusing the .welcome-message styling: no
-  // avatar, toolbar, reactions, or grouping. Covers history load and live
-  // append alike. Uses textContent so the name/template can't inject HTML.
+  // Persisted welcome message (new-member greeting). Rendered as a simple
+  // system line reusing the .welcome-message styling: no toolbar, reactions,
+  // or grouping. Covers history load and live append alike. Built from text
+  // nodes so the name/template can't inject HTML. The greeted name opens the
+  // member's profile card while the account exists, and the picture they
+  // picked at sign up sits above it when the admin attaches pictures.
   if (msg && msg.type === 'welcome') {
     const el = document.createElement('div');
     el.className = 'welcome-message';
     el.dataset.type = 'welcome';
     if (Number.isInteger(msg.id) && msg.id > 0) el.dataset.msgId = msg.id;
-    el.textContent = msg.content;
+    const name = msg.user_id && msg.welcomeName ? String(msg.welcomeName) : '';
+    const parts = name
+      ? String(msg.content).split(new RegExp(`(?<!\\w)(${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?!\\w)`))
+      : [String(msg.content)];
+    parts.forEach((part, i) => {
+      if (i % 2 === 0) { if (part) el.append(part); return; }
+      const link = document.createElement('span');
+      link.className = 'mention';
+      link.dataset.mentionUser = msg.user_id;
+      link.textContent = part;
+      el.append(link);
+    });
+    if (msg.persona_avatar) this._addWelcomeAvatar(el, msg.persona_avatar, msg);
     return el;
   }
   // A group DM's "invited" / "joined" / "left" line, drawn from ids.

@@ -146,8 +146,6 @@
       }
     },
     "eula": {
-      "age_confirm": "Confirmo que tenho <strong>18 anos ou mais</strong> (ou a idade de maioridade legal na minha jurisdição)",
-      "tos_confirm": "Li e concordo com os <a href=\"#\" id=\"eula-link\">Termos de Serviço e o Acordo de Isenção de Responsabilidade</a>",
       "modal_title": "⚖️ Termos de Serviço e Acordo de Isenção de Responsabilidade",
       "decline": "Recusar",
       "accept": "Aceito",
@@ -170,8 +168,6 @@
       "passwords_no_match": "As senhas não coincidem",
       "password_too_short": "A senha deve ter pelo menos 8 caracteres",
       "captcha_incomplete": "Conclua o CAPTCHA.",
-      "must_be_18": "Você precisa confirmar que tem 18 anos ou mais",
-      "must_accept_tos": "Você precisa aceitar os Termos de Serviço e o Acordo de Isenção de Responsabilidade",
       "enter_admin_credentials": "Informe primeiro o nome de usuário e a senha do administrador acima",
       "enter_auth_code": "Informe seu código de autenticação",
       "session_expired": "A sessão expirou. Entre novamente",

@@ -767,6 +767,15 @@ html[lang="fa"] :is(input:not([type]), input[type="text"], input[type="search"],
   border-radius: 0.5rem;
 }
 
+/* The new member's sign up picture on their welcome message (app-messages.js). */
+.welcome-avatar {
+  display: block;
+  width: 3rem;
+  height: 3rem;
+  margin: 0 auto 0.375rem;
+  object-fit: cover;
+}
+
 /* A message marked NSFW (app-message-nsfw.js): text, pictures, videos and
    link cards stay blurred under a label until clicked. Text blurs through a
    shadow, so the label on top of it stays sharp. */
